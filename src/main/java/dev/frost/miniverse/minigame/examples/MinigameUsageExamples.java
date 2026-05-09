@@ -3,7 +3,7 @@ package dev.frost.miniverse.minigame.examples;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame;
-import dev.frost.miniverse.minigame.impl.manhunt.ManhuntRole;
+import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame.ManhuntRole;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 /**

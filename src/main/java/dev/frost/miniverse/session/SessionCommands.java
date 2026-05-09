@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.server.command.ServerCommandSource;
@@ -18,8 +19,7 @@ import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 public final class SessionCommands {
-    private static final List<String> SESSION_COMMANDS = List.of("manhunt", "speedrun");
-    private static final SuggestionProvider<ServerCommandSource> GAME_SUGGESTIONS = (context, builder) -> CommandSource.suggestMatching(SESSION_COMMANDS, builder);
+    private static final SuggestionProvider<ServerCommandSource> GAME_SUGGESTIONS = (context, builder) -> CommandSource.suggestMatching(MinigameRegistry.getIds(), builder);
     private static final SuggestionProvider<ServerCommandSource> SESSION_ID_SUGGESTIONS = (context, builder) -> {
         SessionManager.getInstance().getSessions().stream()
             .map(GameSession::getSessionId)
@@ -65,7 +65,7 @@ public final class SessionCommands {
             .orElse(null);
 
         if (gameType == null) {
-            source.sendError(Text.literal("Unknown game type '" + rawGame + "'. Use manhunt or speedrun."));
+            source.sendError(Text.literal("Unknown game type '" + rawGame + "'. Use one of: " + String.join(", ", MinigameRegistry.getIds()) + "."));
             return 0;
         }
 
@@ -156,6 +156,7 @@ public final class SessionCommands {
             return 0;
         }
 
+        SessionRegistry.markStopRequested(sessionId);
         manager.stopSession(sessionId);
         source.sendFeedback(() -> Text.literal("Stopped session " + sessionId + "."), true);
         return 1;

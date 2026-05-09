@@ -2,6 +2,7 @@ package dev.frost.miniverse.minigame.impl.manhunt;
 
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame.ManhuntRole;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -26,6 +27,7 @@ public final class ManhuntGameEvents {
     }
 
     public static void register() {
+        ManhuntSessionBootstrap.register();
         UseItemCallback.EVENT.register(ManhuntGameEvents::onUseItem);
         ServerTickEvents.END_SERVER_TICK.register(ManhuntGameEvents::onServerTick);
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(ManhuntGameEvents::onAllowDamage);

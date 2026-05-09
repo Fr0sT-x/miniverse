@@ -542,6 +542,7 @@ public class SpeedrunSetupScreen extends Screen {
         NbtCompound plan = new NbtCompound();
         plan.putString("game", SessionGameType.SPEEDRUN.getCommandName());
         plan.putString("name", sessionName);
+        plan.putBoolean("launch", true);
         plan.put("settings", this.buildSettingsCompound());
 
         NbtList groups = new NbtList();

@@ -179,21 +179,7 @@ public final class SpeedrunCommands {
     }
 
     private static @Nullable SpeedrunMinigame getOrCreatePendingSpeedrun(ServerCommandSource source) {
-        MinigameManager manager = MinigameManager.getInstance();
-        Minigame active = manager.getActiveMinigame();
-
-        if (active == null) {
-            SpeedrunMinigame speedrun = new SpeedrunMinigame();
-            manager.setActiveMinigame(speedrun);
-            return speedrun;
-        }
-
-        if (active instanceof SpeedrunMinigame speedrun) {
-            return speedrun;
-        }
-
-        source.sendError(Text.literal("Another minigame is currently active."));
-        return null;
+        return PendingMinigameCommand.getOrCreate(source, SpeedrunMinigame.class, SpeedrunMinigame::new);
     }
 
     private static @Nullable SpeedrunMinigame getExistingSpeedrun() {

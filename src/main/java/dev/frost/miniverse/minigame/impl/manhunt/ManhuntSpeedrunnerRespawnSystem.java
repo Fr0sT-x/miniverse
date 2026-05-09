@@ -7,7 +7,10 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameMode;
+import net.minecraft.world.World;
 
 import java.util.Map;
 import java.util.Set;
@@ -54,10 +57,6 @@ final class ManhuntSpeedrunnerRespawnSystem {
         }
 
         ServerPlayerEntity target = this.findAliveTarget(speedrunner.getUuid());
-        if (target == null) {
-            this.game.endGameBecauseNoAliveSpeedrunners();
-            return;
-        }
 
         GameMode returnMode = speedrunner.getGameMode();
         if (returnMode == GameMode.SPECTATOR || returnMode == GameMode.CREATIVE || returnMode == GameMode.DEFAULT) {
@@ -65,11 +64,24 @@ final class ManhuntSpeedrunnerRespawnSystem {
         }
 
         long respawnAtTick = currentTick + (long) this.respawnDelaySeconds * 20L;
-        this.pendingRespawns.put(speedrunner.getUuid(), new PendingRespawn(speedrunner.getUuid(), target.getUuid(), respawnAtTick, returnMode));
-        this.applySpectatorState(speedrunner, target);
+        UUID targetUuid = target == null ? null : target.getUuid();
+        this.pendingRespawns.put(speedrunner.getUuid(), new PendingRespawn(
+            speedrunner.getUuid(),
+            targetUuid,
+            respawnAtTick,
+            returnMode,
+            speedrunner.getEntityWorld().getRegistryKey(),
+            speedrunner.getBlockPos()
+        ));
+        if (target != null) {
+            this.applySpectatorState(speedrunner, target);
+        } else {
+            speedrunner.changeGameMode(GameMode.SPECTATOR);
+        }
 
         this.game.broadcastManhuntMessage(
-            Text.literal(speedrunner.getName().getString() + " will respawn near " + target.getName().getString()
+            Text.literal(speedrunner.getName().getString() + " will respawn "
+                + (target == null ? "at their death location" : "near " + target.getName().getString())
                 + " in " + this.respawnDelaySeconds + "s.")
                 .formatted(Formatting.YELLOW)
         );
@@ -79,15 +91,17 @@ final class ManhuntSpeedrunnerRespawnSystem {
         this.protectedUntilTicks.entrySet().removeIf(entry -> entry.getValue() <= currentTick);
 
         for (PendingRespawn pending : this.pendingRespawns.values()) {
-            ServerPlayerEntity player = this.game.getParticipantByUuid(pending.playerUuid());
+            ServerPlayerEntity player = this.game.getPlayerByUuid(pending.playerUuid());
             if (player == null || player.isDisconnected()) {
                 continue;
             }
 
             ServerPlayerEntity target = this.resolveTarget(pending, player);
             if (target == null) {
-                this.game.endGameBecauseNoAliveSpeedrunners();
-                return;
+                if (currentTick >= pending.respawnAtTick()) {
+                    this.completeFallbackRespawn(player, pending, currentTick);
+                }
+                continue;
             }
 
             if (currentTick >= pending.respawnAtTick()) {
@@ -98,15 +112,15 @@ final class ManhuntSpeedrunnerRespawnSystem {
 
     void retargetWaitingRunners() {
         for (PendingRespawn pending : this.pendingRespawns.values()) {
-            ServerPlayerEntity player = this.game.getParticipantByUuid(pending.playerUuid());
+            ServerPlayerEntity player = this.game.getPlayerByUuid(pending.playerUuid());
             if (player == null || player.isDisconnected()) {
                 continue;
             }
 
             ServerPlayerEntity target = this.resolveTarget(pending, player);
             if (target == null) {
-                this.game.endGameBecauseNoAliveSpeedrunners();
-                return;
+                player.changeGameMode(GameMode.SPECTATOR);
+                continue;
             }
 
             this.applySpectatorState(player, target);
@@ -121,7 +135,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
 
         ServerPlayerEntity target = this.resolveTarget(pending, player);
         if (target == null) {
-            this.game.endGameBecauseNoAliveSpeedrunners();
+            player.changeGameMode(GameMode.SPECTATOR);
             return;
         }
 
@@ -138,7 +152,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
     }
 
     private ServerPlayerEntity resolveTarget(PendingRespawn pending, ServerPlayerEntity player) {
-        ServerPlayerEntity target = this.game.getAliveSpeedrunnerByUuid(pending.targetUuid());
+        ServerPlayerEntity target = pending.targetUuid() == null ? null : this.game.getAliveSpeedrunnerByUuid(pending.targetUuid());
         if (target != null && !target.isDisconnected()) {
             return target;
         }
@@ -191,9 +205,44 @@ final class ManhuntSpeedrunnerRespawnSystem {
         );
     }
 
-    private record PendingRespawn(UUID playerUuid, UUID targetUuid, long respawnAtTick, GameMode returnMode) {
+    private void completeFallbackRespawn(ServerPlayerEntity player, PendingRespawn pending, long currentTick) {
+        if (!this.pendingRespawns.remove(player.getUuid(), pending)) {
+            return;
+        }
+
+        player.setCameraEntity(player);
+        ServerWorld world = ((ServerWorld) player.getEntityWorld()).getServer().getWorld(pending.fallbackWorld());
+        if (world == null) {
+            world = (ServerWorld) player.getEntityWorld();
+        }
+        BlockPos pos = pending.fallbackPos();
+        player.teleport(world, pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, Set.<PositionFlag>of(), player.getYaw(), player.getPitch(), true);
+        player.changeGameMode(pending.returnMode());
+        player.setHealth(player.getMaxHealth());
+        player.getHungerManager().setFoodLevel(20);
+        player.getHungerManager().setSaturationLevel(20.0F);
+        player.extinguish();
+        player.fallDistance = 0.0F;
+        player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, RESPAWN_PROTECTION_TICKS, 4, true, false, true));
+
+        this.protectedUntilTicks.put(player.getUuid(), currentTick + RESPAWN_PROTECTION_TICKS);
+        this.game.completeSpeedrunnerRespawn(player);
+        this.game.broadcastManhuntMessage(
+            Text.literal(player.getName().getString() + " respawned at their death location.")
+                .formatted(Formatting.GREEN)
+        );
+    }
+
+    private record PendingRespawn(
+        UUID playerUuid,
+        UUID targetUuid,
+        long respawnAtTick,
+        GameMode returnMode,
+        RegistryKey<World> fallbackWorld,
+        BlockPos fallbackPos
+    ) {
         private PendingRespawn withTarget(UUID targetUuid) {
-            return new PendingRespawn(this.playerUuid, targetUuid, this.respawnAtTick, this.returnMode);
+            return new PendingRespawn(this.playerUuid, targetUuid, this.respawnAtTick, this.returnMode, this.fallbackWorld, this.fallbackPos);
         }
     }
 }

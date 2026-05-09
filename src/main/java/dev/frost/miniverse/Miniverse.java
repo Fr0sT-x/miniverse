@@ -1,12 +1,10 @@
 package dev.frost.miniverse;
 
-import dev.frost.miniverse.command.ManhuntCommands;
-import dev.frost.miniverse.command.SpeedrunCommands;
 import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.minigame.MiniverseGames;
+import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.session.SessionCommands;
 import dev.frost.miniverse.session.SessionRoutingEvents;
-import dev.frost.miniverse.minigame.impl.manhunt.ManhuntGameEvents;
-import dev.frost.miniverse.minigame.impl.speedrun.SpeedrunGameEvents;
 import dev.frost.miniverse.network.SessionNetwork;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -27,21 +25,21 @@ public class Miniverse implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
+		MiniverseGames.registerAll();
+
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
 			{
-				ManhuntCommands.register(dispatcher);
-				SpeedrunCommands.register(dispatcher);
+				MinigameRegistry.registerCommands(dispatcher);
 				SessionCommands.register(dispatcher);
 			}
 		);
-		ManhuntGameEvents.register();
-		SpeedrunGameEvents.register();
+		MinigameRegistry.registerEvents();
 		SessionRoutingEvents.register();
 
 		// Register shared session GUI payloads and server-side receivers.
 		NetworkConstants.registerPayloadTypes();
 		SessionNetwork.register();
 
-		LOGGER.info("Miniverse initialized. Manhunt, Speedrun, and session commands registered.");
+		LOGGER.info("Miniverse initialized. {} minigame(s) registered.", MinigameRegistry.getDefinitions().size());
 	}
 }

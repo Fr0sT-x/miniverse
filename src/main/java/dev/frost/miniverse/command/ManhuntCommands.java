@@ -3,6 +3,7 @@ package dev.frost.miniverse.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
@@ -12,7 +13,8 @@ import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame;
-import dev.frost.miniverse.minigame.impl.manhunt.ManhuntRole;
+import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame.ManhuntRole;
+import dev.frost.miniverse.minigame.impl.manhunt.ManhuntSettings;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -48,6 +50,30 @@ public final class ManhuntCommands {
                 .then(literal("respawnDelay")
                     .then(argument("seconds", IntegerArgumentType.integer(0, 3600))
                         .executes(ManhuntCommands::setRespawnDelay)))
+                .then(literal("releaseDelay")
+                    .then(argument("seconds", IntegerArgumentType.integer(0, 3600))
+                        .executes(ManhuntCommands::setReleaseDelay)))
+                .then(literal("compass")
+                    .then(argument("enabled", BoolArgumentType.bool())
+                        .executes(ManhuntCommands::setCompassEnabled)))
+                .then(literal("netherTracking")
+                    .then(argument("enabled", BoolArgumentType.bool())
+                        .executes(ManhuntCommands::setNetherTracking)))
+                .then(literal("compassCooldown")
+                    .then(argument("seconds", IntegerArgumentType.integer(0, 300))
+                        .executes(ManhuntCommands::setCompassCooldown)))
+                .then(literal("runnerGlowPulse")
+                    .then(argument("minutes", IntegerArgumentType.integer(0, 120))
+                        .executes(ManhuntCommands::setRunnerGlowPulse)))
+                .then(literal("runnerLives")
+                    .then(argument("lives", IntegerArgumentType.integer(-1, 100))
+                        .executes(ManhuntCommands::setRunnerLives)))
+                .then(literal("hunterLives")
+                    .then(argument("lives", IntegerArgumentType.integer(-1, 100))
+                        .executes(ManhuntCommands::setHunterLives)))
+                .then(literal("hunterRespawnDelay")
+                    .then(argument("seconds", IntegerArgumentType.integer(0, 3600))
+                        .executes(ManhuntCommands::setHunterRespawnDelay)))
                 .then(literal("info").executes(ManhuntCommands::info))
         );
     }
@@ -160,6 +186,198 @@ public final class ManhuntCommands {
         return 1;
     }
 
+    private static int setReleaseDelay(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        int seconds = IntegerArgumentType.getInteger(context, "seconds");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            seconds,
+            current.speedrunnerRespawnDelaySeconds(),
+            current.huntersCompassEnabled(),
+            current.netherTrackingEnabled(),
+            current.compassCooldownSeconds(),
+            current.runnerGlowPulseMinutes(),
+            current.runnerLives(),
+            current.hunterLives(),
+            current.hunterRespawnDelaySeconds()
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt hunter release delay to " + seconds + " second(s)."), true);
+        return 1;
+    }
+
+    private static int setCompassEnabled(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        boolean enabled = BoolArgumentType.getBool(context, "enabled");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            current.hunterReleaseDelaySeconds(),
+            current.speedrunnerRespawnDelaySeconds(),
+            enabled,
+            current.netherTrackingEnabled(),
+            current.compassCooldownSeconds(),
+            current.runnerGlowPulseMinutes(),
+            current.runnerLives(),
+            current.hunterLives(),
+            current.hunterRespawnDelaySeconds()
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt hunter compass to " + enabled + "."), true);
+        return 1;
+    }
+
+    private static int setNetherTracking(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        boolean enabled = BoolArgumentType.getBool(context, "enabled");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            current.hunterReleaseDelaySeconds(),
+            current.speedrunnerRespawnDelaySeconds(),
+            current.huntersCompassEnabled(),
+            enabled,
+            current.compassCooldownSeconds(),
+            current.runnerGlowPulseMinutes(),
+            current.runnerLives(),
+            current.hunterLives(),
+            current.hunterRespawnDelaySeconds()
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt Nether tracking to " + enabled + "."), true);
+        return 1;
+    }
+
+    private static int setCompassCooldown(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        int seconds = IntegerArgumentType.getInteger(context, "seconds");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            current.hunterReleaseDelaySeconds(),
+            current.speedrunnerRespawnDelaySeconds(),
+            current.huntersCompassEnabled(),
+            current.netherTrackingEnabled(),
+            seconds,
+            current.runnerGlowPulseMinutes(),
+            current.runnerLives(),
+            current.hunterLives(),
+            current.hunterRespawnDelaySeconds()
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt compass cooldown to " + seconds + " second(s)."), true);
+        return 1;
+    }
+
+    private static int setRunnerGlowPulse(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        int minutes = IntegerArgumentType.getInteger(context, "minutes");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            current.hunterReleaseDelaySeconds(),
+            current.speedrunnerRespawnDelaySeconds(),
+            current.huntersCompassEnabled(),
+            current.netherTrackingEnabled(),
+            current.compassCooldownSeconds(),
+            minutes,
+            current.runnerLives(),
+            current.hunterLives(),
+            current.hunterRespawnDelaySeconds()
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt runner glow pulse to every " + minutes + " minute(s). 0 disables it."), true);
+        return 1;
+    }
+
+    private static int setRunnerLives(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        int lives = IntegerArgumentType.getInteger(context, "lives");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            current.hunterReleaseDelaySeconds(),
+            current.speedrunnerRespawnDelaySeconds(),
+            current.huntersCompassEnabled(),
+            current.netherTrackingEnabled(),
+            current.compassCooldownSeconds(),
+            current.runnerGlowPulseMinutes(),
+            lives,
+            current.hunterLives(),
+            current.hunterRespawnDelaySeconds()
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt runner lives to " + formatLives(lives) + "."), true);
+        return 1;
+    }
+
+    private static int setHunterLives(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        int lives = IntegerArgumentType.getInteger(context, "lives");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            current.hunterReleaseDelaySeconds(),
+            current.speedrunnerRespawnDelaySeconds(),
+            current.huntersCompassEnabled(),
+            current.netherTrackingEnabled(),
+            current.compassCooldownSeconds(),
+            current.runnerGlowPulseMinutes(),
+            current.runnerLives(),
+            lives,
+            current.hunterRespawnDelaySeconds()
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt hunter lives to " + formatLives(lives) + "."), true);
+        return 1;
+    }
+
+    private static int setHunterRespawnDelay(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        int seconds = IntegerArgumentType.getInteger(context, "seconds");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(new ManhuntSettings(
+            current.hunterReleaseDelaySeconds(),
+            current.speedrunnerRespawnDelaySeconds(),
+            current.huntersCompassEnabled(),
+            current.netherTrackingEnabled(),
+            current.compassCooldownSeconds(),
+            current.runnerGlowPulseMinutes(),
+            current.runnerLives(),
+            current.hunterLives(),
+            seconds
+        ));
+        source.sendFeedback(() -> Text.literal("Set Manhunt hunter respawn delay to " + seconds + " second(s)."), true);
+        return 1;
+    }
+
     private static int stop(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         MinigameManager manager = MinigameManager.getInstance();
@@ -195,28 +413,22 @@ public final class ManhuntCommands {
         source.sendFeedback(() -> Text.literal("- Participants: " + manager.getParticipantCount()), false);
         source.sendFeedback(() -> Text.literal("- Speedrunners: " + manhunt.getSpeedrunners().size()), false);
         source.sendFeedback(() -> Text.literal("- Hunters: " + manhunt.getHunters().size()), false);
-        source.sendFeedback(() -> Text.literal("- Respawn delay: " + manhunt.getSpeedrunnerRespawnDelaySeconds() + "s"), false);
+        ManhuntSettings settings = manhunt.getSettings();
+        source.sendFeedback(() -> Text.literal("- Hunter release delay: " + settings.hunterReleaseDelaySeconds() + "s"), false);
+        source.sendFeedback(() -> Text.literal("- Speedrunner respawn delay: " + settings.speedrunnerRespawnDelaySeconds() + "s"), false);
+        source.sendFeedback(() -> Text.literal("- Hunter respawn delay: " + settings.hunterRespawnDelaySeconds() + "s"), false);
+        source.sendFeedback(() -> Text.literal("- Compass: " + settings.huntersCompassEnabled() + " cooldown=" + settings.compassCooldownSeconds() + "s"), false);
+        source.sendFeedback(() -> Text.literal("- Nether tracking: " + settings.netherTrackingEnabled()), false);
+        source.sendFeedback(() -> Text.literal("- Runner glow pulse: " + settings.runnerGlowPulseMinutes() + "m"), false);
+        source.sendFeedback(() -> Text.literal("- Runner lives: " + formatLives(settings.runnerLives())), false);
+        source.sendFeedback(() -> Text.literal("- Hunter lives: " + formatLives(settings.hunterLives())), false);
         source.sendFeedback(() -> Text.literal("- Unassigned: " + formatPlayers(manhunt.getUnassignedParticipants())), false);
 
         return 1;
     }
 
     private static @org.jetbrains.annotations.Nullable ManhuntMinigame getOrCreatePendingManhunt(ServerCommandSource source) {
-        MinigameManager manager = MinigameManager.getInstance();
-        Minigame active = manager.getActiveMinigame();
-
-        if (active == null) {
-            ManhuntMinigame manhunt = new ManhuntMinigame();
-            manager.setActiveMinigame(manhunt);
-            return manhunt;
-        }
-
-        if (active instanceof ManhuntMinigame manhunt) {
-            return manhunt;
-        }
-
-        source.sendError(Text.literal("Another minigame is currently active."));
-        return null;
+        return PendingMinigameCommand.getOrCreate(source, ManhuntMinigame.class, ManhuntMinigame::new);
     }
 
     private static @org.jetbrains.annotations.Nullable ManhuntMinigame getExistingManhunt() {
@@ -241,6 +453,10 @@ public final class ManhuntCommands {
             .map(player -> player.getName().getString())
             .reduce((left, right) -> left + ", " + right)
             .orElse("none");
+    }
+
+    private static String formatLives(int lives) {
+        return lives < 0 ? "unlimited" : Integer.toString(lives);
     }
 }
 

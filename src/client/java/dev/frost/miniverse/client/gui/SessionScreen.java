@@ -1,6 +1,7 @@
 package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.session.SessionGameType;
+import dev.frost.miniverse.client.gui.ResourceSprintSetupScreen;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -155,14 +156,35 @@ public class SessionScreen extends Screen {
             "One player hunts while others speedrun.",
             "⚔",
             true,
-            screen -> screen.openManhunt()
+            SessionScreen::openManhunt
         ));
         entries.add(new MinigameEntry(
             SessionGameType.SPEEDRUN.getDisplayName(),
             "Race to finish the game fastest on identical seeds.",
             "⏱",
             true,
-            screen -> screen.openSpeedrun()
+            SessionScreen::openSpeedrun
+        ));
+        entries.add(new MinigameEntry(
+            SessionGameType.BOUNTY_HUNT.getDisplayName(),
+            "Track assigned targets and score hits to win.",
+            "🎯",
+            true,
+            SessionScreen::openBountyHunt
+        ));
+        entries.add(new MinigameEntry(
+            SessionGameType.RESOURCE_SPRINT.getDisplayName(),
+            "Race through a visible objective chain to finish first.",
+            "⛏",
+            true,
+            SessionScreen::openResourceSprint
+        ));
+        entries.add(new MinigameEntry(
+            SessionGameType.DEATH_SWAP.getDisplayName(),
+            "Survive swaps and outlast every other player or team.",
+            "↔",
+            true,
+            SessionScreen::openDeathSwap
         ));
         return entries;
     }
@@ -202,8 +224,20 @@ public class SessionScreen extends Screen {
         this.client.setScreen(new SpeedrunSetupScreen());
     }
 
+    private void openBountyHunt() {
+        this.client.setScreen(new BountyHuntSetupScreen());
+    }
+
+    private void openResourceSprint() {
+        this.client.setScreen(new ResourceSprintSetupScreen());
+    }
+
+    private void openDeathSwap() {
+        this.client.setScreen(new DeathSwapSetupScreen());
+    }
+
     private void openSettingsPlaceholder() {
-        this.statusMessage = "Settings menu coming soon.";
+        this.client.setScreen(new SettingsScreen());
     }
 
     @Override

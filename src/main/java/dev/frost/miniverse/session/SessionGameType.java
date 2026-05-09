@@ -5,15 +5,20 @@ import java.util.Locale;
 import java.util.Optional;
 
 public enum SessionGameType {
-    MANHUNT("manhunt", "Manhunt"),
-    SPEEDRUN("speedrun", "Speedrun");
+    MANHUNT("manhunt", "Manhunt", SessionTopology.SHARED_WORLD),
+    SPEEDRUN("speedrun", "Speedrun", SessionTopology.ISOLATED_WORLD),
+    BOUNTY_HUNT("bountyhunt", "Bounty Hunt", SessionTopology.SHARED_WORLD),
+    RESOURCE_SPRINT("resource_sprint", "Resource Sprint", SessionTopology.SHARED_WORLD),
+    DEATH_SWAP("deathswap", "Death Swap", SessionTopology.SHARED_WORLD);
 
     private final String commandName;
     private final String displayName;
+    private final SessionTopology topology;
 
-    SessionGameType(String commandName, String displayName) {
+    SessionGameType(String commandName, String displayName, SessionTopology topology) {
         this.commandName = commandName;
         this.displayName = displayName;
+        this.topology = topology;
     }
 
     public String getCommandName() {
@@ -22,6 +27,10 @@ public enum SessionGameType {
 
     public String getDisplayName() {
         return this.displayName;
+    }
+
+    public SessionTopology getTopology() {
+        return this.topology;
     }
 
     public static Optional<SessionGameType> fromString(String value) {

@@ -17,6 +17,8 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<CreateSessionPayload> CREATE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_create"));
     public static final CustomPayload.Id<LaunchSessionPayload> LAUNCH_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_launch"));
     public static final CustomPayload.Id<StopSessionPayload> STOP_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_stop"));
+    public static final CustomPayload.Id<GrantOpPayload> GRANT_OP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "grant_op"));
+    public static final CustomPayload.Id<CleanupPlayerPayload> CLEANUP_PLAYER_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "cleanup_player"));
 
     private static boolean payloadTypesRegistered;
 
@@ -32,6 +34,8 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(CREATE_SESSION_ID, CreateSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(LAUNCH_SESSION_ID, LaunchSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(STOP_SESSION_ID, StopSessionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(GRANT_OP_ID, GrantOpPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(CLEANUP_PLAYER_ID, CleanupPlayerPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SESSION_LIST_ID, SessionListPayload.CODEC);
 
         payloadTypesRegistered = true;
@@ -107,6 +111,32 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return STOP_SESSION_ID;
+        }
+    }
+
+    public record GrantOpPayload(String sessionId) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, GrantOpPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING.cast(),
+            GrantOpPayload::sessionId,
+            GrantOpPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return GRANT_OP_ID;
+        }
+    }
+
+    public record CleanupPlayerPayload(String sessionId) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, CleanupPlayerPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING.cast(),
+            CleanupPlayerPayload::sessionId,
+            CleanupPlayerPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return CLEANUP_PLAYER_ID;
         }
     }
 }

@@ -1,17 +1,16 @@
 package dev.frost.miniverse.minigame.impl.speedrun;
 
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
-import net.minecraft.scoreboard.ScoreAccess;
-import net.minecraft.scoreboard.ScoreHolder;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardCriterion;
-import net.minecraft.scoreboard.ScoreboardDisplaySlot;
-import net.minecraft.scoreboard.ScoreboardObjective;
+import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -33,6 +32,8 @@ public class SpeedrunMinigame implements Minigame {
     private static final String NAME = "Speedrun";
     private static final String SCOREBOARD_OBJECTIVE = "speedrun_display";
     private static final int TICKS_PER_SECOND = 20;
+    private static final ScoreboardController SCOREBOARD = new ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Speedrun"));
+    private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("speedrun");
 
     private GameState state;
     @Nullable
@@ -44,6 +45,18 @@ public class SpeedrunMinigame implements Minigame {
 
     public SpeedrunMinigame() {
         this.state = GameState.WAITING_FOR_PLAYERS;
+        this.vanillaTeams.setFriendlyFireAllowed(true);
+        this.vanillaTeams.setTeammateCollisionAllowed(false);
+    }
+
+    public void setVanillaFriendlyFireAllowed(boolean allowed) {
+        this.vanillaTeams.setFriendlyFireAllowed(allowed);
+        this.syncVanillaTeams();
+    }
+
+    public void setVanillaTeammateCollisionAllowed(boolean allowed) {
+        this.vanillaTeams.setTeammateCollisionAllowed(allowed);
+        this.syncVanillaTeams();
     }
 
     @Override
@@ -92,6 +105,7 @@ public class SpeedrunMinigame implements Minigame {
 
         this.restoreParticipants();
         this.clearScoreboard();
+        this.clearVanillaTeams();
 
         this.runnerUuid = null;
         this.elapsedTicks = 0;
@@ -152,6 +166,7 @@ public class SpeedrunMinigame implements Minigame {
         if (this.state == GameState.IN_PROGRESS) {
             this.syncParticipantModes();
         }
+        this.syncVanillaTeams();
 
         this.updateScoreboard();
     }
@@ -219,6 +234,7 @@ public class SpeedrunMinigame implements Minigame {
             this.runnerUuid = MinigameManager.getInstance().getParticipants().get(0).getUuid();
             this.updateScoreboard();
         }
+        this.syncVanillaTeams();
     }
 
     private void prepareParticipantsForRun() {
@@ -299,40 +315,18 @@ public class SpeedrunMinigame implements Minigame {
     }
 
     private void broadcastMessage(Text message) {
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
-            participant.sendMessage(message);
-        }
+        GameMessenger.broadcast(MinigameManager.getInstance().getParticipants(), message);
     }
 
     private void updateScoreboard() {
         if (this.server == null) {
             return;
         }
+        this.syncVanillaTeams();
 
-        Scoreboard scoreboard = this.server.getScoreboard();
-        ScoreboardObjective objective = scoreboard.getObjectives().stream()
-            .filter(obj -> SCOREBOARD_OBJECTIVE.equals(obj.getName()))
-            .findFirst()
-            .orElseGet(() -> scoreboard.addObjective(
-                SCOREBOARD_OBJECTIVE,
-                ScoreboardCriterion.DUMMY,
-                Text.literal("Speedrun"),
-                ScoreboardCriterion.RenderType.INTEGER,
-                false,
-                null
-            ));
-
-        scoreboard.setObjectiveSlot(ScoreboardDisplaySlot.SIDEBAR, objective);
-
-        this.setScore(scoreboard, objective, "Players", MinigameManager.getInstance().getParticipantCount());
-        this.setScore(scoreboard, objective, "Runner", this.getRunner() == null ? 0 : 1);
-        this.setScore(scoreboard, objective, "Time", this.state == GameState.IN_PROGRESS ? this.elapsedTicks / TICKS_PER_SECOND : 0);
-    }
-
-    private void setScore(Scoreboard scoreboard, ScoreboardObjective objective, String label, int value) {
-        ScoreHolder holder = ScoreHolder.fromName(label);
-        ScoreAccess score = scoreboard.getOrCreateScore(holder, objective);
-        score.setScore(value);
+        SCOREBOARD.setScore(this.server, "Players", MinigameManager.getInstance().getParticipantCount());
+        SCOREBOARD.setScore(this.server, "Runner", this.getRunner() == null ? 0 : 1);
+        SCOREBOARD.setScore(this.server, "Time", this.state == GameState.IN_PROGRESS ? this.elapsedTicks / TICKS_PER_SECOND : 0);
     }
 
     private void clearScoreboard() {
@@ -340,22 +334,46 @@ public class SpeedrunMinigame implements Minigame {
             return;
         }
 
-        Scoreboard scoreboard = this.server.getScoreboard();
-        ScoreboardObjective objective = scoreboard.getObjectives().stream()
-            .filter(obj -> SCOREBOARD_OBJECTIVE.equals(obj.getName()))
-            .findFirst()
-            .orElse(null);
+        SCOREBOARD.clear(this.server);
+        this.clearVanillaTeams();
+    }
 
-        scoreboard.setObjectiveSlot(ScoreboardDisplaySlot.SIDEBAR, null);
-        if (objective != null) {
-            scoreboard.removeObjective(objective);
+    private void syncVanillaTeams() {
+        if (this.server == null) {
+            return;
+        }
+
+        ServerPlayerEntity runner = this.getRunner();
+        List<ServerPlayerEntity> runners = runner == null ? List.of() : List.of(runner);
+        List<ServerPlayerEntity> spectators = MinigameManager.getInstance().getParticipants().stream()
+            .filter(player -> runner == null || !runner.getUuid().equals(player.getUuid()))
+            .toList();
+
+        VanillaTeamOptions runnerOptions = VanillaTeamOptions.defaults()
+            .withColor(Formatting.GREEN)
+            .withPrefix(Text.literal("[RUNNER] ").formatted(Formatting.GREEN))
+            .withFriendlyFireAllowed(true)
+            .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
+        VanillaTeamOptions spectatorOptions = VanillaTeamOptions.defaults()
+            .withColor(Formatting.DARK_GRAY)
+            .withPrefix(Text.literal("[SPEC] ").formatted(Formatting.DARK_GRAY))
+            .withFriendlyFireAllowed(false)
+            .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
+
+        this.vanillaTeams.sync(this.server, List.of(
+            new VanillaTeamDescriptor("runner", Text.literal("Runner"), runners, runnerOptions),
+            new VanillaTeamDescriptor("spectators", Text.literal("Spectators"), spectators, spectatorOptions)
+        ));
+    }
+
+    private void clearVanillaTeams() {
+        if (this.server != null) {
+            this.vanillaTeams.clear(this.server);
         }
     }
 
     private void showGameOverTitle(Text title) {
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
-            participant.networkHandler.sendPacket(new TitleS2CPacket(title.copy().formatted(Formatting.GOLD)));
-        }
+        GameMessenger.showGameOverTitle(MinigameManager.getInstance().getParticipants(), title);
     }
 
     @Override

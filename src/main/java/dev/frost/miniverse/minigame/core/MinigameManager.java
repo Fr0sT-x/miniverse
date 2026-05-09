@@ -4,7 +4,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Singleton manager for handling the current active minigame and its state.
@@ -19,7 +19,7 @@ public class MinigameManager {
     @Nullable
     private GameState currentState;
 
-    private final List<ServerPlayerEntity> participants = new CopyOnWriteArrayList<>();
+    private final Map<UUID, ServerPlayerEntity> participants = new ConcurrentHashMap<>();
 
     private MinigameManager() {
         this.currentState = null;
@@ -103,9 +103,7 @@ public class MinigameManager {
      * @param player the player to add
      */
     public void addParticipant(ServerPlayerEntity player) {
-        if (!this.participants.contains(player)) {
-            this.participants.add(player);
-        }
+        this.participants.put(player.getUuid(), player);
     }
 
     /**
@@ -114,7 +112,7 @@ public class MinigameManager {
      * @param player the player to remove
      */
     public void removeParticipant(ServerPlayerEntity player) {
-        this.participants.remove(player);
+        this.participants.remove(player.getUuid());
     }
 
     /**
@@ -125,8 +123,8 @@ public class MinigameManager {
      * @param newPlayer the new player entity
      */
     public void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        this.participants.remove(oldPlayer);
-        this.addParticipant(newPlayer);
+        this.participants.remove(oldPlayer.getUuid());
+        this.participants.put(newPlayer.getUuid(), newPlayer);
     }
 
     /**
@@ -135,7 +133,7 @@ public class MinigameManager {
      * @return a list of all participating players
      */
     public List<ServerPlayerEntity> getParticipants() {
-        return new ArrayList<>(this.participants);
+        return new ArrayList<>(this.participants.values());
     }
 
     /**
@@ -154,7 +152,7 @@ public class MinigameManager {
      * @return true if the player is a participant, false otherwise
      */
     public boolean isParticipant(ServerPlayerEntity player) {
-        return this.participants.contains(player);
+        return this.participants.containsKey(player.getUuid());
     }
 
     /**

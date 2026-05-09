@@ -67,6 +67,7 @@ public final class SessionManager {
         String sessionId = this.nextSessionId(gameType);
         GameSession session = new GameSession(sessionId, gameType, seedPlan);
         this.sessions.put(sessionId, session);
+        this.persistRegistry();
         Miniverse.LOGGER.info("Created {} session {} with seed {}", gameType.getDisplayName(), sessionId, session.getSeedPlan().sharedSeed());
         return session;
     }
@@ -93,7 +94,9 @@ public final class SessionManager {
             playerNames.add(player.getName().getString());
         }
 
-        return session.addAssignment(label, playerUuids, playerNames);
+        PlayerAssignment assignment = session.addAssignment(label, playerUuids, playerNames);
+        this.persistRegistry();
+        return assignment;
     }
 
     public synchronized List<GameSession> getSessions() {
@@ -133,6 +136,8 @@ public final class SessionManager {
             this.launchAssignmentAsync(session, assignment);
         }
 
+        this.persistRegistry();
+
         return assignment;
     }
 
@@ -147,7 +152,22 @@ public final class SessionManager {
             return null;
         }
 
-        return session.removePlayer(playerUuid);
+        PlayerAssignment removed = session.removePlayer(playerUuid);
+        this.persistRegistry();
+        return removed;
+    }
+
+    public synchronized void clearPlayerAssignmentsForSession(String sessionId) {
+        GameSession session = this.sessions.get(sessionId);
+        if (session == null) {
+            return;
+        }
+
+        for (PlayerAssignment assignment : session.snapshotAssignments()) {
+            for (UUID playerUuid : assignment.getPlayerUuids()) {
+                this.playerAssignments.remove(playerUuid, sessionId);
+            }
+        }
     }
 
     public CompletableFuture<GameSession> launchSession(String sessionId) {
@@ -169,18 +189,53 @@ public final class SessionManager {
         }
 
         session.setState(SessionState.LAUNCHING);
+
+        List<PlayerAssignment> assignments = new ArrayList<>(session.snapshotAssignments());
+
+        if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD && assignments.size() > 0) {
+            PlayerAssignment primary = assignments.get(0);
+            CompletableFuture<PlayerAssignment> primaryLaunch = this.launchAssignmentAsync(session, primary);
+
+            return primaryLaunch.thenApply(launchedAssignment -> {
+                // Reuse the launched process/port for other assignments
+                java.nio.file.Path workingDirectory = launchedAssignment.getWorkingDirectory();
+                Integer port = launchedAssignment.getPort();
+                Process process = launchedAssignment.getProcess();
+                String connectionAddress = launchedAssignment.getConnectionAddress();
+
+                for (int i = 1; i < assignments.size(); i++) {
+                    PlayerAssignment other = assignments.get(i);
+                    // Mark as launching and running with the same backend process
+                    if (workingDirectory != null && port != null) {
+                        other.markLaunching(workingDirectory, port);
+                    }
+                    other.markRunning(process, connectionAddress);
+                }
+
+                session.setState(SessionState.RUNNING);
+                this.persistRegistry();
+                return session;
+            }).exceptionally(error -> {
+                session.setState(SessionState.FAILED);
+                this.persistRegistry();
+                throw new RuntimeException(error);
+            });
+        }
+
         List<CompletableFuture<PlayerAssignment>> launches = new ArrayList<>();
-        for (PlayerAssignment assignment : session.snapshotAssignments()) {
+        for (PlayerAssignment assignment : assignments) {
             launches.add(this.launchAssignmentAsync(session, assignment));
         }
 
         return CompletableFuture.allOf(launches.toArray(new CompletableFuture[0]))
             .thenApply(ignored -> {
                 session.setState(SessionState.RUNNING);
+                this.persistRegistry();
                 return session;
             })
             .exceptionally(error -> {
                 session.setState(SessionState.FAILED);
+                this.persistRegistry();
                 throw new RuntimeException(error);
             });
     }
@@ -196,12 +251,15 @@ public final class SessionManager {
             this.serverLauncher.stop(assignment);
         }
         session.setState(SessionState.STOPPED);
+        this.persistRegistry();
     }
 
     public synchronized void removeSession(String sessionId) {
         this.stopSession(sessionId);
         this.sessions.remove(sessionId);
         this.playerAssignments.entrySet().removeIf(entry -> sessionId.equals(entry.getValue()));
+        SessionRegistry.removeSession(sessionId);
+        this.persistRegistry();
     }
 
     public void transferAssignedPlayers(MinecraftServer server, GameSession session) {
@@ -228,6 +286,15 @@ public final class SessionManager {
         player.networkHandler.sendPacket(new ServerTransferS2CPacket("127.0.0.1", assignment.getPort()));
     }
 
+    public void transferPlayer(ServerPlayerEntity player, String host, int port) {
+        if (host == null || host.isBlank() || port <= 0) {
+            return;
+        }
+
+        player.sendMessage(net.minecraft.text.Text.literal("Returning you to the main server..."), false);
+        player.networkHandler.sendPacket(new ServerTransferS2CPacket(host, port));
+    }
+
     public synchronized List<PlayerAssignment> getAssignments(String sessionId) {
         GameSession session = this.sessions.get(sessionId);
         if (session == null) {
@@ -251,7 +318,9 @@ public final class SessionManager {
         AtomicInteger counter = this.sessionCounters.computeIfAbsent(gameType, ignored -> new AtomicInteger(1));
         return gameType.getCommandName() + "-" + counter.getAndIncrement();
     }
+
+    private synchronized void persistRegistry() {
+        SessionRegistry.writeSnapshot(this.sessions.values());
+    }
 }
-
-
 

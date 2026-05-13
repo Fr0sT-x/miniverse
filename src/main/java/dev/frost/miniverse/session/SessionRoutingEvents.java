@@ -109,7 +109,7 @@ public final class SessionRoutingEvents {
                 if (session.getState() != SessionState.STOPPING && session.getState() != SessionState.STOPPED) {
                     session.setState(SessionState.STOPPING);
                 }
-                sessionManager.clearPlayerAssignmentsForSession(stopState.sessionId());
+                sessionManager.clearSessionGroupsForSession(stopState.sessionId());
             }
 
             if (stopState.returnComplete()) {

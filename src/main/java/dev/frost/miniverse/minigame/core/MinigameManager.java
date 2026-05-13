@@ -1,29 +1,25 @@
 package dev.frost.miniverse.minigame.core;
 
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import org.jetbrains.annotations.Nullable;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
- * Singleton manager for handling the current active minigame and its state.
- * This is the central hub for all minigame-related state management.
+ * Singleton holder for the active backend runtime.
  */
 public class MinigameManager {
     private static final MinigameManager INSTANCE = new MinigameManager();
 
     @Nullable
-    private Minigame activeMinigame;
-
-    @Nullable
-    private GameState currentState;
-
-    private final Map<UUID, ServerPlayerEntity> participants = new ConcurrentHashMap<>();
+    private MinigameRuntime runtime;
 
     private MinigameManager() {
-        this.currentState = null;
-        this.activeMinigame = null;
     }
 
     /**
@@ -41,19 +37,22 @@ public class MinigameManager {
      * @param minigame the minigame to activate
      */
     public void setActiveMinigame(@Nullable Minigame minigame) {
-        if (this.activeMinigame != null) {
-            this.activeMinigame.stopGame();
+        if (this.runtime != null) {
+            this.runtime.stop();
+            MatchLifecycleController.getInstance().reset();
         }
-
-        this.activeMinigame = minigame;
 
         if (minigame != null) {
-            this.currentState = GameState.WAITING_FOR_PLAYERS;
-            minigame.initialize();
+            this.runtime = new MinigameRuntime(minigame, null);
+            this.runtime.initialize();
         } else {
-            this.currentState = null;
-            this.participants.clear();
+            this.runtime = null;
         }
+    }
+
+    public void setActiveMinigame(@Nullable Minigame minigame, MinecraftServer server) {
+        this.setActiveMinigame(minigame);
+        this.bindServer(server);
     }
 
     /**
@@ -63,7 +62,30 @@ public class MinigameManager {
      */
     @Nullable
     public Minigame getActiveMinigame() {
-        return this.activeMinigame;
+        return this.runtime == null ? null : this.runtime.minigame();
+    }
+
+    @Nullable
+    public MinigameRuntime getRuntime() {
+        return this.runtime;
+    }
+
+    @Nullable
+    public MinigameContext getContext() {
+        return this.runtime == null ? null : this.runtime.context();
+    }
+
+    public void bindServer(MinecraftServer server) {
+        if (this.runtime != null) {
+            this.runtime.bindServer(server);
+        }
+    }
+
+    public void tickRuntimeClock(MinecraftServer server) {
+        if (this.runtime != null) {
+            this.runtime.bindServer(server);
+            this.runtime.context().clock().tick();
+        }
     }
 
     /**
@@ -73,7 +95,7 @@ public class MinigameManager {
      */
     @Nullable
     public GameState getCurrentState() {
-        return this.currentState;
+        return this.runtime == null ? null : this.runtime.state();
     }
 
     /**
@@ -82,9 +104,8 @@ public class MinigameManager {
      * @param state the new GameState
      */
     public void setCurrentState(GameState state) {
-        this.currentState = state;
-        if (this.activeMinigame != null) {
-            this.activeMinigame.setState(state);
+        if (this.runtime != null) {
+            this.runtime.setState(state);
         }
     }
 
@@ -94,7 +115,7 @@ public class MinigameManager {
      * @return true if a minigame is active, false otherwise
      */
     public boolean isMinigameActive() {
-        return this.activeMinigame != null && this.currentState != null;
+        return this.runtime != null && this.runtime.state() != null;
     }
 
     /**
@@ -103,7 +124,17 @@ public class MinigameManager {
      * @param player the player to add
      */
     public void addParticipant(ServerPlayerEntity player) {
-        this.participants.put(player.getUuid(), player);
+        if (this.runtime == null) {
+            return;
+        }
+        this.bindPlayerServer(player);
+        this.runtime.context().participants().add(player);
+    }
+
+    public void addParticipant(UUID playerId) {
+        if (this.runtime != null) {
+            this.runtime.context().participants().add(playerId);
+        }
     }
 
     /**
@@ -112,7 +143,13 @@ public class MinigameManager {
      * @param player the player to remove
      */
     public void removeParticipant(ServerPlayerEntity player) {
-        this.participants.remove(player.getUuid());
+        this.removeParticipant(player.getUuid());
+    }
+
+    public void removeParticipant(UUID playerId) {
+        if (this.runtime != null) {
+            this.runtime.context().participants().remove(playerId);
+        }
     }
 
     /**
@@ -123,8 +160,11 @@ public class MinigameManager {
      * @param newPlayer the new player entity
      */
     public void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        this.participants.remove(oldPlayer.getUuid());
-        this.participants.put(newPlayer.getUuid(), newPlayer);
+        if (this.runtime == null) {
+            return;
+        }
+        this.bindPlayerServer(newPlayer);
+        this.runtime.context().participants().add(newPlayer);
     }
 
     /**
@@ -133,7 +173,11 @@ public class MinigameManager {
      * @return a list of all participating players
      */
     public List<ServerPlayerEntity> getParticipants() {
-        return new ArrayList<>(this.participants.values());
+        return this.runtime == null ? List.of() : this.runtime.context().liveParticipants();
+    }
+
+    public Set<UUID> getParticipantIds() {
+        return this.runtime == null ? Set.of() : this.runtime.context().participantIds();
     }
 
     /**
@@ -142,7 +186,7 @@ public class MinigameManager {
      * @return the number of participants
      */
     public int getParticipantCount() {
-        return this.participants.size();
+        return this.runtime == null ? 0 : this.runtime.context().participants().size();
     }
 
     /**
@@ -152,25 +196,36 @@ public class MinigameManager {
      * @return true if the player is a participant, false otherwise
      */
     public boolean isParticipant(ServerPlayerEntity player) {
-        return this.participants.containsKey(player.getUuid());
+        return this.isParticipant(player.getUuid());
+    }
+
+    public boolean isParticipant(UUID playerId) {
+        return this.runtime != null && this.runtime.context().participants().contains(playerId);
     }
 
     /**
      * Clears all participants.
      */
     public void clearParticipants() {
-        this.participants.clear();
+        if (this.runtime != null) {
+            this.runtime.context().participants().clear();
+        }
     }
 
     /**
      * Resets the manager to its initial state.
      */
     public void reset() {
-        if (this.activeMinigame != null) {
-            this.activeMinigame.stopGame();
+        if (this.runtime != null) {
+            this.runtime.stop();
         }
-        this.activeMinigame = null;
-        this.currentState = null;
-        this.participants.clear();
+        MatchLifecycleController.getInstance().reset();
+        this.runtime = null;
+    }
+
+    private void bindPlayerServer(ServerPlayerEntity player) {
+        if (this.runtime != null && player.getEntityWorld() instanceof ServerWorld world) {
+            this.runtime.bindServer(world.getServer());
+        }
     }
 }

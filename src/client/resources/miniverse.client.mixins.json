@@ -3,7 +3,8 @@
 	"package": "dev.frost.miniverse.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
+		"ExampleClientMixin",
+		"LivingEntityNightVisionMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -9,8 +9,44 @@ public final class SessionSnapshotData {
     public record RosterEntry(String uuid, String name) {
     }
 
+    public record GameMetadata(
+        String id,
+        String displayName,
+        String description,
+        String icon,
+        String topology,
+        String setupKind,
+        boolean enabled,
+        List<SetupField> fields
+    ) {
+        public boolean isGenericSetup() {
+            return "generic".equalsIgnoreCase(this.setupKind);
+        }
+    }
+
+    public record SetupField(
+        String key,
+        String label,
+        String type,
+        String defaultValue,
+        boolean required,
+        int min,
+        int max
+    ) {
+        public boolean isBoolean() {
+            return "boolean".equalsIgnoreCase(this.type);
+        }
+
+        public boolean isInteger() {
+            return "integer".equalsIgnoreCase(this.type);
+        }
+    }
+
     private static volatile List<SessionSummary> sessions = List.of();
     private static volatile List<RosterEntry> roster = List.of();
+    private static volatile List<GameMetadata> games = List.of();
+    private static volatile int maxConcurrentLaunches = 2;
+    private static volatile int launcherQueueCapacity = 64;
 
     private SessionSnapshotData() {
     }
@@ -23,9 +59,28 @@ public final class SessionSnapshotData {
         return roster;
     }
 
-    public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster) {
+    public static List<GameMetadata> games() {
+        return games;
+    }
+
+    public static int maxConcurrentLaunches() {
+        return maxConcurrentLaunches;
+    }
+
+    public static int launcherQueueCapacity() {
+        return launcherQueueCapacity;
+    }
+
+    public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames) {
+        update(newSessions, newRoster, newGames, maxConcurrentLaunches, launcherQueueCapacity);
+    }
+
+    public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity) {
         sessions = List.copyOf(newSessions);
         roster = List.copyOf(newRoster);
+        games = List.copyOf(newGames);
+        maxConcurrentLaunches = Math.clamp(newMaxConcurrentLaunches, 1, 64);
+        launcherQueueCapacity = Math.max(1, newLauncherQueueCapacity);
     }
 }
 

@@ -1,7 +1,7 @@
 package dev.frost.miniverse.client.gui;
 
-import dev.frost.miniverse.session.SessionGameType;
-import dev.frost.miniverse.client.gui.ResourceSprintSetupScreen;
+import dev.frost.miniverse.common.NetworkConstants;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -14,6 +14,8 @@ import net.minecraft.text.Text;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 public class SessionScreen extends Screen {
     private static final int GRID_COLUMNS = 2;
@@ -26,6 +28,13 @@ public class SessionScreen extends Screen {
     private static final int FOOTER_BUTTON_HEIGHT = 20;
     private static final int SETTINGS_BUTTON_WIDTH = 92;
     private static final int CLOSE_BUTTON_WIDTH = 68;
+    private static final Map<String, Consumer<SessionScreen>> CUSTOM_SETUP_SCREENS = Map.of(
+        "manhunt", SessionScreen::openManhunt,
+        "speedrun", SessionScreen::openSpeedrun,
+        "bountyhunt", SessionScreen::openBountyHunt,
+        "resource_sprint", SessionScreen::openResourceSprint,
+        "deathswap", SessionScreen::openDeathSwap
+    );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final List<MinigameEntry> minigameEntries = new ArrayList<>();
@@ -57,12 +66,59 @@ public class SessionScreen extends Screen {
             roster.add(new SessionSnapshotData.RosterEntry(entry.getString("uuid", ""), entry.getString("name", "")));
         }
 
-        SessionSnapshotData.update(sessions, roster);
+        List<SessionSnapshotData.GameMetadata> games = new ArrayList<>();
+        NbtList gameList = root.getList("games").orElseGet(NbtList::new);
+        for (int i = 0; i < gameList.size(); i++) {
+            NbtCompound entry = gameList.getCompoundOrEmpty(i);
+            List<SessionSnapshotData.SetupField> fields = new ArrayList<>();
+            NbtList fieldList = entry.getList("fields").orElseGet(NbtList::new);
+            for (int fieldIndex = 0; fieldIndex < fieldList.size(); fieldIndex++) {
+                NbtCompound field = fieldList.getCompoundOrEmpty(fieldIndex);
+                fields.add(new SessionSnapshotData.SetupField(
+                    field.getString("key", ""),
+                    field.getString("label", ""),
+                    field.getString("type", "string"),
+                    field.getString("default", ""),
+                    field.getBoolean("required", false),
+                    field.getInt("min").orElse(0),
+                    field.getInt("max").orElse(0)
+                ));
+            }
+
+            games.add(new SessionSnapshotData.GameMetadata(
+                entry.getString("id", ""),
+                entry.getString("displayName", ""),
+                entry.getString("description", ""),
+                entry.getString("icon", "?"),
+                entry.getString("topology", ""),
+                entry.getString("setupKind", "generic"),
+                entry.getBoolean("enabled", true),
+                fields
+            ));
+        }
+
+        NbtCompound launcher = root.getCompound("launcher").orElseGet(NbtCompound::new);
+        SessionSnapshotData.update(
+            sessions,
+            roster,
+            games,
+            launcher.getInt("maxConcurrentLaunches").orElse(SessionSnapshotData.maxConcurrentLaunches()),
+            launcher.getInt("queueCapacity").orElse(SessionSnapshotData.launcherQueueCapacity())
+        );
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.currentScreen instanceof SessionScreen sessionScreen) {
+            sessionScreen.rebuildWidgets();
+        }
     }
 
     @Override
     protected void init() {
         super.init();
+        this.rebuildWidgets();
+        this.requestSnapshot();
+    }
+
+    private void rebuildWidgets() {
         this.clearChildren();
         this.minigameEntries.clear();
         this.minigameEntries.addAll(this.createMinigameEntries());
@@ -151,41 +207,20 @@ public class SessionScreen extends Screen {
 
     private List<MinigameEntry> createMinigameEntries() {
         List<MinigameEntry> entries = new ArrayList<>();
-        entries.add(new MinigameEntry(
-            SessionGameType.MANHUNT.getDisplayName(),
-            "One player hunts while others speedrun.",
-            "⚔",
-            true,
-            SessionScreen::openManhunt
-        ));
-        entries.add(new MinigameEntry(
-            SessionGameType.SPEEDRUN.getDisplayName(),
-            "Race to finish the game fastest on identical seeds.",
-            "⏱",
-            true,
-            SessionScreen::openSpeedrun
-        ));
-        entries.add(new MinigameEntry(
-            SessionGameType.BOUNTY_HUNT.getDisplayName(),
-            "Track assigned targets and score hits to win.",
-            "🎯",
-            true,
-            SessionScreen::openBountyHunt
-        ));
-        entries.add(new MinigameEntry(
-            SessionGameType.RESOURCE_SPRINT.getDisplayName(),
-            "Race through a visible objective chain to finish first.",
-            "⛏",
-            true,
-            SessionScreen::openResourceSprint
-        ));
-        entries.add(new MinigameEntry(
-            SessionGameType.DEATH_SWAP.getDisplayName(),
-            "Survive swaps and outlast every other player or team.",
-            "↔",
-            true,
-            SessionScreen::openDeathSwap
-        ));
+        for (SessionSnapshotData.GameMetadata metadata : SessionSnapshotData.games()) {
+            Consumer<SessionScreen> customAction = CUSTOM_SETUP_SCREENS.get(metadata.id());
+            boolean enabled = metadata.enabled() && (!"custom".equalsIgnoreCase(metadata.setupKind()) || customAction != null);
+            entries.add(new MinigameEntry(
+                metadata.id(),
+                metadata.displayName(),
+                metadata.description(),
+                metadata.icon(),
+                enabled,
+                metadata.setupKind(),
+                metadata.fields(),
+                customAction
+            ));
+        }
         return entries;
     }
 
@@ -236,8 +271,18 @@ public class SessionScreen extends Screen {
         this.client.setScreen(new DeathSwapSetupScreen());
     }
 
+    public void openGenericSetup(MinigameEntry entry) {
+        this.client.setScreen(new GenericSetupScreen(entry));
+    }
+
     private void openSettingsPlaceholder() {
         this.client.setScreen(new SettingsScreen());
+    }
+
+    private void requestSnapshot() {
+        if (this.client.player != null) {
+            ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload("metadata"));
+        }
     }
 
     @Override

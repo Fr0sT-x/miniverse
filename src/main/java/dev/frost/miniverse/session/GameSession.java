@@ -12,16 +12,16 @@ import net.minecraft.nbt.NbtCompound;
 
 public final class GameSession {
     private final String sessionId;
-    private final SessionGameType gameType;
+    private final SessionGameDescriptor gameType;
     private final SeedPlan seedPlan;
     private final Instant createdAt;
-    private final List<PlayerAssignment> assignments = new ArrayList<>();
+    private final List<SessionGroup> groups = new ArrayList<>();
     private NbtCompound settings = new NbtCompound();
 
     private volatile SessionState state;
     private volatile Instant launchedAt;
 
-    public GameSession(String sessionId, SessionGameType gameType, SeedPlan seedPlan) {
+    public GameSession(String sessionId, SessionGameDescriptor gameType, SeedPlan seedPlan) {
         this.sessionId = sessionId;
         this.gameType = gameType;
         this.seedPlan = seedPlan;
@@ -33,7 +33,7 @@ public final class GameSession {
         return this.sessionId;
     }
 
-    public SessionGameType getGameType() {
+    public SessionGameDescriptor getGameType() {
         return this.gameType;
     }
 
@@ -61,16 +61,27 @@ public final class GameSession {
         return this.launchedAt;
     }
 
-    public synchronized PlayerAssignment addPlayer(UUID playerUuid, String playerName) {
-        return this.addAssignment(playerName, List.of(playerUuid), List.of(playerName));
+    public synchronized SessionGroup addPlayer(UUID playerUuid, String playerName) {
+        return this.addGroup(playerName, List.of(playerUuid), List.of(playerName));
     }
 
-    public synchronized PlayerAssignment addAssignment(String label, Collection<UUID> playerUuids, Collection<String> playerNames) {
+    public synchronized SessionGroup addGroup(PlannedTeam plannedTeam) {
+        SessionGroup group = new SessionGroup(
+            this.sessionId,
+            this.gameType,
+            this.seedPlan,
+            plannedTeam
+        );
+        this.groups.add(group);
+        return group;
+    }
+
+    public synchronized SessionGroup addGroup(String label, Collection<UUID> playerUuids, Collection<String> playerNames) {
         if (playerUuids.isEmpty() || playerNames.isEmpty() || playerUuids.size() != playerNames.size()) {
-            throw new IllegalArgumentException("Assignments must contain at least one player and matching UUID/name counts.");
+            throw new IllegalArgumentException("Session groups must contain at least one player and matching UUID/name counts.");
         }
 
-        PlayerAssignment assignment = new PlayerAssignment(
+        SessionGroup group = new SessionGroup(
             this.sessionId,
             this.gameType,
             this.seedPlan,
@@ -78,32 +89,32 @@ public final class GameSession {
             new ArrayList<>(playerUuids),
             new ArrayList<>(playerNames)
         );
-        this.assignments.add(assignment);
-        return assignment;
+        this.groups.add(group);
+        return group;
     }
 
-    public synchronized Optional<PlayerAssignment> getAssignment(UUID playerUuid) {
-        return this.assignments.stream().filter(assignment -> assignment.containsPlayer(playerUuid)).findFirst();
+    public synchronized Optional<SessionGroup> getGroup(UUID playerUuid) {
+        return this.groups.stream().filter(group -> group.containsPlayer(playerUuid)).findFirst();
     }
 
-    public synchronized List<PlayerAssignment> getAssignments() {
-        return Collections.unmodifiableList(new ArrayList<>(new LinkedHashSet<>(this.assignments)));
+    public synchronized List<SessionGroup> getGroups() {
+        return Collections.unmodifiableList(new ArrayList<>(new LinkedHashSet<>(this.groups)));
     }
 
     public synchronized boolean containsPlayer(UUID playerUuid) {
-        return this.assignments.stream().anyMatch(assignment -> assignment.containsPlayer(playerUuid));
+        return this.groups.stream().anyMatch(group -> group.containsPlayer(playerUuid));
     }
 
-    public synchronized PlayerAssignment removePlayer(UUID playerUuid) {
-        PlayerAssignment assignment = this.getAssignment(playerUuid).orElse(null);
-        if (assignment != null) {
-            this.assignments.remove(assignment);
+    public synchronized SessionGroup removePlayer(UUID playerUuid) {
+        SessionGroup group = this.getGroup(playerUuid).orElse(null);
+        if (group != null) {
+            this.groups.remove(group);
         }
-        return assignment;
+        return group;
     }
 
     public synchronized boolean isEmpty() {
-        return this.assignments.isEmpty();
+        return this.groups.isEmpty();
     }
 
     public synchronized void setState(SessionState state) {
@@ -113,8 +124,24 @@ public final class GameSession {
         }
     }
 
-    public synchronized Collection<PlayerAssignment> snapshotAssignments() {
-        return List.copyOf(new LinkedHashSet<>(this.assignments));
+    public synchronized Collection<SessionGroup> snapshotGroups() {
+        return List.copyOf(new LinkedHashSet<>(this.groups));
+    }
+
+    public synchronized SessionGroup addAssignment(String label, Collection<UUID> playerUuids, Collection<String> playerNames) {
+        return this.addGroup(label, playerUuids, playerNames);
+    }
+
+    public synchronized Optional<SessionGroup> getAssignment(UUID playerUuid) {
+        return this.getGroup(playerUuid);
+    }
+
+    public synchronized List<SessionGroup> getAssignments() {
+        return this.getGroups();
+    }
+
+    public synchronized Collection<SessionGroup> snapshotAssignments() {
+        return this.snapshotGroups();
     }
 }
 

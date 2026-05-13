@@ -1,7 +1,7 @@
 package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.session.SessionGameType;
+import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintDefinition;
 import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintSettings;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public class ResourceSprintSetupScreen extends Screen {
+    private static final String GAME_ID = ResourceSprintDefinition.ID;
     private static final double[] PROBABILITY_OPTIONS = {1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1};
     private static final int PANEL_PADDING = 16;
     private static final int PANEL_MAX_WIDTH = 1040;
@@ -856,7 +857,7 @@ public class ResourceSprintSetupScreen extends Screen {
         NbtCompound settings = settingsModel.toNbt();
 
         NbtCompound plan = new NbtCompound();
-        plan.putString("game", SessionGameType.RESOURCE_SPRINT.getCommandName());
+        plan.putString("game", GAME_ID);
         plan.putString("name", sessionName);
         plan.putBoolean("launch", true);
         plan.put("settings", settings);
@@ -871,7 +872,7 @@ public class ResourceSprintSetupScreen extends Screen {
         }
         plan.put("groups", groups);
 
-        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(SessionGameType.RESOURCE_SPRINT.getCommandName(), sessionName, plan));
+        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(GAME_ID, sessionName, plan));
         this.statusMessage = "Requested Resource Sprint session creation.";
     }
 

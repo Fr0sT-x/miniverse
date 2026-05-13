@@ -1,7 +1,7 @@
 package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.session.SessionGameType;
+import dev.frost.miniverse.minigame.impl.manhunt.ManhuntDefinition;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class ManhuntSetupScreen extends Screen {
+    private static final String GAME_ID = ManhuntDefinition.ID;
     private static final int PANEL_PADDING = 16;
     private static final int PANEL_MAX_WIDTH = 980;
     private static final int PANEL_MAX_HEIGHT = 720;
@@ -833,14 +834,14 @@ public class ManhuntSetupScreen extends Screen {
          }
 
          NbtCompound plan = new NbtCompound();
-         plan.putString("game", SessionGameType.MANHUNT.getCommandName());
+         plan.putString("game", GAME_ID);
          plan.putString("name", this.sessionNameField.getText().trim());
          plan.putBoolean("launch", true);
          plan.put("settings", this.buildSettingsCompound());
 
          // Don't add groups - all players (speedrunners and hunters) will be on the same server
          // Settings will contain the roles for players
-         ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(SessionGameType.MANHUNT.getCommandName(), this.sessionNameField.getText().trim(), plan));
+         ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(GAME_ID, this.sessionNameField.getText().trim(), plan));
          this.statusMessage = "Requested Manhunt session creation.";
      }
 

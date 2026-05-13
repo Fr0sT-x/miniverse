@@ -1,12 +1,12 @@
  package dev.frost.miniverse.minigame.impl.resourcesprint;
 
 import dev.frost.miniverse.minigame.core.GameMessenger;
-import dev.frost.miniverse.minigame.core.MinigameManager;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 import java.util.Collection;
+import java.util.function.Supplier;
 
 /**
  * Centralized event messaging helper for Resource Sprint that applies severity levels.
@@ -14,8 +14,14 @@ import java.util.Collection;
 public final class ResourceSprintEventMessenger {
     public enum Severity { MAJOR, MILESTONE, REGULAR }
 
+    private final Supplier<Collection<ServerPlayerEntity>> participants;
+
+    public ResourceSprintEventMessenger(Supplier<Collection<ServerPlayerEntity>> participants) {
+        this.participants = participants;
+    }
+
     public void send(Severity severity, Text title, Text subtitle) {
-        Collection<ServerPlayerEntity> participants = MinigameManager.getInstance().getParticipants();
+        Collection<ServerPlayerEntity> participants = this.participants.get();
         switch (severity) {
             case MAJOR -> {
                 GameMessenger.showGameTitle(participants, title, subtitle);

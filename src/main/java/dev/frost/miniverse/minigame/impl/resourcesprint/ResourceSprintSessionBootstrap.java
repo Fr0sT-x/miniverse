@@ -1,113 +1,56 @@
 package dev.frost.miniverse.minigame.impl.resourcesprint;
 
-import dev.frost.miniverse.Miniverse;
-import dev.frost.miniverse.minigame.core.Minigame;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintMinigame;
-import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintSettings;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import dev.frost.miniverse.minigame.core.SessionBootstrapper;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Properties;
-import java.util.UUID;
 
 final class ResourceSprintSessionBootstrap {
-    private static boolean registered;
-    private static Properties config;
-    private static boolean settingsApplied;
-
     private ResourceSprintSessionBootstrap() {
     }
 
-    static synchronized void register() {
-        if (registered) {
-            return;
-        }
-
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> onJoin(handler.player));
-        registered = true;
-    }
-
-    private static void onJoin(ServerPlayerEntity player) {
-        Properties properties = getConfig();
-        if (!"resource_sprint".equalsIgnoreCase(properties.getProperty("game", ""))) {
-            return;
-        }
-
-        if (!properties.containsKey("player." + player.getUuid())) {
-            return;
-        }
-
-        ResourceSprintMinigame resourceSprint = getOrCreateResourceSprint();
-        resourceSprint.setPlayerTeam(player, properties.getProperty("player." + player.getUuid() + ".team", properties.getProperty("assignmentLabel", "Team")));
-        if (!settingsApplied) {
-            resourceSprint.applySettings(ResourceSprintSettings.fromProperties(properties));
-            settingsApplied = true;
-        }
-
-        MinigameManager.getInstance().addParticipant(player);
-        if (resourceSprint.getState() == dev.frost.miniverse.minigame.core.GameState.WAITING_FOR_PLAYERS
-            && resourceSprint.canStartMatch()
-            && expectedPlayersOnline(properties)) {
-            resourceSprint.startGame();
-        }
-    }
-
-    private static ResourceSprintMinigame getOrCreateResourceSprint() {
-        Minigame active = MinigameManager.getInstance().getActiveMinigame();
-        if (active instanceof ResourceSprintMinigame resourceSprint) {
-            return resourceSprint;
-        }
-
-        ResourceSprintMinigame resourceSprint = new ResourceSprintMinigame();
-        MinigameManager.getInstance().setActiveMinigame(resourceSprint);
-        return resourceSprint;
-    }
-
-    private static boolean expectedPlayersOnline(Properties properties) {
-        for (String name : properties.stringPropertyNames()) {
-            if (!isExpectedPlayerKey(properties, name)) {
-                continue;
+    static void register() {
+        SessionBootstrapper.register(new SessionBootstrapper.Handler<ResourceSprintMinigame>() {
+            @Override
+            public String gameId() {
+                return ResourceSprintDefinition.ID;
             }
 
-            try {
-                UUID uuid = UUID.fromString(name.substring("player.".length()));
-                if (MinigameManager.getInstance().getParticipants().stream().noneMatch(player -> player.getUuid().equals(uuid))) {
-                    return false;
-                }
-            } catch (IllegalArgumentException ignored) {
-                return false;
+            @Override
+            public Class<ResourceSprintMinigame> runtimeType() {
+                return ResourceSprintMinigame.class;
             }
-        }
-        return true;
-    }
 
-    private static boolean isExpectedPlayerKey(Properties properties, String name) {
-        return name.startsWith("player.") && "true".equalsIgnoreCase(properties.getProperty(name));
-    }
+            @Override
+            public ResourceSprintMinigame createRuntime() {
+                return new ResourceSprintMinigame();
+            }
 
-    private static synchronized Properties getConfig() {
-        if (config != null) {
-            return config;
-        }
+            @Override
+            public void applySettings(ResourceSprintMinigame minigame, Properties properties) {
+                minigame.applySettings(ResourceSprintSettings.fromProperties(properties));
+            }
 
-        config = new Properties();
-        String configPath = System.getProperty("miniverse.session.config", "");
-        if (configPath.isBlank()) {
-            return config;
-        }
+            @Override
+            public void onPlayerJoin(ResourceSprintMinigame minigame, ServerPlayerEntity player, Properties properties) {
+                minigame.setPlayerTeam(player, properties.getProperty("player." + player.getUuid() + ".team", properties.getProperty("groupLabel", "Team")));
+            }
 
-        try (Reader reader = Files.newBufferedReader(Path.of(configPath))) {
-            config.load(reader);
-        } catch (IOException e) {
-            Miniverse.LOGGER.warn("Could not load Miniverse session config {}", configPath, e);
-        }
-        return config;
+            @Override
+            public MatchLifecycleOptions lifecycleOptions(ResourceSprintMinigame minigame, Properties properties) {
+                return MatchLifecycleOptions.defaults(minigame.getName())
+                    .withStartTitle(
+                        Text.literal(minigame.getName()),
+                        Text.literal("Race through the objective chain. The fastest team to complete it wins.")
+                    );
+            }
+
+            @Override
+            public boolean canStart(ResourceSprintMinigame minigame) {
+                return minigame.canStartMatch();
+            }
+        });
     }
 }
-
-

@@ -3,11 +3,11 @@ package dev.frost.miniverse.session;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.common.MiniversePaths;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Manages memory allocation configuration for game sessions.
@@ -15,7 +15,7 @@ import java.nio.file.Paths;
  */
 public final class SessionMemoryConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH = Paths.get("config", "miniverse", "session-memory.json");
+    private static final Path CONFIG_PATH = MiniversePaths.miniverseConfig("session-memory.json");
     
     private static SessionMemoryConfig instance;
     private Config config;

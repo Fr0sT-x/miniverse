@@ -2,6 +2,8 @@ package dev.frost.miniverse.minigame.impl.bountyhunt;
 
 import net.minecraft.nbt.NbtCompound;
 
+import java.util.Properties;
+
 public record BountyHuntSettings(
     int gracePeriodSeconds,
     int respawnInvincibilitySeconds,
@@ -43,6 +45,24 @@ public record BountyHuntSettings(
         ).normalized();
     }
 
+    public static BountyHuntSettings fromProperties(Properties properties) {
+        BountyHuntSettings defaults = defaults();
+        if (properties == null || properties.isEmpty()) {
+            return defaults;
+        }
+
+        return new BountyHuntSettings(
+            parseInt(properties.getProperty("bountyhunt.gracePeriodSeconds"), defaults.gracePeriodSeconds()),
+            parseInt(properties.getProperty("bountyhunt.respawnInvincibilitySeconds"), defaults.respawnInvincibilitySeconds()),
+            parseInt(properties.getProperty("bountyhunt.scoreToWin"), defaults.scoreToWin()),
+            parseInt(properties.getProperty("bountyhunt.targetSwapIntervalSeconds"), defaults.targetSwapIntervalSeconds()),
+            parseBoolean(properties.getProperty("bountyhunt.trackerEnabled"), defaults.trackerEnabled()),
+            parseBoolean(properties.getProperty("bountyhunt.netherTracking"), defaults.netherTrackingEnabled()),
+            parseInt(properties.getProperty("bountyhunt.compassCooldownSeconds"), defaults.compassCooldownSeconds()),
+            properties.getProperty("bountyhunt.trackerItemId", defaults.trackerItemId())
+        ).normalized();
+    }
+
     private BountyHuntSettings normalized() {
         String itemId = this.trackerItemId == null || this.trackerItemId.isBlank()
             ? "minecraft:compass"
@@ -57,6 +77,18 @@ public record BountyHuntSettings(
             Math.clamp(this.compassCooldownSeconds, 0, 300),
             itemId
         );
+    }
+
+    private static int parseInt(String value, int fallback) {
+        try {
+            return value == null || value.isBlank() ? fallback : Integer.parseInt(value.trim());
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static boolean parseBoolean(String value, boolean fallback) {
+        return value == null || value.isBlank() ? fallback : Boolean.parseBoolean(value.trim());
     }
 }
 

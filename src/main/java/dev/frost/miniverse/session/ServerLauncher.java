@@ -1,12 +1,9 @@
 package dev.frost.miniverse.session;
 
 import dev.frost.miniverse.Miniverse;
-import dev.frost.miniverse.minigame.impl.bountyhunt.BountyHuntSettings;
-import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapSettings;
-import dev.frost.miniverse.minigame.impl.manhunt.ManhuntSettings;
-import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintSettings;
+import dev.frost.miniverse.common.MiniversePaths;
+import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtList;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -15,24 +12,26 @@ import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.locks.LockSupport;
 
 public final class ServerLauncher {
-    public record LaunchResult(PlayerAssignment assignment, Process process, int port, Path workingDirectory) {
+    public record LaunchResult(SessionGroup group, Process process, int port, Path workingDirectory) {
     }
 
-    public LaunchResult launch(GameSession session, PlayerAssignment assignment) throws IOException {
+    public LaunchResult launch(GameSession session, SessionGroup group) throws IOException {
         int port = this.reservePort();
-        Path workingDirectory = this.prepareWorkingDirectory(session, assignment);
+        Path workingDirectory = this.prepareWorkingDirectory(session, group);
         this.writeEula(workingDirectory);
-        this.writeSessionConfig(workingDirectory, session, assignment);
-        this.writeServerProperties(workingDirectory, session, assignment, port);
+        this.writeSessionConfig(workingDirectory, session, group);
+        this.writeServerProperties(workingDirectory, session, group, port);
 
-        assignment.markLaunching(workingDirectory, port);
+        group.markLaunching(workingDirectory, port);
 
         List<String> command = this.buildCommand(workingDirectory, session, port);
         ProcessBuilder builder = new ProcessBuilder(command);
@@ -43,26 +42,32 @@ public final class ServerLauncher {
         Process process = builder.start();
         this.waitForPortOpen(process, port);
         String address = "127.0.0.1:" + port;
-        assignment.markRunning(process, address);
+        group.markRunning(process, address);
 
-        Miniverse.LOGGER.info("Launched {} session {} for {} at {}", session.getGameType().getDisplayName(), session.getSessionId(), assignment.getDisplayName(), address);
-        return new LaunchResult(assignment, process, port, workingDirectory);
+        Miniverse.LOGGER.info("Launched {} session {} for {} at {}", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address);
+        return new LaunchResult(group, process, port, workingDirectory);
     }
 
-    public void stop(PlayerAssignment assignment) {
-        Process process = assignment.getProcess();
+    public void stop(SessionGroup group) {
+        Process process = group.getProcess();
         if (process != null && process.isAlive()) {
             process.destroy();
             try {
                 if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
                     process.destroyForcibly();
+                    process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 process.destroyForcibly();
+                try {
+                    process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
             }
         }
-        assignment.markStopped();
+        group.markStopped();
     }
 
     private List<String> buildCommand(Path workingDirectory, GameSession session, int port) throws IOException {
@@ -95,31 +100,11 @@ public final class ServerLauncher {
         this.appendArgument(content, "-Dminiverse.session.port=" + port);
         this.appendArgument(content, "-Dminiverse.session.dir=" + workingDirectory.toAbsolutePath());
         this.appendArgument(content, "-Dminiverse.session.game=" + session.getGameType().getCommandName());
-        this.appendArgument(content, "-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.properties").toAbsolutePath());
-        if (session.getGameType() == SessionGameType.MANHUNT) {
-            NbtCompound settingsNbt = session.getSettings();
-            ManhuntSettings settings = ManhuntSettings.fromNbt(settingsNbt);
-            this.appendArgument(content, "-Dminiverse.manhunt.hunterReleaseDelaySeconds=" + settings.hunterReleaseDelaySeconds());
-            this.appendArgument(content, "-Dminiverse.manhunt.respawnDelaySeconds=" + settings.speedrunnerRespawnDelaySeconds());
-            this.appendArgument(content, "-Dminiverse.manhunt.huntersCompass=" + settings.huntersCompassEnabled());
-            this.appendArgument(content, "-Dminiverse.manhunt.netherTracking=" + settings.netherTrackingEnabled());
-            this.appendArgument(content, "-Dminiverse.manhunt.compassCooldownSeconds=" + settings.compassCooldownSeconds());
-            this.appendArgument(content, "-Dminiverse.manhunt.runnerGlowPulseMinutes=" + settings.runnerGlowPulseMinutes());
-            this.appendArgument(content, "-Dminiverse.manhunt.runnerLives=" + settings.runnerLives());
-            this.appendArgument(content, "-Dminiverse.manhunt.hunterLives=" + settings.hunterLives());
-            this.appendArgument(content, "-Dminiverse.manhunt.hunterRespawnDelaySeconds=" + settings.hunterRespawnDelaySeconds());
-        }
-        if (session.getGameType() == SessionGameType.BOUNTY_HUNT) {
-            NbtCompound settingsNbt = session.getSettings();
-            BountyHuntSettings settings = BountyHuntSettings.fromNbt(settingsNbt);
-            this.appendArgument(content, "-Dminiverse.bountyhunt.gracePeriodSeconds=" + settings.gracePeriodSeconds());
-            this.appendArgument(content, "-Dminiverse.bountyhunt.respawnInvincibilitySeconds=" + settings.respawnInvincibilitySeconds());
-            this.appendArgument(content, "-Dminiverse.bountyhunt.scoreToWin=" + settings.scoreToWin());
-            this.appendArgument(content, "-Dminiverse.bountyhunt.targetSwapIntervalSeconds=" + settings.targetSwapIntervalSeconds());
-            this.appendArgument(content, "-Dminiverse.bountyhunt.trackerEnabled=" + settings.trackerEnabled());
-            this.appendArgument(content, "-Dminiverse.bountyhunt.netherTracking=" + settings.netherTrackingEnabled());
-            this.appendArgument(content, "-Dminiverse.bountyhunt.compassCooldownSeconds=" + settings.compassCooldownSeconds());
-            this.appendArgument(content, "-Dminiverse.bountyhunt.trackerItemId=" + settings.trackerItemId());
+        this.appendArgument(content, "-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
+        Map<String, String> launchProperties = new LinkedHashMap<>();
+        this.definitionFor(session).ifPresent(definition -> definition.writeLaunchProperties(session.getSettings(), launchProperties));
+        for (Map.Entry<String, String> entry : launchProperties.entrySet()) {
+            this.appendArgument(content, "-D" + entry.getKey() + "=" + entry.getValue());
         }
         this.appendArgument(content, "-cp");
         this.appendArgument(content, classPath);
@@ -150,15 +135,15 @@ public final class ServerLauncher {
         throw new IOException("Timed out waiting for launched server to open port " + port + ".");
     }
 
-    private Path prepareWorkingDirectory(GameSession session, PlayerAssignment assignment) throws IOException {
-        Path sessionsRoot = this.locateProjectRoot().resolve("run").resolve("sessions");
-        String assignmentFolder = this.sanitize(assignment.getAssignmentLabel());
-        Path sessionDirectory = sessionsRoot.resolve(session.getSessionId()).resolve(assignmentFolder);
+    private Path prepareWorkingDirectory(GameSession session, SessionGroup group) throws IOException {
+        Path sessionsRoot = MiniversePaths.sessionsRoot();
+        String groupFolder = this.sanitize(group.getGroupLabel());
+        Path sessionDirectory = sessionsRoot.resolve(session.getSessionId()).resolve(groupFolder);
         if (Files.exists(sessionDirectory)) {
             try {
                 deleteRecursively(sessionDirectory);
             } catch (IOException e) {
-                String fallbackName = assignmentFolder + "_" + System.currentTimeMillis();
+                String fallbackName = groupFolder + "_" + System.currentTimeMillis();
                 Path fallback = sessionsRoot.resolve(session.getSessionId()).resolve(fallbackName);
                 Miniverse.LOGGER.warn("Failed to clear session dir {}; using {} instead", sessionDirectory, fallback, e);
                 sessionDirectory = fallback;
@@ -174,71 +159,35 @@ public final class ServerLauncher {
         Files.writeString(eula, "eula=true\n", java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    private void writeSessionConfig(Path workingDirectory, GameSession session, PlayerAssignment assignment) throws IOException {
+    private void writeSessionConfig(Path workingDirectory, GameSession session, SessionGroup group) throws IOException {
         Properties properties = new Properties();
         properties.setProperty("game", session.getGameType().getCommandName());
         properties.setProperty("sessionId", session.getSessionId());
-        properties.setProperty("assignmentLabel", assignment.getAssignmentLabel());
+        properties.setProperty("groupLabel", group.getGroupLabel());
+        properties.setProperty("assignmentLabel", group.getGroupLabel());
         properties.setProperty("return.host", this.resolveReturnHost());
         properties.setProperty("return.port", Integer.toString(this.resolveReturnPort()));
 
         NbtCompound settings = session.getSettings();
-        if (session.getGameType() == SessionGameType.MANHUNT) {
-            ManhuntSettings manhunt = ManhuntSettings.fromNbt(settings);
-            properties.setProperty("manhunt.hunterReleaseDelaySeconds", Integer.toString(manhunt.hunterReleaseDelaySeconds()));
-            properties.setProperty("manhunt.speedrunnerRespawnDelaySeconds", Integer.toString(manhunt.speedrunnerRespawnDelaySeconds()));
-            properties.setProperty("manhunt.huntersCompass", Boolean.toString(manhunt.huntersCompassEnabled()));
-            properties.setProperty("manhunt.netherTracking", Boolean.toString(manhunt.netherTrackingEnabled()));
-            properties.setProperty("manhunt.compassCooldownSeconds", Integer.toString(manhunt.compassCooldownSeconds()));
-            properties.setProperty("manhunt.runnerGlowPulseMinutes", Integer.toString(manhunt.runnerGlowPulseMinutes()));
-            properties.setProperty("manhunt.runnerLives", Integer.toString(manhunt.runnerLives()));
-            properties.setProperty("manhunt.hunterLives", Integer.toString(manhunt.hunterLives()));
-            properties.setProperty("manhunt.hunterRespawnDelaySeconds", Integer.toString(manhunt.hunterRespawnDelaySeconds()));
+        Properties settingsProperties = new Properties();
+        this.definitionFor(session).ifPresent(definition -> definition.writeSessionProperties(settings, settingsProperties));
+        properties.putAll(settingsProperties);
 
-            NbtList roles = settings.getList("roles").orElseGet(NbtList::new);
-            for (int i = 0; i < roles.size(); i++) {
-                NbtCompound role = roles.getCompoundOrEmpty(i);
-                String uuid = role.getString("uuid", "");
-                String roleName = role.getString("role", "");
-                if (!uuid.isBlank() && !roleName.isBlank()) {
-                    properties.setProperty("manhunt.role." + uuid, roleName);
-                }
-            }
-        }
-        if (session.getGameType() == SessionGameType.BOUNTY_HUNT) {
-            BountyHuntSettings bountyHunt = BountyHuntSettings.fromNbt(settings);
-            properties.setProperty("bountyhunt.gracePeriodSeconds", Integer.toString(bountyHunt.gracePeriodSeconds()));
-            properties.setProperty("bountyhunt.respawnInvincibilitySeconds", Integer.toString(bountyHunt.respawnInvincibilitySeconds()));
-            properties.setProperty("bountyhunt.scoreToWin", Integer.toString(bountyHunt.scoreToWin()));
-            properties.setProperty("bountyhunt.targetSwapIntervalSeconds", Integer.toString(bountyHunt.targetSwapIntervalSeconds()));
-            properties.setProperty("bountyhunt.trackerEnabled", Boolean.toString(bountyHunt.trackerEnabled()));
-            properties.setProperty("bountyhunt.netherTracking", Boolean.toString(bountyHunt.netherTrackingEnabled()));
-            properties.setProperty("bountyhunt.compassCooldownSeconds", Integer.toString(bountyHunt.compassCooldownSeconds()));
-            properties.setProperty("bountyhunt.trackerItemId", bountyHunt.trackerItemId());
-        }
-        if (session.getGameType() == SessionGameType.RESOURCE_SPRINT) {
-            ResourceSprintSettings.fromNbt(settings).writeTo(properties);
-        }
-        if (session.getGameType() == SessionGameType.DEATH_SWAP) {
-            DeathSwapSettings.fromNbt(settings).writeTo(properties);
-        }
-
-        for (PlayerAssignment sessionAssignment : assignmentsForConfig(session, assignment)) {
-            String teamLabel = sessionAssignment.getAssignmentLabel();
-            for (UUID playerUuid : sessionAssignment.getPlayerUuids()) {
+        for (SessionGroup sessionGroup : groupsForConfig(session, group)) {
+            String teamLabel = sessionGroup.getGroupLabel();
+            for (UUID playerUuid : sessionGroup.getPlayerUuids()) {
                 properties.setProperty("player." + playerUuid, "true");
                 properties.setProperty("player." + playerUuid + ".team", teamLabel);
             }
         }
 
-        StringBuilder content = new StringBuilder();
-        for (String key : properties.stringPropertyNames().stream().sorted().toList()) {
-            content.append(key).append('=').append(properties.getProperty(key)).append('\n');
-        }
-        Files.writeString(workingDirectory.resolve("miniverse-session.properties"), content.toString(), java.nio.charset.StandardCharsets.UTF_8);
+        SessionConfigJson.write(
+            workingDirectory.resolve("miniverse-session.json"),
+            SessionConfigJson.runtimeSession(session, group, groupsForConfig(session, group), settingsProperties, properties.getProperty("return.host"), this.parsePort(properties.getProperty("return.port"), 25565))
+        );
     }
 
-    private void writeServerProperties(Path workingDirectory, GameSession session, PlayerAssignment assignment, int port) throws IOException {
+    private void writeServerProperties(Path workingDirectory, GameSession session, SessionGroup group, int port) throws IOException {
         Properties properties = new Properties();
         properties.setProperty("accepts-transfers", "true");
         properties.setProperty("allow-flight", "true");
@@ -260,11 +209,11 @@ public final class ServerLauncher {
         properties.setProperty("level-name", "world");
         properties.setProperty("level-seed", Long.toString(session.getSeedPlan().sharedSeed()));
         properties.setProperty("level-type", "minecraft:normal");
-        int maxPlayers = assignmentsForConfig(session, assignment).stream()
-            .mapToInt(PlayerAssignment::getPlayerCount)
+        int maxPlayers = groupsForConfig(session, group).stream()
+            .mapToInt(SessionGroup::getPlayerCount)
             .sum();
         properties.setProperty("max-players", Integer.toString(Math.max(1, maxPlayers)));
-        properties.setProperty("motd", session.getGameType().getDisplayName() + " " + session.getSessionId() + " / " + assignment.getAssignmentLabel());
+        properties.setProperty("motd", session.getGameType().getDisplayName() + " " + session.getSessionId() + " / " + group.getGroupLabel());
         properties.setProperty("network-compression-threshold", "256");
         properties.setProperty("online-mode", "false");
         properties.setProperty("op-permission-level", "4");
@@ -302,32 +251,23 @@ public final class ServerLauncher {
         return javaBin.toString();
     }
 
-    private List<PlayerAssignment> assignmentsForConfig(GameSession session, PlayerAssignment assignment) {
+    private List<SessionGroup> groupsForConfig(GameSession session, SessionGroup group) {
         if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD) {
-            return List.copyOf(session.snapshotAssignments());
+            return List.copyOf(session.snapshotGroups());
         }
-        return List.of(assignment);
+        return List.of(group);
+    }
+
+    private Optional<MinigameDefinition> definitionFor(GameSession session) {
+        return Optional.of(session.getGameType().definition());
     }
 
     private String locateLaunchConfig() throws IOException {
-        Path projectRoot = this.locateProjectRoot();
-        Path launchConfig = projectRoot.resolve(".gradle").resolve("loom-cache").resolve("launch.cfg");
+        Path launchConfig = MiniversePaths.fabricLaunchConfig();
         if (!Files.exists(launchConfig)) {
             throw new IOException("Could not locate Fabric launch config at " + launchConfig);
         }
         return launchConfig.toAbsolutePath().toString();
-    }
-
-    private Path locateProjectRoot() {
-        Path current = Paths.get("").toAbsolutePath();
-        while (current != null) {
-            if (Files.exists(current.resolve("gradle.properties"))) {
-                return current;
-            }
-            current = current.getParent();
-        }
-
-        return Paths.get("").toAbsolutePath();
     }
 
     private int reservePort() throws IOException {
@@ -374,7 +314,7 @@ public final class ServerLauncher {
     }
 
     private Properties readMainServerProperties() throws IOException {
-        Path serverProperties = this.locateProjectRoot().resolve("run").resolve("server.properties");
+        Path serverProperties = MiniversePaths.mainServerProperties();
         Properties properties = new Properties();
         if (!Files.exists(serverProperties)) {
             return properties;
@@ -384,6 +324,14 @@ public final class ServerLauncher {
             properties.load(reader);
         }
         return properties;
+    }
+
+    private int parsePort(String value, int fallback) {
+        try {
+            return value == null || value.isBlank() ? fallback : Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
     }
 
     private static void deleteRecursively(Path root) throws IOException {

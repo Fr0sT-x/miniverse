@@ -19,6 +19,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<StopSessionPayload> STOP_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_stop"));
     public static final CustomPayload.Id<GrantOpPayload> GRANT_OP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "grant_op"));
     public static final CustomPayload.Id<CleanupPlayerPayload> CLEANUP_PLAYER_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "cleanup_player"));
+    public static final CustomPayload.Id<LauncherSettingsPayload> LAUNCHER_SETTINGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "launcher_settings"));
 
     private static boolean payloadTypesRegistered;
 
@@ -36,6 +37,7 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(STOP_SESSION_ID, StopSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(GRANT_OP_ID, GrantOpPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CLEANUP_PLAYER_ID, CleanupPlayerPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(LAUNCHER_SETTINGS_ID, LauncherSettingsPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SESSION_LIST_ID, SessionListPayload.CODEC);
 
         payloadTypesRegistered = true;
@@ -137,6 +139,19 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return CLEANUP_PLAYER_ID;
+        }
+    }
+
+    public record LauncherSettingsPayload(NbtCompound settings) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, LauncherSettingsPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.NBT_COMPOUND.cast(),
+            LauncherSettingsPayload::settings,
+            LauncherSettingsPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return LAUNCHER_SETTINGS_ID;
         }
     }
 }

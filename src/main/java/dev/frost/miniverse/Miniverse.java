@@ -2,10 +2,13 @@ package dev.frost.miniverse;
 
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.MiniverseGames;
+import dev.frost.miniverse.minigame.core.event.MinigameEventRouter;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleCommands;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.session.SessionCommands;
 import dev.frost.miniverse.session.SessionRoutingEvents;
 import dev.frost.miniverse.network.SessionNetwork;
+import dev.frost.miniverse.session.SessionRegistry;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import org.slf4j.Logger;
@@ -26,13 +29,16 @@ public class Miniverse implements ModInitializer {
 		// Proceed with mild caution.
 
 		MiniverseGames.registerAll();
+		SessionRegistry.cleanupSessionsOnStartup();
 
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
 			{
 				MinigameRegistry.registerCommands(dispatcher);
 				SessionCommands.register(dispatcher);
+				MatchLifecycleCommands.register(dispatcher);
 			}
 		);
+		MinigameEventRouter.register();
 		MinigameRegistry.registerEvents();
 		SessionRoutingEvents.register();
 

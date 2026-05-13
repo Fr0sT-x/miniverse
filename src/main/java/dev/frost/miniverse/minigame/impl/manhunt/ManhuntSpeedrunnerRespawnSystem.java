@@ -11,6 +11,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.Set;
@@ -104,8 +105,14 @@ final class ManhuntSpeedrunnerRespawnSystem {
                 continue;
             }
 
-            if (currentTick >= pending.respawnAtTick()) {
-                this.completeRespawn(player, target, pending, currentTick);
+            PendingRespawn updated = this.enforceSpectatorTarget(player, pending, target);
+            ServerPlayerEntity effectiveTarget = this.game.getAliveSpeedrunnerByUuid(updated.targetUuid());
+            if (effectiveTarget == null) {
+                effectiveTarget = target;
+            }
+
+            if (currentTick >= updated.respawnAtTick()) {
+                this.completeRespawn(player, effectiveTarget, updated, currentTick);
             }
         }
     }
@@ -123,7 +130,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
                 continue;
             }
 
-            this.applySpectatorState(player, target);
+            this.enforceSpectatorTarget(player, pending, target);
         }
     }
 
@@ -139,7 +146,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
             return;
         }
 
-        this.applySpectatorState(player, target);
+        this.enforceSpectatorTarget(player, pending, target);
     }
 
     void removePlayer(ServerPlayerEntity player) {
@@ -176,20 +183,56 @@ final class ManhuntSpeedrunnerRespawnSystem {
         return null;
     }
 
+    @Nullable
+    private ServerPlayerEntity cameraTarget(ServerPlayerEntity player) {
+        if (player.getCameraEntity() instanceof ServerPlayerEntity camera) {
+            ServerPlayerEntity aliveTarget = this.game.getAliveSpeedrunnerByUuid(camera.getUuid());
+            if (aliveTarget != null && !aliveTarget.getUuid().equals(player.getUuid())) {
+                return aliveTarget;
+            }
+        }
+        return null;
+    }
+
+    private PendingRespawn enforceSpectatorTarget(ServerPlayerEntity player, PendingRespawn pending, ServerPlayerEntity defaultTarget) {
+        if (player.getGameMode() != GameMode.SPECTATOR) {
+            player.changeGameMode(GameMode.SPECTATOR);
+        }
+
+        ServerPlayerEntity cameraTarget = this.cameraTarget(player);
+        if (cameraTarget != null) {
+            if (!cameraTarget.getUuid().equals(pending.targetUuid())) {
+                PendingRespawn updated = pending.withTarget(cameraTarget.getUuid());
+                this.pendingRespawns.put(player.getUuid(), updated);
+                return updated;
+            }
+            return pending;
+        }
+
+        this.applySpectatorState(player, defaultTarget);
+        if (!defaultTarget.getUuid().equals(pending.targetUuid())) {
+            PendingRespawn updated = pending.withTarget(defaultTarget.getUuid());
+            this.pendingRespawns.put(player.getUuid(), updated);
+            return updated;
+        }
+        return pending;
+    }
+
     private void applySpectatorState(ServerPlayerEntity player, ServerPlayerEntity target) {
         player.changeGameMode(GameMode.SPECTATOR);
         player.setCameraEntity(target);
     }
 
     private void completeRespawn(ServerPlayerEntity player, ServerPlayerEntity target, PendingRespawn pending, long currentTick) {
-        if (!this.pendingRespawns.remove(player.getUuid(), pending)) {
+        PendingRespawn stored = this.pendingRespawns.remove(player.getUuid());
+        if (stored == null) {
             return;
         }
 
         player.setCameraEntity(player);
         ServerWorld targetWorld = (ServerWorld) target.getEntityWorld();
         player.teleport(targetWorld, target.getX(), target.getY(), target.getZ(), Set.<PositionFlag>of(), target.getYaw(), target.getPitch(), true);
-        player.changeGameMode(pending.returnMode());
+        player.changeGameMode(stored.returnMode());
         player.setHealth(player.getMaxHealth());
         player.getHungerManager().setFoodLevel(20);
         player.getHungerManager().setSaturationLevel(20.0F);
@@ -206,18 +249,19 @@ final class ManhuntSpeedrunnerRespawnSystem {
     }
 
     private void completeFallbackRespawn(ServerPlayerEntity player, PendingRespawn pending, long currentTick) {
-        if (!this.pendingRespawns.remove(player.getUuid(), pending)) {
+        PendingRespawn stored = this.pendingRespawns.remove(player.getUuid());
+        if (stored == null) {
             return;
         }
 
         player.setCameraEntity(player);
-        ServerWorld world = ((ServerWorld) player.getEntityWorld()).getServer().getWorld(pending.fallbackWorld());
+        ServerWorld world = ((ServerWorld) player.getEntityWorld()).getServer().getWorld(stored.fallbackWorld());
         if (world == null) {
             world = (ServerWorld) player.getEntityWorld();
         }
-        BlockPos pos = pending.fallbackPos();
+        BlockPos pos = stored.fallbackPos();
         player.teleport(world, pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, Set.<PositionFlag>of(), player.getYaw(), player.getPitch(), true);
-        player.changeGameMode(pending.returnMode());
+        player.changeGameMode(stored.returnMode());
         player.setHealth(player.getMaxHealth());
         player.getHungerManager().setFoodLevel(20);
         player.getHungerManager().setSaturationLevel(20.0F);

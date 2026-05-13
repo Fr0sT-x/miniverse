@@ -2,6 +2,7 @@ package dev.frost.miniverse.minigame.impl.deathswap;
 
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
+import dev.frost.miniverse.minigame.core.respawn.RespawnMode;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,15 +19,16 @@ public record DeathSwapSettings(
     SeedMode seedMode,
     long seed,
     boolean keepInventory,
+    boolean pvpEnabled,
+    RespawnMode respawnMode,
+    int pointsToWin,
     boolean preserveVelocity,
-    int damageImmunityAfterSwapSeconds,
-    boolean trioRotationEnabled,
     List<TeamConfig> teams
 ) {
     private static final int DEFAULT_SWAP_INTERVAL_SECONDS = 300;
     private static final int DEFAULT_INITIAL_GRACE_PERIOD_SECONDS = 30;
     private static final int DEFAULT_BORDER_SIZE = 3000;
-    private static final int DEFAULT_DAMAGE_IMMUNITY_SECONDS = 3;
+    private static final int DEFAULT_POINTS_TO_WIN = 5;
 
     public DeathSwapSettings {
         teams = List.copyOf(normalizeTeams(teams));
@@ -40,8 +42,9 @@ public record DeathSwapSettings(
             SeedMode.RANDOM,
             ThreadLocalRandom.current().nextLong(),
             true,
-            true,
-            DEFAULT_DAMAGE_IMMUNITY_SECONDS,
+            false,
+            RespawnMode.POINTS,
+            DEFAULT_POINTS_TO_WIN,
             true,
             List.of()
         );
@@ -60,9 +63,10 @@ public record DeathSwapSettings(
             parseSeedMode(nbt.getString("seedMode", defaults.seedMode().nbtValue())),
             nbt.getLong("seed").orElse(defaults.seed()),
             nbt.getBoolean("keepInventory", defaults.keepInventory()),
+            nbt.getBoolean("pvpEnabled", defaults.pvpEnabled()),
+            RespawnMode.parse(nbt.getString("respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
+            clamp(nbt.getInt("pointsToWin", defaults.pointsToWin()), 1, 100),
             nbt.getBoolean("preserveVelocity", defaults.preserveVelocity()),
-            clamp(nbt.getInt("damageImmunityAfterSwapSeconds", defaults.damageImmunityAfterSwapSeconds()), 0, 600),
-            nbt.getBoolean("trioRotationEnabled", defaults.trioRotationEnabled()),
             readTeams(nbt.getList("teams").orElseGet(NbtList::new))
         );
     }
@@ -80,9 +84,10 @@ public record DeathSwapSettings(
             parseSeedMode(properties.getProperty("deathswap.seedMode", defaults.seedMode().nbtValue())),
             parseLong(properties.getProperty("deathswap.seed"), defaults.seed()),
             parseBoolean(properties.getProperty("deathswap.keepInventory"), defaults.keepInventory()),
+            parseBoolean(properties.getProperty("deathswap.pvpEnabled"), defaults.pvpEnabled()),
+            RespawnMode.parse(properties.getProperty("deathswap.respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
+            clamp(parseInt(properties.getProperty("deathswap.pointsToWin"), defaults.pointsToWin()), 1, 100),
             parseBoolean(properties.getProperty("deathswap.preserveVelocity"), defaults.preserveVelocity()),
-            clamp(parseInt(properties.getProperty("deathswap.damageImmunityAfterSwapSeconds"), defaults.damageImmunityAfterSwapSeconds()), 0, 600),
-            parseBoolean(properties.getProperty("deathswap.trioRotationEnabled"), defaults.trioRotationEnabled()),
             readTeams(properties)
         );
     }
@@ -94,9 +99,10 @@ public record DeathSwapSettings(
         properties.setProperty("deathswap.seedMode", this.seedMode.nbtValue());
         properties.setProperty("deathswap.seed", Long.toString(this.seed));
         properties.setProperty("deathswap.keepInventory", Boolean.toString(this.keepInventory));
+        properties.setProperty("deathswap.pvpEnabled", Boolean.toString(this.pvpEnabled));
+        properties.setProperty("deathswap.respawnMode", this.respawnMode.configValue());
+        properties.setProperty("deathswap.pointsToWin", Integer.toString(this.pointsToWin));
         properties.setProperty("deathswap.preserveVelocity", Boolean.toString(this.preserveVelocity));
-        properties.setProperty("deathswap.damageImmunityAfterSwapSeconds", Integer.toString(this.damageImmunityAfterSwapSeconds));
-        properties.setProperty("deathswap.trioRotationEnabled", Boolean.toString(this.trioRotationEnabled));
         properties.setProperty("deathswap.teams.count", Integer.toString(this.teams.size()));
 
         for (int i = 0; i < this.teams.size(); i++) {
@@ -119,9 +125,10 @@ public record DeathSwapSettings(
         nbt.putString("seedMode", this.seedMode.nbtValue());
         nbt.putLong("seed", this.seed);
         nbt.putBoolean("keepInventory", this.keepInventory);
+        nbt.putBoolean("pvpEnabled", this.pvpEnabled);
+        nbt.putString("respawnMode", this.respawnMode.configValue());
+        nbt.putInt("pointsToWin", this.pointsToWin);
         nbt.putBoolean("preserveVelocity", this.preserveVelocity);
-        nbt.putInt("damageImmunityAfterSwapSeconds", this.damageImmunityAfterSwapSeconds);
-        nbt.putBoolean("trioRotationEnabled", this.trioRotationEnabled);
 
         NbtList teamsList = new NbtList();
         for (TeamConfig team : this.teams) {
@@ -299,5 +306,4 @@ public record DeathSwapSettings(
     public record TeamMember(UUID uuid, String name) {
     }
 }
-
 

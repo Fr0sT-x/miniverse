@@ -3,13 +3,34 @@ package dev.frost.miniverse.minigame.impl.deathswap;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.Minigame;
+import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.RuntimeContextAware;
 import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.countdown.CountdownService;
+import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.respawn.RespawnMode;
+import dev.frost.miniverse.minigame.core.respawn.RespawnPolicyController;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorFramework;
+import dev.frost.miniverse.minigame.core.swap.DerangementAssignment;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamRole;
+import dev.frost.miniverse.team.TeamColorPalette;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -17,63 +38,62 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class DeathSwapMinigame implements Minigame {
+public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider {
     private static final String NAME = "Death Swap";
     private static final String SCOREBOARD_OBJECTIVE = "deathswap_display";
+    private static final int DEATH_ATTRIBUTION_SECONDS = 90;
+    private static final int SWAP_WARNING_SECONDS = 10;
+    private static final int RECENT_TARGET_LIMIT = 3;
     private static final ScoreboardController SCOREBOARD = new ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Death Swap"));
+
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("deathswap");
-
-    private final DeathSwapManager manager = new DeathSwapManager();
-    private final Map<UUID, Long> damageImmunityUntilTicks = new ConcurrentHashMap<>();
-    private final Map<UUID, Integer> swapsSurvived = new ConcurrentHashMap<>();
-    private final Map<UUID, Integer> eliminations = new ConcurrentHashMap<>();
-    private final Map<UUID, String> playerTeams = new ConcurrentHashMap<>();
+    private final CountdownService visibleCountdowns = new CountdownService();
+    private final DerangementAssignment<UUID> assignmentBuilder = new DerangementAssignment<>();
+    private final SpectatorFramework spectators = new SpectatorFramework();
+    private final TeamManager teams = new TeamManager();
     private final Set<UUID> aliveParticipants = ConcurrentHashMap.newKeySet();
-    private final Set<Integer> announcedCountdowns = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Integer> points = new ConcurrentHashMap<>();
+    private final Map<UUID, ArrayDeque<UUID>> recentTargets = new ConcurrentHashMap<>();
+    private final Map<UUID, SwapAttribution> deathAttributions = new ConcurrentHashMap<>();
+    private Map<UUID, UUID> pendingAssignment = Map.of();
 
-    private GameState state;
-    private DeathSwapSettings settings;
+    private GameState state = GameState.WAITING_FOR_PLAYERS;
+    private DeathSwapSettings settings = DeathSwapSettings.defaults();
+    private RespawnPolicyController respawns = new RespawnPolicyController(RespawnMode.POINTS, this.spectators);
+    @Nullable
+    private MinigameContext context;
     @Nullable
     private MinecraftServer server;
     private long gameTicks;
-    private int tickCounter;
-    private int graceTicksRemaining;
+    private int secondAccumulator;
     private int swapTicksRemaining;
     private int swapCount;
+    private boolean warnedCurrentSwap;
 
-    public DeathSwapMinigame() {
-        this.state = GameState.WAITING_FOR_PLAYERS;
-        this.settings = DeathSwapSettings.defaults();
-        this.vanillaTeams.setFriendlyFireAllowed(true);
-        this.vanillaTeams.setTeammateCollisionAllowed(false);
+    @Override
+    public void attachContext(MinigameContext context) {
+        this.context = context;
     }
 
     public void applySettings(DeathSwapSettings settings) {
         this.settings = settings == null ? DeathSwapSettings.defaults() : settings;
-    }
-
-    public void setVanillaFriendlyFireAllowed(boolean allowed) {
-        this.vanillaTeams.setFriendlyFireAllowed(allowed);
-        this.syncVanillaTeams();
-    }
-
-    public void setVanillaTeammateCollisionAllowed(boolean allowed) {
-        this.vanillaTeams.setTeammateCollisionAllowed(allowed);
-        this.syncVanillaTeams();
+        this.respawns = new RespawnPolicyController(this.settings.respawnMode(), this.spectators);
     }
 
     @Override
@@ -81,146 +101,139 @@ public class DeathSwapMinigame implements Minigame {
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.server = null;
         this.gameTicks = 0L;
-        this.tickCounter = 0;
-        this.graceTicksRemaining = 0;
+        this.secondAccumulator = 0;
         this.swapTicksRemaining = 0;
         this.swapCount = 0;
-        this.damageImmunityUntilTicks.clear();
-        this.swapsSurvived.clear();
-        this.eliminations.clear();
-        this.playerTeams.clear();
+        this.warnedCurrentSwap = false;
+        this.pendingAssignment = Map.of();
+        this.visibleCountdowns.reset();
+        this.teams.clear();
+        this.spectators.clear();
         this.aliveParticipants.clear();
-        this.announcedCountdowns.clear();
+        this.points.clear();
+        this.recentTargets.clear();
+        this.deathAttributions.clear();
     }
 
     @Override
     public void startGame() {
-        if (this.state == GameState.IN_PROGRESS || this.state == GameState.ENDING) {
-            return;
-        }
-
-        List<ServerPlayerEntity> participants = new ArrayList<>(MinigameManager.getInstance().getParticipants());
+        List<ServerPlayerEntity> participants = this.getParticipants();
         if (participants.size() < 2) {
-            this.broadcastMessage(Text.literal("Need at least two players to start Death Swap.").formatted(Formatting.RED));
+            this.broadcast(Text.literal("Need at least two players to start Death Swap.").formatted(Formatting.RED));
             return;
         }
 
-        this.state = GameState.STARTING;
-        MinigameManager.getInstance().setCurrentState(GameState.STARTING);
+        this.state = GameState.RUNNING;
+        this.context().setState(GameState.RUNNING);
         this.gameTicks = 0L;
-        this.tickCounter = 0;
+        this.secondAccumulator = 0;
         this.swapCount = 0;
-        this.graceTicksRemaining = this.settings.initialGracePeriodSeconds() * 20;
         this.swapTicksRemaining = Math.max(1, this.settings.swapIntervalSeconds()) * 20;
-        this.damageImmunityUntilTicks.clear();
-        this.swapsSurvived.clear();
-        this.eliminations.clear();
+        this.warnedCurrentSwap = false;
+        this.pendingAssignment = Map.of();
+        this.visibleCountdowns.reset();
         this.aliveParticipants.clear();
         this.aliveParticipants.addAll(participants.stream().map(ServerPlayerEntity::getUuid).toList());
-        this.announcedCountdowns.clear();
-        this.rebuildTeams(participants);
-        this.syncVanillaTeams();
-        this.prepareWorld();
-        this.prepareParticipants(participants);
-
-        this.broadcastMessage(Text.literal("✓ Death Swap started!").formatted(Formatting.GREEN));
-        this.broadcastMessage(Text.literal("Swap interval: " + this.settings.swapIntervalSeconds() + "s | Grace: " + this.settings.initialGracePeriodSeconds() + "s").formatted(Formatting.AQUA));
-        this.broadcastMessage(Text.literal("Last surviving player/team wins.").formatted(Formatting.AQUA));
-
-        if (this.graceTicksRemaining <= 0) {
-            this.beginInProgress();
-        } else {
-            this.updateScoreboard();
+        this.points.clear();
+        this.deathAttributions.clear();
+        if (this.server != null) {
+            this.vanillaTeams.pruneNamespaceTeams(this.server);
         }
+        this.rebuildSoloTeams(participants);
+        this.prepareMatch(participants);
+        this.updateScoreboard();
+        this.broadcast(Text.literal("Swap in " + formatDuration(this.settings.swapIntervalSeconds())).formatted(Formatting.AQUA));
     }
 
     @Override
     public void stopGame() {
         this.state = GameState.ENDING;
-        MinigameManager.getInstance().setCurrentState(GameState.ENDING);
-
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
+        this.context().setState(GameState.ENDING);
+        for (ServerPlayerEntity participant : this.getParticipants()) {
             participant.changeGameMode(GameMode.SURVIVAL);
         }
-
         this.clearScoreboard();
-        this.clearVanillaTeams();
-        MinigameManager.getInstance().clearParticipants();
+        if (this.server != null) {
+            this.vanillaTeams.clear(this.server);
+        }
+        this.context().participants().clear();
     }
 
     @Override
-    public void onPlayerDeath(ServerPlayerEntity player) {
-        if (this.state != GameState.STARTING && this.state != GameState.IN_PROGRESS) {
-            return;
-        }
-        if (!MinigameManager.getInstance().isParticipant(player) || !this.aliveParticipants.contains(player.getUuid())) {
-            return;
-        }
-
-        this.eliminatePlayer(player, Text.literal(player.getName().getString() + " died.").formatted(Formatting.RED));
-    }
-
     public void onServerTick(MinecraftServer server) {
         this.server = server;
-        if (this.state == GameState.ENDING) {
+        if (this.state != GameState.RUNNING) {
             return;
         }
 
         this.gameTicks++;
-        this.tickCounter++;
-        if (this.tickCounter < 20) {
+        this.secondAccumulator++;
+        this.expireAttributions();
+        if (this.secondAccumulator < 20) {
             return;
         }
-        this.tickCounter = 0;
-
-        if (this.state == GameState.STARTING) {
-            this.tickGracePeriod();
-            return;
-        }
-
-        if (this.state == GameState.IN_PROGRESS) {
-            this.tickSwapTimer();
-            this.updateScoreboard();
-        }
+        this.secondAccumulator = 0;
+        this.tickSwapTimer();
+        this.updateScoreboard();
     }
 
-    public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        if (!MinigameManager.getInstance().isParticipant(oldPlayer)) {
-            return;
+    @Override
+    public boolean allowDamage(ServerPlayerEntity player, DamageSource source, float amount) {
+        if (!this.isParticipant(player)) {
+            return true;
         }
-
-        MinigameManager.getInstance().replaceParticipant(oldPlayer, newPlayer);
-        UUID uuid = newPlayer.getUuid();
-        if (this.aliveParticipants.contains(uuid)) {
-            newPlayer.changeGameMode(GameMode.SURVIVAL);
-        } else {
-            newPlayer.changeGameMode(GameMode.SPECTATOR);
-        }
-    }
-
-    public void handlePlayerLeave(ServerPlayerEntity player) {
-        UUID playerUuid = player.getUuid();
-        MinigameManager.getInstance().removeParticipant(player);
-        this.aliveParticipants.remove(playerUuid);
-        this.damageImmunityUntilTicks.remove(playerUuid);
-
-        if (this.state == GameState.IN_PROGRESS && this.resolveWinnerLabel().isBlank()) {
-            this.endGameIfRequired();
-        }
-    }
-
-    public boolean shouldCancelDamage(ServerPlayerEntity player) {
-        if (!this.aliveParticipants.contains(player.getUuid())) {
+        if (!this.settings.pvpEnabled() && this.isParticipantAttacker(source)) {
             return false;
         }
+        return true;
+    }
 
-        long immuneUntil = this.damageImmunityUntilTicks.getOrDefault(player.getUuid(), 0L);
-        return this.state == GameState.IN_PROGRESS && immuneUntil > this.gameTicks;
+    @Override
+    public void onEntityDeath(LivingEntity entity, DamageSource source) {
+        if (entity instanceof ServerPlayerEntity player && this.isParticipant(player)) {
+            this.handleParticipantDeath(player);
+        }
+    }
+
+    @Override
+    public void onPlayerDeath(ServerPlayerEntity player) {
+        if (this.isParticipant(player)) {
+            this.handleParticipantDeath(player);
+        }
+    }
+
+    @Override
+    public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
+        if (!this.context().participants().contains(oldPlayer.getUuid())) {
+            return;
+        }
+        this.context().participants().add(newPlayer);
+        this.respawns.handleRespawn(newPlayer);
+        this.syncVanillaTeams();
+    }
+
+    @Override
+    public void onPlayerLeave(ServerPlayerEntity player) {
+        if (!this.isParticipant(player)) {
+            return;
+        }
+        UUID playerId = player.getUuid();
+        this.context().participants().remove(playerId);
+        this.aliveParticipants.remove(playerId);
+        this.deathAttributions.remove(playerId);
+        if (this.state == GameState.RUNNING) {
+            this.checkEliminationEnd();
+        }
     }
 
     @Override
     public String getName() {
         return NAME;
+    }
+
+    @Override
+    public TeamManager teamManager() {
+        return this.teams;
     }
 
     @Override
@@ -234,7 +247,7 @@ public class DeathSwapMinigame implements Minigame {
     }
 
     public boolean canStartMatch() {
-        return MinigameManager.getInstance().getParticipantCount() >= 2;
+        return this.context().participants().size() >= 2;
     }
 
     public int getAliveCount() {
@@ -245,263 +258,229 @@ public class DeathSwapMinigame implements Minigame {
         return this.swapCount;
     }
 
-    private void tickGracePeriod() {
-        this.graceTicksRemaining = Math.max(0, this.graceTicksRemaining - 20);
-        this.updateCountdownAnnouncements(this.graceTicksRemaining, "First swap");
-        this.updateScoreboard();
-
-        if (this.graceTicksRemaining <= 0) {
-            this.beginInProgress();
+    private void prepareMatch(List<ServerPlayerEntity> participants) {
+        if (this.server == null) {
+            return;
         }
+        new GlobalMatchRules(this.settings.keepInventory(), this.settings.pvpEnabled()).apply(this.server);
+        for (ServerWorld world : this.server.getWorlds()) {
+            world.getWorldBorder().setCenter(0.5D, 0.5D);
+            world.getWorldBorder().setSize(this.settings.borderSize());
+        }
+        for (ServerPlayerEntity participant : participants) {
+            participant.changeGameMode(GameMode.SURVIVAL);
+            participant.setHealth(participant.getMaxHealth());
+            participant.getHungerManager().setFoodLevel(20);
+            participant.getHungerManager().setSaturationLevel(20.0F);
+            participant.clearStatusEffects();
+            participant.extinguish();
+            participant.fallDistance = 0.0F;
+        }
+        this.syncVanillaTeams();
     }
 
     private void tickSwapTimer() {
         this.refreshAliveParticipants();
-        if (this.aliveParticipants.size() <= 1) {
-            this.endMatch();
+        if (this.settings.respawnMode() == RespawnMode.ELIMINATION && this.aliveParticipants.size() <= 1) {
+            this.endMatch(this.aliveParticipants);
             return;
         }
 
         this.swapTicksRemaining = Math.max(0, this.swapTicksRemaining - 20);
-        this.updateCountdownAnnouncements(this.swapTicksRemaining, "Swap");
+        int secondsRemaining = Math.max(0, (this.swapTicksRemaining + 19) / 20);
+        if (secondsRemaining == SWAP_WARNING_SECONDS && !this.warnedCurrentSwap) {
+            this.warnedCurrentSwap = true;
+            this.pendingAssignment = this.buildAssignment();
+            this.notifyPrivateTargets(this.pendingAssignment);
+        }
+
+        this.visibleCountdowns.announceVisibleCountdown(
+            this.getParticipants(),
+            secondsRemaining,
+            SWAP_WARNING_SECONDS,
+            Text.literal("Swap"),
+            SoundEvents.BLOCK_NOTE_BLOCK_PLING.value()
+        );
 
         if (this.swapTicksRemaining <= 0) {
             this.executeSwap();
         }
     }
 
-    private void beginInProgress() {
-        this.state = GameState.IN_PROGRESS;
-        MinigameManager.getInstance().setCurrentState(GameState.IN_PROGRESS);
-        this.swapTicksRemaining = Math.max(1, this.settings.swapIntervalSeconds()) * 20;
-        this.announcedCountdowns.clear();
-        this.broadcastMessage(Text.literal("The first swap is coming!").formatted(Formatting.YELLOW));
-        this.updateScoreboard();
+    private Map<UUID, UUID> buildAssignment() {
+        return this.assignmentBuilder.assign(this.aliveParticipants, this.recentTargets);
     }
 
     private void executeSwap() {
         this.refreshAliveParticipants();
-        List<ServerPlayerEntity> alivePlayers = this.getAlivePlayers();
-        if (alivePlayers.size() <= 1) {
-            this.endMatch();
+        if (this.aliveParticipants.size() < 2) {
+            this.checkEliminationEnd();
+            this.resetSwapTimer();
             return;
         }
 
-        List<ServerPlayerEntity> order = this.manager.buildSwapOrder(alivePlayers, this.settings.trioRotationEnabled());
-        Map<UUID, PositionSnapshot> snapshots = this.captureSnapshots(alivePlayers);
-        List<String> teamLabelsBeforeSwap = this.snapshotAliveTeamLabels(alivePlayers);
+        Map<UUID, UUID> assignment = this.pendingAssignment.isEmpty() ? this.buildAssignment() : this.pendingAssignment;
+        Map<UUID, PositionSnapshot> snapshots = this.captureSnapshots(assignment.values());
+        int teleported = 0;
+        int nextSwapId = this.swapCount + 1;
 
-        for (int i = 0; i < alivePlayers.size(); i++) {
-            ServerPlayerEntity source = alivePlayers.get(i);
-            ServerPlayerEntity destination = order.get(i);
-            PositionSnapshot snapshot = snapshots.get(destination.getUuid());
-            if (snapshot == null) {
+        for (Map.Entry<UUID, UUID> entry : assignment.entrySet()) {
+            ServerPlayerEntity source = this.getPlayerByUuid(entry.getKey());
+            PositionSnapshot target = snapshots.get(entry.getValue());
+            if (source == null || target == null) {
                 continue;
             }
-
-            source.teleport(snapshot.world(), snapshot.x(), snapshot.y(), snapshot.z(), Set.of(), snapshot.yaw(), snapshot.pitch(), true);
-            source.setVelocity(this.settings.preserveVelocity() ? snapshot.velocity() : Vec3d.ZERO);
+            source.teleport(target.world(), target.x(), target.y(), target.z(), Set.of(), target.yaw(), target.pitch(), true);
             source.fallDistance = 0.0F;
+            source.setVelocity(this.settings.preserveVelocity() ? target.velocity() : Vec3d.ZERO);
             source.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1.0F, 1.0F);
+            this.rememberTarget(entry.getKey(), entry.getValue());
+            this.deathAttributions.put(entry.getKey(), new SwapAttribution(entry.getValue(), this.gameTicks + DEATH_ATTRIBUTION_SECONDS * 20L, nextSwapId));
+            teleported++;
         }
 
-        this.swapCount++;
-        this.announcedCountdowns.clear();
+        this.swapCount = nextSwapId;
+        this.broadcast(Text.literal("Swapped " + teleported + " player" + (teleported == 1 ? "" : "s") + ".").formatted(Formatting.AQUA));
+        this.resetSwapTimer();
+        this.updateScoreboard();
+    }
+
+    private void resetSwapTimer() {
         this.swapTicksRemaining = Math.max(1, this.settings.swapIntervalSeconds()) * 20;
+        this.warnedCurrentSwap = false;
+        this.pendingAssignment = Map.of();
+        this.visibleCountdowns.reset();
+    }
 
-        if (this.settings.damageImmunityAfterSwapSeconds() > 0) {
-            long until = this.gameTicks + (long) this.settings.damageImmunityAfterSwapSeconds() * 20L;
-            for (ServerPlayerEntity player : alivePlayers) {
-                this.damageImmunityUntilTicks.put(player.getUuid(), until);
-                player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, this.settings.damageImmunityAfterSwapSeconds() * 20, 4, true, false, true));
-                this.swapsSurvived.merge(player.getUuid(), 1, Integer::sum);
-            }
-        } else {
-            for (ServerPlayerEntity player : alivePlayers) {
-                this.swapsSurvived.merge(player.getUuid(), 1, Integer::sum);
-            }
+    private void handleParticipantDeath(ServerPlayerEntity player) {
+        if (this.state != GameState.RUNNING) {
+            return;
         }
 
-        this.broadcastMessage(Text.literal("↔ Swapped " + alivePlayers.size() + " player" + (alivePlayers.size() == 1 ? "" : "s") + ".").formatted(Formatting.AQUA));
-        if (!teamLabelsBeforeSwap.isEmpty()) {
-            this.broadcastMessage(Text.literal("Teams alive: " + String.join(", ", teamLabelsBeforeSwap)).formatted(Formatting.GRAY));
+        UUID playerId = player.getUuid();
+        this.awardSwapPoint(playerId);
+
+        if (this.settings.respawnMode() == RespawnMode.ELIMINATION) {
+            if (!this.aliveParticipants.remove(playerId)) {
+                return;
+            }
+            this.respawns.handleDeath(player, Text.literal("Eliminated from Death Swap."));
+            this.broadcast(Text.literal(player.getName().getString() + " was eliminated.").formatted(Formatting.RED));
+            this.checkEliminationEnd();
         }
         this.updateScoreboard();
-        this.endGameIfRequired();
     }
 
-    private void endGameIfRequired() {
+    private void awardSwapPoint(UUID deadPlayerId) {
+        SwapAttribution attribution = this.deathAttributions.remove(deadPlayerId);
+        if (attribution == null || attribution.expiresAtTick() < this.gameTicks || attribution.swapId() != this.swapCount) {
+            return;
+        }
+        UUID scorerId = attribution.scorerId();
+        if (scorerId.equals(deadPlayerId) || !this.context().participants().contains(scorerId)) {
+            return;
+        }
+        int score = this.points.merge(scorerId, 1, Integer::sum);
+        ServerPlayerEntity scorer = this.getPlayerByUuid(scorerId);
+        String scorerName = scorer == null ? "A player" : scorer.getName().getString();
+        this.broadcast(Text.literal(scorerName + " scored from a swap death. (" + score + "/" + this.settings.pointsToWin() + ")").formatted(Formatting.GOLD));
+        if (this.settings.respawnMode() == RespawnMode.POINTS && score >= this.settings.pointsToWin()) {
+            this.endMatch(Set.of(scorerId));
+        }
+    }
+
+    private void checkEliminationEnd() {
+        if (this.settings.respawnMode() != RespawnMode.ELIMINATION) {
+            return;
+        }
         this.refreshAliveParticipants();
-        if (this.aliveParticipants.size() > 1 && this.resolveWinnerLabel().isBlank()) {
-            return;
+        if (this.aliveParticipants.size() <= 1) {
+            this.endMatch(this.aliveParticipants);
         }
-
-        this.endMatch();
     }
 
-    private void endMatch() {
-        if (this.state == GameState.ENDING) {
+    private void endMatch(Collection<UUID> winners) {
+        if (this.state == GameState.ENDING || this.state == GameState.RETURNING || this.state == GameState.FINISHED) {
             return;
         }
-
         this.state = GameState.ENDING;
-        MinigameManager.getInstance().setCurrentState(GameState.ENDING);
-
-        String winnerLabel = this.resolveWinnerLabel();
-        if (winnerLabel.isBlank()) {
-            this.broadcastMessage(Text.literal("No one survived Death Swap.").formatted(Formatting.RED));
-        } else {
-            this.broadcastMessage(Text.literal("🏆 " + winnerLabel + " wins Death Swap! 🏆").formatted(Formatting.GOLD));
-        }
-        this.broadcastMessage(Text.literal("Swaps completed: " + this.swapCount).formatted(Formatting.YELLOW));
-        this.broadcastMessage(Text.literal("Survivors: " + this.aliveParticipants.size()).formatted(Formatting.YELLOW));
-
-        this.showGameOverTitle(Text.literal(winnerLabel.isBlank() ? "Death Swap Over" : winnerLabel + " wins"));
+        this.context().setState(GameState.ENDING);
         this.clearScoreboard();
-    }
 
-    private void prepareWorld() {
-        if (this.server == null) {
-            return;
-        }
-
-        for (ServerWorld world : this.server.getWorlds()) {
-            world.getWorldBorder().setCenter(0.5D, 0.5D);
-            world.getWorldBorder().setSize(this.settings.borderSize());
-        }
-    }
-
-    private void prepareParticipants(List<ServerPlayerEntity> participants) {
-        if (this.server == null) {
-            return;
-        }
-
-        ServerWorld world = this.server.getOverworld();
-        BlockPos spawnPos = new BlockPos(0, 80, 0);
-        for (int i = 0; i < participants.size(); i++) {
-            ServerPlayerEntity participant = participants.get(i);
-            double angle = (Math.PI * 2.0D * i) / Math.max(1, participants.size());
-            double offsetX = Math.cos(angle) * 2.5D;
-            double offsetZ = Math.sin(angle) * 2.5D;
-            participant.changeGameMode(GameMode.SURVIVAL);
-            participant.setHealth(participant.getMaxHealth());
-            participant.getHungerManager().setFoodLevel(20);
-            participant.getHungerManager().setSaturationLevel(20.0F);
-            participant.extinguish();
-            participant.clearStatusEffects();
-            participant.fallDistance = 0.0F;
-            participant.teleport(world, spawnPos.getX() + 0.5D + offsetX, spawnPos.getY(), spawnPos.getZ() + 0.5D + offsetZ, Set.of(), participant.getYaw(), participant.getPitch(), true);
-            participant.setVelocity(Vec3d.ZERO);
+        Set<UUID> winnerSet = new LinkedHashSet<>(winners == null ? Set.of() : winners);
+        Text winnerLabel = Text.literal(this.winnerLabel(winnerSet));
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime != null) {
+            MatchLifecycleController.getInstance().endMatch(
+                runtime,
+                new MatchEndResult(winnerSet, winnerLabel),
+                MatchLifecycleOptions.defaults(NAME).withReturnSeconds(10)
+            );
         }
     }
 
-    private void rebuildTeams(List<ServerPlayerEntity> participants) {
-        this.playerTeams.clear();
-        List<UUID> assignedMembers = new ArrayList<>();
-        int fallbackIndex = 1;
-
-        for (DeathSwapSettings.TeamConfig team : this.settings.teams()) {
-            String label = this.uniqueTeamLabel(team.label(), fallbackIndex++);
-            for (DeathSwapSettings.TeamMember member : team.members()) {
-                if (participants.stream().noneMatch(player -> player.getUuid().equals(member.uuid()))) {
-                    continue;
-                }
-                this.playerTeams.put(member.uuid(), label);
-                assignedMembers.add(member.uuid());
-            }
+    private String winnerLabel(Set<UUID> winners) {
+        if (winners.isEmpty()) {
+            return "No winner";
         }
+        if (winners.size() == 1) {
+            ServerPlayerEntity winner = this.getPlayerByUuid(winners.iterator().next());
+            return winner == null ? "Winner" : winner.getName().getString();
+        }
+        List<String> names = new ArrayList<>();
+        for (UUID winnerId : winners) {
+            ServerPlayerEntity winner = this.getPlayerByUuid(winnerId);
+            names.add(winner == null ? winnerId.toString() : winner.getName().getString());
+        }
+        return String.join(", ", names);
+    }
 
-        for (ServerPlayerEntity participant : participants) {
-            if (this.playerTeams.containsKey(participant.getUuid())) {
+    private void notifyPrivateTargets(Map<UUID, UUID> assignment) {
+        for (Map.Entry<UUID, UUID> entry : assignment.entrySet()) {
+            ServerPlayerEntity player = this.getPlayerByUuid(entry.getKey());
+            ServerPlayerEntity target = this.getPlayerByUuid(entry.getValue());
+            if (player == null || target == null) {
                 continue;
             }
-            this.playerTeams.put(participant.getUuid(), this.uniqueTeamLabel(participant.getName().getString(), fallbackIndex++));
+            player.sendMessage(Text.literal("Your swap target: ").formatted(Formatting.LIGHT_PURPLE, Formatting.BOLD)
+                .append(Text.literal(target.getName().getString()).formatted(Formatting.WHITE)), false);
         }
     }
 
-    private String uniqueTeamLabel(String label, int fallbackIndex) {
-        String base = label == null || label.isBlank() ? "Team " + fallbackIndex : label.trim();
-        String candidate = base;
-        int suffix = 2;
-        while (this.playerTeams.containsValue(candidate)) {
-            candidate = base + " #" + suffix++;
-        }
-        return candidate;
-    }
 
-    private void eliminatePlayer(ServerPlayerEntity player, Text message) {
-        UUID uuid = player.getUuid();
-        if (!this.aliveParticipants.remove(uuid)) {
-            return;
-        }
-
-        this.eliminations.merge(uuid, 1, Integer::sum);
-        player.changeGameMode(GameMode.SPECTATOR);
-        this.broadcastMessage(message);
-        this.updateScoreboard();
-        this.endGameIfRequired();
-    }
-
-    private void refreshAliveParticipants() {
-        List<UUID> toRemove = new ArrayList<>();
-        for (UUID uuid : this.aliveParticipants) {
-            ServerPlayerEntity player = this.getPlayerByUuid(uuid);
-            if (player == null || player.isDisconnected() || player.isSpectator()) {
-                toRemove.add(uuid);
-            }
-        }
-        this.aliveParticipants.removeAll(toRemove);
-    }
-
-    private List<ServerPlayerEntity> getAlivePlayers() {
-        List<ServerPlayerEntity> players = new ArrayList<>();
-        for (UUID uuid : this.aliveParticipants) {
-            ServerPlayerEntity player = this.getPlayerByUuid(uuid);
-            if (player != null && !player.isDisconnected() && !player.isSpectator()) {
-                players.add(player);
-            }
-        }
-        return players;
-    }
-
-    private Map<UUID, PositionSnapshot> captureSnapshots(List<ServerPlayerEntity> players) {
+    private Map<UUID, PositionSnapshot> captureSnapshots(Collection<UUID> playerIds) {
         Map<UUID, PositionSnapshot> snapshots = new LinkedHashMap<>();
-        for (ServerPlayerEntity player : players) {
-            snapshots.put(player.getUuid(), new PositionSnapshot(
-                (ServerWorld) player.getEntityWorld(),
-                player.getX(),
-                player.getY(),
-                player.getZ(),
-                player.getYaw(),
-                player.getPitch(),
-                player.getVelocity()
-            ));
+        for (UUID playerId : playerIds) {
+            ServerPlayerEntity player = this.getPlayerByUuid(playerId);
+            if (player == null || !(player.getEntityWorld() instanceof ServerWorld world)) {
+                continue;
+            }
+            snapshots.put(playerId, new PositionSnapshot(world, player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch(), player.getVelocity()));
         }
         return snapshots;
     }
 
-    private List<String> snapshotAliveTeamLabels(List<ServerPlayerEntity> players) {
-        Set<String> labels = new LinkedHashSet<>();
-        for (ServerPlayerEntity player : players) {
-            String label = this.playerTeams.get(player.getUuid());
-            if (label == null || label.isBlank()) {
-                label = player.getName().getString();
-            }
-            labels.add(label);
+    private void rebuildSoloTeams(List<ServerPlayerEntity> participants) {
+        this.teams.clear();
+        for (ServerPlayerEntity player : participants) {
+            String id = "solo_" + player.getUuid().toString().replace("-", "");
+            this.teams.assign(player, id, player.getName().getString(), TeamRole.MEMBER);
         }
-        return new ArrayList<>(labels);
+        this.syncVanillaTeams();
     }
 
-    private void updateCountdownAnnouncements(int ticksRemaining, String phase) {
-        int secondsRemaining = Math.max(0, (ticksRemaining + 19) / 20);
-        int[] milestones = {10, 5, 3, 2, 1};
-        for (int milestone : milestones) {
-            if (secondsRemaining != milestone || this.announcedCountdowns.contains(milestone)) {
-                continue;
-            }
-            this.announcedCountdowns.add(milestone);
-            this.broadcastMessage(Text.literal(phase + " in " + milestone + "s.").formatted(Formatting.YELLOW));
+    private void syncVanillaTeams() {
+        if (this.server == null) {
+            return;
         }
+        this.vanillaTeams.syncSnapshots(this.server, this.teams.snapshots(), snapshot -> {
+            Formatting color = this.vanillaTeams.colorFor(snapshot.id());
+            return VanillaTeamOptions.defaults()
+                .withColor(color)
+                .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
+                .withFriendlyFireAllowed(this.settings.pvpEnabled())
+                .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
+        });
     }
 
     private void updateScoreboard() {
@@ -509,90 +488,91 @@ public class DeathSwapMinigame implements Minigame {
             return;
         }
         this.syncVanillaTeams();
-
-        SCOREBOARD.setScore(this.server, "Alive Players", this.aliveParticipants.size());
-        SCOREBOARD.setScore(this.server, "Alive Teams", this.manager.countAliveTeams(this.aliveParticipants, this.playerTeams));
+        SCOREBOARD.setScore(this.server, "Alive", this.aliveParticipants.size());
         SCOREBOARD.setScore(this.server, "Swaps", this.swapCount);
-        SCOREBOARD.setScore(this.server, "Grace", Math.max(0, this.graceTicksRemaining / 20));
         SCOREBOARD.setScore(this.server, "Next Swap", Math.max(0, this.swapTicksRemaining / 20));
+        if (this.settings.respawnMode() == RespawnMode.POINTS) {
+            SCOREBOARD.setScore(this.server, "Points To Win", this.settings.pointsToWin());
+            for (UUID playerId : this.context().participantIds()) {
+                ServerPlayerEntity player = this.getPlayerByUuid(playerId);
+                String label = player == null ? playerId.toString().substring(0, 8) : player.getName().getString();
+                SCOREBOARD.setScore(this.server, label, this.points.getOrDefault(playerId, 0));
+            }
+        }
     }
 
     private void clearScoreboard() {
-        if (this.server == null) {
-            return;
-        }
-
-        SCOREBOARD.clear(this.server);
-        this.clearVanillaTeams();
-    }
-
-    private void syncVanillaTeams() {
-        if (this.server == null) {
-            return;
-        }
-
-        Map<String, List<ServerPlayerEntity>> membersByTeam = new LinkedHashMap<>();
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
-            String team = this.playerTeams.getOrDefault(participant.getUuid(), participant.getName().getString());
-            membersByTeam.computeIfAbsent(team, ignored -> new ArrayList<>()).add(participant);
-        }
-
-        List<VanillaTeamDescriptor> descriptors = new ArrayList<>();
-        for (Map.Entry<String, List<ServerPlayerEntity>> entry : membersByTeam.entrySet()) {
-            Formatting color = this.vanillaTeams.colorFor(entry.getKey());
-            VanillaTeamOptions options = VanillaTeamOptions.defaults()
-                .withColor(color)
-                .withPrefix(Text.literal("[" + entry.getKey() + "] ").formatted(color))
-                .withFriendlyFireAllowed(true)
-                .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
-            descriptors.add(new VanillaTeamDescriptor(entry.getKey(), Text.literal(entry.getKey()), entry.getValue(), options));
-        }
-        this.vanillaTeams.sync(this.server, descriptors);
-    }
-
-    private void clearVanillaTeams() {
         if (this.server != null) {
+            SCOREBOARD.clear(this.server);
             this.vanillaTeams.clear(this.server);
         }
     }
 
-    private void showGameOverTitle(Text title) {
-        GameMessenger.showGameOverTitle(MinigameManager.getInstance().getParticipants(), title);
+    private void refreshAliveParticipants() {
+        this.aliveParticipants.removeIf(playerId -> {
+            ServerPlayerEntity player = this.getPlayerByUuid(playerId);
+            return player == null || player.isDisconnected() || (this.settings.respawnMode() == RespawnMode.ELIMINATION && player.isSpectator());
+        });
     }
 
-    private void broadcastMessage(Text message) {
-        GameMessenger.broadcast(MinigameManager.getInstance().getParticipants(), message);
+    private void expireAttributions() {
+        this.deathAttributions.entrySet().removeIf(entry -> entry.getValue().expiresAtTick() < this.gameTicks);
+    }
+
+    private void rememberTarget(UUID source, UUID target) {
+        ArrayDeque<UUID> recent = this.recentTargets.computeIfAbsent(source, ignored -> new ArrayDeque<>());
+        recent.remove(target);
+        recent.addFirst(target);
+        while (recent.size() > RECENT_TARGET_LIMIT) {
+            recent.removeLast();
+        }
+    }
+
+    private boolean isParticipantAttacker(DamageSource source) {
+        Entity attacker = source.getAttacker();
+        return attacker instanceof ServerPlayerEntity player && this.isParticipant(player);
+    }
+
+    private boolean isParticipant(ServerPlayerEntity player) {
+        return this.context().participants().contains(player);
+    }
+
+    private List<ServerPlayerEntity> getParticipants() {
+        return this.context().liveParticipants();
+    }
+
+    private void broadcast(Text message) {
+        GameMessenger.broadcast(this.getParticipants(), message);
     }
 
     @Nullable
-    private ServerPlayerEntity getPlayerByUuid(UUID uuid) {
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
-            if (participant.getUuid().equals(uuid)) {
-                return participant;
-            }
+    private ServerPlayerEntity getPlayerByUuid(UUID playerId) {
+        Optional<ServerPlayerEntity> participant = this.context().resolvePlayer(playerId);
+        if (participant.isPresent()) {
+            return participant.get();
         }
-        if (this.server != null) {
-            return this.server.getPlayerManager().getPlayer(uuid);
-        }
-        return null;
+        return this.server == null ? null : this.server.getPlayerManager().getPlayer(playerId);
     }
 
-    private String resolveWinnerLabel() {
-        String label = this.manager.resolveWinningLabel(this.aliveParticipants, this.playerTeams);
-        if (!label.isBlank()) {
-            return label;
+    private MinigameContext context() {
+        if (this.context == null) {
+            throw new IllegalStateException("Death Swap runtime context is not attached.");
         }
-        if (this.aliveParticipants.size() == 1) {
-            UUID winnerUuid = this.aliveParticipants.iterator().next();
-            ServerPlayerEntity player = this.getPlayerByUuid(winnerUuid);
-            return player == null ? "" : player.getName().getString();
+        return this.context;
+    }
+
+    private static String formatDuration(int seconds) {
+        if (seconds >= 60) {
+            int minutes = seconds / 60;
+            int remainder = seconds % 60;
+            return remainder == 0 ? minutes + "m" : minutes + "m " + remainder + "s";
         }
-        return "";
+        return seconds + "s";
     }
 
     private record PositionSnapshot(ServerWorld world, double x, double y, double z, float yaw, float pitch, Vec3d velocity) {
     }
+
+    private record SwapAttribution(UUID scorerId, long expiresAtTick, int swapId) {
+    }
 }
-
-
-

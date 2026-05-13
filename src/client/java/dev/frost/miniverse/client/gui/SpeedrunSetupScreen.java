@@ -1,7 +1,7 @@
 package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.session.SessionGameType;
+import dev.frost.miniverse.minigame.impl.speedrun.SpeedrunDefinition;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public class SpeedrunSetupScreen extends Screen {
+    private static final String GAME_ID = SpeedrunDefinition.ID;
     private static final int PANEL_PADDING = 16;
     private static final int PANEL_MAX_WIDTH = 1040;
     private static final int PANEL_MAX_HEIGHT = 680;
@@ -540,7 +541,7 @@ public class SpeedrunSetupScreen extends Screen {
         }
 
         NbtCompound plan = new NbtCompound();
-        plan.putString("game", SessionGameType.SPEEDRUN.getCommandName());
+        plan.putString("game", GAME_ID);
         plan.putString("name", sessionName);
         plan.putBoolean("launch", true);
         plan.put("settings", this.buildSettingsCompound());
@@ -562,7 +563,7 @@ public class SpeedrunSetupScreen extends Screen {
         }
 
         plan.put("groups", groups);
-        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(SessionGameType.SPEEDRUN.getCommandName(), sessionName, plan));
+        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(GAME_ID, sessionName, plan));
         this.statusMessage = "Requested Speedrun session creation.";
     }
 

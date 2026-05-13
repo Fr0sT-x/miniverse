@@ -1,11 +1,23 @@
 package dev.frost.miniverse.minigame.impl.resourcesprint;
 
+import dev.frost.miniverse.team.TeamColorPalette;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamRole;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.RuntimeContextAware;
+import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -30,12 +42,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class ResourceSprintMinigame implements Minigame {
+public class ResourceSprintMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider {
     private static final int TICKS_PER_SECOND = 20;
     private static final String NAME = "Resource Sprint";
 
     private GameState state;
     private ResourceSprintSettings settings;
+    private MinigameContext context;
     private MinecraftServer server;
     private String teamLabel = "Team";
     private int elapsedTicks;
@@ -43,13 +56,13 @@ public class ResourceSprintMinigame implements Minigame {
     private final Set<String> suddenDeathTeams = new HashSet<>();
     private final List<ResourceSprintSettings.ObjectiveEntry> activeObjectives = new ArrayList<>();
     private final Map<String, TeamProgress> teamProgress = new LinkedHashMap<>();
-    private final Map<UUID, String> playerTeams = new HashMap<>();
+    private final TeamManager teams = new TeamManager();
     // Scoreboard and time-warning helpers
     private static final String SCOREBOARD_OBJECTIVE = "resourcesprint_display";
     private static final dev.frost.miniverse.minigame.core.ScoreboardController SCOREBOARD =
         new dev.frost.miniverse.minigame.core.ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Resource Sprint"));
     private final Set<Integer> timeWarningsShown = new HashSet<>();
-    private final ResourceSprintEventMessenger eventMessenger = new ResourceSprintEventMessenger();
+    private final ResourceSprintEventMessenger eventMessenger = new ResourceSprintEventMessenger(this::getParticipants);
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("resourcesprint");
 
     private static final class TeamProgress {
@@ -76,6 +89,11 @@ public class ResourceSprintMinigame implements Minigame {
         this.vanillaTeams.setTeammateCollisionAllowed(false);
     }
 
+    @Override
+    public void attachContext(MinigameContext context) {
+        this.context = context;
+    }
+
     public void applySettings(ResourceSprintSettings settings) {
         this.settings = settings == null ? ResourceSprintSettings.defaults() : settings;
     }
@@ -98,7 +116,7 @@ public class ResourceSprintMinigame implements Minigame {
 
     public void setPlayerTeam(ServerPlayerEntity player, String teamLabel) {
         String resolvedTeam = this.normalizeTeamLabel(teamLabel);
-        this.playerTeams.put(player.getUuid(), resolvedTeam);
+        this.teams.assign(player, resolvedTeam, resolvedTeam, TeamRole.MEMBER);
         this.teamProgress.computeIfAbsent(resolvedTeam, ignored -> new TeamProgress());
         this.teamLabel = resolvedTeam;
         this.syncVanillaTeams();
@@ -115,7 +133,7 @@ public class ResourceSprintMinigame implements Minigame {
         this.timeWarningsShown.clear();
         this.activeObjectives.clear();
         this.teamProgress.clear();
-        this.playerTeams.clear();
+        this.teams.clear();
     }
 
     @Override
@@ -130,7 +148,7 @@ public class ResourceSprintMinigame implements Minigame {
         }
 
         this.state = GameState.IN_PROGRESS;
-        MinigameManager.getInstance().setCurrentState(GameState.IN_PROGRESS);
+        this.setRuntimeState(GameState.IN_PROGRESS);
         this.elapsedTicks = 0;
         this.suddenDeathActive = false;
         this.suddenDeathTeams.clear();
@@ -138,7 +156,7 @@ public class ResourceSprintMinigame implements Minigame {
         this.activeObjectives.clear();
         this.activeObjectives.addAll(this.resolveActiveObjectives());
         this.teamProgress.values().forEach(TeamProgress::reset);
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
+        for (ServerPlayerEntity participant : this.getParticipants()) {
             this.teamProgress.computeIfAbsent(this.teamFor(participant), ignored -> new TeamProgress());
         }
 
@@ -159,7 +177,7 @@ public class ResourceSprintMinigame implements Minigame {
     @Override
     public void stopGame() {
         this.state = GameState.ENDING;
-        MinigameManager.getInstance().setCurrentState(GameState.ENDING);
+        this.setRuntimeState(GameState.ENDING);
         this.elapsedTicks = 0;
         this.suddenDeathActive = false;
         this.suddenDeathTeams.clear();
@@ -170,7 +188,7 @@ public class ResourceSprintMinigame implements Minigame {
         }
         this.clearVanillaTeams();
         this.server = null;
-        MinigameManager.getInstance().clearParticipants();
+        this.clearParticipants();
     }
 
     @Override
@@ -184,7 +202,7 @@ public class ResourceSprintMinigame implements Minigame {
             return;
         }
 
-        if (MinigameManager.getInstance().getParticipants().isEmpty()) {
+        if (this.getParticipants().isEmpty()) {
             this.stopGame();
             return;
         }
@@ -224,33 +242,52 @@ public class ResourceSprintMinigame implements Minigame {
         }
     }
 
+    @Override
+    public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
+        if (this.isParticipant(oldPlayer)) {
+            this.handlePlayerRespawn(oldPlayer, newPlayer);
+        }
+    }
+
+    @Override
+    public void onPlayerLeave(ServerPlayerEntity player) {
+        if (this.isParticipant(player)) {
+            this.handlePlayerLeave(player);
+        }
+    }
+
     public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        if (!MinigameManager.getInstance().isParticipant(oldPlayer)) {
+        if (!this.isParticipant(oldPlayer)) {
             return;
         }
 
-        MinigameManager.getInstance().replaceParticipant(oldPlayer, newPlayer);
+        this.replaceParticipant(oldPlayer, newPlayer);
         this.syncVanillaTeams();
     }
 
     public void handlePlayerLeave(ServerPlayerEntity player) {
-        boolean wasTracked = MinigameManager.getInstance().isParticipant(player);
-        MinigameManager.getInstance().removeParticipant(player);
-        this.playerTeams.remove(player.getUuid());
+        boolean wasTracked = this.isParticipant(player);
+        this.removeParticipant(player);
+        this.teams.remove(player);
         this.syncVanillaTeams();
 
-        if (wasTracked && this.state == GameState.IN_PROGRESS && MinigameManager.getInstance().getParticipants().isEmpty()) {
+        if (wasTracked && this.state == GameState.IN_PROGRESS && this.getParticipants().isEmpty()) {
             this.stopGame();
         }
     }
 
     public boolean canStartMatch() {
-        return !MinigameManager.getInstance().getParticipants().isEmpty() && !this.settings.objectives().isEmpty();
+        return !this.getParticipants().isEmpty() && !this.settings.objectives().isEmpty();
     }
 
     @Override
     public String getName() {
         return NAME;
+    }
+
+    @Override
+    public TeamManager teamManager() {
+        return this.teams;
     }
 
     @Override
@@ -277,7 +314,7 @@ public class ResourceSprintMinigame implements Minigame {
             return;
         }
 
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
+        for (ServerPlayerEntity participant : this.getParticipants()) {
             if (!this.teamFor(participant).equals(team)) {
                 continue;
             }
@@ -384,6 +421,7 @@ public class ResourceSprintMinigame implements Minigame {
         }
     }
 
+
     private void checkTimeWarnings() {
         if (this.settings.mode() != ResourceSprintSettings.Mode.TIME_LIMITED) return;
         if (this.server == null) return;
@@ -409,7 +447,7 @@ public class ResourceSprintMinigame implements Minigame {
     }
 
     private void showTimeWarning(String message, Formatting color) {
-        GameMessenger.showGameTitle(MinigameManager.getInstance().getParticipants(),
+        GameMessenger.showGameTitle(this.getParticipants(),
             Text.literal("⏰ " + message).formatted(color),
             Text.literal("").formatted(Formatting.RESET));
         this.broadcastMessage(Text.literal("⏰ " + message).formatted(color));
@@ -473,7 +511,7 @@ public class ResourceSprintMinigame implements Minigame {
         ServerPlayerEntity player = winner == null ? null : this.findParticipant(winner);
         String winnerName = player == null ? "Unknown player" : player.getName().getString();
         this.state = GameState.ENDING;
-        MinigameManager.getInstance().setCurrentState(GameState.ENDING);
+        this.setRuntimeState(GameState.ENDING);
         this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
         this.broadcastMessage(Text.literal("🏁 Resource Sprint Complete! 🏁").formatted(Formatting.GOLD));
         this.broadcastMessage(reason.copy().formatted(Formatting.GOLD));
@@ -489,8 +527,25 @@ public class ResourceSprintMinigame implements Minigame {
             }
         }
 
-        GameMessenger.showGameOverTitle(MinigameManager.getInstance().getParticipants(), Text.literal(winningTeam + " wins Resource Sprint"));
+        this.startStandardEndSequence(winningTeam);
         this.stopGame();
+    }
+
+    private void startStandardEndSequence(String winningTeam) {
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime == null) {
+            return;
+        }
+
+        Set<UUID> winners = this.getParticipants().stream()
+            .filter(player -> this.teamFor(player).equals(winningTeam))
+            .map(ServerPlayerEntity::getUuid)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        MatchLifecycleController.getInstance().endMatch(
+            runtime,
+            new MatchEndResult(winners, Text.literal(winningTeam)),
+            MatchLifecycleOptions.defaults(NAME)
+        );
     }
 
     private String describeMode() {
@@ -596,10 +651,10 @@ public class ResourceSprintMinigame implements Minigame {
     }
 
     private String teamFor(ServerPlayerEntity player) {
-        String team = this.playerTeams.get(player.getUuid());
+        String team = this.teams.teamLabel(player.getUuid(), "");
         if (team == null || team.isBlank()) {
             team = this.normalizeTeamLabel(this.teamLabel);
-            this.playerTeams.put(player.getUuid(), team);
+            this.teams.assign(player, team, team, TeamRole.MEMBER);
             this.teamProgress.computeIfAbsent(team, ignored -> new TeamProgress());
         }
         return team;
@@ -614,20 +669,14 @@ public class ResourceSprintMinigame implements Minigame {
             return;
         }
 
-        List<VanillaTeamDescriptor> descriptors = new ArrayList<>();
-        for (String team : this.teamProgress.keySet()) {
-            List<ServerPlayerEntity> members = MinigameManager.getInstance().getParticipants().stream()
-                .filter(player -> this.teamFor(player).equals(team))
-                .toList();
-            Formatting color = this.vanillaTeams.colorFor(team);
-            VanillaTeamOptions options = VanillaTeamOptions.defaults()
+        this.vanillaTeams.syncSnapshots(this.server, this.teams.snapshots(this.teamProgress.keySet()), snapshot -> {
+            Formatting color = this.vanillaTeams.colorFor(snapshot.id());
+            return VanillaTeamOptions.defaults()
                 .withColor(color)
-                .withPrefix(Text.literal("[" + team + "] ").formatted(color))
+                .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
                 .withFriendlyFireAllowed(false)
                 .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
-            descriptors.add(new VanillaTeamDescriptor(team, Text.literal(team), members, options));
-        }
-        this.vanillaTeams.sync(this.server, descriptors);
+        });
     }
 
     private void clearVanillaTeams() {
@@ -644,7 +693,7 @@ public class ResourceSprintMinigame implements Minigame {
     }
 
     private @Nullable ServerPlayerEntity findParticipant(UUID uuid) {
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
+        for (ServerPlayerEntity participant : this.getParticipants()) {
             if (participant.getUuid().equals(uuid)) {
                 return participant;
             }
@@ -673,7 +722,38 @@ public class ResourceSprintMinigame implements Minigame {
     }
 
     private void broadcastMessage(Text message) {
-        GameMessenger.broadcast(MinigameManager.getInstance().getParticipants(), message);
+        GameMessenger.broadcast(this.getParticipants(), message);
+    }
+
+    private List<ServerPlayerEntity> getParticipants() {
+        return this.context().liveParticipants();
+    }
+
+    private boolean isParticipant(ServerPlayerEntity player) {
+        return this.context().participants().contains(player);
+    }
+
+    private void removeParticipant(ServerPlayerEntity player) {
+        this.context().participants().remove(player);
+    }
+
+    private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
+        this.context().participants().add(newPlayer);
+    }
+
+    private void clearParticipants() {
+        this.context().participants().clear();
+    }
+
+    private void setRuntimeState(GameState state) {
+        this.context().setState(state);
+    }
+
+    private MinigameContext context() {
+        if (this.context == null) {
+            throw new IllegalStateException("Resource Sprint runtime context is not attached.");
+        }
+        return this.context;
     }
 
     public String getFormattedTime() {
@@ -687,7 +767,3 @@ public class ResourceSprintMinigame implements Minigame {
         return String.format("%d:%02d", minutes, seconds);
     }
 }
-
-
-
-

@@ -1,7 +1,7 @@
 package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.session.SessionGameType;
+import dev.frost.miniverse.minigame.impl.bountyhunt.BountyHuntDefinition;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 public class BountyHuntSetupScreen extends Screen {
+    private static final String GAME_ID = BountyHuntDefinition.ID;
     private static final int PANEL_PADDING = 16;
     private static final int PANEL_MAX_WIDTH = 920;
     private static final int PANEL_MAX_HEIGHT = 700;
@@ -311,13 +312,13 @@ public class BountyHuntSetupScreen extends Screen {
         }
 
         NbtCompound plan = new NbtCompound();
-        plan.putString("game", SessionGameType.BOUNTY_HUNT.getCommandName());
+        plan.putString("game", GAME_ID);
         plan.putString("name", sessionName);
         plan.putBoolean("launch", true);
         plan.put("settings", this.buildSettingsCompound());
 
         // Don't add groups - all players will be on the same server
-        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(SessionGameType.BOUNTY_HUNT.getCommandName(), sessionName, plan));
+        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(GAME_ID, sessionName, plan));
         this.statusMessage = "Requested Bounty Hunt session creation.";
     }
 

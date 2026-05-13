@@ -1,12 +1,15 @@
 package dev.frost.miniverse.network;
 
 import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.minigame.core.MinigameDefinition;
+import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.session.GameSession;
-import dev.frost.miniverse.session.PlayerAssignment;
-import dev.frost.miniverse.session.SeedPlan;
+import dev.frost.miniverse.session.SessionCreationService;
+import dev.frost.miniverse.session.SessionGroup;
+import dev.frost.miniverse.session.SessionLauncherConfig;
 import dev.frost.miniverse.session.SessionRegistry;
-import dev.frost.miniverse.session.SessionGameType;
 import dev.frost.miniverse.session.SessionManager;
+import dev.frost.miniverse.session.SessionPermissions;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
@@ -28,163 +31,63 @@ public final class SessionNetwork {
             return;
         }
 
-        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.REQUEST_SESSIONS_ID, (payload, context) -> sendSessionList(context.server(), context.player()));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.REQUEST_SESSIONS_ID, (payload, context) -> handleRequest(context.server(), context.player()));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_SESSION_ID, (payload, context) -> handleCreate(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCH_SESSION_ID, (payload, context) -> handleLaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.STOP_SESSION_ID, (payload, context) -> handleStop(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.GRANT_OP_ID, (payload, context) -> handleGrantOp(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLEANUP_PLAYER_ID, (payload, context) -> handleCleanupPlayer(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCHER_SETTINGS_ID, (payload, context) -> handleLauncherSettings(context.server(), context.player(), payload));
 
         registered = true;
     }
 
-    private static void handleCreate(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CreateSessionPayload payload) {
-        SessionGameType.fromString(payload.game())
-            .ifPresentOrElse(gameType -> {
-                NbtCompound plan = payload.plan();
-                SeedPlan seedPlan = resolveSeedPlan(plan, player);
-                if (seedPlan == null) {
-                    return;
-                }
-
-                GameSession session = SessionManager.getInstance().createSession(gameType, seedPlan);
-                boolean autoLaunch = false;
-                if (plan != null && !plan.isEmpty()) {
-                    NbtCompound settings = plan.getCompound("settings").orElseGet(NbtCompound::new);
-                    String plannedGame = plan.getString("game", gameType.getCommandName());
-                    if (gameType.getCommandName().equals(plannedGame)) {
-                        NbtList groups = plan.getList("groups").orElseGet(NbtList::new);
-                        NbtList plannedRoles = new NbtList();
-
-                        // Groups become session assignments. The launcher decides whether those
-                        // assignments share a backend or get isolated backend state.
-                        if (gameType == SessionGameType.SPEEDRUN && !groups.isEmpty()) {
-                            // SPEEDRUN: Create separate server instances per team
-                            for (int i = 0; i < groups.size(); i++) {
-                                NbtCompound group = groups.getCompoundOrEmpty(i);
-                                NbtList roles = group.getList("roles").orElseGet(NbtList::new);
-                                for (int r = 0; r < roles.size(); r++) {
-                                    plannedRoles.add(roles.getCompoundOrEmpty(r).copy());
-                                }
-                                String label = group.getString("label", gameType.getDisplayName() + " " + (i + 1));
-                                NbtList members = group.getList("members").orElseGet(NbtList::new);
-                                List<ServerPlayerEntity> resolved = new java.util.ArrayList<>();
-                                for (int m = 0; m < members.size(); m++) {
-                                    NbtCompound member = members.getCompoundOrEmpty(m);
-                                    String uuidString = member.getString("uuid", "");
-                                    if (uuidString.isBlank()) {
-                                        continue;
-                                    }
-                                    try {
-                                        java.util.UUID uuid = java.util.UUID.fromString(uuidString);
-                                        ServerPlayerEntity resolvedPlayer = server.getPlayerManager().getPlayer(uuid);
-                                        if (resolvedPlayer != null) {
-                                            resolved.add(resolvedPlayer);
-                                        }
-                                    } catch (IllegalArgumentException ignored) {
-                                    }
-                                }
-                                if (!resolved.isEmpty()) {
-                                    SessionManager.getInstance().assignPlayers(session.getSessionId(), label, resolved);
-                                }
-                            }
-                        } else {
-                            if (groups.isEmpty()) {
-                                // No explicit groups were provided in the plan – treat this as a single-group
-                                // session that should include all currently-online players so that everyone
-                                // is transferred together.
-                                List<ServerPlayerEntity> allPlayers = new java.util.ArrayList<>();
-                                for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
-                                    allPlayers.add(online);
-                                }
-                                if (!allPlayers.isEmpty()) {
-                                    SessionManager.getInstance().assignPlayers(session.getSessionId(), gameType.getDisplayName(), allPlayers);
-                                }
-                            } else {
-                                // For non-SPEEDRUN gamemodes where groups were provided by the UI,
-                                // keep one assignment per group. Resource Sprint launches these
-                                // separately; most other game modes collocate them onto one backend.
-                                for (int i = 0; i < groups.size(); i++) {
-                                    NbtCompound group = groups.getCompoundOrEmpty(i);
-                                    NbtList roles = group.getList("roles").orElseGet(NbtList::new);
-                                    for (int r = 0; r < roles.size(); r++) {
-                                        plannedRoles.add(roles.getCompoundOrEmpty(r).copy());
-                                    }
-                                    String label = group.getString("label", gameType.getDisplayName() + " " + (i + 1));
-                                    NbtList members = group.getList("members").orElseGet(NbtList::new);
-                                    List<ServerPlayerEntity> resolved = new java.util.ArrayList<>();
-                                    for (int m = 0; m < members.size(); m++) {
-                                        NbtCompound member = members.getCompoundOrEmpty(m);
-                                        String uuidString = member.getString("uuid", "");
-                                        if (uuidString.isBlank()) {
-                                            continue;
-                                        }
-                                        try {
-                                            java.util.UUID uuid = java.util.UUID.fromString(uuidString);
-                                            ServerPlayerEntity resolvedPlayer = server.getPlayerManager().getPlayer(uuid);
-                                            if (resolvedPlayer != null) {
-                                                resolved.add(resolvedPlayer);
-                                            }
-                                        } catch (IllegalArgumentException ignored) {
-                                        }
-                                    }
-                                    if (!resolved.isEmpty()) {
-                                        SessionManager.getInstance().assignPlayers(session.getSessionId(), label, resolved);
-                                    }
-                                }
-                            }
-                        }
-
-                        if (!plannedRoles.isEmpty()) {
-                            settings.put("roles", plannedRoles);
-                        }
-                    }
-                    session.setSettings(settings);
-                    autoLaunch = plan.getBoolean("launch", false);
-                } else {
-                    SessionManager.getInstance().assignPlayer(session.getSessionId(), player);
-                }
-                player.sendMessage(Text.literal("Created session " + session.getSessionId() + " for " + gameType.getDisplayName() + "."), false);
-                if (!autoLaunch) {
-                    sendSessionList(server, player);
-                    return;
-                }
-
-                player.sendMessage(Text.literal("Launching session " + session.getSessionId() + "..."), false);
-                SessionManager.getInstance().launchSession(session.getSessionId()).whenComplete((launched, error) -> server.execute(() -> {
-                    if (error != null) {
-                        player.sendMessage(Text.literal("Failed to launch session " + session.getSessionId() + ": " + error.getMessage()), false);
-                        sendSessionList(server, player);
-                        return;
-                    }
-
-                    SessionManager.getInstance().transferAssignedPlayers(server, launched);
-                    player.sendMessage(Text.literal("Launched session " + launched.getSessionId() + "."), false);
-                    sendSessionList(server, player);
-                }));
-            }, () -> player.sendMessage(Text.literal("Unknown game type '" + payload.game() + "'."), false));
+    private static void handleRequest(MinecraftServer server, ServerPlayerEntity player) {
+        if (!SessionPermissions.checkCanManageSessions(player, "view sessions")) {
+            return;
+        }
+        sendSessionList(server, player);
     }
 
-    private static SeedPlan resolveSeedPlan(NbtCompound plan, ServerPlayerEntity player) {
-        if (plan == null || plan.isEmpty()) {
-            return SeedPlan.randomSameSeed();
+    private static void handleCreate(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CreateSessionPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "create sessions")) {
+            return;
         }
 
-        NbtCompound settings = plan.getCompound("settings").orElseGet(NbtCompound::new);
-        String seedMode = settings.getString("seedMode", "random");
-        if (!"fixed".equalsIgnoreCase(seedMode)) {
-            return SeedPlan.randomSameSeed();
+        SessionManager manager = SessionManager.getInstance();
+        SessionCreationService.CreateResult result = new SessionCreationService(manager)
+            .create(server, player, payload.game(), payload.name(), payload.plan());
+        if (!result.succeeded()) {
+            player.sendMessage(Text.literal(result.errorMessage()), false);
+            return;
         }
 
-        return settings.getLong("seed")
-            .map(SeedPlan::fixed)
-            .orElseGet(() -> {
-                player.sendMessage(Text.literal("Fixed seed was selected but no valid seed value was provided."), false);
-                return null;
-            });
+        GameSession session = result.session();
+        player.sendMessage(Text.literal("Created session " + session.getSessionId() + " for " + result.gameType().getDisplayName() + "."), false);
+        if (!result.autoLaunch()) {
+            sendSessionList(server, player);
+            return;
+        }
+
+        player.sendMessage(Text.literal("Launching session " + session.getSessionId() + "..."), false);
+        manager.launchSession(session.getSessionId()).whenComplete((launched, error) -> server.execute(() -> {
+            if (error != null) {
+                player.sendMessage(Text.literal("Failed to launch session " + session.getSessionId() + ": " + error.getMessage()), false);
+                sendSessionList(server, player);
+                return;
+            }
+
+            manager.transferAssignedPlayers(server, launched);
+            player.sendMessage(Text.literal("Launched session " + launched.getSessionId() + "."), false);
+            sendSessionList(server, player);
+        }));
     }
 
     private static void handleLaunch(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.LaunchSessionPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "launch sessions")) {
+            return;
+        }
+
         SessionManager manager = SessionManager.getInstance();
         String sessionId = payload.sessionId();
 
@@ -208,6 +111,10 @@ public final class SessionNetwork {
     }
 
     private static void handleStop(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.StopSessionPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "stop sessions")) {
+            return;
+        }
+
         String sessionId = payload.sessionId();
         SessionRegistry.markStopRequested(sessionId);
         player.sendMessage(Text.literal("Stopping session " + sessionId + " and returning players to the main server..."), false);
@@ -215,19 +122,39 @@ public final class SessionNetwork {
     }
 
     private static void handleGrantOp(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.GrantOpPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "grant operator access")) {
+            return;
+        }
+
         // Grant operator permission to the player
         server.getPlayerManager().addToOperators(new net.minecraft.server.PlayerConfigEntry(player.getGameProfile()));
         player.sendMessage(Text.literal("You have been granted operator access."), false);
     }
 
     private static void handleCleanupPlayer(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CleanupPlayerPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "run session cleanup")) {
+            return;
+        }
+
         // Clear the player's inventory
         player.getInventory().clear();
-        
+
         // Fill the player's hunger
         player.getHungerManager().setFoodLevel(20);
 
         player.sendMessage(Text.literal("Your inventory has been cleaned and hunger restored."), false);
+    }
+
+    private static void handleLauncherSettings(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.LauncherSettingsPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "update launcher settings")) {
+            return;
+        }
+
+        int maxConcurrentLaunches = payload.settings().getInt("maxConcurrentLaunches").orElse(SessionLauncherConfig.getInstance().maxConcurrentLaunches());
+        SessionManager.getInstance().setMaxConcurrentLaunches(maxConcurrentLaunches);
+        int applied = SessionLauncherConfig.getInstance().maxConcurrentLaunches();
+        player.sendMessage(Text.literal("Max concurrent session launches set to " + applied + "."), false);
+        sendSessionList(server, player);
     }
 
     private static void sendSessionList(MinecraftServer server, ServerPlayerEntity player) {
@@ -246,7 +173,7 @@ public final class SessionNetwork {
                 NbtList players = new NbtList();
                 session.getAssignments().forEach(assignment -> players.add(NbtString.of(assignment.getDisplayName())));
                 entry.put("players", players);
-                entry.putInt("playerCount", session.getAssignments().stream().mapToInt(PlayerAssignment::getPlayerCount).sum());
+                entry.putInt("playerCount", session.getAssignments().stream().mapToInt(SessionGroup::getPlayerCount).sum());
                 sessions.add(entry);
             }
         } else {
@@ -268,6 +195,13 @@ public final class SessionNetwork {
         }
 
         root.put("sessions", sessions);
+
+        NbtList games = new NbtList();
+        for (MinigameDefinition definition : MinigameRegistry.getDefinitions()) {
+            games.add(definition.metadata().toNbt());
+        }
+        root.put("games", games);
+
         NbtList roster = new NbtList();
         for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
             NbtCompound entry = new NbtCompound();
@@ -276,6 +210,13 @@ public final class SessionNetwork {
             roster.add(entry);
         }
         root.put("players", roster);
+
+        NbtCompound launcher = new NbtCompound();
+        SessionLauncherConfig launcherConfig = SessionLauncherConfig.getInstance();
+        launcher.putInt("maxConcurrentLaunches", launcherConfig.maxConcurrentLaunches());
+        launcher.putInt("queueCapacity", launcherConfig.queueCapacity());
+        root.put("launcher", launcher);
+
         ServerPlayNetworking.send(player, new NetworkConstants.SessionListPayload(root));
     }
 }

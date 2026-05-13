@@ -9,6 +9,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
@@ -35,15 +36,17 @@ public class SettingsScreen extends Screen {
     private final List<SessionEntry> sessions = new ArrayList<>();
     private String statusMessage = "";
     private final List<ButtonWidget> sessionButtons = new ArrayList<>();
+    private SettingsTab activeTab = SettingsTab.SESSIONS;
 
     // Memory config state
-    private boolean showMemorySettings = false;
     private TextFieldWidget maxHeapField;
     private TextFieldWidget initialHeapField;
     private ButtonWidget enabledToggle;
     private int maxHeapValue;
     private int initialHeapValue;
     private boolean memoryEnabled;
+    private TextFieldWidget maxConcurrentLaunchesField;
+    private int maxConcurrentLaunchesValue;
 
     public SettingsScreen() {
         super(Text.literal("Settings"));
@@ -61,6 +64,7 @@ public class SettingsScreen extends Screen {
         this.maxHeapValue = config.getMaxHeap();
         this.initialHeapValue = config.getInitialHeap();
         this.memoryEnabled = config.isEnabled();
+        this.maxConcurrentLaunchesValue = SessionSnapshotData.maxConcurrentLaunches();
 
         // Request session list from server
         if (this.client.player != null) {
@@ -73,19 +77,27 @@ public class SettingsScreen extends Screen {
 
         // Tab buttons
         this.addDrawableChild(ButtonWidget.builder(Text.literal("📋 Sessions"), button -> {
-            this.switchTab(false);
+            this.switchTab(SettingsTab.SESSIONS);
         })
             .dimensions(layout.contentX, layout.panelY + 45, 100, TAB_HEIGHT)
             .build());
 
         this.addDrawableChild(ButtonWidget.builder(Text.literal("💾 Memory"), button -> {
-            this.switchTab(true);
+            this.switchTab(SettingsTab.MEMORY);
         })
             .dimensions(layout.contentX + 110, layout.panelY + 45, 100, TAB_HEIGHT)
             .build());
 
-        if (this.showMemorySettings) {
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("🚀 Launcher"), button -> {
+            this.switchTab(SettingsTab.LAUNCHER);
+        })
+            .dimensions(layout.contentX + 220, layout.panelY + 45, 110, TAB_HEIGHT)
+            .build());
+
+        if (this.activeTab == SettingsTab.MEMORY) {
             this.initMemorySettings(layout);
+        } else if (this.activeTab == SettingsTab.LAUNCHER) {
+            this.initLauncherSettings(layout);
         } else {
             this.initSessionActions(layout);
         }
@@ -103,12 +115,12 @@ public class SettingsScreen extends Screen {
         }
     }
 
-    private void switchTab(boolean memorySettings) {
-        if (this.showMemorySettings == memorySettings) {
+    private void switchTab(SettingsTab tab) {
+        if (this.activeTab == tab) {
             return;
         }
 
-        this.showMemorySettings = memorySettings;
+        this.activeTab = tab;
         this.init();
     }
 
@@ -171,6 +183,20 @@ public class SettingsScreen extends Screen {
             .build());
     }
 
+    private void initLauncherSettings(Layout layout) {
+        int startY = layout.listY + 35;
+        int fieldWidth = 100;
+
+        this.maxConcurrentLaunchesField = new TextFieldWidget(this.textRenderer, layout.contentX, startY, fieldWidth, 20, Text.literal("Max Concurrent Launches"));
+        this.maxConcurrentLaunchesField.setMaxLength(2);
+        this.maxConcurrentLaunchesField.setText(String.valueOf(this.maxConcurrentLaunchesValue));
+        this.addDrawableChild(this.maxConcurrentLaunchesField);
+
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save Launch Limit"), button -> this.updateMaxConcurrentLaunches())
+            .dimensions(layout.contentX + fieldWidth + 10, startY, 140, BUTTON_HEIGHT)
+            .build());
+    }
+
     private void updateMaxHeap() {
         try {
             int value = Integer.parseInt(this.maxHeapField.getText().trim());
@@ -201,10 +227,33 @@ public class SettingsScreen extends Screen {
         }
     }
 
+    private void updateMaxConcurrentLaunches() {
+        if (this.client.player == null) {
+            this.statusMessage = "Not connected to server.";
+            return;
+        }
+
+        try {
+            int value = Integer.parseInt(this.maxConcurrentLaunchesField.getText().trim());
+            if (value < 1 || value > 64) {
+                this.statusMessage = "Max concurrent launches must be between 1 and 64.";
+                return;
+            }
+
+            NbtCompound settings = new NbtCompound();
+            settings.putInt("maxConcurrentLaunches", value);
+            ClientPlayNetworking.send(new NetworkConstants.LauncherSettingsPayload(settings));
+            this.maxConcurrentLaunchesValue = value;
+            this.statusMessage = "Max concurrent launches set to " + value + ".";
+        } catch (NumberFormatException e) {
+            this.statusMessage = "Invalid number for max concurrent launches.";
+        }
+    }
+
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         boolean sessionsChanged = this.syncSessionsFromSnapshot();
-        if (sessionsChanged && !this.showMemorySettings) {
+        if (sessionsChanged && this.activeTab == SettingsTab.SESSIONS) {
             this.init();
             return;
         }
@@ -216,7 +265,7 @@ public class SettingsScreen extends Screen {
         context.drawCenteredTextWithShadow(this.textRenderer, this.title, titleCenterX, layout.panelY + TITLE_TOP_Y, TEXT_WHITE);
         context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Manage your game sessions and memory allocation."), titleCenterX, layout.panelY + SUBTITLE_TOP_Y, TEXT_MUTED);
 
-        if (!this.showMemorySettings) {
+        if (this.activeTab == SettingsTab.SESSIONS) {
             // Draw sessions list
             if (this.sessions.isEmpty()) {
                 context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Waiting for session data..."), titleCenterX, layout.listY + 12, TEXT_PRIMARY);
@@ -228,11 +277,16 @@ public class SettingsScreen extends Screen {
                     y += SESSION_ROW_HEIGHT + ROW_GAP;
                 }
             }
-        } else {
+        } else if (this.activeTab == SettingsTab.MEMORY) {
             // Draw memory settings info
             context.drawText(this.textRenderer, Text.literal("Max Heap (GB): For maximum memory per session"), layout.contentX, layout.listY, TEXT_PRIMARY, false);
             context.drawText(this.textRenderer, Text.literal("Initial Heap (GB): Starting memory allocation per session"), layout.contentX, layout.listY + 100, TEXT_PRIMARY, false);
             context.drawText(this.textRenderer, Text.literal("Changes apply to all new sessions created after this."), layout.contentX, layout.listY + 150, TEXT_MUTED, false);
+        } else {
+            context.drawText(this.textRenderer, Text.literal("Max Concurrent Launches: backend servers allowed to start at the same time"), layout.contentX, layout.listY, TEXT_PRIMARY, false);
+            context.drawText(this.textRenderer, Text.literal("Current server value: " + SessionSnapshotData.maxConcurrentLaunches()), layout.contentX, layout.listY + 70, TEXT_PRIMARY, false);
+            context.drawText(this.textRenderer, Text.literal("Queued launch capacity: " + SessionSnapshotData.launcherQueueCapacity()), layout.contentX, layout.listY + 86, TEXT_MUTED, false);
+            context.drawText(this.textRenderer, Text.literal("Lower values reduce CPU and memory spikes during speedrun launches."), layout.contentX, layout.listY + 120, TEXT_MUTED, false);
         }
 
         // Draw status message
@@ -363,6 +417,12 @@ public class SettingsScreen extends Screen {
     }
 
     private record SessionEntry(String id, String game, String state, int playerCount) {
+    }
+
+    private enum SettingsTab {
+        SESSIONS,
+        MEMORY,
+        LAUNCHER
     }
 }
 

@@ -2,16 +2,31 @@ package dev.frost.miniverse.minigame.impl.bountyhunt;
 
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.RuntimeContextAware;
 import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
+import dev.frost.miniverse.minigame.core.event.ItemUseAware;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import dev.frost.miniverse.team.TeamMembership;
+import dev.frost.miniverse.team.TeamRole;
+import dev.frost.miniverse.team.TeamSnapshot;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LodestoneTrackerComponent;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -22,7 +37,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.TypeFilter;
 import net.minecraft.util.math.BlockPos;
@@ -39,7 +56,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class BountyHuntMinigame implements Minigame {
+public class BountyHuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware {
     private static final String NAME = "Bounty Hunt";
     private static final String TRACKER_TAG = "BountyHunt_tracker";
     private static final String SCOREBOARD_OBJECTIVE = "bountyhunt_display";
@@ -55,6 +72,7 @@ public class BountyHuntMinigame implements Minigame {
 
     private GameState state;
     private BountyHuntSettings settings;
+    private MinigameContext context;
     private MinecraftServer server;
     private long gameTicks;
     private int tickCounter;
@@ -66,6 +84,11 @@ public class BountyHuntMinigame implements Minigame {
         this.applySettings(BountyHuntSettings.defaults());
         this.vanillaTeams.setFriendlyFireAllowed(true);
         this.vanillaTeams.setTeammateCollisionAllowed(false);
+    }
+
+    @Override
+    public void attachContext(MinigameContext context) {
+        this.context = context;
     }
 
     public void setVanillaFriendlyFireAllowed(boolean allowed) {
@@ -96,7 +119,7 @@ public class BountyHuntMinigame implements Minigame {
     @Override
     public void startGame() {
         this.state = GameState.STARTING;
-        MinigameManager.getInstance().setCurrentState(GameState.STARTING);
+        this.setRuntimeState(GameState.STARTING);
         this.targetAssignments.clear();
         this.scores.clear();
         this.invincibleUntilTicks.clear();
@@ -134,7 +157,7 @@ public class BountyHuntMinigame implements Minigame {
         this.trackingData.clear();
         this.clearScoreboard();
         this.clearVanillaTeams();
-        MinigameManager.getInstance().clearParticipants();
+        this.clearParticipants();
     }
 
     @Override
@@ -143,7 +166,7 @@ public class BountyHuntMinigame implements Minigame {
     }
 
     public void handlePlayerDeath(ServerPlayerEntity player, @Nullable DamageSource source) {
-        if (!MinigameManager.getInstance().isParticipant(player)) {
+        if (!this.isParticipant(player)) {
             return;
         }
 
@@ -152,7 +175,7 @@ public class BountyHuntMinigame implements Minigame {
             : null;
 
         boolean scored = false;
-        if (killer != null && MinigameManager.getInstance().isParticipant(killer)) {
+        if (killer != null && this.isParticipant(killer)) {
             UUID expectedTarget = this.targetAssignments.get(killer.getUuid());
             if (expectedTarget != null && expectedTarget.equals(player.getUuid())) {
                 int newScore = this.scores.merge(killer.getUuid(), 1, Integer::sum);
@@ -203,6 +226,52 @@ public class BountyHuntMinigame implements Minigame {
         }
     }
 
+    @Override
+    public ActionResult onUseItem(ServerPlayerEntity player, World world, Hand hand) {
+        if (!this.isParticipant(player)) {
+            return ActionResult.PASS;
+        }
+
+        if (!this.isTrackerItem(player.getStackInHand(hand))) {
+            return ActionResult.PASS;
+        }
+
+        this.cycleTrackerCooldown(player);
+        return ActionResult.SUCCESS;
+    }
+
+    @Override
+    public boolean allowDamage(ServerPlayerEntity player, DamageSource source, float amount) {
+        if (!this.isParticipant(player)) {
+            return true;
+        }
+
+        return !this.shouldCancelDamage(player, source);
+    }
+
+    @Override
+    public void onEntityDeath(LivingEntity entity, DamageSource source) {
+        if (entity instanceof ServerPlayerEntity player && this.isParticipant(player)) {
+            this.handlePlayerDeath(player, source);
+        }
+    }
+
+    @Override
+    public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
+        if (this.isParticipant(oldPlayer)) {
+            this.replaceParticipant(oldPlayer, newPlayer);
+            this.handlePlayerRespawn(oldPlayer, newPlayer);
+        }
+    }
+
+    @Override
+    public void onPlayerLeave(ServerPlayerEntity player) {
+        if (this.isParticipant(player)) {
+            this.removeParticipant(player);
+            this.handlePlayerLeave(player);
+        }
+    }
+
     public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
         this.grantTracker(newPlayer);
         this.syncTrackerTarget(newPlayer, false);
@@ -237,7 +306,7 @@ public class BountyHuntMinigame implements Minigame {
     }
 
     public boolean shouldCancelDamage(ServerPlayerEntity player, DamageSource source) {
-        if (!MinigameManager.getInstance().isParticipant(player)) {
+        if (!this.isParticipant(player)) {
             return false;
         }
 
@@ -246,7 +315,7 @@ public class BountyHuntMinigame implements Minigame {
         }
 
         if (this.state == GameState.STARTING && source.getAttacker() instanceof ServerPlayerEntity attacker) {
-            return MinigameManager.getInstance().isParticipant(attacker);
+            return this.isParticipant(attacker);
         }
 
         return false;
@@ -336,7 +405,7 @@ public class BountyHuntMinigame implements Minigame {
             return;
         }
         this.state = GameState.IN_PROGRESS;
-        MinigameManager.getInstance().setCurrentState(GameState.IN_PROGRESS);
+        this.setRuntimeState(GameState.IN_PROGRESS);
         this.broadcastMessage(Text.literal("Hunt is live!").formatted(Formatting.GREEN));
     }
 
@@ -618,7 +687,34 @@ public class BountyHuntMinigame implements Minigame {
     }
 
     private List<ServerPlayerEntity> getParticipants() {
-        return MinigameManager.getInstance().getParticipants();
+        return this.context().liveParticipants();
+    }
+
+    private boolean isParticipant(ServerPlayerEntity player) {
+        return this.context().participants().contains(player);
+    }
+
+    private void removeParticipant(ServerPlayerEntity player) {
+        this.context().participants().remove(player);
+    }
+
+    private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
+        this.context().participants().add(newPlayer);
+    }
+
+    private void clearParticipants() {
+        this.context().participants().clear();
+    }
+
+    private void setRuntimeState(GameState state) {
+        this.context().setState(state);
+    }
+
+    private MinigameContext context() {
+        if (this.context == null) {
+            throw new IllegalStateException("Bounty Hunt runtime context is not attached.");
+        }
+        return this.context;
     }
 
     @Nullable
@@ -626,7 +722,7 @@ public class BountyHuntMinigame implements Minigame {
         if (uuid == null) {
             return null;
         }
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
+        for (ServerPlayerEntity participant : this.getParticipants()) {
             if (participant.getUuid().equals(uuid)) {
                 return participant;
             }
@@ -663,19 +759,21 @@ public class BountyHuntMinigame implements Minigame {
             return;
         }
 
-        List<VanillaTeamDescriptor> descriptors = new ArrayList<>();
+        List<TeamSnapshot> snapshots = new ArrayList<>();
         for (ServerPlayerEntity player : this.getParticipants()) {
-            boolean isCurrentTarget = this.targetAssignments.containsValue(player.getUuid());
-            Formatting color = isCurrentTarget ? Formatting.YELLOW : this.vanillaTeams.colorFor(player.getName().getString());
-            String prefix = isCurrentTarget ? "[TARGET] " : "[HUNTER] ";
-            VanillaTeamOptions options = VanillaTeamOptions.defaults()
+            TeamRole role = this.targetAssignments.containsValue(player.getUuid()) ? TeamRole.TARGET : TeamRole.HUNTER;
+            snapshots.add(new TeamSnapshot("player_" + player.getUuidAsString(), player.getName().getString(), List.of(TeamMembership.of(player, role))));
+        }
+        this.vanillaTeams.syncSnapshots(this.server, snapshots, snapshot -> {
+            TeamRole role = snapshot.members().isEmpty() ? TeamRole.MEMBER : snapshot.members().get(0).role();
+            Formatting color = role == TeamRole.TARGET ? Formatting.YELLOW : this.vanillaTeams.colorFor(snapshot.id());
+            String prefix = role == TeamRole.TARGET ? "[TARGET] " : "[HUNTER] ";
+            return VanillaTeamOptions.defaults()
                 .withColor(color)
                 .withPrefix(Text.literal(prefix).formatted(color))
                 .withFriendlyFireAllowed(true)
                 .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
-            descriptors.add(new VanillaTeamDescriptor("player_" + player.getUuidAsString(), player.getName(), List.of(player), options));
-        }
-        this.vanillaTeams.sync(this.server, descriptors);
+        });
     }
 
     private void clearVanillaTeams() {
@@ -685,18 +783,25 @@ public class BountyHuntMinigame implements Minigame {
     }
 
     private void broadcastMessage(Text message) {
-        GameMessenger.broadcast(MinigameManager.getInstance().getParticipants(), message);
+        GameMessenger.broadcast(this.getParticipants(), message);
     }
 
     private void endGameWithWinner(ServerPlayerEntity winner) {
         this.state = GameState.ENDING;
-        MinigameManager.getInstance().setCurrentState(GameState.ENDING);
+        this.setRuntimeState(GameState.ENDING);
 
         this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
         this.broadcastMessage(Text.literal("🏆 " + winner.getName().getString() + " wins! 🏆").formatted(Formatting.GOLD));
         this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
-        GameMessenger.showGameOverTitle(MinigameManager.getInstance().getParticipants(), Text.literal("Bounty Hunt Winner"));
+        this.startStandardEndSequence(MatchEndResult.winner(winner));
         this.clearScoreboard();
+    }
+
+    private void startStandardEndSequence(MatchEndResult result) {
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime != null) {
+            MatchLifecycleController.getInstance().endMatch(runtime, result, MatchLifecycleOptions.defaults(NAME));
+        }
     }
 
     private static final class TrackingData {
@@ -706,6 +811,10 @@ public class BountyHuntMinigame implements Minigame {
         private BlockPos endEntryOverworld;
     }
 }
+
+
+
+
 
 
 

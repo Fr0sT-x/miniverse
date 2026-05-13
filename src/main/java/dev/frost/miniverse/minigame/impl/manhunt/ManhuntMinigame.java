@@ -2,19 +2,38 @@ package dev.frost.miniverse.minigame.impl.manhunt;
 
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.GameMessenger;
+import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.RuntimeContextAware;
 import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
+import dev.frost.miniverse.minigame.core.event.ItemUseAware;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamMembership;
+import dev.frost.miniverse.team.TeamRole;
+import dev.frost.miniverse.team.TeamSnapshot;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LodestoneTrackerComponent;
 import net.minecraft.component.type.NbtComponent;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.registry.RegistryKey;
@@ -23,7 +42,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Hand;
 import net.minecraft.util.TypeFilter;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
@@ -39,13 +60,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * In this game, Speedrunners try to reach the End while Hunters try to stop them.
  * If a Speedrunner dies, the Hunters win. Hunters can respawn upon death.
  */
-public class ManhuntMinigame implements Minigame {
+public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider {
     private static final String NAME = "Manhunt";
 
     private GameState state;
 
-    // Role assignments for each player
-    private final Map<UUID, ManhuntRole> playerRoles = new ConcurrentHashMap<>();
+    private final TeamManager teams = new TeamManager();
 
     // Track dead speedrunners who are now spectators
     private final List<UUID> deadSpeedrunners = new CopyOnWriteArrayList<>();
@@ -71,6 +91,7 @@ public class ManhuntMinigame implements Minigame {
     private final Set<UUID> eliminatedHunters = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Long> compassCooldownUntilTicks = new ConcurrentHashMap<>();
     private ManhuntSettings settings;
+    private MinigameContext context;
     private int leadTicksRemaining;
     private boolean huntStarted;
     private int tickCounter;
@@ -87,6 +108,11 @@ public class ManhuntMinigame implements Minigame {
         this.vanillaTeams.setTeammateCollisionAllowed(false);
     }
 
+    @Override
+    public void attachContext(MinigameContext context) {
+        this.context = context;
+    }
+
     public void setVanillaFriendlyFireAllowed(boolean allowed) {
         this.vanillaTeams.setFriendlyFireAllowed(allowed);
         this.syncVanillaTeams();
@@ -100,7 +126,7 @@ public class ManhuntMinigame implements Minigame {
     @Override
     public void initialize() {
         this.state = GameState.WAITING_FOR_PLAYERS;
-        this.playerRoles.clear();
+        this.teams.clear();
         this.deadSpeedrunners.clear();
         this.aliveSpeedrunners.clear();
         this.hunterTrackingIndexes.clear();
@@ -117,8 +143,8 @@ public class ManhuntMinigame implements Minigame {
 
     @Override
     public void startGame() {
-        this.state = GameState.STARTING;
-        MinigameManager.getInstance().setCurrentState(GameState.STARTING);
+        this.state = GameState.RUNNING;
+        this.setRuntimeState(GameState.RUNNING);
 
         // Initialize tracking
         this.aliveSpeedrunners.clear();
@@ -163,7 +189,7 @@ public class ManhuntMinigame implements Minigame {
         this.state = GameState.ENDING;
 
         // Clean up
-        this.playerRoles.clear();
+        this.teams.clear();
         this.deadSpeedrunners.clear();
         this.aliveSpeedrunners.clear();
         this.hunterTrackingIndexes.clear();
@@ -179,16 +205,15 @@ public class ManhuntMinigame implements Minigame {
         this.clearVanillaTeams();
 
         // Remove all participants from the minigame
-        MinigameManager.getInstance().clearParticipants();
+        this.clearParticipants();
     }
 
     @Override
     public void onPlayerDeath(ServerPlayerEntity player) {
-        if (!this.playerRoles.containsKey(player.getUuid())) {
+        ManhuntRole role = this.roleFor(player.getUuid());
+        if (role == null) {
             return; // Player is not part of this minigame
         }
-
-        ManhuntRole role = this.playerRoles.get(player.getUuid());
 
         if (role == ManhuntRole.SPEEDRUNNER) {
             // Speedrunner died - move to spectator mode and end game
@@ -206,7 +231,7 @@ public class ManhuntMinigame implements Minigame {
      * @param speedrunner the speedrunner who died
      */
     private void handleSpeedrunnerDeath(ServerPlayerEntity speedrunner) {
-        if (this.state != GameState.IN_PROGRESS) {
+        if (!this.state.isActive()) {
             return;
         }
 
@@ -281,7 +306,7 @@ public class ManhuntMinigame implements Minigame {
      */
     private void endGameWithHunterVictory() {
         this.state = GameState.ENDING;
-        MinigameManager.getInstance().setCurrentState(GameState.ENDING);
+        this.setRuntimeState(GameState.ENDING);
 
         this.broadcastMessage(
             Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD)
@@ -296,13 +321,13 @@ public class ManhuntMinigame implements Minigame {
             Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD)
         );
 
-        this.showGameOverTitle(Text.literal("Hunters Win"));
+        this.startStandardEndSequence(this.getActiveHunters(), Text.literal("Hunters"));
         this.clearScoreboard();
     }
 
     private void endGameWithRunnerVictory(Text reason) {
         this.state = GameState.ENDING;
-        MinigameManager.getInstance().setCurrentState(GameState.ENDING);
+        this.setRuntimeState(GameState.ENDING);
 
         this.broadcastMessage(
             Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD)
@@ -315,12 +340,23 @@ public class ManhuntMinigame implements Minigame {
             Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD)
         );
 
-        this.showGameOverTitle(Text.literal("Runners Win"));
+        this.startStandardEndSequence(this.getSpeedrunners(), Text.literal("Runners"));
         this.clearScoreboard();
     }
 
+    private void startStandardEndSequence(Collection<ServerPlayerEntity> winners, Text winnerLabel) {
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime != null) {
+            MatchLifecycleController.getInstance().endMatch(
+                runtime,
+                MatchEndResult.winners(winners, winnerLabel),
+                MatchLifecycleOptions.defaults(NAME)
+            );
+        }
+    }
+
     public void handleDragonDeath() {
-        if (this.state != GameState.IN_PROGRESS) {
+        if (!this.state.isActive()) {
             return;
         }
 
@@ -329,12 +365,12 @@ public class ManhuntMinigame implements Minigame {
 
     public void onServerTick(MinecraftServer server) {
         this.server = server;
-        if (this.state == GameState.ENDING) {
+        if (this.state.isTerminal()) {
             return;
         }
 
         this.gameTicks++;
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             this.speedrunnerRespawns.tick(this.gameTicks);
             this.tickHunterRespawns();
         }
@@ -346,15 +382,79 @@ public class ManhuntMinigame implements Minigame {
             this.pulseRunnerGlow();
             this.updateScoreboard();
 
-            if (this.state == GameState.STARTING) {
+            if (this.state == GameState.RUNNING && !this.huntStarted) {
                 this.leadTicksRemaining = Math.max(0, this.leadTicksRemaining - 20);
                 if (this.leadTicksRemaining <= 0) {
                     this.beginHunt();
                 }
-            } else if (this.state == GameState.IN_PROGRESS) {
+            } else if (this.state == GameState.RUNNING && this.huntStarted) {
                 this.updateHunterCompasses();
                 this.cleanupDroppedCompasses();
             }
+        }
+    }
+
+    @Override
+    public ActionResult onUseItem(ServerPlayerEntity player, World world, Hand hand) {
+        if (!player.getStackInHand(hand).isOf(Items.COMPASS)) {
+            return ActionResult.PASS;
+        }
+
+        if (!this.isGameActive()) {
+            return ActionResult.PASS;
+        }
+
+        if (!this.isParticipant(player) || this.getPlayerRole(player) != ManhuntRole.HUNTER) {
+            return ActionResult.PASS;
+        }
+
+        ServerPlayerEntity target = this.cycleHunterTrackingTarget(player);
+        if (target == null) {
+            player.sendMessage(Text.literal("No speedrunners are alive to track."), true);
+            return ActionResult.SUCCESS;
+        }
+
+        player.sendMessage(
+            Text.literal("Tracking now: " + target.getName().getString() + " (right-click again to switch)"),
+            true
+        );
+        return ActionResult.SUCCESS;
+    }
+
+    @Override
+    public boolean allowDamage(ServerPlayerEntity player, DamageSource source, float amount) {
+        if (!this.isParticipant(player)) {
+            return true;
+        }
+
+        return !this.shouldCancelDamage(player);
+    }
+
+    @Override
+    public void onEntityDeath(LivingEntity entity, DamageSource source) {
+        if (entity instanceof EnderDragonEntity) {
+            this.handleDragonDeath();
+            return;
+        }
+
+        if (entity instanceof ServerPlayerEntity player && this.isParticipant(player)) {
+            this.onPlayerDeath(player);
+        }
+    }
+
+    @Override
+    public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
+        if (this.isParticipant(oldPlayer)) {
+            this.replaceParticipant(oldPlayer, newPlayer);
+            this.handlePlayerRespawn(oldPlayer, newPlayer);
+        }
+    }
+
+    @Override
+    public void onPlayerLeave(ServerPlayerEntity player) {
+        if (this.isParticipant(player)) {
+            this.removeParticipant(player);
+            this.handlePlayerLeave(player);
         }
     }
 
@@ -363,8 +463,6 @@ public class ManhuntMinigame implements Minigame {
             return;
         }
         this.huntStarted = true;
-        this.state = GameState.IN_PROGRESS;
-        MinigameManager.getInstance().setCurrentState(GameState.IN_PROGRESS);
 
         for (ServerPlayerEntity hunter : this.getActiveHunters()) {
             this.clearLeadEffects(hunter);
@@ -381,7 +479,7 @@ public class ManhuntMinigame implements Minigame {
      * Hunters in the Overworld, Nether, and End can all track speedrunners.
      */
     public void updateHunterCompasses() {
-        if (this.state != GameState.IN_PROGRESS) {
+        if (this.state != GameState.RUNNING || !this.huntStarted) {
             return;
         }
 
@@ -579,7 +677,7 @@ public class ManhuntMinigame implements Minigame {
             hunter.getInventory().insertStack(stack);
         }
         this.hunterTrackingIndexes.put(hunter.getUuid(), 0);
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             this.syncHunterTracking(hunter, announce);
         }
     }
@@ -623,11 +721,14 @@ public class ManhuntMinigame implements Minigame {
         this.aliveSpeedrunners.remove(playerUuid);
         this.deadSpeedrunners.remove(playerUuid);
         this.hunterTrackingIndexes.remove(player.getUuid());
-        this.playerRoles.put(playerUuid, role);
+        TeamRole teamRole = role == ManhuntRole.SPEEDRUNNER ? TeamRole.RUNNER : TeamRole.HUNTER;
+        String teamId = role == ManhuntRole.SPEEDRUNNER ? "speedrunners" : "hunters";
+        String teamLabel = role == ManhuntRole.SPEEDRUNNER ? "Speedrunners" : "Hunters";
+        this.teams.assign(player, teamId, teamLabel, teamRole);
         this.eliminatedHunters.remove(playerUuid);
         this.speedrunnerRespawns.removePlayer(player);
 
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             if (role == ManhuntRole.SPEEDRUNNER) {
                 this.aliveSpeedrunners.add(playerUuid);
             } else if (role == ManhuntRole.HUNTER && this.settings.huntersCompassEnabled()) {
@@ -645,7 +746,19 @@ public class ManhuntMinigame implements Minigame {
      */
     @Nullable
     public ManhuntRole getPlayerRole(ServerPlayerEntity player) {
-        return this.playerRoles.get(player.getUuid());
+        return this.roleFor(player.getUuid());
+    }
+
+    @Nullable
+    private ManhuntRole roleFor(UUID playerUuid) {
+        if (!this.teams.contains(playerUuid)) {
+            return null;
+        }
+        return switch (this.teams.role(playerUuid)) {
+            case RUNNER -> ManhuntRole.SPEEDRUNNER;
+            case HUNTER -> ManhuntRole.HUNTER;
+            default -> null;
+        };
     }
 
     /**
@@ -661,10 +774,7 @@ public class ManhuntMinigame implements Minigame {
     }
 
     private List<UUID> getSpeedrunnerUuids() {
-        return this.playerRoles.entrySet().stream()
-            .filter(entry -> entry.getValue() == ManhuntRole.SPEEDRUNNER)
-            .map(Map.Entry::getKey)
-            .toList();
+        return this.teams.playerUuidsWithRole(TeamRole.RUNNER);
     }
 
     /**
@@ -673,18 +783,16 @@ public class ManhuntMinigame implements Minigame {
      * @return a list of all hunters
      */
     public List<ServerPlayerEntity> getHunters() {
-        return this.playerRoles.entrySet().stream()
-            .filter(entry -> entry.getValue() == ManhuntRole.HUNTER)
-            .map(entry -> this.getPlayerByUuid(entry.getKey()))
+        return this.teams.playerUuidsWithRole(TeamRole.HUNTER).stream()
+            .map(this::getPlayerByUuid)
             .filter(Objects::nonNull)
             .toList();
     }
 
     public List<ServerPlayerEntity> getActiveHunters() {
-        return this.playerRoles.entrySet().stream()
-            .filter(entry -> entry.getValue() == ManhuntRole.HUNTER)
-            .filter(entry -> !this.eliminatedHunters.contains(entry.getKey()))
-            .map(entry -> this.getPlayerByUuid(entry.getKey()))
+        return this.teams.playerUuidsWithRole(TeamRole.HUNTER).stream()
+            .filter(uuid -> !this.eliminatedHunters.contains(uuid))
+            .map(this::getPlayerByUuid)
             .filter(Objects::nonNull)
             .toList();
     }
@@ -719,7 +827,38 @@ public class ManhuntMinigame implements Minigame {
      * @param message the message to broadcast
      */
     private void broadcastMessage(Text message) {
-        GameMessenger.broadcast(MinigameManager.getInstance().getParticipants(), message);
+        GameMessenger.broadcast(this.getParticipants(), message);
+    }
+
+    private List<ServerPlayerEntity> getParticipants() {
+        return this.context().liveParticipants();
+    }
+
+    private boolean isParticipant(ServerPlayerEntity player) {
+        return this.context().participants().contains(player);
+    }
+
+    private void removeParticipant(ServerPlayerEntity player) {
+        this.context().participants().remove(player);
+    }
+
+    private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
+        this.context().participants().add(newPlayer);
+    }
+
+    private void clearParticipants() {
+        this.context().participants().clear();
+    }
+
+    private void setRuntimeState(GameState state) {
+        this.context().setState(state);
+    }
+
+    private MinigameContext context() {
+        if (this.context == null) {
+            throw new IllegalStateException("Manhunt runtime context is not attached.");
+        }
+        return this.context;
     }
 
     private void pruneDisconnectedSpeedrunners() {
@@ -734,6 +873,11 @@ public class ManhuntMinigame implements Minigame {
     @Override
     public String getName() {
         return NAME;
+    }
+
+    @Override
+    public TeamManager teamManager() {
+        return this.teams;
     }
 
     @Override
@@ -752,7 +896,7 @@ public class ManhuntMinigame implements Minigame {
      * @return true if the game is in progress, false otherwise
      */
     public boolean isGameActive() {
-        return this.state == GameState.IN_PROGRESS;
+        return this.state == GameState.RUNNING && this.huntStarted;
     }
 
     /**
@@ -774,8 +918,8 @@ public class ManhuntMinigame implements Minigame {
      */
     public List<ServerPlayerEntity> getUnassignedParticipants() {
         List<ServerPlayerEntity> unassigned = new ArrayList<>();
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
-            if (!this.playerRoles.containsKey(participant.getUuid())) {
+        for (ServerPlayerEntity participant : this.getParticipants()) {
+            if (!this.teams.contains(participant.getUuid())) {
                 unassigned.add(participant);
             }
         }
@@ -784,14 +928,14 @@ public class ManhuntMinigame implements Minigame {
 
     public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
         UUID playerUuid = oldPlayer.getUuid();
-        ManhuntRole role = this.playerRoles.get(playerUuid);
+        ManhuntRole role = this.roleFor(playerUuid);
         if (role == null) {
             return;
         }
 
         this.speedrunnerRespawns.handlePlayerRespawn(newPlayer);
 
-        if (role == ManhuntRole.HUNTER && this.state == GameState.IN_PROGRESS) {
+        if (role == ManhuntRole.HUNTER && this.state == GameState.RUNNING) {
             if (this.eliminatedHunters.contains(playerUuid)) {
                 newPlayer.changeGameMode(net.minecraft.world.GameMode.SPECTATOR);
             } else if (this.pendingHunterRespawns.containsKey(playerUuid)) {
@@ -808,10 +952,11 @@ public class ManhuntMinigame implements Minigame {
 
     public void handlePlayerLeave(ServerPlayerEntity player) {
         UUID playerUuid = player.getUuid();
-        ManhuntRole role = this.playerRoles.remove(playerUuid);
+        ManhuntRole role = this.roleFor(playerUuid);
         if (role == null) {
             return;
         }
+        this.teams.remove(playerUuid);
 
         this.aliveSpeedrunners.remove(playerUuid);
         this.deadSpeedrunners.remove(playerUuid);
@@ -824,7 +969,7 @@ public class ManhuntMinigame implements Minigame {
         this.eliminatedHunters.remove(playerUuid);
         this.compassCooldownUntilTicks.remove(playerUuid);
 
-        if (role == ManhuntRole.SPEEDRUNNER && this.state == GameState.IN_PROGRESS && this.aliveSpeedrunners.isEmpty()) {
+        if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive() && this.aliveSpeedrunners.isEmpty()) {
             this.broadcastMessage(
                 Text.literal(player.getName().getString() + " (Speedrunner) left the game.").formatted(Formatting.RED)
             );
@@ -855,7 +1000,7 @@ public class ManhuntMinigame implements Minigame {
     }
 
     ServerPlayerEntity getPlayerByUuid(UUID uuid) {
-        for (ServerPlayerEntity participant : MinigameManager.getInstance().getParticipants()) {
+        for (ServerPlayerEntity participant : this.getParticipants()) {
             if (participant.getUuid().equals(uuid)) {
                 return participant;
             }
@@ -881,7 +1026,7 @@ public class ManhuntMinigame implements Minigame {
     }
 
     void endGameBecauseNoAliveSpeedrunners() {
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             this.endGameWithHunterVictory();
         }
     }
@@ -943,7 +1088,7 @@ public class ManhuntMinigame implements Minigame {
     }
 
     private void pulseRunnerGlow() {
-        if (this.settings.runnerGlowPulseMinutes() <= 0 || this.state != GameState.IN_PROGRESS) {
+        if (this.settings.runnerGlowPulseMinutes() <= 0 || this.state != GameState.RUNNING) {
             return;
         }
 
@@ -984,7 +1129,7 @@ public class ManhuntMinigame implements Minigame {
         SCOREBOARD.setScore(this.server, "Runner Lives", this.settings.runnerLives());
         SCOREBOARD.setScore(this.server, "Hunter Lives", this.settings.hunterLives());
 
-        if (this.state == GameState.STARTING) {
+        if (!this.huntStarted && this.leadTicksRemaining > 0) {
             int secondsLeft = Math.max(0, this.leadTicksRemaining / 20);
             SCOREBOARD.setScore(this.server, "Lead", secondsLeft);
         } else {
@@ -1006,31 +1151,34 @@ public class ManhuntMinigame implements Minigame {
             return;
         }
 
-        List<VanillaTeamDescriptor> descriptors = new ArrayList<>();
         VanillaTeamOptions runnerOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.GREEN)
-            .withPrefix(Text.literal("[RUNNER] ").formatted(Formatting.GREEN))
+            .withColor(Formatting.WHITE)
             .withFriendlyFireAllowed(true)
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
         VanillaTeamOptions hunterOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.RED)
-            .withPrefix(Text.literal("[HUNTER] ").formatted(Formatting.RED))
+            .withColor(Formatting.WHITE)
             .withFriendlyFireAllowed(true)
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
         VanillaTeamOptions deadOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.DARK_GRAY)
-            .withPrefix(Text.literal("[DEAD] ").formatted(Formatting.DARK_GRAY))
+            .withColor(Formatting.WHITE)
             .withFriendlyFireAllowed(false)
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
 
-        descriptors.add(new VanillaTeamDescriptor("runners", Text.literal("Speedrunners"), this.getAliveSpeedrunners(), runnerOptions));
-        descriptors.add(new VanillaTeamDescriptor("hunters", Text.literal("Hunters"), this.getActiveHunters(), hunterOptions));
-        List<ServerPlayerEntity> dead = this.deadSpeedrunners.stream()
-            .map(this::getPlayerByUuid)
-            .filter(Objects::nonNull)
-            .toList();
-        descriptors.add(new VanillaTeamDescriptor("dead", Text.literal("Dead"), dead, deadOptions));
-        this.vanillaTeams.sync(this.server, descriptors);
+        List<TeamSnapshot> snapshots = List.of(
+            new TeamSnapshot("runners", "Speedrunners", this.membershipsFor(this.getAliveSpeedrunners(), TeamRole.RUNNER)),
+            new TeamSnapshot("hunters", "Hunters", this.membershipsFor(this.getActiveHunters(), TeamRole.HUNTER)),
+            new TeamSnapshot("dead", "Dead", this.membershipsFor(this.getDeadSpeedrunners(), TeamRole.DEAD))
+        );
+        this.vanillaTeams.syncSnapshots(this.server, snapshots, snapshot -> switch (snapshot.id()) {
+            case "runners" -> runnerOptions;
+            case "hunters" -> hunterOptions;
+            case "dead" -> deadOptions;
+            default -> VanillaTeamOptions.defaults();
+        });
+    }
+
+    private List<TeamMembership> membershipsFor(List<ServerPlayerEntity> players, TeamRole role) {
+        return players.stream().map(player -> TeamMembership.of(player, role)).toList();
     }
 
     private void clearVanillaTeams() {
@@ -1040,7 +1188,7 @@ public class ManhuntMinigame implements Minigame {
     }
 
     private void showGameOverTitle(Text title) {
-        GameMessenger.showGameOverTitle(MinigameManager.getInstance().getParticipants(), title);
+        GameMessenger.showGameOverTitle(this.getParticipants(), title);
     }
 
     private void applyLeadEffects(ServerPlayerEntity hunter) {

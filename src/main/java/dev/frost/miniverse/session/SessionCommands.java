@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.argument.EntityArgumentType;
@@ -61,14 +62,14 @@ public final class SessionCommands {
     private static int createSession(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         String rawGame = StringArgumentType.getString(context, "game");
-        SessionGameType gameType = SessionGameType.fromString(rawGame)
-            .orElse(null);
+        MinigameDefinition definition = MinigameRegistry.get(rawGame).orElse(null);
 
-        if (gameType == null) {
+        if (definition == null) {
             source.sendError(Text.literal("Unknown game type '" + rawGame + "'. Use one of: " + String.join(", ", MinigameRegistry.getIds()) + "."));
             return 0;
         }
 
+        SessionGameDescriptor gameType = SessionGameDescriptor.fromDefinition(definition);
         GameSession session = SessionManager.getInstance().createSession(gameType);
         source.sendFeedback(
             () -> Text.literal("Created " + gameType.getDisplayName() + " session " + session.getSessionId() + " with shared seed " + session.getSeedPlan().sharedSeed() + "."),
@@ -88,7 +89,7 @@ public final class SessionCommands {
             return 0;
         }
 
-        PlayerAssignment assignment = SessionManager.getInstance().assignPlayer(sessionId, player);
+        SessionGroup assignment = SessionManager.getInstance().assignPlayer(sessionId, player);
         source.sendFeedback(
             () -> Text.literal("Assigned " + player.getName().getString() + " to session " + sessionId + "."),
             true
@@ -131,7 +132,7 @@ public final class SessionCommands {
                 .append(" player(s): ");
 
             boolean first = true;
-            for (PlayerAssignment assignment : launchedSession.getAssignments()) {
+            for (SessionGroup assignment : launchedSession.getAssignments()) {
                 if (!first) {
                     message.append(" | ");
                 }
@@ -178,7 +179,7 @@ public final class SessionCommands {
         source.sendFeedback(() -> Text.literal("- Seed: " + session.getSeedPlan().sharedSeed()), false);
         source.sendFeedback(() -> Text.literal("- Players: " + session.getAssignments().size()), false);
 
-        for (PlayerAssignment assignment : session.getAssignments()) {
+        for (SessionGroup assignment : session.getAssignments()) {
             source.sendFeedback(
                 () -> Text.literal("  * " + assignment.getDisplayName() + " => " + assignment.getState() + (assignment.getConnectionAddress() == null ? "" : " @ " + assignment.getConnectionAddress())),
                 false

@@ -1,10 +1,5 @@
 package dev.frost.miniverse.session;
 
-import dev.frost.miniverse.Miniverse;
-
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
@@ -50,15 +45,7 @@ public final class SessionRuntimeConfig {
         }
 
         Path path = Paths.get(configPath);
-        if (!Files.exists(path)) {
-            return config;
-        }
-
-        try (Reader reader = Files.newBufferedReader(path)) {
-            config.load(reader);
-        } catch (IOException e) {
-            Miniverse.LOGGER.warn("Could not load Miniverse session runtime config {}", configPath, e);
-        }
+        config = SessionConfigJson.readRuntimeProperties(path);
         return config;
     }
 }

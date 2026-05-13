@@ -1,8 +1,8 @@
 package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapDefinition;
 import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapSettings;
-import dev.frost.miniverse.session.SessionGameType;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public class DeathSwapSetupScreen extends Screen {
+    private static final String GAME_ID = DeathSwapDefinition.ID;
     private static final int PANEL_PADDING = 16;
     private static final int PANEL_MAX_WIDTH = 1040;
     private static final int PANEL_MAX_HEIGHT = 720;
@@ -63,12 +64,10 @@ public class DeathSwapSetupScreen extends Screen {
     private TextFieldWidget swapIntervalField;
     private TextFieldWidget gracePeriodField;
     private TextFieldWidget borderSizeField;
-    private TextFieldWidget damageImmunityField;
     private TextFieldWidget seedValueField;
     private ButtonWidget seedModeButton;
     private ButtonWidget keepInventoryButton;
     private ButtonWidget preserveVelocityButton;
-    private ButtonWidget trioRotationButton;
     private ButtonWidget startButton;
     private ButtonWidget createTeamButton;
     private ButtonWidget assignToSelectedTeamButton;
@@ -86,7 +85,6 @@ public class DeathSwapSetupScreen extends Screen {
     private DeathSwapSettings.SeedMode seedMode = DeathSwapSettings.SeedMode.RANDOM;
     private boolean keepInventory = true;
     private boolean preserveVelocity = true;
-    private boolean trioRotationEnabled = true;
     private String statusMessage = "";
 
     public DeathSwapSetupScreen() {
@@ -124,7 +122,6 @@ public class DeathSwapSetupScreen extends Screen {
         this.swapIntervalField = this.addField(layout.leftFieldX(), layout.swapIntervalY(), layout.leftFieldWidth(), "swap interval seconds", "300");
         this.gracePeriodField = this.addField(layout.leftFieldX(), layout.gracePeriodY(), layout.leftFieldWidth(), "initial grace seconds", "30");
         this.borderSizeField = this.addField(layout.leftFieldX(), layout.borderSizeY(), layout.leftFieldWidth(), "border size", "3000");
-        this.damageImmunityField = this.addField(layout.leftFieldX(), layout.damageImmunityY(), layout.leftFieldWidth(), "damage immunity seconds", "3");
 
         this.seedModeButton = this.addDrawableChild(ButtonWidget.builder(Text.literal(this.seedModeLabel()), button -> {
             this.seedMode = this.seedMode.next();
@@ -139,10 +136,6 @@ public class DeathSwapSetupScreen extends Screen {
             this.preserveVelocity = !this.preserveVelocity;
             button.setMessage(Text.literal(this.toggleLabel("Preserve Velocity", this.preserveVelocity)));
         }).dimensions(layout.rightFieldX(), layout.preserveVelocityY(), layout.rightFieldWidth(), 20).build());
-        this.trioRotationButton = this.addDrawableChild(ButtonWidget.builder(Text.literal(this.toggleLabel("Trio Rotation", this.trioRotationEnabled)), button -> {
-            this.trioRotationEnabled = !this.trioRotationEnabled;
-            button.setMessage(Text.literal(this.toggleLabel("Trio Rotation", this.trioRotationEnabled)));
-        }).dimensions(layout.rightFieldX(), layout.trioRotationY(), layout.rightFieldWidth(), 20).build());
 
         this.resetButton = this.addDrawableChild(ButtonWidget.builder(Text.literal("Reset"), button -> this.resetDraft())
             .dimensions(layout.footerResetX(), layout.footerButtonsY(), RESET_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
@@ -162,12 +155,10 @@ public class DeathSwapSetupScreen extends Screen {
         this.swapIntervalField.active = connected;
         this.gracePeriodField.active = connected;
         this.borderSizeField.active = connected;
-        this.damageImmunityField.active = connected;
         this.seedModeButton.active = connected;
         this.seedValueField.active = connected && this.seedMode == DeathSwapSettings.SeedMode.FIXED;
         this.keepInventoryButton.active = connected;
         this.preserveVelocityButton.active = connected;
-        this.trioRotationButton.active = connected;
         this.selectAllButton.active = connected;
         this.clearSelectionButton.active = connected;
         this.soloAllButton.active = connected && hasSelection;
@@ -359,12 +350,10 @@ public class DeathSwapSetupScreen extends Screen {
         context.drawText(this.textRenderer, Text.literal("Swap Interval:"), layout.leftLabelX(), layout.swapIntervalY() + 5, TEXT_SECONDARY, false);
         context.drawText(this.textRenderer, Text.literal("Initial Grace:"), layout.leftLabelX(), layout.gracePeriodY() + 5, TEXT_SECONDARY, false);
         context.drawText(this.textRenderer, Text.literal("Border Size:"), layout.leftLabelX(), layout.borderSizeY() + 5, TEXT_SECONDARY, false);
-        context.drawText(this.textRenderer, Text.literal("Damage Immunity:"), layout.leftLabelX(), layout.damageImmunityY() + 5, TEXT_SECONDARY, false);
 
         context.drawText(this.textRenderer, Text.literal("World Seed:"), layout.rightLabelX(), layout.seedModeY() + 5, TEXT_SECONDARY, false);
         context.drawText(this.textRenderer, Text.literal("Keep Inventory:"), layout.rightLabelX(), layout.keepInventoryY() + 5, TEXT_SECONDARY, false);
         context.drawText(this.textRenderer, Text.literal("Preserve Velocity:"), layout.rightLabelX(), layout.preserveVelocityY() + 5, TEXT_SECONDARY, false);
-        context.drawText(this.textRenderer, Text.literal("Trio Rotation:"), layout.rightLabelX(), layout.trioRotationY() + 5, TEXT_SECONDARY, false);
     }
 
     private void createSession() {
@@ -381,14 +370,14 @@ public class DeathSwapSetupScreen extends Screen {
 
         List<SessionSnapshotData.RosterEntry> selectedParticipants = this.getSelectedParticipants();
         NbtCompound plan = new NbtCompound();
-        plan.putString("game", SessionGameType.DEATH_SWAP.getCommandName());
+        plan.putString("game", GAME_ID);
         plan.putString("name", this.sessionNameField.getText().trim());
         plan.putBoolean("launch", true);
         plan.put("settings", this.buildSettingsCompound());
 
         // Don't add groups - all players will be on the same server
         // Team assignments are stored in settings instead
-        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(SessionGameType.DEATH_SWAP.getCommandName(), this.sessionNameField.getText().trim(), plan));
+        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(GAME_ID, this.sessionNameField.getText().trim(), plan));
         this.statusMessage = "Requested Death Swap session creation.";
     }
 
@@ -397,10 +386,8 @@ public class DeathSwapSetupScreen extends Screen {
         settings.putInt("swapIntervalSeconds", this.readInt(this.swapIntervalField, 300, 1, 3600, "Swap interval must be a number."));
         settings.putInt("initialGracePeriodSeconds", this.readInt(this.gracePeriodField, 30, 0, 3600, "Grace period must be a number."));
         settings.putInt("borderSize", this.readInt(this.borderSizeField, 3000, 16, 60_000, "Border size must be a number."));
-        settings.putInt("damageImmunityAfterSwapSeconds", this.readInt(this.damageImmunityField, 3, 0, 600, "Damage immunity must be a number."));
         settings.putBoolean("keepInventory", this.keepInventory);
         settings.putBoolean("preserveVelocity", this.preserveVelocity);
-        settings.putBoolean("trioRotationEnabled", this.trioRotationEnabled);
         settings.putString("seedMode", this.seedMode.nbtValue());
         settings.putLong("seed", this.seedMode == DeathSwapSettings.SeedMode.FIXED ? this.getSelectedSeedValue() : System.currentTimeMillis());
 
@@ -593,7 +580,6 @@ public class DeathSwapSetupScreen extends Screen {
         this.seedModeButton.setMessage(Text.literal(this.seedModeLabel()));
         this.keepInventoryButton.setMessage(Text.literal(this.toggleLabel("Keep Inventory", this.keepInventory)));
         this.preserveVelocityButton.setMessage(Text.literal(this.toggleLabel("Preserve Velocity", this.preserveVelocity)));
-        this.trioRotationButton.setMessage(Text.literal(this.toggleLabel("Trio Rotation", this.trioRotationEnabled)));
     }
 
     private String seedModeLabel() {
@@ -657,7 +643,6 @@ public class DeathSwapSetupScreen extends Screen {
         this.seedMode = DeathSwapSettings.SeedMode.RANDOM;
         this.keepInventory = true;
         this.preserveVelocity = true;
-        this.trioRotationEnabled = true;
         if (this.seedValueField != null) {
             this.seedValueField.setText(Long.toString(System.currentTimeMillis()));
         }
@@ -832,17 +817,15 @@ public class DeathSwapSetupScreen extends Screen {
         int swapIntervalY = settingsY + 24;
         int gracePeriodY = settingsY + 46;
         int borderSizeY = settingsY + 68;
-        int damageImmunityY = settingsY + 90;
         int seedModeY = settingsY + 24;
         int seedValueY = settingsY + 46;
         int keepInventoryY = settingsY + 68;
         int preserveVelocityY = settingsY + 90;
-        int trioRotationY = settingsY + 112;
 
-        return new Layout(panelX, panelY, panelWidth, panelHeight, contentX, sessionFieldX, topButtonsY, sessionFieldWidth, selectAllX, clearSelectionX, soloAllX, startMatchX, contentX, teamX, listTop, listsHeight, availableWidth, teamWidth, actionButtonsY, actionLeft, actionLeft + CREATE_TEAM_BUTTON_WIDTH + 8, actionLeft + CREATE_TEAM_BUTTON_WIDTH + ASSIGN_BUTTON_WIDTH + 16, actionLeft + CREATE_TEAM_BUTTON_WIDTH + ASSIGN_BUTTON_WIDTH + REMOVE_BUTTON_WIDTH + 24, settingsY, contentWidth, SETTINGS_HEIGHT, leftLabelX, leftFieldX, leftFieldWidth, rightLabelX, rightFieldX, rightFieldWidth, swapIntervalY, gracePeriodY, borderSizeY, damageImmunityY, seedModeY, seedValueY, keepInventoryY, preserveVelocityY, trioRotationY, footerButtonsY, footerLeft, footerLeft + footerResetWidth + footerGap);
+        return new Layout(panelX, panelY, panelWidth, panelHeight, contentX, sessionFieldX, topButtonsY, sessionFieldWidth, selectAllX, clearSelectionX, soloAllX, startMatchX, contentX, teamX, listTop, listsHeight, availableWidth, teamWidth, actionButtonsY, actionLeft, actionLeft + CREATE_TEAM_BUTTON_WIDTH + 8, actionLeft + CREATE_TEAM_BUTTON_WIDTH + ASSIGN_BUTTON_WIDTH + 16, actionLeft + CREATE_TEAM_BUTTON_WIDTH + ASSIGN_BUTTON_WIDTH + REMOVE_BUTTON_WIDTH + 24, settingsY, contentWidth, SETTINGS_HEIGHT, leftLabelX, leftFieldX, leftFieldWidth, rightLabelX, rightFieldX, rightFieldWidth, swapIntervalY, gracePeriodY, borderSizeY, seedModeY, seedValueY, keepInventoryY, preserveVelocityY, footerButtonsY, footerLeft, footerLeft + footerResetWidth + footerGap);
     }
 
-    private record Layout(int panelX, int panelY, int panelWidth, int panelHeight, int contentX, int sessionFieldX, int sessionFieldY, int sessionFieldWidth, int selectAllX, int clearSelectionX, int soloAllX, int startMatchX, int availableX, int teamX, int listsY, int listsHeight, int availableWidth, int teamWidth, int actionButtonsY, int createTeamX, int assignTeamX, int removeTeamX, int deleteTeamX, int settingsY, int settingsWidth, int settingsHeight, int leftLabelX, int leftFieldX, int leftFieldWidth, int rightLabelX, int rightFieldX, int rightFieldWidth, int swapIntervalY, int gracePeriodY, int borderSizeY, int damageImmunityY, int seedModeY, int seedValueY, int keepInventoryY, int preserveVelocityY, int trioRotationY, int footerButtonsY, int footerResetX, int footerBackX) {
+    private record Layout(int panelX, int panelY, int panelWidth, int panelHeight, int contentX, int sessionFieldX, int sessionFieldY, int sessionFieldWidth, int selectAllX, int clearSelectionX, int soloAllX, int startMatchX, int availableX, int teamX, int listsY, int listsHeight, int availableWidth, int teamWidth, int actionButtonsY, int createTeamX, int assignTeamX, int removeTeamX, int deleteTeamX, int settingsY, int settingsWidth, int settingsHeight, int leftLabelX, int leftFieldX, int leftFieldWidth, int rightLabelX, int rightFieldX, int rightFieldWidth, int swapIntervalY, int gracePeriodY, int borderSizeY, int seedModeY, int seedValueY, int keepInventoryY, int preserveVelocityY, int footerButtonsY, int footerResetX, int footerBackX) {
     }
 
     private static final class TeamDraft {
@@ -882,6 +865,8 @@ public class DeathSwapSetupScreen extends Screen {
         }
     }
 }
+
+
 
 
 

@@ -16,10 +16,12 @@ import org.lwjgl.glfw.GLFW;
 
 public class MiniverseClient implements ClientModInitializer {
 	public static KeyBinding OPEN_GUI_KEY;
+	private static boolean pendingSessionOpen;
 
 	@Override
 	public void onInitializeClient() {
 		NetworkConstants.registerPayloadTypes();
+		NightVisionToggle.register();
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.miniverse.open_gui",
@@ -43,12 +45,29 @@ public class MiniverseClient implements ClientModInitializer {
 		));
 
 		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.SESSION_LIST_ID, (payload, context) ->
-			context.client().execute(() -> SessionScreen.onServerSnapshot(payload.sessions()))
+			context.client().execute(() -> {
+				SessionScreen.onServerSnapshot(payload.sessions());
+				maybeOpenGui(context.client());
+			})
 		);
 	}
 
 	private static void openGui() {
 		MinecraftClient client = MinecraftClient.getInstance();
-		client.setScreen(new SessionScreen());
+		if (client.player == null || client.currentScreen instanceof SessionScreen) {
+			return;
+		}
+		pendingSessionOpen = true;
+		ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload("open"));
+	}
+
+	private static void maybeOpenGui(MinecraftClient client) {
+		if (!pendingSessionOpen) {
+			return;
+		}
+		pendingSessionOpen = false;
+		if (!(client.currentScreen instanceof SessionScreen)) {
+			client.setScreen(new SessionScreen());
+		}
 	}
 }

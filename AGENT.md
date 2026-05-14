@@ -43,6 +43,8 @@ After changing any framework / implementing new frameworks, make sure to update 
 - `minigame/MiniverseGames`: central list of registered definitions.
 - `minigame/core/event`: Fabric event router plus small opt-in interfaces (`ServerTickAware`, `PlayerRespawnAware`, etc.).
 - `minigame/core/lifecycle`: generic match start/end sequencing, countdowns, player freeze enforcement, admin return cancellation, and backend return transfer.
+- `minigame/core/freeze`: reusable freeze service for movement blocking, freeze reasons, and lifecycle integration.
+- `minigame/core/spectator`: reusable spectator framework (sessions, policies, camera control, target providers, restrictions, and lifecycle cleanup).
 - `minigame/core/vanilla`: adapter for mirroring custom teams into vanilla scoreboard teams.
 - `network/SessionNetwork`: server-side GUI payload handlers and session snapshot creation.
 - `session/SessionManager`: in-memory session registry, player assignment, backend launching, transfer packets, and stop/remove lifecycle.
@@ -78,7 +80,7 @@ Start flow:
 1. `SessionBootstrapper` calls `MatchLifecycleController.beginMatch(runtime, options, minigame::startGame)` when all expected players are online and the gamemode reports it can start.
 2. The controller transitions through `STARTING`/`FROZEN`, freezes participants for the configured duration, clears inventories, fills food and saturation, shows the minigame title plus gamemode-specific subtitle, and displays countdown actionbar text.
 3. Late-joining participants during `START_FREEZE` are added and frozen through `MatchLifecycleController.onParticipantJoin(...)` (invoked from `MinigameEventRouter`).
-4. During freeze, global event routing blocks movement escape, jumping by teleporting to the frozen position, interaction, entity/block attacks, block breaking/placing, and dropped frozen-player items.
+4. During freeze, global routing blocks movement input via the freeze service, prevents frozen interactions, and keeps participants immobile without per-tick teleport spam.
 5. When the countdown ends, the controller unfreezes participants, moves the runtime into `RUNNING`, and invokes the gamemode start callback.
 
 End flow:
@@ -92,6 +94,10 @@ End flow:
 Default phases are `WAITING`/`WAITING_FOR_PLAYERS`, `STARTING`, `FROZEN`, `RUNNING`/`IN_PROGRESS`, `ENDING`, `RETURNING`, and `FINISHED`. Existing `WAITING_FOR_PLAYERS` and `IN_PROGRESS` names remain for compatibility, but new lifecycle code should prefer the generic phases where possible.
 
 Gamemodes customize lifecycle behavior by passing `MatchLifecycleOptions`; do not hardcode game ids in lifecycle code. Backend bootstrappers can override `SessionBootstrapper.Handler.lifecycleOptions(...)` to provide the start title/subtitle, freeze duration, return duration, sounds, and teleport behavior. Use the subtitle for one concise sentence explaining the mode objective or win condition.
+
+## Spectator Framework
+
+`minigame/core/spectator` provides a reusable spectator system with per-player `SpectatorSession` state, policy-driven restrictions, and a camera controller that locks/validates targets to prevent freecam exploits. Gamemodes should request spectator behavior through `SpectatorService.startSpectating(...)` and supply a `SpectatorPolicy` plus `SpectatorTargetProvider` instead of embedding custom spectator logic. The service integrates with `MinigameEventRouter` for join/leave/respawn/death events and validates active sessions on server tick to reattach cameras and enforce restrictions.
 
 ## Team System
 

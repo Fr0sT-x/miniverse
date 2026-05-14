@@ -6,10 +6,15 @@ import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtList;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 public final class SessionCreationService {
     private final SessionManager sessionManager;
@@ -57,6 +62,11 @@ public final class SessionCreationService {
     }
 
     private void createPlannedGroups(MinecraftServer server, GameSession session, SessionGameDescriptor gameType, SessionPlan plan) {
+        PlannedTeam roleTeam = this.plannedTeamFromRoleSettings(server, plan, gameType);
+        if (roleTeam != null) {
+            this.sessionManager.createGroup(session.getSessionId(), roleTeam);
+            return;
+        }
         if (plan.shouldAssignAllOnlinePlayers(gameType)) {
             List<ServerPlayerEntity> allPlayers = new ArrayList<>(server.getPlayerManager().getPlayerList());
             if (!allPlayers.isEmpty()) {
@@ -86,6 +96,48 @@ public final class SessionCreationService {
             }
         }
         return memberships.isEmpty() ? null : new PlannedTeam(team.label(), memberships);
+    }
+
+    private PlannedTeam plannedTeamFromRoleSettings(MinecraftServer server, SessionPlan plan, SessionGameDescriptor gameType) {
+        if (!plan.explicitPlan() || !plan.teams().isEmpty()) {
+            return null;
+        }
+
+        NbtCompound settings = plan.settings();
+        NbtList roles = settings.getList("roles").orElseGet(NbtList::new);
+        if (roles.isEmpty()) {
+            return null;
+        }
+
+        Map<UUID, SessionMembership> members = new LinkedHashMap<>();
+        for (int i = 0; i < roles.size(); i++) {
+            NbtCompound roleEntry = roles.getCompoundOrEmpty(i);
+            String uuidText = roleEntry.getString("uuid", "");
+            if (uuidText.isBlank()) {
+                continue;
+            }
+
+            UUID uuid;
+            try {
+                uuid = UUID.fromString(uuidText);
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
+            if (player == null) {
+                continue;
+            }
+
+            String role = roleEntry.getString("role", "").trim();
+            members.put(uuid, new SessionMembership(uuid, player.getName().getString(), role));
+        }
+
+        if (members.isEmpty()) {
+            return null;
+        }
+
+        return new PlannedTeam(gameType.getDisplayName(), new ArrayList<>(members.values()));
     }
 
     public record CreateResult(GameSession session, SessionGameDescriptor gameType, boolean autoLaunch, String errorMessage) {

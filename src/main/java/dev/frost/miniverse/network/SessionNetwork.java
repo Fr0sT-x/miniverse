@@ -10,6 +10,8 @@ import dev.frost.miniverse.session.SessionLauncherConfig;
 import dev.frost.miniverse.session.SessionRegistry;
 import dev.frost.miniverse.session.SessionManager;
 import dev.frost.miniverse.session.SessionPermissions;
+import dev.frost.miniverse.session.SessionMemoryConfig;
+import dev.frost.miniverse.session.SessionServerConfig;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
@@ -38,6 +40,7 @@ public final class SessionNetwork {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.GRANT_OP_ID, (payload, context) -> handleGrantOp(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLEANUP_PLAYER_ID, (payload, context) -> handleCleanupPlayer(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCHER_SETTINGS_ID, (payload, context) -> handleLauncherSettings(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.SERVER_SETTINGS_ID, (payload, context) -> handleServerSettings(context.server(), context.player(), payload));
 
         registered = true;
     }
@@ -157,6 +160,52 @@ public final class SessionNetwork {
         sendSessionList(server, player);
     }
 
+    private static void handleServerSettings(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.ServerSettingsPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "update server settings")) {
+            return;
+        }
+
+        NbtCompound settings = payload.settings();
+        NbtCompound memory = settings.getCompound("memory").orElseGet(NbtCompound::new);
+        NbtCompound serverSettings = settings.getCompound("server").orElseGet(NbtCompound::new);
+
+        SessionMemoryConfig memoryConfig = SessionMemoryConfig.getInstance();
+        if (memory.contains("enabled")) {
+            memoryConfig.setEnabled(memory.getBoolean("enabled", memoryConfig.isEnabled()));
+        }
+        if (memory.contains("maxHeapGb")) {
+            memoryConfig.setMaxHeap(memory.getInt("maxHeapGb").orElse(memoryConfig.getMaxHeap()));
+        }
+        if (memory.contains("initialHeapGb")) {
+            memoryConfig.setInitialHeap(memory.getInt("initialHeapGb").orElse(memoryConfig.getInitialHeap()));
+        }
+
+        SessionServerConfig serverConfig = SessionServerConfig.getInstance();
+        if (serverSettings.contains("viewDistance")) {
+            serverConfig.setViewDistance(serverSettings.getInt("viewDistance").orElse(serverConfig.viewDistance()));
+        }
+        if (serverSettings.contains("simulationDistance")) {
+            serverConfig.setSimulationDistance(serverSettings.getInt("simulationDistance").orElse(serverConfig.simulationDistance()));
+        }
+        if (serverSettings.contains("onlineMode")) {
+            serverConfig.setOnlineMode(serverSettings.getBoolean("onlineMode", serverConfig.onlineMode()));
+        }
+        if (serverSettings.contains("spawnProtection")) {
+            serverConfig.setSpawnProtection(serverSettings.getInt("spawnProtection").orElse(serverConfig.spawnProtection()));
+        }
+        if (serverSettings.contains("difficulty")) {
+            serverConfig.setDifficulty(serverSettings.getString("difficulty", serverConfig.difficulty()));
+        }
+        if (serverSettings.contains("allowFlight")) {
+            serverConfig.setAllowFlight(serverSettings.getBoolean("allowFlight", serverConfig.allowFlight()));
+        }
+        if (serverSettings.contains("acceptsTransfers")) {
+            serverConfig.setAcceptsTransfers(serverSettings.getBoolean("acceptsTransfers", serverConfig.acceptsTransfers()));
+        }
+
+        sendSessionList(server, player);
+    }
+
     private static void sendSessionList(MinecraftServer server, ServerPlayerEntity player) {
         NbtCompound root = new NbtCompound();
         NbtList sessions = new NbtList();
@@ -216,6 +265,24 @@ public final class SessionNetwork {
         launcher.putInt("maxConcurrentLaunches", launcherConfig.maxConcurrentLaunches());
         launcher.putInt("queueCapacity", launcherConfig.queueCapacity());
         root.put("launcher", launcher);
+
+        NbtCompound memory = new NbtCompound();
+        SessionMemoryConfig memoryConfig = SessionMemoryConfig.getInstance();
+        memory.putBoolean("enabled", memoryConfig.isEnabled());
+        memory.putInt("maxHeapGb", memoryConfig.getMaxHeap());
+        memory.putInt("initialHeapGb", memoryConfig.getInitialHeap());
+        root.put("memory", memory);
+
+        NbtCompound serverSettings = new NbtCompound();
+        SessionServerConfig serverConfig = SessionServerConfig.getInstance();
+        serverSettings.putInt("viewDistance", serverConfig.viewDistance());
+        serverSettings.putInt("simulationDistance", serverConfig.simulationDistance());
+        serverSettings.putBoolean("onlineMode", serverConfig.onlineMode());
+        serverSettings.putInt("spawnProtection", serverConfig.spawnProtection());
+        serverSettings.putString("difficulty", serverConfig.difficulty());
+        serverSettings.putBoolean("allowFlight", serverConfig.allowFlight());
+        serverSettings.putBoolean("acceptsTransfers", serverConfig.acceptsTransfers());
+        root.put("server", serverSettings);
 
         ServerPlayNetworking.send(player, new NetworkConstants.SessionListPayload(root));
     }

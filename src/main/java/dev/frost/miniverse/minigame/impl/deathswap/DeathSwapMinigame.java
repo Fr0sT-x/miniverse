@@ -20,7 +20,7 @@ import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.respawn.RespawnMode;
 import dev.frost.miniverse.minigame.core.respawn.RespawnPolicyController;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
-import dev.frost.miniverse.minigame.core.spectator.SpectatorFramework;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.swap.DerangementAssignment;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
@@ -65,7 +65,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("deathswap");
     private final CountdownService visibleCountdowns = new CountdownService();
     private final DerangementAssignment<UUID> assignmentBuilder = new DerangementAssignment<>();
-    private final SpectatorFramework spectators = new SpectatorFramework();
+    private final SpectatorService spectators = SpectatorService.getInstance();
     private final TeamManager teams = new TeamManager();
     private final Set<UUID> aliveParticipants = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Integer> points = new ConcurrentHashMap<>();
@@ -108,7 +108,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         this.pendingAssignment = Map.of();
         this.visibleCountdowns.reset();
         this.teams.clear();
-        this.spectators.clear();
+        this.spectators.clearAll();
         this.aliveParticipants.clear();
         this.points.clear();
         this.recentTargets.clear();

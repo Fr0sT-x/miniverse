@@ -6,7 +6,6 @@ import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import net.minecraft.nbt.NbtCompound;
 
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.Files;
@@ -19,28 +18,79 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.locks.LockSupport;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.stream.Stream;
 
 public final class ServerLauncher {
+
+    // Template cache location: miniverse/runtime-template/
+    private static final String TEMPLATE_FOLDER = "miniverse/runtime-template";
+    private static final Set<String> TEMPLATE_INCLUDE = Set.of(
+            "fabric-server-launch.jar", "server.jar", "libraries", "mods", "config"
+    );
+    private static final Set<String> TEMPLATE_EXCLUDE = Set.of(
+            "world", "logs", "crash-reports", "sessions", "run", "usercache.json",
+            "banned-ips.json", "banned-players.json", "ops.json", "whitelist.json"
+    );
     public record LaunchResult(SessionGroup group, Process process, int port, Path workingDirectory) {
     }
 
     public LaunchResult launch(GameSession session, SessionGroup group) throws IOException {
+        // 1. Detect server root
+        Path serverRoot = detectServerRoot();
+        // 2. Ensure template exists
+        Path templateDir = serverRoot.resolve(TEMPLATE_FOLDER);
+        ensureTemplateExists(serverRoot, templateDir);
         int port = this.reservePort();
-        Path workingDirectory = this.prepareWorkingDirectory(session, group);
+        Path workingDirectory = this.prepareWorkingDirectory(session, group, templateDir);
         this.writeEula(workingDirectory);
         this.writeSessionConfig(workingDirectory, session, group);
         this.writeServerProperties(workingDirectory, session, group, port);
 
         group.markLaunching(workingDirectory, port);
 
-        List<String> command = this.buildCommand(workingDirectory, session, port);
+        // Ensure required files exist
+        Path fabricLauncherJar = workingDirectory.resolve("fabric-server-launch.jar");
+        if (!Files.exists(fabricLauncherJar)) {
+            throw new IOException("Missing fabric-server-launch.jar in session directory: " + fabricLauncherJar);
+        }
+        if (!Files.isDirectory(workingDirectory.resolve("libraries"))) {
+            throw new IOException("Missing libraries/ directory in session directory: " + workingDirectory);
+        }
+        if (!Files.isDirectory(workingDirectory.resolve("mods"))) {
+            throw new IOException("Missing mods/ directory in session directory: " + workingDirectory);
+        }
+        if (!Files.isDirectory(workingDirectory.resolve("config"))) {
+            throw new IOException("Missing config/ directory in session directory: " + workingDirectory);
+        }
+        if (!Files.exists(workingDirectory.resolve("server.properties"))) {
+            throw new IOException("Missing server.properties in session directory: " + workingDirectory);
+        }
+
+        // Build production-safe command
+        String javaExecutable = this.resolveJavaExecutable();
+        List<String> command = List.of(
+            javaExecutable,
+            "-Xmx2G",
+            "-jar",
+            "fabric-server-launch.jar",
+            "nogui"
+        );
+
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(workingDirectory.toFile());
-        builder.redirectErrorStream(true);
-        builder.redirectOutput(workingDirectory.resolve("session.log").toFile());
+        builder.redirectOutput(workingDirectory.resolve("stdout.log").toFile());
+        builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
-        this.waitForPortOpen(process, port);
+
+        // Wait for server to fully boot (look for "Done" in stdout)
+        boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
+        if (!booted) {
+            int exitCode = process.isAlive() ? -1 : process.exitValue();
+            throw new IOException("Server failed to boot. Exit code: " + exitCode);
+        }
         String address = "127.0.0.1:" + port;
         group.markRunning(process, address);
 
@@ -70,72 +120,37 @@ public final class ServerLauncher {
         group.markStopped();
     }
 
-    private List<String> buildCommand(Path workingDirectory, GameSession session, int port) throws IOException {
-        String javaExecutable = this.resolveJavaExecutable();
-        Path argumentsFile = workingDirectory.resolve("launch.args");
-        this.writeArgumentsFile(argumentsFile, workingDirectory, session, port);
-
-        return List.of(javaExecutable, "@" + argumentsFile.toAbsolutePath());
-    }
-
-    private void writeArgumentsFile(Path argumentsFile, Path workingDirectory, GameSession session, int port) throws IOException {
-        String classPath = System.getProperty("java.class.path");
-        String launchConfig = this.locateLaunchConfig();
-
-        StringBuilder content = new StringBuilder();
-        for (String inputArgument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
-            this.appendArgument(content, inputArgument);
-        }
-
-        // Apply custom memory allocation if configured
-        SessionMemoryConfig memoryConfig = SessionMemoryConfig.getInstance();
-        if (memoryConfig.isEnabled()) {
-            this.appendArgument(content, memoryConfig.getInitialHeapArg());
-            this.appendArgument(content, memoryConfig.getMaxHeapArg());
-        }
-
-        this.appendArgument(content, "-Dfabric.dli.config=" + launchConfig);
-        this.appendArgument(content, "-Dfabric.dli.env=server");
-        this.appendArgument(content, "-Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotServer");
-        this.appendArgument(content, "-Dminiverse.session.port=" + port);
-        this.appendArgument(content, "-Dminiverse.session.dir=" + workingDirectory.toAbsolutePath());
-        this.appendArgument(content, "-Dminiverse.session.game=" + session.getGameType().getCommandName());
-        this.appendArgument(content, "-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
-        Map<String, String> launchProperties = new LinkedHashMap<>();
-        this.definitionFor(session).ifPresent(definition -> definition.writeLaunchProperties(session.getSettings(), launchProperties));
-        for (Map.Entry<String, String> entry : launchProperties.entrySet()) {
-            this.appendArgument(content, "-D" + entry.getKey() + "=" + entry.getValue());
-        }
-        this.appendArgument(content, "-cp");
-        this.appendArgument(content, classPath);
-        this.appendArgument(content, "net.fabricmc.devlaunchinjector.Main");
-        this.appendArgument(content, "nogui");
-
-        Files.writeString(argumentsFile, content.toString(), java.nio.charset.StandardCharsets.UTF_8);
-    }
-
-    private void waitForPortOpen(Process process, int port) throws IOException {
-        long deadline = System.currentTimeMillis() + 90_000L;
+    /**
+     * Waits for the Fabric server to fully boot by monitoring the stdout log for the "Done" message.
+     * Returns true if the server boots successfully, false otherwise.
+     */
+    private boolean waitForServerBoot(Path stdoutLog, Process process) {
+        long deadline = System.currentTimeMillis() + 120_000L; // 2 minutes
         while (System.currentTimeMillis() < deadline) {
             if (!process.isAlive()) {
-                throw new IOException("Launched server exited before opening port " + port + ".");
+                return false;
             }
-
-            try (java.net.Socket socket = new java.net.Socket()) {
-                socket.connect(new InetSocketAddress("127.0.0.1", port), 750);
-                return;
-            } catch (IOException ignored) {
-                LockSupport.parkNanos(500_000_000L);
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new IOException("Interrupted while waiting for server port " + port + ".");
+            try {
+                if (Files.exists(stdoutLog)) {
+                    List<String> lines = Files.readAllLines(stdoutLog);
+                    for (String line : lines) {
+                        if (line.contains("Done") && line.contains("For help, type")) {
+                            return true;
+                        }
+                    }
                 }
+            } catch (IOException ignored) {}
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
             }
         }
-
-        throw new IOException("Timed out waiting for launched server to open port " + port + ".");
+        return false;
     }
 
-    private Path prepareWorkingDirectory(GameSession session, SessionGroup group) throws IOException {
+    private Path prepareWorkingDirectory(GameSession session, SessionGroup group, Path templateDir) throws IOException {
         Path sessionsRoot = MiniversePaths.sessionsRoot();
         String groupFolder = this.sanitize(group.getGroupLabel());
         Path sessionDirectory = sessionsRoot.resolve(session.getSessionId()).resolve(groupFolder);
@@ -150,8 +165,150 @@ public final class ServerLauncher {
             }
         }
         Files.createDirectories(sessionDirectory);
+        long start = System.currentTimeMillis();
+        copyTemplateToSession(templateDir, sessionDirectory);
+        long duration = System.currentTimeMillis() - start;
+        Miniverse.LOGGER.info("Copied session template to {} in {} ms", sessionDirectory, duration);
         Files.createDirectories(sessionDirectory.resolve("logs"));
         return sessionDirectory;
+    }
+
+    /**
+     * Detects the main server root directory by searching for fabric-server-launch.jar and mods/.
+     */
+    private Path detectServerRoot() {
+        Path cwd = Paths.get("").toAbsolutePath();
+        Path current = cwd;
+        while (current != null) {
+            if (Files.exists(current.resolve("fabric-server-launch.jar")) &&
+                Files.isDirectory(current.resolve("mods"))) {
+                Miniverse.LOGGER.info("Detected server root: {}", current);
+                return current;
+            }
+            current = current.getParent();
+        }
+        throw new IllegalStateException("Could not detect server root directory (fabric-server-launch.jar and mods/ required)");
+    }
+
+    /**
+     * Ensures the template exists, creates it if missing, and checks integrity.
+     */
+    private void ensureTemplateExists(Path serverRoot, Path templateDir) throws IOException {
+        if (Files.exists(templateDir)) {
+            Miniverse.LOGGER.info("Miniverse session template found at {}. Reusing.", templateDir);
+            checkTemplateIntegrity(templateDir);
+            return;
+        }
+        Miniverse.LOGGER.info("Miniverse session template not found. Creating at {}...", templateDir);
+        createTemplate(serverRoot, templateDir);
+        checkTemplateIntegrity(templateDir);
+    }
+
+    /**
+     * Creates the session template by copying only required files/folders.
+     */
+    private void createTemplate(Path serverRoot, Path templateDir) throws IOException {
+        Files.createDirectories(templateDir);
+        // Always try to copy both fabric-server-launch.jar and server.jar if present
+        String[] jars = {"fabric-server-launch.jar", "server.jar"};
+        for (String jar : jars) {
+            Path src = serverRoot.resolve(jar);
+            Path dest = templateDir.resolve(jar);
+            if (Files.exists(src)) {
+                Miniverse.LOGGER.info("Copying file to template: {}", jar);
+                Files.copy(src, dest);
+            } else {
+                Miniverse.LOGGER.warn("Template source missing: {}", src);
+            }
+        }
+        // Copy other included directories
+        for (String entry : TEMPLATE_INCLUDE) {
+            if (entry.equals("fabric-server-launch.jar") || entry.equals("server.jar")) continue;
+            Path src = serverRoot.resolve(entry);
+            Path dest = templateDir.resolve(entry);
+            if (Files.isDirectory(src)) {
+                Miniverse.LOGGER.info("Copying directory to template: {}", entry);
+                copyDirectoryFiltered(src, dest, TEMPLATE_EXCLUDE);
+            } else if (Files.exists(src)) {
+                Miniverse.LOGGER.info("Copying file to template: {}", entry);
+                Files.copy(src, dest);
+            } else {
+                Miniverse.LOGGER.warn("Template source missing: {}", src);
+            }
+        }
+    }
+
+    /**
+     * Copies the template to a new session directory, efficiently.
+     */
+    private void copyTemplateToSession(Path templateDir, Path sessionDir) throws IOException {
+        try (Stream<Path> stream = Files.walk(templateDir)) {
+            stream.forEach(source -> {
+                try {
+                    Path relative = templateDir.relativize(source);
+                    Path target = sessionDir.resolve(relative);
+                    if (Files.isDirectory(source)) {
+                        Files.createDirectories(target);
+                    } else {
+                        Files.copy(source, target);
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+    }
+
+    /**
+     * Checks that the template contains all required files/folders.
+     */
+    private void checkTemplateIntegrity(Path templateDir) throws IOException {
+        Path fabricJar = templateDir.resolve("fabric-server-launch.jar");
+        Path serverJar = templateDir.resolve("server.jar");
+        Path mods = templateDir.resolve("mods");
+        Path libs = templateDir.resolve("libraries");
+        boolean hasFabric = Files.exists(fabricJar);
+        boolean hasServer = Files.exists(serverJar);
+        if (!hasFabric && !hasServer) {
+            throw new IOException("Template missing both fabric-server-launch.jar and server.jar: " + fabricJar + ", " + serverJar);
+        }
+        if (!hasFabric) {
+            Miniverse.LOGGER.warn("Template missing fabric-server-launch.jar: {}", fabricJar);
+        }
+        if (!hasServer) {
+            Miniverse.LOGGER.warn("Template missing server.jar: {}", serverJar);
+        }
+        if (!Files.isDirectory(mods)) {
+            throw new IOException("Template missing mods/ directory: " + mods);
+        }
+        if (!Files.isDirectory(libs)) {
+            throw new IOException("Template missing libraries/ directory: " + libs);
+        }
+        Miniverse.LOGGER.info("Template integrity check passed at {}", templateDir);
+    }
+
+    /**
+     * Recursively copies a directory, excluding any entries in the exclude set.
+     */
+    private void copyDirectoryFiltered(Path src, Path dest, Set<String> exclude) throws IOException {
+        Files.walk(src).forEach(source -> {
+            try {
+                Path relative = src.relativize(source);
+                String first = relative.getNameCount() > 0 ? relative.getName(0).toString() : "";
+                if (exclude.contains(first)) {
+                    Miniverse.LOGGER.info("Excluding from template: {}", source);
+                    return;
+                }
+                Path target = dest.resolve(relative);
+                if (Files.isDirectory(source)) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.copy(source, target);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     private void writeEula(Path workingDirectory) throws IOException {
@@ -189,12 +346,13 @@ public final class ServerLauncher {
 
     private void writeServerProperties(Path workingDirectory, GameSession session, SessionGroup group, int port) throws IOException {
         Properties properties = new Properties();
-        properties.setProperty("accepts-transfers", "true");
-        properties.setProperty("allow-flight", "true");
+        SessionServerConfig serverConfig = SessionServerConfig.getInstance();
+        properties.setProperty("accepts-transfers", Boolean.toString(serverConfig.acceptsTransfers()));
+        properties.setProperty("allow-flight", Boolean.toString(serverConfig.allowFlight()));
         properties.setProperty("allow-nether", "true");
         properties.setProperty("broadcast-console-to-ops", "true");
         properties.setProperty("broadcast-rcon-to-ops", "true");
-        properties.setProperty("difficulty", "normal");
+        properties.setProperty("difficulty", serverConfig.difficulty());
         properties.setProperty("enable-command-block", "true");
         properties.setProperty("enable-jmx-monitoring", "false");
         properties.setProperty("enable-rcon", "false");
@@ -215,7 +373,7 @@ public final class ServerLauncher {
         properties.setProperty("max-players", Integer.toString(Math.max(1, maxPlayers)));
         properties.setProperty("motd", session.getGameType().getDisplayName() + " " + session.getSessionId() + " / " + group.getGroupLabel());
         properties.setProperty("network-compression-threshold", "256");
-        properties.setProperty("online-mode", "false");
+        properties.setProperty("online-mode", Boolean.toString(serverConfig.onlineMode()));
         properties.setProperty("op-permission-level", "4");
         properties.setProperty("player-idle-timeout", "0");
         properties.setProperty("prevent-proxy-connections", "false");
@@ -229,13 +387,13 @@ public final class ServerLauncher {
         properties.setProperty("resource-pack-prompt", "");
         properties.setProperty("server-ip", "");
         properties.setProperty("server-port", Integer.toString(port));
-        properties.setProperty("simulation-distance", "6");
+        properties.setProperty("simulation-distance", Integer.toString(serverConfig.simulationDistance()));
         properties.setProperty("spawn-monsters", "true");
-        properties.setProperty("spawn-protection", "0");
+        properties.setProperty("spawn-protection", Integer.toString(serverConfig.spawnProtection()));
         properties.setProperty("sync-chunk-writes", "true");
         properties.setProperty("text-filtering-config", "");
         properties.setProperty("use-native-transport", "true");
-        properties.setProperty("view-distance", "8");
+        properties.setProperty("view-distance", Integer.toString(serverConfig.viewDistance()));
         properties.setProperty("white-list", "false");
 
         StringBuilder content = new StringBuilder();
@@ -262,14 +420,6 @@ public final class ServerLauncher {
         return Optional.of(session.getGameType().definition());
     }
 
-    private String locateLaunchConfig() throws IOException {
-        Path launchConfig = MiniversePaths.fabricLaunchConfig();
-        if (!Files.exists(launchConfig)) {
-            throw new IOException("Could not locate Fabric launch config at " + launchConfig);
-        }
-        return launchConfig.toAbsolutePath().toString();
-    }
-
     private int reservePort() throws IOException {
         try (ServerSocket socket = new ServerSocket(0)) {
             socket.setReuseAddress(true);
@@ -281,22 +431,10 @@ public final class ServerLauncher {
         return value.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
-    private void appendArgument(StringBuilder content, String argument) {
-        if (argument == null || argument.isBlank()) {
-            return;
-        }
-
-        if (argument.matches(".*\\s.*") || argument.contains("\"") || argument.contains("'")) {
-            content.append('"').append(argument.replace("\"", "\\\"")).append('"').append('\n');
-        } else {
-            content.append(argument).append('\n');
-        }
-    }
-
-    private boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase().contains("win");
-    }
-
+    /**
+     * Returns the Java host and port configured for returning players.
+     * Fallbacks to 127.0.0.1:25565 if not explicitly set.
+     */
     private String resolveReturnHost() throws IOException {
         Properties properties = this.readMainServerProperties();
         String serverIp = properties.getProperty("server-ip", "").trim();
@@ -346,5 +484,9 @@ public final class ServerLauncher {
         } catch (java.io.UncheckedIOException e) {
             throw e.getCause();
         }
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 }

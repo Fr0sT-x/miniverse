@@ -20,6 +20,8 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<GrantOpPayload> GRANT_OP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "grant_op"));
     public static final CustomPayload.Id<CleanupPlayerPayload> CLEANUP_PLAYER_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "cleanup_player"));
     public static final CustomPayload.Id<LauncherSettingsPayload> LAUNCHER_SETTINGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "launcher_settings"));
+    public static final CustomPayload.Id<ServerSettingsPayload> SERVER_SETTINGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "server_settings"));
+    public static final CustomPayload.Id<FreezeStatePayload> FREEZE_STATE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "freeze_state"));
 
     private static boolean payloadTypesRegistered;
 
@@ -38,7 +40,9 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(GRANT_OP_ID, GrantOpPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CLEANUP_PLAYER_ID, CleanupPlayerPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(LAUNCHER_SETTINGS_ID, LauncherSettingsPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(SERVER_SETTINGS_ID, ServerSettingsPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SESSION_LIST_ID, SessionListPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(FREEZE_STATE_ID, FreezeStatePayload.CODEC);
 
         payloadTypesRegistered = true;
     }
@@ -154,7 +158,31 @@ public final class NetworkConstants {
             return LAUNCHER_SETTINGS_ID;
         }
     }
+
+    public record ServerSettingsPayload(NbtCompound settings) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, ServerSettingsPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.NBT_COMPOUND.cast(),
+            ServerSettingsPayload::settings,
+            ServerSettingsPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SERVER_SETTINGS_ID;
+        }
+    }
+
+    public record FreezeStatePayload(boolean frozen) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, FreezeStatePayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.BOOLEAN,
+            FreezeStatePayload::frozen,
+            FreezeStatePayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return FREEZE_STATE_ID;
+        }
+    }
 }
-
-
 

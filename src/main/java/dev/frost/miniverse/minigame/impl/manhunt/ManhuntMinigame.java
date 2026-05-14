@@ -17,7 +17,10 @@ import dev.frost.miniverse.minigame.core.event.ServerTickAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
+import dev.frost.miniverse.minigame.core.freeze.FreezeService;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
@@ -36,6 +39,9 @@ import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.ExperienceOrbEntity;
+import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
+import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
@@ -48,6 +54,7 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.TypeFilter;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
@@ -189,6 +196,9 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         this.state = GameState.ENDING;
 
         // Clean up
+        for (ServerPlayerEntity hunter : this.getHunters()) {
+            this.clearLeadEffects(hunter);
+        }
         this.teams.clear();
         this.deadSpeedrunners.clear();
         this.aliveSpeedrunners.clear();
@@ -244,7 +254,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         int deaths = this.speedrunnerDeaths.merge(speedrunnerUuid, 1, Integer::sum);
 
         if (!this.hasLivesRemaining(this.settings.runnerLives(), deaths)) {
-            speedrunner.changeGameMode(net.minecraft.world.GameMode.SPECTATOR);
+            this.speedrunnerRespawns.beginEliminatedSpectate(speedrunner);
             this.broadcastMessage(
                 Text.literal(speedrunner.getName().getString() + " (Speedrunner) is out of lives!").formatted(Formatting.RED)
             );
@@ -396,11 +406,28 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
 
     @Override
     public ActionResult onUseItem(ServerPlayerEntity player, World world, Hand hand) {
-        if (!player.getStackInHand(hand).isOf(Items.COMPASS)) {
+        if (!this.isGameActive()) {
             return ActionResult.PASS;
         }
 
-        if (!this.isGameActive()) {
+        if (this.isParticipant(player) && this.getPlayerRole(player) == ManhuntRole.SPEEDRUNNER
+            && this.deadSpeedrunners.contains(player.getUuid()) && player.isSpectator()) {
+            if (this.speedrunnerRespawns.cycleSpectatorTarget(player, true)) {
+                ServerPlayerEntity target = this.speedrunnerRespawns.getSpectatorTarget(player);
+                if (target != null) {
+                    player.sendMessage(
+                        Text.literal("Spectating: " + target.getName().getString() + " (right-click to switch)")
+                            .formatted(Formatting.AQUA),
+                        true
+                    );
+                }
+            } else {
+                player.sendMessage(Text.literal("No alive speedrunners to spectate.").formatted(Formatting.YELLOW), true);
+            }
+            return ActionResult.SUCCESS;
+        }
+
+        if (!player.getStackInHand(hand).isOf(Items.COMPASS)) {
             return ActionResult.PASS;
         }
 
@@ -427,7 +454,22 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             return true;
         }
 
-        return !this.shouldCancelDamage(player);
+        if (this.shouldCancelDamage(player)) {
+            return false;
+        }
+
+        ManhuntRole role = this.roleFor(player.getUuid());
+        if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive()) {
+            float remaining = player.getHealth() - amount;
+            if (remaining <= 0.0F && !this.speedrunnerRespawns.hasPendingRespawn(player)) {
+                this.dropSpeedrunnerLoot(player);
+                this.handleSpeedrunnerDeath(player);
+                this.showSpeedrunnerDeathTitle(player);
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @Override
@@ -734,6 +776,9 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             } else if (role == ManhuntRole.HUNTER && this.settings.huntersCompassEnabled()) {
                 this.grantHunterCompass(player, true);
             }
+            if (role == ManhuntRole.HUNTER && !this.huntStarted && this.leadTicksRemaining > 0) {
+                this.applyLeadEffects(player);
+            }
         }
         this.syncVanillaTeams();
     }
@@ -944,9 +989,6 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             } else if (this.settings.huntersCompassEnabled()) {
                 this.grantHunterCompass(newPlayer, false);
             }
-        } else if (role == ManhuntRole.SPEEDRUNNER && this.deadSpeedrunners.contains(playerUuid)) {
-            newPlayer.changeGameMode(net.minecraft.world.GameMode.SPECTATOR);
-            this.speedrunnerRespawns.handlePlayerRespawn(newPlayer);
         }
     }
 
@@ -955,6 +997,9 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         ManhuntRole role = this.roleFor(playerUuid);
         if (role == null) {
             return;
+        }
+        if (role == ManhuntRole.HUNTER) {
+            this.clearLeadEffects(player);
         }
         this.teams.remove(playerUuid);
 
@@ -1151,30 +1196,32 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             return;
         }
 
-        VanillaTeamOptions runnerOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.WHITE)
-            .withFriendlyFireAllowed(true)
-            .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
-        VanillaTeamOptions hunterOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.WHITE)
+        VanillaTeamOptions aliveOptionsTemplate = VanillaTeamOptions.defaults()
             .withFriendlyFireAllowed(true)
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
         VanillaTeamOptions deadOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.WHITE)
+            .withColor(Formatting.GRAY)
             .withFriendlyFireAllowed(false)
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
 
-        List<TeamSnapshot> snapshots = List.of(
-            new TeamSnapshot("runners", "Speedrunners", this.membershipsFor(this.getAliveSpeedrunners(), TeamRole.RUNNER)),
-            new TeamSnapshot("hunters", "Hunters", this.membershipsFor(this.getActiveHunters(), TeamRole.HUNTER)),
-            new TeamSnapshot("dead", "Dead", this.membershipsFor(this.getDeadSpeedrunners(), TeamRole.DEAD))
-        );
-        this.vanillaTeams.syncSnapshots(this.server, snapshots, snapshot -> switch (snapshot.id()) {
-            case "runners" -> runnerOptions;
-            case "hunters" -> hunterOptions;
-            case "dead" -> deadOptions;
-            default -> VanillaTeamOptions.defaults();
-        });
+        List<VanillaTeamDescriptor> descriptors = new ArrayList<>();
+        for (ServerPlayerEntity player : this.getAliveSpeedrunners()) {
+            String teamId = "player_" + player.getUuid();
+            VanillaTeamOptions options = aliveOptionsTemplate.withColor(this.vanillaTeams.colorFor(teamId));
+            descriptors.add(new VanillaTeamDescriptor(teamId, player.getDisplayName(), List.of(player), options));
+        }
+        for (ServerPlayerEntity player : this.getActiveHunters()) {
+            String teamId = "player_" + player.getUuid();
+            VanillaTeamOptions options = aliveOptionsTemplate.withColor(this.vanillaTeams.colorFor(teamId));
+            descriptors.add(new VanillaTeamDescriptor(teamId, player.getDisplayName(), List.of(player), options));
+        }
+
+        List<ServerPlayerEntity> deadPlayers = this.getDeadSpeedrunners();
+        if (!deadPlayers.isEmpty()) {
+            descriptors.add(new VanillaTeamDescriptor("dead", Text.literal("Dead"), deadPlayers, deadOptions));
+        }
+
+        this.vanillaTeams.sync(this.server, descriptors);
     }
 
     private List<TeamMembership> membershipsFor(List<ServerPlayerEntity> players, TeamRole role) {
@@ -1196,17 +1243,28 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         if (leadTicks <= 0) {
             return;
         }
-        hunter.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, leadTicks, 3, true, false, false));
-        hunter.addStatusEffect(new StatusEffectInstance(StatusEffects.BLINDNESS, leadTicks, 1, true, false, false));
-        hunter.addStatusEffect(new StatusEffectInstance(StatusEffects.MINING_FATIGUE, leadTicks, 3, true, false, false));
-        hunter.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, leadTicks, 3, true, false, false));
+        hunter.addStatusEffect(new StatusEffectInstance(StatusEffects.BLINDNESS, leadTicks, 0, true, false, false));
+        FreezeService.getInstance().freeze(hunter, FreezeReason.MANHUNT_LEAD);
+        hunter.changeGameMode(net.minecraft.world.GameMode.ADVENTURE);
     }
 
     private void clearLeadEffects(ServerPlayerEntity hunter) {
-        hunter.removeStatusEffect(StatusEffects.SLOWNESS);
         hunter.removeStatusEffect(StatusEffects.BLINDNESS);
-        hunter.removeStatusEffect(StatusEffects.MINING_FATIGUE);
-        hunter.removeStatusEffect(StatusEffects.WEAKNESS);
+        FreezeService.getInstance().unfreeze(hunter, FreezeReason.MANHUNT_LEAD);
+        hunter.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+    }
+
+    private void showSpeedrunnerDeathTitle(ServerPlayerEntity player) {
+        int seconds = this.speedrunnerRespawns.getRespawnDelaySeconds();
+        Text subtitle = seconds <= 0
+            ? Text.literal("You will respawn now.").formatted(Formatting.YELLOW)
+            : Text.literal("You will respawn in " + this.formatMinutes(seconds) + " minutes").formatted(Formatting.YELLOW);
+        player.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("YOU DIED").formatted(Formatting.RED, Formatting.BOLD)));
+        player.networkHandler.sendPacket(new SubtitleS2CPacket(subtitle));
+    }
+
+    private int formatMinutes(int totalSeconds) {
+        return Math.max(1, (totalSeconds + 59) / 60);
     }
 
     public enum ManhuntRole {
@@ -1233,5 +1291,31 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
 
     private boolean hasLivesRemaining(int lives, int deaths) {
         return lives == ManhuntSettings.UNLIMITED_LIVES || deaths < lives;
+    }
+
+    private void dropSpeedrunnerLoot(ServerPlayerEntity player) {
+        if (player == null || player.getEntityWorld() == null) {
+            return;
+        }
+        if (player.getEntityWorld() instanceof ServerWorld serverWorld) {
+            int xpToDrop = player.totalExperience;
+            if (xpToDrop > 0) {
+                ExperienceOrbEntity.spawn(serverWorld, new Vec3d(player.getX(), player.getY(), player.getZ()), xpToDrop);
+                player.totalExperience = 0;
+                player.experienceLevel = 0;
+                player.experienceProgress = 0.0F;
+            }
+        }
+        for (int slot = 0; slot < player.getInventory().size(); slot++) {
+            ItemStack stack = player.getInventory().getStack(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            ItemStack drop = stack.copy();
+            player.getInventory().setStack(slot, ItemStack.EMPTY);
+            ItemEntity item = new ItemEntity(player.getEntityWorld(), player.getX(), player.getY(), player.getZ(), drop);
+            player.getEntityWorld().spawnEntity(item);
+        }
+        player.getInventory().markDirty();
     }
 }

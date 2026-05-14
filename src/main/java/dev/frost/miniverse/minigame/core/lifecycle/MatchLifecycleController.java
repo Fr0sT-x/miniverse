@@ -4,37 +4,34 @@ import dev.frost.miniverse.chat.ChatRouter;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
+import dev.frost.miniverse.minigame.core.freeze.FreezeService;
 import dev.frost.miniverse.session.SessionPermissions;
+import dev.frost.miniverse.session.SessionRegistry;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
-import net.minecraft.entity.ItemEntity;
 import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
 import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.world.GameMode;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
-import net.minecraft.util.TypeFilter;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public final class MatchLifecycleController {
     private static final MatchLifecycleController INSTANCE = new MatchLifecycleController();
     private static final int TICKS_PER_SECOND = 20;
 
-    private final Map<UUID, FrozenPosition> frozenPositions = new HashMap<>();
     private final Map<UUID, ServerPlayerEntity> lifecyclePlayers = new HashMap<>();
+    private final FreezeService freezeService = FreezeService.getInstance();
     @Nullable
     private MinigameRuntime runtime;
     private MatchLifecycleOptions options = MatchLifecycleOptions.defaults("Minigame");
@@ -120,7 +117,6 @@ public final class MatchLifecycleController {
         this.bindServer(server);
         if (this.phase == Phase.START_FREEZE) {
             this.reconcileStartFreezeParticipants();
-            this.enforceFreeze(server);
         }
         if (this.phase != Phase.START_FREEZE && this.phase != Phase.END_RETURN) {
             return;
@@ -159,17 +155,6 @@ public final class MatchLifecycleController {
         return true;
     }
 
-    public synchronized boolean isPlayerFrozen(ServerPlayerEntity player) {
-        return this.frozenPositions.containsKey(player.getUuid());
-    }
-
-    public synchronized ActionResult cancelInteraction(ServerPlayerEntity player) {
-        return this.isPlayerFrozen(player) ? ActionResult.FAIL : ActionResult.PASS;
-    }
-
-    public synchronized boolean allowBlockBreak(ServerPlayerEntity player) {
-        return !this.isPlayerFrozen(player);
-    }
 
     public synchronized void onParticipantJoin(ServerPlayerEntity player) {
         if (this.phase != Phase.START_FREEZE || this.runtime == null) {
@@ -183,6 +168,7 @@ public final class MatchLifecycleController {
     }
 
     private void startRunning() {
+        this.setParticipantsGameMode(GameMode.SURVIVAL);
         this.unfreezeParticipants();
         this.phase = Phase.RUNNING;
         this.runtimeState(GameState.RUNNING);
@@ -200,6 +186,8 @@ public final class MatchLifecycleController {
         this.phase = Phase.ENDED;
         this.unfreezeParticipants();
         this.runtimeState(GameState.FINISHED);
+        // Prevent main-server join routing from bouncing returned players back into this session.
+        SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markStopRequested);
         String host = SessionRuntimeConfig.getReturnHost();
         int port = SessionRuntimeConfig.getReturnPort();
         for (ServerPlayerEntity player : this.participants()) {
@@ -221,20 +209,19 @@ public final class MatchLifecycleController {
     }
 
     private void freezeParticipants(boolean prepareInventory) {
-        this.frozenPositions.clear();
         for (ServerPlayerEntity player : this.participants()) {
             if (prepareInventory) {
                 player.getInventory().clear();
                 player.getHungerManager().setFoodLevel(20);
                 player.getHungerManager().setSaturationLevel(20.0F);
             }
+            player.changeGameMode(GameMode.ADVENTURE);
             this.freeze(player);
         }
     }
 
     private void freeze(ServerPlayerEntity player) {
-        this.frozenPositions.put(player.getUuid(), FrozenPosition.capture(player));
-        player.setVelocity(Vec3d.ZERO);
+        this.freezeService.freeze(player, FreezeReason.MATCH_START);
     }
 
     private void reconcileStartFreezeParticipants() {
@@ -253,41 +240,22 @@ public final class MatchLifecycleController {
         player.getInventory().clear();
         player.getHungerManager().setFoodLevel(20);
         player.getHungerManager().setSaturationLevel(20.0F);
+        player.changeGameMode(GameMode.ADVENTURE);
         this.freeze(player);
         this.showStartTitleTo(player);
         this.sendCountdownTo(player, this.secondsRemaining());
         ChatRouter.sendTeamChatNotice(List.of(player));
     }
 
-    private void unfreezeParticipants() {
-        this.frozenPositions.clear();
+    private void setParticipantsGameMode(GameMode mode) {
+        for (ServerPlayerEntity player : this.participants()) {
+            player.changeGameMode(mode);
+        }
     }
 
-    private void enforceFreeze(MinecraftServer server) {
-        if (this.frozenPositions.isEmpty()) {
-            return;
-        }
-
+    private void unfreezeParticipants() {
         for (ServerPlayerEntity player : this.participants()) {
-            FrozenPosition position = this.frozenPositions.get(player.getUuid());
-            if (position == null || player.isDisconnected()) {
-                continue;
-            }
-
-            if (player.getEntityWorld() != position.world()
-                || player.squaredDistanceTo(position.x(), position.y(), position.z()) > 0.0001D) {
-                player.teleport(position.world(), position.x(), position.y(), position.z(), Set.of(), position.yaw(), position.pitch(), true);
-            }
-            player.setVelocity(Vec3d.ZERO);
-            player.fallDistance = 0.0F;
-        }
-
-        for (ServerWorld world : server.getWorlds()) {
-            List<? extends ItemEntity> items = world.getEntitiesByType(TypeFilter.instanceOf(ItemEntity.class),
-                entity -> this.frozenPositions.containsKey(entity.getOwner()));
-            for (ItemEntity item : items) {
-                item.discard();
-            }
+            this.freezeService.unfreeze(player, FreezeReason.MATCH_START);
         }
     }
 
@@ -406,7 +374,7 @@ public final class MatchLifecycleController {
         this.phase = Phase.IDLE;
         this.ticksRemaining = 0;
         this.lastAnnouncedSecond = -1;
-        this.frozenPositions.clear();
+        this.unfreezeParticipants();
         this.lifecyclePlayers.clear();
         this.startCallback = null;
         this.endResult = null;
@@ -418,7 +386,7 @@ public final class MatchLifecycleController {
         this.phase = Phase.IDLE;
         this.ticksRemaining = 0;
         this.lastAnnouncedSecond = -1;
-        this.frozenPositions.clear();
+        this.unfreezeParticipants();
         this.lifecyclePlayers.clear();
         this.startCallback = null;
         this.endResult = null;
@@ -433,13 +401,4 @@ public final class MatchLifecycleController {
         ENDED
     }
 
-    private record FrozenPosition(ServerWorld world, double x, double y, double z, float yaw, float pitch) {
-        private static FrozenPosition capture(ServerPlayerEntity player) {
-            World world = player.getEntityWorld();
-            if (!(world instanceof ServerWorld serverWorld)) {
-                throw new IllegalStateException("Cannot freeze player outside a server world.");
-            }
-            return new FrozenPosition(serverWorld, player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch());
-        }
-    }
 }

@@ -35,6 +35,7 @@ public final class DeathSwapSessionBootstrap {
             @Override
             public MatchLifecycleOptions lifecycleOptions(DeathSwapMinigame minigame, Properties properties) {
                 return MatchLifecycleOptions.defaults(minigame.getName())
+                    .withFreezeEnabled(true)
                     .withFreezeSeconds(10)
                     .withReturnSeconds(10)
                     .withStartTitle(

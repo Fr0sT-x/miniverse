@@ -45,6 +45,7 @@ final class ManhuntSessionBootstrap {
             @Override
             public MatchLifecycleOptions lifecycleOptions(ManhuntMinigame minigame, Properties properties) {
                 return MatchLifecycleOptions.defaults(minigame.getName())
+                    .withFreezeEnabled(true)
                     .withStartTitle(
                         Text.literal(minigame.getName()),
                         Text.literal("Speedrunners defeat the dragon. Hunters win by stopping every runner.")

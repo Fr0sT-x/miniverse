@@ -3,7 +3,9 @@ package dev.frost.miniverse.minigame.core.event;
 import dev.frost.miniverse.chat.ChatRouter;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.SessionBootstrapper;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -43,33 +45,11 @@ public final class MinigameEventRouter {
         registered = true;
 
         UseItemCallback.EVENT.register(MinigameEventRouter::onUseItem);
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (player instanceof ServerPlayerEntity serverPlayer) {
-                return MatchLifecycleController.getInstance().cancelInteraction(serverPlayer);
-            }
-            return ActionResult.PASS;
-        });
-        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
-            if (player instanceof ServerPlayerEntity serverPlayer) {
-                return MatchLifecycleController.getInstance().cancelInteraction(serverPlayer);
-            }
-            return ActionResult.PASS;
-        });
-        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
-            if (player instanceof ServerPlayerEntity serverPlayer) {
-                return MatchLifecycleController.getInstance().cancelInteraction(serverPlayer);
-            }
-            return ActionResult.PASS;
-        });
-        AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
-            if (player instanceof ServerPlayerEntity serverPlayer) {
-                return MatchLifecycleController.getInstance().cancelInteraction(serverPlayer);
-            }
-            return ActionResult.PASS;
-        });
-        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) ->
-            !(player instanceof ServerPlayerEntity serverPlayer)
-                || MatchLifecycleController.getInstance().allowBlockBreak(serverPlayer));
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> ActionResult.PASS);
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> ActionResult.PASS);
+        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> ActionResult.PASS);
+        AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> ActionResult.PASS);
+        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> true);
         ServerTickEvents.END_SERVER_TICK.register(MinigameEventRouter::onServerTick);
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(MinigameEventRouter::onAllowDamage);
         ServerLivingEntityEvents.AFTER_DEATH.register(MinigameEventRouter::onAfterDeath);
@@ -81,7 +61,9 @@ public final class MinigameEventRouter {
 
     private static void onServerTick(MinecraftServer server) {
         MinigameManager.getInstance().tickRuntimeClock(server);
+        SessionBootstrapper.tick(server);
         MatchLifecycleController.getInstance().tick(server);
+        SpectatorService.getInstance().tick(server);
         Minigame active = activeMinigame();
         if (active instanceof ServerTickAware tickAware) {
             tickAware.onServerTick(server);
@@ -115,6 +97,7 @@ public final class MinigameEventRouter {
     }
 
     private static void onAfterDeath(LivingEntity entity, DamageSource source) {
+        SpectatorService.getInstance().onEntityDeath(entity);
         Minigame active = activeMinigame();
         if (active instanceof EntityDeathAware deathAware) {
             deathAware.onEntityDeath(entity, source);
@@ -128,10 +111,12 @@ public final class MinigameEventRouter {
             joinAware.onPlayerJoin(handler.player, server);
         }
         MatchLifecycleController.getInstance().onParticipantJoin(handler.player);
+        SpectatorService.getInstance().onPlayerJoin(handler.player);
         ChatRouter.notifyPlayerIfMatchActive(handler.player);
     }
 
     private static void onAfterRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
+        SpectatorService.getInstance().onPlayerRespawn(oldPlayer, newPlayer, alive);
         Minigame active = activeMinigame();
         if (active instanceof PlayerRespawnAware respawnAware) {
             respawnAware.onPlayerRespawn(oldPlayer, newPlayer, alive);
@@ -139,6 +124,7 @@ public final class MinigameEventRouter {
     }
 
     private static void onPlayerLeave(ServerPlayerEntity player) {
+        SpectatorService.getInstance().onPlayerLeave(player);
         Minigame active = activeMinigame();
         if (active instanceof PlayerLeaveAware leaveAware) {
             leaveAware.onPlayerLeave(player);

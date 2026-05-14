@@ -1,7 +1,6 @@
 package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.session.SessionMemoryConfig;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -31,6 +30,8 @@ public class SettingsScreen extends Screen {
     private static final int TEXT_WHITE = 0xFFFFFFFF;
     private static final int TEXT_PRIMARY = 0xFFE0E0E0;
     private static final int TEXT_MUTED = 0xFFB8B8B8;
+    private static final String[] DIFFICULTY_VALUES = {"peaceful", "easy", "normal", "hard"};
+    private static final String[] DIFFICULTY_LABELS = {"Peaceful", "Easy", "Medium", "Hard"};
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final List<SessionEntry> sessions = new ArrayList<>();
@@ -41,10 +42,28 @@ public class SettingsScreen extends Screen {
     // Memory config state
     private TextFieldWidget maxHeapField;
     private TextFieldWidget initialHeapField;
-    private ButtonWidget enabledToggle;
+    private ButtonWidget memoryEnabledToggle;
     private int maxHeapValue;
     private int initialHeapValue;
     private boolean memoryEnabled;
+
+    // Server config state
+    private TextFieldWidget viewDistanceField;
+    private TextFieldWidget simulationDistanceField;
+    private TextFieldWidget spawnProtectionField;
+    private ButtonWidget onlineModeToggle;
+    private ButtonWidget allowFlightToggle;
+    private ButtonWidget acceptsTransfersToggle;
+    private ButtonWidget difficultyToggle;
+    private int viewDistanceValue;
+    private int simulationDistanceValue;
+    private int spawnProtectionValue;
+    private boolean onlineMode;
+    private boolean allowFlight;
+    private boolean acceptsTransfers;
+    private String difficultyValue;
+
+    // Launcher config state
     private TextFieldWidget maxConcurrentLaunchesField;
     private int maxConcurrentLaunchesValue;
 
@@ -60,10 +79,18 @@ public class SettingsScreen extends Screen {
         this.statusMessage = "";
 
         // Load memory config
-        SessionMemoryConfig config = SessionMemoryConfig.getInstance();
-        this.maxHeapValue = config.getMaxHeap();
-        this.initialHeapValue = config.getInitialHeap();
-        this.memoryEnabled = config.isEnabled();
+        SessionSnapshotData.MemorySettings memorySettings = SessionSnapshotData.memorySettings();
+        SessionSnapshotData.ServerSettings serverSettings = SessionSnapshotData.serverSettings();
+        this.maxHeapValue = memorySettings.maxHeapGb();
+        this.initialHeapValue = memorySettings.initialHeapGb();
+        this.memoryEnabled = memorySettings.enabled();
+        this.viewDistanceValue = serverSettings.viewDistance();
+        this.simulationDistanceValue = serverSettings.simulationDistance();
+        this.spawnProtectionValue = serverSettings.spawnProtection();
+        this.onlineMode = serverSettings.onlineMode();
+        this.allowFlight = serverSettings.allowFlight();
+        this.acceptsTransfers = serverSettings.acceptsTransfers();
+        this.difficultyValue = serverSettings.difficulty();
         this.maxConcurrentLaunchesValue = SessionSnapshotData.maxConcurrentLaunches();
 
         // Request session list from server
@@ -82,8 +109,8 @@ public class SettingsScreen extends Screen {
             .dimensions(layout.contentX, layout.panelY + 45, 100, TAB_HEIGHT)
             .build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("💾 Memory"), button -> {
-            this.switchTab(SettingsTab.MEMORY);
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("🖥 Server"), button -> {
+            this.switchTab(SettingsTab.SERVER);
         })
             .dimensions(layout.contentX + 110, layout.panelY + 45, 100, TAB_HEIGHT)
             .build());
@@ -94,8 +121,8 @@ public class SettingsScreen extends Screen {
             .dimensions(layout.contentX + 220, layout.panelY + 45, 110, TAB_HEIGHT)
             .build());
 
-        if (this.activeTab == SettingsTab.MEMORY) {
-            this.initMemorySettings(layout);
+        if (this.activeTab == SettingsTab.SERVER) {
+            this.initServerSettings(layout);
         } else if (this.activeTab == SettingsTab.LAUNCHER) {
             this.initLauncherSettings(layout);
         } else {
@@ -145,42 +172,299 @@ public class SettingsScreen extends Screen {
         }
     }
 
-    private void initMemorySettings(Layout layout) {
-        int startY = layout.listY + 20;
-        int fieldWidth = 100;
-        int labelWidth = 150;
+    private void initServerSettings(Layout layout) {
+        int startY = layout.listY + 6;
+        int rowHeight = 28;
+        int fieldWidth = 90;
+        int toggleWidth = 190;
+        int saveWidth = 70;
+        int x = layout.contentX;
+        int y = startY;
 
-        // Enable/Disable toggle
-        this.enabledToggle = this.addDrawableChild(ButtonWidget.builder(
+        this.viewDistanceField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("View Distance"));
+        this.viewDistanceField.setMaxLength(2);
+        this.viewDistanceField.setText(String.valueOf(this.viewDistanceValue));
+        this.addDrawableChild(this.viewDistanceField);
+
+        ButtonWidget saveViewDistance = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveViewDistance())
+            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveViewDistance.setTooltip(Tooltip.of(Text.literal("Controls how far chunks are sent to players.")));
+        y += rowHeight;
+
+        this.simulationDistanceField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Simulation Distance"));
+        this.simulationDistanceField.setMaxLength(2);
+        this.simulationDistanceField.setText(String.valueOf(this.simulationDistanceValue));
+        this.addDrawableChild(this.simulationDistanceField);
+
+        ButtonWidget saveSimulationDistance = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveSimulationDistance())
+            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveSimulationDistance.setTooltip(Tooltip.of(Text.literal("Controls how far entities tick and spawn.")));
+        y += rowHeight;
+
+        this.spawnProtectionField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Spawn Protection"));
+        this.spawnProtectionField.setMaxLength(3);
+        this.spawnProtectionField.setText(String.valueOf(this.spawnProtectionValue));
+        this.addDrawableChild(this.spawnProtectionField);
+
+        ButtonWidget saveSpawnProtection = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveSpawnProtection())
+            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveSpawnProtection.setTooltip(Tooltip.of(Text.literal("Prevents block edits near spawn.")));
+        y += rowHeight;
+
+        this.difficultyToggle = this.addDrawableChild(ButtonWidget.builder(
+            Text.literal("Difficulty: " + this.getDifficultyLabel(this.difficultyValue)),
+            button -> {
+                this.cycleDifficulty();
+                button.setMessage(Text.literal("Difficulty: " + this.getDifficultyLabel(this.difficultyValue)));
+            })
+            .dimensions(x, y, toggleWidth, BUTTON_HEIGHT)
+            .build());
+        this.difficultyToggle.setTooltip(Tooltip.of(Text.literal("Sets global damage and mob behavior.")));
+
+        ButtonWidget saveDifficulty = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveDifficulty())
+            .dimensions(x + toggleWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveDifficulty.setTooltip(Tooltip.of(Text.literal("Applies the selected difficulty.")));
+        y += rowHeight;
+
+        this.onlineModeToggle = this.addDrawableChild(ButtonWidget.builder(
+            Text.literal("Online Mode: " + (this.onlineMode ? "ON" : "OFF")),
+            button -> {
+                this.onlineMode = !this.onlineMode;
+                button.setMessage(Text.literal("Online Mode: " + (this.onlineMode ? "ON" : "OFF")));
+            })
+            .dimensions(x, y, toggleWidth, BUTTON_HEIGHT)
+            .build());
+        this.onlineModeToggle.setTooltip(Tooltip.of(Text.literal("Authenticates players with Mojang servers.")));
+
+        ButtonWidget saveOnlineMode = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveOnlineMode())
+            .dimensions(x + toggleWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveOnlineMode.setTooltip(Tooltip.of(Text.literal("Applies online mode for new sessions.")));
+        y += rowHeight;
+
+        this.allowFlightToggle = this.addDrawableChild(ButtonWidget.builder(
+            Text.literal("Allow Flight: " + (this.allowFlight ? "ON" : "OFF")),
+            button -> {
+                this.allowFlight = !this.allowFlight;
+                button.setMessage(Text.literal("Allow Flight: " + (this.allowFlight ? "ON" : "OFF")));
+            })
+            .dimensions(x, y, toggleWidth, BUTTON_HEIGHT)
+            .build());
+        this.allowFlightToggle.setTooltip(Tooltip.of(Text.literal("Allows players to fly in survival.")));
+
+        ButtonWidget saveAllowFlight = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveAllowFlight())
+            .dimensions(x + toggleWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveAllowFlight.setTooltip(Tooltip.of(Text.literal("Applies flight permission for new sessions.")));
+        y += rowHeight;
+
+        this.acceptsTransfersToggle = this.addDrawableChild(ButtonWidget.builder(
+            Text.literal("Accepts Transfers: " + (this.acceptsTransfers ? "ON" : "OFF")),
+            button -> {
+                this.acceptsTransfers = !this.acceptsTransfers;
+                button.setMessage(Text.literal("Accepts Transfers: " + (this.acceptsTransfers ? "ON" : "OFF")));
+            })
+            .dimensions(x, y, toggleWidth, BUTTON_HEIGHT)
+            .build());
+        this.acceptsTransfersToggle.setTooltip(Tooltip.of(Text.literal("Allows server-to-server transfers.")));
+
+        ButtonWidget saveAcceptsTransfers = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveAcceptsTransfers())
+            .dimensions(x + toggleWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveAcceptsTransfers.setTooltip(Tooltip.of(Text.literal("Applies transfer policy for new sessions.")));
+        y += rowHeight + 6;
+
+        this.memoryEnabledToggle = this.addDrawableChild(ButtonWidget.builder(
             Text.literal("Memory Limits: " + (this.memoryEnabled ? "ON" : "OFF")),
             button -> {
                 this.memoryEnabled = !this.memoryEnabled;
-                SessionMemoryConfig.getInstance().setEnabled(this.memoryEnabled);
                 button.setMessage(Text.literal("Memory Limits: " + (this.memoryEnabled ? "ON" : "OFF")));
-                this.statusMessage = "Memory limits " + (this.memoryEnabled ? "enabled" : "disabled") + ".";
             })
-            .dimensions(layout.contentX, startY, 200, BUTTON_HEIGHT)
+            .dimensions(x, y, toggleWidth, BUTTON_HEIGHT)
             .build());
+        this.memoryEnabledToggle.setTooltip(Tooltip.of(Text.literal("Enables custom heap limits for sessions.")));
 
-        // Max Heap field
-        this.maxHeapField = new TextFieldWidget(this.textRenderer, layout.contentX, startY + 35, fieldWidth, 20, Text.literal("Max Heap"));
+        ButtonWidget saveMemoryEnabled = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveMemoryEnabled())
+            .dimensions(x + toggleWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveMemoryEnabled.setTooltip(Tooltip.of(Text.literal("Applies memory limit toggle.")));
+        y += rowHeight;
+
+        this.maxHeapField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Max Heap"));
         this.maxHeapField.setMaxLength(3);
         this.maxHeapField.setText(String.valueOf(this.maxHeapValue));
         this.addDrawableChild(this.maxHeapField);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Set Max Heap"), button -> this.updateMaxHeap())
-            .dimensions(layout.contentX + fieldWidth + 10, startY + 35, 120, BUTTON_HEIGHT)
+        ButtonWidget saveMaxHeap = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveMaxHeap())
+            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
+        saveMaxHeap.setTooltip(Tooltip.of(Text.literal("Maximum heap size per session (GB).")));
+        y += rowHeight;
 
-        // Initial Heap field
-        this.initialHeapField = new TextFieldWidget(this.textRenderer, layout.contentX, startY + 70, fieldWidth, 20, Text.literal("Initial Heap"));
+        this.initialHeapField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Initial Heap"));
         this.initialHeapField.setMaxLength(3);
         this.initialHeapField.setText(String.valueOf(this.initialHeapValue));
         this.addDrawableChild(this.initialHeapField);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Set Initial Heap"), button -> this.updateInitialHeap())
-            .dimensions(layout.contentX + fieldWidth + 10, startY + 70, 120, BUTTON_HEIGHT)
+        ButtonWidget saveInitialHeap = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveInitialHeap())
+            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
+        saveInitialHeap.setTooltip(Tooltip.of(Text.literal("Initial heap size per session (GB).")));
+    }
+
+    private void cycleDifficulty() {
+        for (int i = 0; i < DIFFICULTY_VALUES.length; i++) {
+            if (DIFFICULTY_VALUES[i].equals(this.difficultyValue)) {
+                this.difficultyValue = DIFFICULTY_VALUES[(i + 1) % DIFFICULTY_VALUES.length];
+                return;
+            }
+        }
+        this.difficultyValue = DIFFICULTY_VALUES[1];
+    }
+
+    private String getDifficultyLabel(String value) {
+        for (int i = 0; i < DIFFICULTY_VALUES.length; i++) {
+            if (DIFFICULTY_VALUES[i].equals(value)) {
+                return DIFFICULTY_LABELS[i];
+            }
+        }
+        return "Easy";
+    }
+
+    private void saveViewDistance() {
+        Integer value = this.parseInt(this.viewDistanceField, 2, 32, "View distance");
+        if (value == null) {
+            return;
+        }
+        this.viewDistanceValue = value;
+        NbtCompound server = new NbtCompound();
+        server.putInt("viewDistance", value);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved value " + value + ".";
+    }
+
+    private void saveSimulationDistance() {
+        Integer value = this.parseInt(this.simulationDistanceField, 2, 32, "Simulation distance");
+        if (value == null) {
+            return;
+        }
+        this.simulationDistanceValue = value;
+        NbtCompound server = new NbtCompound();
+        server.putInt("simulationDistance", value);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved value " + value + ".";
+    }
+
+    private void saveSpawnProtection() {
+        Integer value = this.parseInt(this.spawnProtectionField, 0, 64, "Spawn protection");
+        if (value == null) {
+            return;
+        }
+        this.spawnProtectionValue = value;
+        NbtCompound server = new NbtCompound();
+        server.putInt("spawnProtection", value);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved value " + value + ".";
+    }
+
+    private void saveDifficulty() {
+        NbtCompound server = new NbtCompound();
+        server.putString("difficulty", this.difficultyValue);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved value " + this.getDifficultyLabel(this.difficultyValue) + ".";
+    }
+
+    private void saveOnlineMode() {
+        NbtCompound server = new NbtCompound();
+        server.putBoolean("onlineMode", this.onlineMode);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved value " + this.onlineMode + ".";
+    }
+
+    private void saveAllowFlight() {
+        NbtCompound server = new NbtCompound();
+        server.putBoolean("allowFlight", this.allowFlight);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved value " + this.allowFlight + ".";
+    }
+
+    private void saveAcceptsTransfers() {
+        NbtCompound server = new NbtCompound();
+        server.putBoolean("acceptsTransfers", this.acceptsTransfers);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved value " + this.acceptsTransfers + ".";
+    }
+
+    private void saveMemoryEnabled() {
+        NbtCompound memory = new NbtCompound();
+        memory.putBoolean("enabled", this.memoryEnabled);
+        this.sendServerSettings(memory, null);
+        this.statusMessage = "Saved value " + this.memoryEnabled + ".";
+    }
+
+    private void saveMaxHeap() {
+        Integer value = this.parseInt(this.maxHeapField, 1, 128, "Max heap");
+        if (value == null) {
+            return;
+        }
+        this.maxHeapValue = value;
+        NbtCompound memory = new NbtCompound();
+        memory.putInt("maxHeapGb", value);
+        this.sendServerSettings(memory, null);
+        this.statusMessage = "Saved value " + value + ".";
+    }
+
+    private void saveInitialHeap() {
+        Integer value = this.parseInt(this.initialHeapField, 1, Math.max(1, this.maxHeapValue), "Initial heap");
+        if (value == null) {
+            return;
+        }
+        this.initialHeapValue = value;
+        NbtCompound memory = new NbtCompound();
+        memory.putInt("initialHeapGb", value);
+        this.sendServerSettings(memory, null);
+        this.statusMessage = "Saved value " + value + ".";
+    }
+
+    private Integer parseInt(TextFieldWidget field, int min, int max, String label) {
+        try {
+            int value = Integer.parseInt(field.getText().trim());
+            if (value < min || value > max) {
+                this.statusMessage = label + " must be between " + min + " and " + max + ".";
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            this.statusMessage = "Invalid number for " + label.toLowerCase() + ".";
+            return null;
+        }
+    }
+
+    private void sendServerSettings(NbtCompound memorySettings, NbtCompound serverSettings) {
+        if (this.client.player == null) {
+            this.statusMessage = "Not connected to server.";
+            return;
+        }
+
+        NbtCompound payload = new NbtCompound();
+        boolean hasUpdates = false;
+        if (memorySettings != null && !memorySettings.getKeys().isEmpty()) {
+            payload.put("memory", memorySettings);
+            hasUpdates = true;
+        }
+        if (serverSettings != null && !serverSettings.getKeys().isEmpty()) {
+            payload.put("server", serverSettings);
+            hasUpdates = true;
+        }
+        if (!hasUpdates) {
+            return;
+        }
+
+        ClientPlayNetworking.send(new NetworkConstants.ServerSettingsPayload(payload));
     }
 
     private void initLauncherSettings(Layout layout) {
@@ -195,36 +479,6 @@ public class SettingsScreen extends Screen {
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Save Launch Limit"), button -> this.updateMaxConcurrentLaunches())
             .dimensions(layout.contentX + fieldWidth + 10, startY, 140, BUTTON_HEIGHT)
             .build());
-    }
-
-    private void updateMaxHeap() {
-        try {
-            int value = Integer.parseInt(this.maxHeapField.getText().trim());
-            if (value < 1 || value > 128) {
-                this.statusMessage = "Max heap must be between 1 and 128 GB.";
-                return;
-            }
-            SessionMemoryConfig.getInstance().setMaxHeap(value);
-            this.maxHeapValue = value;
-            this.statusMessage = "Max heap set to " + value + " GB. New sessions will use this limit.";
-        } catch (NumberFormatException e) {
-            this.statusMessage = "Invalid number for max heap.";
-        }
-    }
-
-    private void updateInitialHeap() {
-        try {
-            int value = Integer.parseInt(this.initialHeapField.getText().trim());
-            if (value < 1 || value > this.maxHeapValue) {
-                this.statusMessage = "Initial heap must be between 1 and " + this.maxHeapValue + " GB.";
-                return;
-            }
-            SessionMemoryConfig.getInstance().setInitialHeap(value);
-            this.initialHeapValue = value;
-            this.statusMessage = "Initial heap set to " + value + " GB. New sessions will use this limit.";
-        } catch (NumberFormatException e) {
-            this.statusMessage = "Invalid number for initial heap.";
-        }
     }
 
     private void updateMaxConcurrentLaunches() {
@@ -263,7 +517,7 @@ public class SettingsScreen extends Screen {
 
         int titleCenterX = layout.contentX + layout.contentWidth / 2;
         context.drawCenteredTextWithShadow(this.textRenderer, this.title, titleCenterX, layout.panelY + TITLE_TOP_Y, TEXT_WHITE);
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Manage your game sessions and memory allocation."), titleCenterX, layout.panelY + SUBTITLE_TOP_Y, TEXT_MUTED);
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Manage sessions, server defaults, and launcher limits."), titleCenterX, layout.panelY + SUBTITLE_TOP_Y, TEXT_MUTED);
 
         if (this.activeTab == SettingsTab.SESSIONS) {
             // Draw sessions list
@@ -277,11 +531,8 @@ public class SettingsScreen extends Screen {
                     y += SESSION_ROW_HEIGHT + ROW_GAP;
                 }
             }
-        } else if (this.activeTab == SettingsTab.MEMORY) {
-            // Draw memory settings info
-            context.drawText(this.textRenderer, Text.literal("Max Heap (GB): For maximum memory per session"), layout.contentX, layout.listY, TEXT_PRIMARY, false);
-            context.drawText(this.textRenderer, Text.literal("Initial Heap (GB): Starting memory allocation per session"), layout.contentX, layout.listY + 100, TEXT_PRIMARY, false);
-            context.drawText(this.textRenderer, Text.literal("Changes apply to all new sessions created after this."), layout.contentX, layout.listY + 150, TEXT_MUTED, false);
+        } else if (this.activeTab == SettingsTab.SERVER) {
+            context.drawText(this.textRenderer, Text.literal("Hover Save buttons for details."), layout.contentX, layout.listY - 14, TEXT_MUTED, false);
         } else {
             context.drawText(this.textRenderer, Text.literal("Max Concurrent Launches: backend servers allowed to start at the same time"), layout.contentX, layout.listY, TEXT_PRIMARY, false);
             context.drawText(this.textRenderer, Text.literal("Current server value: " + SessionSnapshotData.maxConcurrentLaunches()), layout.contentX, layout.listY + 70, TEXT_PRIMARY, false);
@@ -421,11 +672,8 @@ public class SettingsScreen extends Screen {
 
     private enum SettingsTab {
         SESSIONS,
-        MEMORY,
+        SERVER,
         LAUNCHER
     }
 }
-
-
-
 

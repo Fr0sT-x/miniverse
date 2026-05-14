@@ -3,8 +3,10 @@ package dev.frost.miniverse.minigame.core;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import org.jetbrains.annotations.Nullable;
+import dev.frost.miniverse.minigame.core.freeze.FreezeService;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Set;
@@ -40,6 +42,8 @@ public class MinigameManager {
         if (this.runtime != null) {
             this.runtime.stop();
             MatchLifecycleController.getInstance().reset();
+            FreezeService.getInstance().clearAll();
+            SpectatorService.getInstance().clearAll();
         }
 
         if (minigame != null) {
@@ -220,6 +224,8 @@ public class MinigameManager {
             this.runtime.stop();
         }
         MatchLifecycleController.getInstance().reset();
+        FreezeService.getInstance().clearAll();
+        SpectatorService.getInstance().clearAll();
         this.runtime = null;
     }
 

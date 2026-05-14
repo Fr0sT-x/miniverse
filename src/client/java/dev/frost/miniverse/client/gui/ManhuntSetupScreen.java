@@ -839,8 +839,25 @@ public class ManhuntSetupScreen extends Screen {
          plan.putBoolean("launch", true);
          plan.put("settings", this.buildSettingsCompound());
 
-         // Don't add groups - all players (speedrunners and hunters) will be on the same server
-         // Settings will contain the roles for players
+        NbtList groups = new NbtList();
+        NbtCompound group = new NbtCompound();
+        group.putString("label", "Manhunt");
+
+        NbtList members = new NbtList();
+        NbtList roles = new NbtList();
+        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.SPEEDRUNNER).members) {
+            members.add(this.member(entry));
+            roles.add(this.roleMember(entry, "speedrunner"));
+        }
+        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.HUNTER).members) {
+            members.add(this.member(entry));
+            roles.add(this.roleMember(entry, "hunter"));
+        }
+        group.put("members", members);
+        group.put("roles", roles);
+        groups.add(group);
+        plan.put("groups", groups);
+
          ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(GAME_ID, this.sessionNameField.getText().trim(), plan));
          this.statusMessage = "Requested Manhunt session creation.";
      }
@@ -875,7 +892,7 @@ public class ManhuntSetupScreen extends Screen {
              settings.putLong("seed", this.getSelectedSeedValue());
          }
 
-         // Add roles to settings (since they're no longer in groups)
+         // Also include roles in settings to preserve backend compatibility.
          List<SessionSnapshotData.RosterEntry> speedrunners = this.getColumn(ColumnKind.SPEEDRUNNER).members;
          List<SessionSnapshotData.RosterEntry> hunters = this.getColumn(ColumnKind.HUNTER).members;
          NbtList roles = new NbtList();

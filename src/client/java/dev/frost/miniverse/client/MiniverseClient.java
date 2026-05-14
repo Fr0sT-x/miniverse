@@ -1,5 +1,7 @@
 package dev.frost.miniverse.client;
 
+import dev.frost.miniverse.client.freeze.ClientFreezeHandler;
+import dev.frost.miniverse.client.freeze.ClientFreezeState;
 import dev.frost.miniverse.client.gui.SessionScreen;
 import dev.frost.miniverse.common.NetworkConstants;
 import net.fabricmc.api.ClientModInitializer;
@@ -22,6 +24,7 @@ public class MiniverseClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		NetworkConstants.registerPayloadTypes();
 		NightVisionToggle.register();
+		ClientFreezeHandler.register();
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.miniverse.open_gui",
@@ -49,6 +52,10 @@ public class MiniverseClient implements ClientModInitializer {
 				SessionScreen.onServerSnapshot(payload.sessions());
 				maybeOpenGui(context.client());
 			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.FREEZE_STATE_ID, (payload, context) ->
+			context.client().execute(() -> ClientFreezeState.setFrozen(payload.frozen()))
 		);
 	}
 

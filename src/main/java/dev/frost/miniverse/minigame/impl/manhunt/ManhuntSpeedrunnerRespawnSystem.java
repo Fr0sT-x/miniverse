@@ -1,5 +1,12 @@
 package dev.frost.miniverse.minigame.impl.manhunt;
 
+import dev.frost.miniverse.minigame.core.spectator.SpectatorMode;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorPolicy;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorTargetProvider;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorSession;
+import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.network.packet.s2c.play.PositionFlag;
@@ -13,6 +20,9 @@ import net.minecraft.world.GameMode;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -23,12 +33,17 @@ final class ManhuntSpeedrunnerRespawnSystem {
     private static final int RESPAWN_PROTECTION_TICKS = 3 * 20;
 
     private final ManhuntMinigame game;
+    private final SpectatorService spectators = SpectatorService.getInstance();
+    private final SpectatorPolicy policy;
+    private final SpectatorTargetProvider targetProvider;
     private final Map<UUID, PendingRespawn> pendingRespawns = new ConcurrentHashMap<>();
     private final Map<UUID, Long> protectedUntilTicks = new ConcurrentHashMap<>();
     private int respawnDelaySeconds = DEFAULT_RESPAWN_DELAY_SECONDS;
 
     ManhuntSpeedrunnerRespawnSystem(ManhuntMinigame game) {
         this.game = game;
+        this.policy = SpectatorPolicies.teamOnly(game.teamManager(), true);
+        this.targetProvider = context -> new ArrayList<>(this.game.getAliveSpeedrunners());
     }
 
     void reset() {
@@ -74,11 +89,15 @@ final class ManhuntSpeedrunnerRespawnSystem {
             speedrunner.getEntityWorld().getRegistryKey(),
             speedrunner.getBlockPos()
         ));
-        if (target != null) {
-            this.applySpectatorState(speedrunner, target);
-        } else {
-            speedrunner.changeGameMode(GameMode.SPECTATOR);
-        }
+        this.spectators.startSpectating(
+            speedrunner,
+            this.policy,
+            this.targetProvider,
+            SpectatorMode.STANDARD,
+            targetUuid,
+            returnMode,
+            Text.literal("Spectating teammates while waiting to respawn.").formatted(Formatting.AQUA)
+        );
 
         this.game.broadcastManhuntMessage(
             Text.literal(speedrunner.getName().getString() + " will respawn "
@@ -90,6 +109,10 @@ final class ManhuntSpeedrunnerRespawnSystem {
 
     void tick(long currentTick) {
         this.protectedUntilTicks.entrySet().removeIf(entry -> entry.getValue() <= currentTick);
+
+        if (currentTick % 20L == 0L) {
+            this.sendRespawnActionBars(currentTick);
+        }
 
         for (PendingRespawn pending : this.pendingRespawns.values()) {
             ServerPlayerEntity player = this.game.getPlayerByUuid(pending.playerUuid());
@@ -105,14 +128,8 @@ final class ManhuntSpeedrunnerRespawnSystem {
                 continue;
             }
 
-            PendingRespawn updated = this.enforceSpectatorTarget(player, pending, target);
-            ServerPlayerEntity effectiveTarget = this.game.getAliveSpeedrunnerByUuid(updated.targetUuid());
-            if (effectiveTarget == null) {
-                effectiveTarget = target;
-            }
-
-            if (currentTick >= updated.respawnAtTick()) {
-                this.completeRespawn(player, effectiveTarget, updated, currentTick);
+            if (currentTick >= pending.respawnAtTick()) {
+                this.completeRespawn(player, target, pending, currentTick);
             }
         }
     }
@@ -125,12 +142,11 @@ final class ManhuntSpeedrunnerRespawnSystem {
             }
 
             ServerPlayerEntity target = this.resolveTarget(pending, player);
-            if (target == null) {
-                player.changeGameMode(GameMode.SPECTATOR);
-                continue;
+            if (target != null) {
+                this.updateSpectatorTarget(player, target.getUuid());
+            } else {
+                this.spectators.ensureSpectating(player);
             }
-
-            this.enforceSpectatorTarget(player, pending, target);
         }
     }
 
@@ -141,21 +157,50 @@ final class ManhuntSpeedrunnerRespawnSystem {
         }
 
         ServerPlayerEntity target = this.resolveTarget(pending, player);
-        if (target == null) {
-            player.changeGameMode(GameMode.SPECTATOR);
-            return;
+        if (target != null) {
+            this.updateSpectatorTarget(player, target.getUuid());
         }
-
-        this.enforceSpectatorTarget(player, pending, target);
+        this.spectators.ensureSpectating(player);
     }
 
     void removePlayer(ServerPlayerEntity player) {
         this.pendingRespawns.remove(player.getUuid());
         this.protectedUntilTicks.remove(player.getUuid());
+        this.spectators.stopSpectating(player, SpectatorStopReason.MANUAL);
     }
 
     boolean isProtected(ServerPlayerEntity player, long currentTick) {
         return this.protectedUntilTicks.getOrDefault(player.getUuid(), 0L) > currentTick;
+    }
+
+    boolean cycleSpectatorTarget(ServerPlayerEntity speedrunner, boolean forward) {
+        return speedrunner != null && this.spectators.cycleTarget(speedrunner, forward);
+    }
+
+    @Nullable
+    ServerPlayerEntity getSpectatorTarget(ServerPlayerEntity speedrunner) {
+        if (speedrunner == null) {
+            return null;
+        }
+        SpectatorSession session = this.spectators.session(speedrunner.getUuid());
+        if (session == null || session.targetId() == null) {
+            return null;
+        }
+        return this.game.getAliveSpeedrunnerByUuid(session.targetId());
+    }
+
+    void beginEliminatedSpectate(ServerPlayerEntity speedrunner) {
+        ServerPlayerEntity target = this.findAliveTarget(speedrunner.getUuid());
+        UUID targetUuid = target == null ? null : target.getUuid();
+        this.spectators.startSpectating(
+            speedrunner,
+            this.policy,
+            this.targetProvider,
+            SpectatorMode.ELIMINATED,
+            targetUuid,
+            null,
+            Text.literal("You are out of lives. Spectating teammates.").formatted(Formatting.RED)
+        );
     }
 
     private ServerPlayerEntity resolveTarget(PendingRespawn pending, ServerPlayerEntity player) {
@@ -170,6 +215,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
         }
 
         this.pendingRespawns.put(player.getUuid(), pending.withTarget(replacement.getUuid()));
+        this.updateSpectatorTarget(player, replacement.getUuid());
         player.sendMessage(Text.literal("Spectating " + replacement.getName().getString() + " until respawn.").formatted(Formatting.AQUA), true);
         return replacement;
     }
@@ -183,53 +229,13 @@ final class ManhuntSpeedrunnerRespawnSystem {
         return null;
     }
 
-    @Nullable
-    private ServerPlayerEntity cameraTarget(ServerPlayerEntity player) {
-        if (player.getCameraEntity() instanceof ServerPlayerEntity camera) {
-            ServerPlayerEntity aliveTarget = this.game.getAliveSpeedrunnerByUuid(camera.getUuid());
-            if (aliveTarget != null && !aliveTarget.getUuid().equals(player.getUuid())) {
-                return aliveTarget;
-            }
-        }
-        return null;
-    }
-
-    private PendingRespawn enforceSpectatorTarget(ServerPlayerEntity player, PendingRespawn pending, ServerPlayerEntity defaultTarget) {
-        if (player.getGameMode() != GameMode.SPECTATOR) {
-            player.changeGameMode(GameMode.SPECTATOR);
-        }
-
-        ServerPlayerEntity cameraTarget = this.cameraTarget(player);
-        if (cameraTarget != null) {
-            if (!cameraTarget.getUuid().equals(pending.targetUuid())) {
-                PendingRespawn updated = pending.withTarget(cameraTarget.getUuid());
-                this.pendingRespawns.put(player.getUuid(), updated);
-                return updated;
-            }
-            return pending;
-        }
-
-        this.applySpectatorState(player, defaultTarget);
-        if (!defaultTarget.getUuid().equals(pending.targetUuid())) {
-            PendingRespawn updated = pending.withTarget(defaultTarget.getUuid());
-            this.pendingRespawns.put(player.getUuid(), updated);
-            return updated;
-        }
-        return pending;
-    }
-
-    private void applySpectatorState(ServerPlayerEntity player, ServerPlayerEntity target) {
-        player.changeGameMode(GameMode.SPECTATOR);
-        player.setCameraEntity(target);
-    }
-
     private void completeRespawn(ServerPlayerEntity player, ServerPlayerEntity target, PendingRespawn pending, long currentTick) {
         PendingRespawn stored = this.pendingRespawns.remove(player.getUuid());
         if (stored == null) {
             return;
         }
 
-        player.setCameraEntity(player);
+        this.spectators.stopSpectating(player, SpectatorStopReason.RESPAWN);
         ServerWorld targetWorld = (ServerWorld) target.getEntityWorld();
         player.teleport(targetWorld, target.getX(), target.getY(), target.getZ(), Set.<PositionFlag>of(), target.getYaw(), target.getPitch(), true);
         player.changeGameMode(stored.returnMode());
@@ -254,7 +260,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
             return;
         }
 
-        player.setCameraEntity(player);
+        this.spectators.stopSpectating(player, SpectatorStopReason.RESPAWN);
         ServerWorld world = ((ServerWorld) player.getEntityWorld()).getServer().getWorld(stored.fallbackWorld());
         if (world == null) {
             world = (ServerWorld) player.getEntityWorld();
@@ -275,6 +281,52 @@ final class ManhuntSpeedrunnerRespawnSystem {
             Text.literal(player.getName().getString() + " respawned at their death location.")
                 .formatted(Formatting.GREEN)
         );
+    }
+
+    private void updateSpectatorTarget(ServerPlayerEntity player, UUID targetId) {
+        if (player == null || targetId == null) {
+            return;
+        }
+        this.spectators.setTarget(player, targetId);
+        this.spectators.ensureSpectating(player);
+    }
+
+    private void sendRespawnActionBars(long currentTick) {
+        if (this.pendingRespawns.isEmpty()) {
+            return;
+        }
+
+        List<PendingRespawn> pendingList = new ArrayList<>(this.pendingRespawns.values());
+        pendingList.sort(Comparator.comparingLong(PendingRespawn::respawnAtTick));
+
+        StringBuilder combined = new StringBuilder();
+        for (PendingRespawn pending : pendingList) {
+            ServerPlayerEntity pendingPlayer = this.game.getPlayerByUuid(pending.playerUuid());
+            if (pendingPlayer == null || pendingPlayer.isDisconnected()) {
+                continue;
+            }
+            int secondsRemaining = Math.max(0, (int) ((pending.respawnAtTick() - currentTick + 19L) / 20L));
+            String message = pendingPlayer.getName().getString() + " will respawn in " + secondsRemaining + "s";
+
+            pendingPlayer.sendMessage(Text.literal(message).formatted(Formatting.YELLOW), true);
+
+            if (combined.length() > 0) {
+                combined.append(" | ");
+            }
+            combined.append(message);
+        }
+
+        if (combined.length() == 0) {
+            return;
+        }
+
+        Text combinedText = Text.literal(combined.toString()).formatted(Formatting.YELLOW);
+        for (ServerPlayerEntity speedrunner : this.game.getAliveSpeedrunners()) {
+            if (speedrunner == null || speedrunner.isDisconnected()) {
+                continue;
+            }
+            speedrunner.sendMessage(combinedText, true);
+        }
     }
 
     private record PendingRespawn(

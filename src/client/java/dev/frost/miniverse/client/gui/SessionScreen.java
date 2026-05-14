@@ -98,12 +98,28 @@ public class SessionScreen extends Screen {
         }
 
         NbtCompound launcher = root.getCompound("launcher").orElseGet(NbtCompound::new);
+        NbtCompound memory = root.getCompound("memory").orElseGet(NbtCompound::new);
+        NbtCompound serverSettings = root.getCompound("server").orElseGet(NbtCompound::new);
         SessionSnapshotData.update(
             sessions,
             roster,
             games,
             launcher.getInt("maxConcurrentLaunches").orElse(SessionSnapshotData.maxConcurrentLaunches()),
-            launcher.getInt("queueCapacity").orElse(SessionSnapshotData.launcherQueueCapacity())
+            launcher.getInt("queueCapacity").orElse(SessionSnapshotData.launcherQueueCapacity()),
+            new SessionSnapshotData.MemorySettings(
+                memory.getInt("maxHeapGb").orElse(SessionSnapshotData.memorySettings().maxHeapGb()),
+                memory.getInt("initialHeapGb").orElse(SessionSnapshotData.memorySettings().initialHeapGb()),
+                memory.getBoolean("enabled", SessionSnapshotData.memorySettings().enabled())
+            ),
+            new SessionSnapshotData.ServerSettings(
+                serverSettings.getInt("viewDistance").orElse(SessionSnapshotData.serverSettings().viewDistance()),
+                serverSettings.getInt("simulationDistance").orElse(SessionSnapshotData.serverSettings().simulationDistance()),
+                serverSettings.getBoolean("onlineMode", SessionSnapshotData.serverSettings().onlineMode()),
+                serverSettings.getInt("spawnProtection").orElse(SessionSnapshotData.serverSettings().spawnProtection()),
+                serverSettings.getString("difficulty", SessionSnapshotData.serverSettings().difficulty()),
+                serverSettings.getBoolean("allowFlight", SessionSnapshotData.serverSettings().allowFlight()),
+                serverSettings.getBoolean("acceptsTransfers", SessionSnapshotData.serverSettings().acceptsTransfers())
+            )
         );
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof SessionScreen sessionScreen) {
@@ -223,7 +239,6 @@ public class SessionScreen extends Screen {
         }
         return entries;
     }
-
     private Layout createLayout(int entryCount) {
         int panelWidth = Math.min(PANEL_MAX_WIDTH, this.width - 24);
         int gridRows = Math.max(2, (entryCount + GRID_COLUMNS - 1) / GRID_COLUMNS);
@@ -284,7 +299,6 @@ public class SessionScreen extends Screen {
             ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload("metadata"));
         }
     }
-
     @Override
     public boolean shouldCloseOnEsc() {
         return true;

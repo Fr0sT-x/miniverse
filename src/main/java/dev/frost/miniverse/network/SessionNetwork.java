@@ -73,7 +73,7 @@ public final class SessionNetwork {
         }
 
         player.sendMessage(Text.literal("Launching session " + session.getSessionId() + "..."), false);
-        manager.launchSession(session.getSessionId()).whenComplete((launched, error) -> server.execute(() -> {
+        manager.launchSession(session.getSessionId(), server).whenComplete((launched, error) -> server.execute(() -> {
             if (error != null) {
                 player.sendMessage(Text.literal("Failed to launch session " + session.getSessionId() + ": " + error.getMessage()), false);
                 sendSessionList(server, player);
@@ -100,7 +100,7 @@ public final class SessionNetwork {
         }
 
         player.sendMessage(Text.literal("Launching session " + sessionId + "..."), false);
-        manager.launchSession(sessionId).whenComplete((session, error) -> server.execute(() -> {
+        manager.launchSession(sessionId, server).whenComplete((session, error) -> server.execute(() -> {
             if (error != null) {
                 player.sendMessage(Text.literal("Failed to launch session " + sessionId + ": " + error.getMessage()), false);
                 sendSessionList(server, player);

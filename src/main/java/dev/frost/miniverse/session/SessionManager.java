@@ -5,6 +5,8 @@ import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -180,7 +182,7 @@ public final class SessionManager {
         this.clearPlayerSessionsForSession(sessionId);
     }
 
-    public CompletableFuture<GameSession> launchSession(String sessionId) {
+    public CompletableFuture<GameSession> launchSession(String sessionId, MinecraftServer server) {
         GameSession session;
         synchronized (this) {
             session = this.sessions.get(sessionId);
@@ -228,6 +230,7 @@ public final class SessionManager {
             }).exceptionally(error -> {
                 session.setState(SessionState.FAILED);
                 this.persistRegistry();
+                this.notifyPlayersOfFailure(session, server, error.getCause() != null ? error.getCause().getMessage() : error.getMessage());
                 throw new RuntimeException(error);
             });
         }
@@ -246,8 +249,21 @@ public final class SessionManager {
             .exceptionally(error -> {
                 session.setState(SessionState.FAILED);
                 this.persistRegistry();
+                this.notifyPlayersOfFailure(session, server, error.getCause() != null ? error.getCause().getMessage() : error.getMessage());
                 throw new RuntimeException(error);
             });
+    }
+    
+    private void notifyPlayersOfFailure(GameSession session, MinecraftServer server, String errorMessage) {
+        Text message = Text.literal("Session launch failed: " + errorMessage).formatted(Formatting.RED);
+        for (SessionGroup group : session.snapshotGroups()) {
+            for (UUID playerUuid : group.getPlayerUuids()) {
+                ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerUuid);
+                if (player != null) {
+                    player.sendMessage(message, false);
+                }
+            }
+        }
     }
 
     public synchronized void stopSession(String sessionId) {
@@ -397,4 +413,3 @@ public final class SessionManager {
         SessionRegistry.writeSnapshot(this.sessions.values());
     }
 }
-

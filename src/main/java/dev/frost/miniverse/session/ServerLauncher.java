@@ -6,86 +6,59 @@ import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import net.minecraft.nbt.NbtCompound;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.locks.LockSupport;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.stream.Stream;
 
 public final class ServerLauncher {
 
-    // Template cache location: miniverse/runtime-template/
-    private static final String TEMPLATE_FOLDER = "miniverse/runtime-template";
-    private static final Set<String> TEMPLATE_INCLUDE = Set.of(
-            "fabric-server-launch.jar", "server.jar", "libraries", "mods", "config"
-    );
-    private static final Set<String> TEMPLATE_EXCLUDE = Set.of(
-            "world", "logs", "crash-reports", "sessions", "run", "usercache.json",
-            "banned-ips.json", "banned-players.json", "ops.json", "whitelist.json"
-    );
     public record LaunchResult(SessionGroup group, Process process, int port, Path workingDirectory) {
     }
 
     public LaunchResult launch(GameSession session, SessionGroup group) throws IOException {
-        // 1. Detect server root
+        // 1. Detect and validate the shared server runtime
         Path serverRoot = detectServerRoot();
-        // 2. Ensure template exists
-        Path templateDir = serverRoot.resolve(TEMPLATE_FOLDER);
-        ensureTemplateExists(serverRoot, templateDir);
+        validateSharedRuntime(serverRoot);
+
+        // 2. Prepare an isolated working directory for the session
+        Path workingDirectory = this.prepareWorkingDirectory(session, group);
         int port = this.reservePort();
-        Path workingDirectory = this.prepareWorkingDirectory(session, group, templateDir);
+
+        // 3. Create symbolic links/junctions to the shared runtime files
+        this.createRuntimeSymlinks(workingDirectory, serverRoot);
+
+        // 4. Write session-specific configuration files into the working directory
         this.writeEula(workingDirectory);
         this.writeSessionConfig(workingDirectory, session, group);
         this.writeServerProperties(workingDirectory, session, group, port);
 
         group.markLaunching(workingDirectory, port);
 
-        // Ensure required files exist
-        Path fabricLauncherJar = workingDirectory.resolve("fabric-server-launch.jar");
-        if (!Files.exists(fabricLauncherJar)) {
-            throw new IOException("Missing fabric-server-launch.jar in session directory: " + fabricLauncherJar);
-        }
-        if (!Files.isDirectory(workingDirectory.resolve("libraries"))) {
-            throw new IOException("Missing libraries/ directory in session directory: " + workingDirectory);
-        }
-        if (!Files.isDirectory(workingDirectory.resolve("mods"))) {
-            throw new IOException("Missing mods/ directory in session directory: " + workingDirectory);
-        }
-        if (!Files.isDirectory(workingDirectory.resolve("config"))) {
-            throw new IOException("Missing config/ directory in session directory: " + workingDirectory);
-        }
-        if (!Files.exists(workingDirectory.resolve("server.properties"))) {
-            throw new IOException("Missing server.properties in session directory: " + workingDirectory);
-        }
-
-        // Build production-safe command
+        // 5. Build the launch command to run from the isolated directory
         String javaExecutable = this.resolveJavaExecutable();
-        List<String> command = List.of(
-            javaExecutable,
-            "-Xmx2G",
-            "-jar",
-            "fabric-server-launch.jar",
-            "nogui"
-        );
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutable);
+        command.add("-Xmx2G");
+        command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
+        command.add("-Dminiverse.session.game=" + session.getGameType().getCommandName());
+        command.add("-jar");
+        command.add("fabric-server-launch.jar"); // Relative path works due to the symlink/hardlink
+        command.add("nogui");
 
         ProcessBuilder builder = new ProcessBuilder(command);
-        builder.directory(workingDirectory.toFile());
+        builder.directory(workingDirectory.toFile()); // Execute from the isolated session directory
         builder.redirectOutput(workingDirectory.resolve("stdout.log").toFile());
         builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
 
-        // Wait for server to fully boot (look for "Done" in stdout)
+        // 6. Wait for the server to boot and mark it as running
         boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
         if (!booted) {
             int exitCode = process.isAlive() ? -1 : process.exitValue();
@@ -122,7 +95,6 @@ public final class ServerLauncher {
 
     /**
      * Waits for the Fabric server to fully boot by monitoring the stdout log for the "Done" message.
-     * Returns true if the server boots successfully, false otherwise.
      */
     private boolean waitForServerBoot(Path stdoutLog, Process process) {
         long deadline = System.currentTimeMillis() + 120_000L; // 2 minutes
@@ -139,7 +111,8 @@ public final class ServerLauncher {
                         }
                     }
                 }
-            } catch (IOException ignored) {}
+            } catch (IOException ignored) {
+            }
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -150,7 +123,10 @@ public final class ServerLauncher {
         return false;
     }
 
-    private Path prepareWorkingDirectory(GameSession session, SessionGroup group, Path templateDir) throws IOException {
+    /**
+     * Creates a clean, isolated working directory for a new session group.
+     */
+    private Path prepareWorkingDirectory(GameSession session, SessionGroup group) throws IOException {
         Path sessionsRoot = MiniversePaths.sessionsRoot();
         String groupFolder = this.sanitize(group.getGroupLabel());
         Path sessionDirectory = sessionsRoot.resolve(session.getSessionId()).resolve(groupFolder);
@@ -165,24 +141,76 @@ public final class ServerLauncher {
             }
         }
         Files.createDirectories(sessionDirectory);
-        long start = System.currentTimeMillis();
-        copyTemplateToSession(templateDir, sessionDirectory);
-        long duration = System.currentTimeMillis() - start;
-        Miniverse.LOGGER.info("Copied session template to {} in {} ms", sessionDirectory, duration);
         Files.createDirectories(sessionDirectory.resolve("logs"));
         return sessionDirectory;
     }
 
     /**
-     * Detects the main server root directory by searching for fabric-server-launch.jar and mods/.
+     * Creates symbolic links (or junctions/hard links on Windows) pointing to the shared server runtime files.
+     */
+    private void createRuntimeSymlinks(Path workingDirectory, Path serverRoot) throws IOException {
+        Miniverse.LOGGER.info("Creating runtime links for session in {}", workingDirectory);
+        this.linkFile(workingDirectory.resolve("fabric-server-launch.jar"), serverRoot.resolve("fabric-server-launch.jar"));
+        this.linkFile(workingDirectory.resolve("server.jar"), serverRoot.resolve("server.jar"));
+        this.linkDirectory(workingDirectory.resolve("libraries"), serverRoot.resolve("libraries"));
+        this.linkDirectory(workingDirectory.resolve("mods"), serverRoot.resolve("mods"));
+        this.linkDirectory(workingDirectory.resolve("config"), serverRoot.resolve("config"));
+    }
+
+    private void linkFile(Path link, Path target) throws IOException {
+        if (this.isWindows()) {
+            try {
+                // Windows hard links do not require admin privileges
+                Files.createLink(link, target);
+            } catch (IOException e) {
+                Miniverse.LOGGER.warn("Failed to create hard link for {}, falling back to copy: {}", link.getFileName(), e.getMessage());
+                Files.copy(target, link);
+            }
+        } else {
+            try {
+                Files.createSymbolicLink(link, target);
+            } catch (IOException e) {
+                Miniverse.LOGGER.warn("Failed to create symbolic link for {}, falling back to hard link: {}", link.getFileName(), e.getMessage());
+                try {
+                    Files.createLink(link, target);
+                } catch (IOException ex) {
+                    Files.copy(target, link);
+                }
+            }
+        }
+    }
+
+    private void linkDirectory(Path link, Path target) throws IOException {
+        if (this.isWindows()) {
+            try {
+                // Windows directory junctions do not require admin privileges
+                ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", "mklink", "/J", link.toAbsolutePath().toString(), target.toAbsolutePath().toString());
+                Process process = pb.start();
+                int exitCode = process.waitFor();
+                if (exitCode != 0) {
+                    throw new IOException("mklink /J exited with code " + exitCode);
+                }
+            } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new IOException("Failed to create directory junction for " + link.getFileName(), e);
+            }
+        } else {
+            Files.createSymbolicLink(link, target);
+        }
+    }
+
+    /**
+     * Detects the main server root directory by searching for key Fabric server files.
      */
     private Path detectServerRoot() {
         Path cwd = Paths.get("").toAbsolutePath();
         Path current = cwd;
         while (current != null) {
             if (Files.exists(current.resolve("fabric-server-launch.jar")) &&
-                Files.isDirectory(current.resolve("mods"))) {
-                Miniverse.LOGGER.info("Detected server root: {}", current);
+                    Files.isDirectory(current.resolve("mods"))) {
+                Miniverse.LOGGER.info("Detected shared server root: {}", current);
                 return current;
             }
             current = current.getParent();
@@ -191,124 +219,30 @@ public final class ServerLauncher {
     }
 
     /**
-     * Ensures the template exists, creates it if missing, and checks integrity.
+     * Checks that the shared runtime contains all required files/folders.
      */
-    private void ensureTemplateExists(Path serverRoot, Path templateDir) throws IOException {
-        if (Files.exists(templateDir)) {
-            Miniverse.LOGGER.info("Miniverse session template found at {}. Reusing.", templateDir);
-            checkTemplateIntegrity(templateDir);
-            return;
+    private void validateSharedRuntime(Path serverRoot) throws IOException {
+        List<String> missing = new ArrayList<>();
+        if (!Files.exists(serverRoot.resolve("fabric-server-launch.jar"))) {
+            missing.add("fabric-server-launch.jar");
         }
-        Miniverse.LOGGER.info("Miniverse session template not found. Creating at {}...", templateDir);
-        createTemplate(serverRoot, templateDir);
-        checkTemplateIntegrity(templateDir);
-    }
+        if (!Files.exists(serverRoot.resolve("server.jar"))) {
+            missing.add("server.jar");
+        }
+        if (!Files.isDirectory(serverRoot.resolve("libraries"))) {
+            missing.add("libraries/");
+        }
+        if (!Files.isDirectory(serverRoot.resolve("mods"))) {
+            missing.add("mods/");
+        }
+        if (!Files.isDirectory(serverRoot.resolve("config"))) {
+            missing.add("config/");
+        }
 
-    /**
-     * Creates the session template by copying only required files/folders.
-     */
-    private void createTemplate(Path serverRoot, Path templateDir) throws IOException {
-        Files.createDirectories(templateDir);
-        // Always try to copy both fabric-server-launch.jar and server.jar if present
-        String[] jars = {"fabric-server-launch.jar", "server.jar"};
-        for (String jar : jars) {
-            Path src = serverRoot.resolve(jar);
-            Path dest = templateDir.resolve(jar);
-            if (Files.exists(src)) {
-                Miniverse.LOGGER.info("Copying file to template: {}", jar);
-                Files.copy(src, dest);
-            } else {
-                Miniverse.LOGGER.warn("Template source missing: {}", src);
-            }
+        if (!missing.isEmpty()) {
+            throw new IOException("Shared server runtime is missing required files/directories: " + String.join(", ", missing));
         }
-        // Copy other included directories
-        for (String entry : TEMPLATE_INCLUDE) {
-            if (entry.equals("fabric-server-launch.jar") || entry.equals("server.jar")) continue;
-            Path src = serverRoot.resolve(entry);
-            Path dest = templateDir.resolve(entry);
-            if (Files.isDirectory(src)) {
-                Miniverse.LOGGER.info("Copying directory to template: {}", entry);
-                copyDirectoryFiltered(src, dest, TEMPLATE_EXCLUDE);
-            } else if (Files.exists(src)) {
-                Miniverse.LOGGER.info("Copying file to template: {}", entry);
-                Files.copy(src, dest);
-            } else {
-                Miniverse.LOGGER.warn("Template source missing: {}", src);
-            }
-        }
-    }
-
-    /**
-     * Copies the template to a new session directory, efficiently.
-     */
-    private void copyTemplateToSession(Path templateDir, Path sessionDir) throws IOException {
-        try (Stream<Path> stream = Files.walk(templateDir)) {
-            stream.forEach(source -> {
-                try {
-                    Path relative = templateDir.relativize(source);
-                    Path target = sessionDir.resolve(relative);
-                    if (Files.isDirectory(source)) {
-                        Files.createDirectories(target);
-                    } else {
-                        Files.copy(source, target);
-                    }
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-        }
-    }
-
-    /**
-     * Checks that the template contains all required files/folders.
-     */
-    private void checkTemplateIntegrity(Path templateDir) throws IOException {
-        Path fabricJar = templateDir.resolve("fabric-server-launch.jar");
-        Path serverJar = templateDir.resolve("server.jar");
-        Path mods = templateDir.resolve("mods");
-        Path libs = templateDir.resolve("libraries");
-        boolean hasFabric = Files.exists(fabricJar);
-        boolean hasServer = Files.exists(serverJar);
-        if (!hasFabric && !hasServer) {
-            throw new IOException("Template missing both fabric-server-launch.jar and server.jar: " + fabricJar + ", " + serverJar);
-        }
-        if (!hasFabric) {
-            Miniverse.LOGGER.warn("Template missing fabric-server-launch.jar: {}", fabricJar);
-        }
-        if (!hasServer) {
-            Miniverse.LOGGER.warn("Template missing server.jar: {}", serverJar);
-        }
-        if (!Files.isDirectory(mods)) {
-            throw new IOException("Template missing mods/ directory: " + mods);
-        }
-        if (!Files.isDirectory(libs)) {
-            throw new IOException("Template missing libraries/ directory: " + libs);
-        }
-        Miniverse.LOGGER.info("Template integrity check passed at {}", templateDir);
-    }
-
-    /**
-     * Recursively copies a directory, excluding any entries in the exclude set.
-     */
-    private void copyDirectoryFiltered(Path src, Path dest, Set<String> exclude) throws IOException {
-        Files.walk(src).forEach(source -> {
-            try {
-                Path relative = src.relativize(source);
-                String first = relative.getNameCount() > 0 ? relative.getName(0).toString() : "";
-                if (exclude.contains(first)) {
-                    Miniverse.LOGGER.info("Excluding from template: {}", source);
-                    return;
-                }
-                Path target = dest.resolve(relative);
-                if (Files.isDirectory(source)) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.copy(source, target);
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        Miniverse.LOGGER.info("Shared runtime integrity check passed at {}", serverRoot);
     }
 
     private void writeEula(Path workingDirectory) throws IOException {
@@ -339,8 +273,8 @@ public final class ServerLauncher {
         }
 
         SessionConfigJson.write(
-            workingDirectory.resolve("miniverse-session.json"),
-            SessionConfigJson.runtimeSession(session, group, groupsForConfig(session, group), settingsProperties, properties.getProperty("return.host"), this.parsePort(properties.getProperty("return.port"), 25565))
+                workingDirectory.resolve("miniverse-session.json"),
+                SessionConfigJson.runtimeSession(session, group, groupsForConfig(session, group), settingsProperties, properties.getProperty("return.host"), this.parsePort(properties.getProperty("return.port"), 25565))
         );
     }
 
@@ -368,8 +302,8 @@ public final class ServerLauncher {
         properties.setProperty("level-seed", Long.toString(session.getSeedPlan().sharedSeed()));
         properties.setProperty("level-type", "minecraft:normal");
         int maxPlayers = groupsForConfig(session, group).stream()
-            .mapToInt(SessionGroup::getPlayerCount)
-            .sum();
+                .mapToInt(SessionGroup::getPlayerCount)
+                .sum();
         properties.setProperty("max-players", Integer.toString(Math.max(1, maxPlayers)));
         properties.setProperty("motd", session.getGameType().getDisplayName() + " " + session.getSessionId() + " / " + group.getGroupLabel());
         properties.setProperty("network-compression-threshold", "256");
@@ -431,10 +365,6 @@ public final class ServerLauncher {
         return value.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
-    /**
-     * Returns the Java host and port configured for returning players.
-     * Fallbacks to 127.0.0.1:25565 if not explicitly set.
-     */
     private String resolveReturnHost() throws IOException {
         Properties properties = this.readMainServerProperties();
         String serverIp = properties.getProperty("server-ip", "").trim();

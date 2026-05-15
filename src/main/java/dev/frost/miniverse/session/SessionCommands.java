@@ -116,7 +116,7 @@ public final class SessionCommands {
         }
 
         source.sendFeedback(() -> Text.literal("Launching session " + sessionId + " in the background..."), true);
-        manager.launchSession(sessionId).whenComplete((launchedSession, error) -> source.getServer().execute(() -> {
+        manager.launchSession(sessionId, source.getServer()).whenComplete((launchedSession, error) -> source.getServer().execute(() -> {
             if (error != null) {
                 source.sendError(Text.literal("Failed to launch session " + sessionId + ": " + error.getMessage()));
                 Miniverse.LOGGER.error("Failed to launch session {}", sessionId, error);
@@ -209,6 +209,3 @@ public final class SessionCommands {
     }
 
 }
-
-
-

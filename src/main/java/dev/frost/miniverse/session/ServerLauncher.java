@@ -3,6 +3,7 @@ package dev.frost.miniverse.session;
 import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.common.MiniversePaths;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.nbt.NbtCompound;
 
 import java.io.IOException;
@@ -25,6 +26,10 @@ public final class ServerLauncher {
         // 1. Detect and validate the shared server runtime
         Path serverRoot = detectServerRoot();
         validateSharedRuntime(serverRoot);
+
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            this.syncLatestModJar(serverRoot);
+        }
 
         // 2. Prepare an isolated working directory for the session
         Path workingDirectory = this.prepareWorkingDirectory(session, group);
@@ -51,6 +56,10 @@ public final class ServerLauncher {
         command.add("fabric-server-launch.jar"); // Relative path works due to the symlink/hardlink
         command.add("nogui");
 
+        Miniverse.LOGGER.info("Backend launch command: {}", String.join(" ", command));
+
+        long startTime = System.currentTimeMillis();
+
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(workingDirectory.toFile()); // Execute from the isolated session directory
         builder.redirectOutput(workingDirectory.resolve("stdout.log").toFile());
@@ -64,10 +73,12 @@ public final class ServerLauncher {
             int exitCode = process.isAlive() ? -1 : process.exitValue();
             throw new IOException("Server failed to boot. Exit code: " + exitCode);
         }
+
+        long bootTime = System.currentTimeMillis() - startTime;
         String address = "127.0.0.1:" + port;
         group.markRunning(process, address);
 
-        Miniverse.LOGGER.info("Launched {} session {} for {} at {}", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address);
+        Miniverse.LOGGER.info("Launched {} session {} for {} at {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, bootTime);
         return new LaunchResult(group, process, port, workingDirectory);
     }
 
@@ -201,16 +212,69 @@ public final class ServerLauncher {
         }
     }
 
+    private void syncLatestModJar(Path serverRoot) {
+        Path buildLibs = MiniversePaths.projectRoot().resolve("build").resolve("libs");
+        if (!Files.exists(buildLibs)) {
+            return;
+        }
+
+        try {
+            Path latestJar = null;
+            long latestTime = 0;
+
+            try (var stream = Files.list(buildLibs)) {
+                for (Path file : stream.toList()) {
+                    if (file.toString().endsWith(".jar") && !file.toString().endsWith("-sources.jar") && !file.toString().endsWith("-javadoc.jar")) {
+                        long time = Files.getLastModifiedTime(file).toMillis();
+                        if (time > latestTime) {
+                            latestTime = time;
+                            latestJar = file;
+                        }
+                    }
+                }
+            }
+
+            if (latestJar != null) {
+                Path targetMods = serverRoot.resolve("mods");
+                Files.createDirectories(targetMods);
+                Path targetJar = targetMods.resolve(latestJar.getFileName().toString());
+
+                if (!Files.exists(targetJar) || Files.getLastModifiedTime(targetJar).toMillis() < latestTime) {
+                    Miniverse.LOGGER.info("Syncing latest mod build to dev runtime: {}", latestJar.getFileName());
+                    Files.copy(latestJar, targetJar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        } catch (IOException e) {
+            Miniverse.LOGGER.warn("Failed to sync latest mod jar to dev runtime", e);
+        }
+    }
+
     /**
      * Detects the main server root directory by searching for key Fabric server files.
      */
     private Path detectServerRoot() {
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            Path devRuntime = MiniversePaths.serverRuntimeRoot();
+            Miniverse.LOGGER.info("Development mode detected. Targeting dedicated runtime: {}", devRuntime);
+            if (!Files.exists(devRuntime.resolve("fabric-server-launch.jar"))) {
+                Miniverse.LOGGER.error("====================================================");
+                Miniverse.LOGGER.error("MISSING DEVELOPMENT RUNTIME!");
+                Miniverse.LOGGER.error("You must create a real Fabric server runtime in:");
+                Miniverse.LOGGER.error(devRuntime.toString());
+                Miniverse.LOGGER.error("This is required to launch backend sessions in dev.");
+                Miniverse.LOGGER.error("Run the Fabric server installer targeting this folder.");
+                Miniverse.LOGGER.error("====================================================");
+                throw new IllegalStateException("Missing development runtime at " + devRuntime);
+            }
+            return devRuntime;
+        }
+
         Path cwd = Paths.get("").toAbsolutePath();
         Path current = cwd;
         while (current != null) {
             if (Files.exists(current.resolve("fabric-server-launch.jar")) &&
                     Files.isDirectory(current.resolve("mods"))) {
-                Miniverse.LOGGER.info("Detected shared server root: {}", current);
+                Miniverse.LOGGER.info("Production mode detected. Targeting shared server root: {}", current);
                 return current;
             }
             current = current.getParent();
@@ -235,13 +299,16 @@ public final class ServerLauncher {
         if (!Files.isDirectory(serverRoot.resolve("mods"))) {
             missing.add("mods/");
         }
-        if (!Files.isDirectory(serverRoot.resolve("config"))) {
-            missing.add("config/");
-        }
 
         if (!missing.isEmpty()) {
             throw new IOException("Shared server runtime is missing required files/directories: " + String.join(", ", missing));
         }
+        
+        // Ensure config exists but don't fail if it doesn't, just create it
+        if (!Files.isDirectory(serverRoot.resolve("config"))) {
+            Files.createDirectories(serverRoot.resolve("config"));
+        }
+
         Miniverse.LOGGER.info("Shared runtime integrity check passed at {}", serverRoot);
     }
 

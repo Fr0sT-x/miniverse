@@ -1,5 +1,7 @@
 package dev.frost.miniverse.common;
 
+import net.fabricmc.loader.api.FabricLoader;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -14,6 +16,12 @@ public final class MiniversePaths {
         Path cached = projectRoot;
         if (cached != null) {
             return cached;
+        }
+
+        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            Path fallback = Paths.get("").toAbsolutePath();
+            projectRoot = fallback;
+            return fallback;
         }
 
         Path current = Paths.get("").toAbsolutePath();
@@ -31,7 +39,17 @@ public final class MiniversePaths {
     }
 
     public static Path runRoot() {
+        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            return projectRoot();
+        }
         return projectRoot().resolve("run");
+    }
+
+    public static Path serverRuntimeRoot() {
+        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            return projectRoot();
+        }
+        return runRoot().resolve("server-runtime");
     }
 
     public static Path sessionsRoot() {
@@ -47,6 +65,6 @@ public final class MiniversePaths {
     }
 
     public static Path miniverseConfig(String fileName) {
-        return projectRoot().resolve("config").resolve("miniverse").resolve(fileName);
+        return runRoot().resolve("config").resolve("miniverse").resolve(fileName);
     }
 }

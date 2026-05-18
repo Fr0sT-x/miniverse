@@ -12,13 +12,19 @@ import dev.frost.miniverse.session.SessionManager;
 import dev.frost.miniverse.session.SessionPermissions;
 import dev.frost.miniverse.session.SessionMemoryConfig;
 import dev.frost.miniverse.session.SessionServerConfig;
+import dev.frost.miniverse.session.SessionConfigJson;
+import dev.frost.miniverse.session.SessionRuntimeConfig;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import java.util.List;
 
@@ -37,7 +43,7 @@ public final class SessionNetwork {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_SESSION_ID, (payload, context) -> handleCreate(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCH_SESSION_ID, (payload, context) -> handleLaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.STOP_SESSION_ID, (payload, context) -> handleStop(context.server(), context.player(), payload));
-        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.GRANT_OP_ID, (payload, context) -> handleGrantOp(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CHANGE_SEED_ID, (payload, context) -> handleChangeSeed(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLEANUP_PLAYER_ID, (payload, context) -> handleCleanupPlayer(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCHER_SETTINGS_ID, (payload, context) -> handleLauncherSettings(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.SERVER_SETTINGS_ID, (payload, context) -> handleServerSettings(context.server(), context.player(), payload));
@@ -124,14 +130,22 @@ public final class SessionNetwork {
         sendSessionList(server, player);
     }
 
-    private static void handleGrantOp(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.GrantOpPayload payload) {
-        if (!SessionPermissions.checkCanManageSessions(player, "grant operator access")) {
+    private static void handleChangeSeed(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.ChangeSeedPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "change session seed")) {
             return;
         }
 
-        // Grant operator permission to the player
-        server.getPlayerManager().addToOperators(new net.minecraft.server.PlayerConfigEntry(player.getGameProfile()));
-        player.sendMessage(Text.literal("You have been granted operator access."), false);
+        String sessionId = payload.sessionId();
+        if (!SessionRuntimeConfig.isSessionServer() && SessionManager.getInstance().getSession(sessionId).isEmpty()) {
+            player.sendMessage(Text.literal("Unknown session '" + sessionId + "'."), false);
+            return;
+        }
+
+        SessionRegistry.markSeedChangeRequested(sessionId);
+        Text message = Text.literal("Seed is changing for session " + sessionId + ". A new world will generate in the background.").formatted(Formatting.GREEN);
+        player.sendMessage(message, false);
+        player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 1.0F, 1.0F);
+        sendSessionList(server, player);
     }
 
     private static void handleCleanupPlayer(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CleanupPlayerPayload payload) {
@@ -141,9 +155,11 @@ public final class SessionNetwork {
 
         // Clear the player's inventory
         player.getInventory().clear();
+        player.currentScreenHandler.sendContentUpdates();
 
         // Fill the player's hunger
         player.getHungerManager().setFoodLevel(20);
+        player.getHungerManager().setSaturationLevel(20.0F);
 
         player.sendMessage(Text.literal("Your inventory has been cleaned and hunger restored."), false);
     }
@@ -210,9 +226,15 @@ public final class SessionNetwork {
         NbtCompound root = new NbtCompound();
         NbtList sessions = new NbtList();
 
-        List<SessionRegistry.Snapshot> snapshots = SessionRegistry.loadSnapshots();
+        if (SessionRuntimeConfig.isSessionServer()) {
+            SessionRuntimeConfig.getSessionJson()
+                .map(SessionNetwork::runtimeSessionToNbt)
+                .ifPresent(sessions::add);
+        }
+
+        List<SessionRegistry.Snapshot> snapshots = sessions.isEmpty() ? SessionRegistry.loadSnapshots() : List.of();
         if (snapshots.isEmpty()) {
-            for (GameSession session : SessionManager.getInstance().getSessions()) {
+            for (GameSession session : sessions.isEmpty() ? SessionManager.getInstance().getSessions() : List.<GameSession>of()) {
                 NbtCompound entry = new NbtCompound();
                 entry.putString("id", session.getSessionId());
                 entry.putString("game", session.getGameType().getDisplayName());
@@ -285,5 +307,35 @@ public final class SessionNetwork {
         root.put("server", serverSettings);
 
         ServerPlayNetworking.send(player, new NetworkConstants.SessionListPayload(root));
+    }
+
+    private static NbtCompound runtimeSessionToNbt(JsonObject json) {
+        NbtCompound entry = new NbtCompound();
+        entry.putString("id", SessionConfigJson.string(json, "sessionId", ""));
+        entry.putString("game", SessionConfigJson.string(json, "gameDisplayName", SessionConfigJson.string(json, "gameId", "")));
+        entry.putString("state", "RUNNING");
+        entry.putLong("seed", SessionConfigJson.longValue(json, "seed", 0L));
+        entry.putInt("playerCount", runtimePlayerCount(json));
+        return entry;
+    }
+
+    private static int runtimePlayerCount(JsonObject json) {
+        JsonArray teams = json.has("teams") && json.get("teams").isJsonArray()
+            ? json.getAsJsonArray("teams")
+            : new JsonArray();
+
+        int count = 0;
+        for (var teamElement : teams) {
+            if (!teamElement.isJsonObject()) {
+                continue;
+            }
+            JsonObject team = teamElement.getAsJsonObject();
+            if (team.has("members") && team.get("members").isJsonArray()) {
+                count += team.getAsJsonArray("members").size();
+            } else {
+                count += SessionConfigJson.integer(team, "playerCount", 0);
+            }
+        }
+        return count;
     }
 }

@@ -48,8 +48,10 @@ After changing any framework / implementing new frameworks, make sure to update 
 - `minigame/core/vanilla`: adapter for mirroring custom teams into vanilla scoreboard teams.
 - `network/SessionNetwork`: server-side GUI payload handlers and session snapshot creation.
 - `session/SessionManager`: in-memory session registry, player assignment, backend launching, transfer packets, and stop/remove lifecycle.
-- `session/ServerLauncher`: prepares backend working dirs, writes `miniverse-session.json` and `server.properties`, builds the child JVM command, and waits for ports.
-- `session/SessionRegistry`: persists session snapshots under `run/sessions/<sessionId>/session.json`; still reads legacy `session.properties`.
+- `session/ServerLauncher`: prepares backend working dirs, links them to a standalone Fabric server runtime, writes `miniverse-session.json`, `ops.json`, and `server.properties`, builds the child JVM command, and waits for ports.
+- `session/SessionOperatorSnapshot`: captures assigned players who are vanilla operators on the main server before backend launch and writes equivalent backend `ops.json` entries.
+- `session/SessionRegistry`: persists session snapshots under `run/sessions/<sessionId>/session.json`; still reads legacy `session.properties`. Seed-change restarts are coordinated through registry lifecycle flags and per-group replacement targets so the main server can stage a new backend while players remain in the old backend, then the old backend transfers them directly to the replacement.
+- `common/MiniverseFileUtils`: shared filesystem helpers for link-aware session cleanup. Use this for deleting session folders so Windows junctions are removed as links instead of traversed into the shared runtime.
 - `client/gui`: session selector, setup screens, session snapshot cache, and NBT plan builders.
 
 ## Runtime Architecture
@@ -60,8 +62,9 @@ Main server flow:
 2. Commands and `SessionNetwork` create a `GameSession` through `SessionCreationService`.
 3. `SessionPlan` validates settings, seed plan, teams, roles, and launch intent.
 4. `SessionManager.launchSession()` launches backend servers according to the session topology.
-5. `ServerLauncher` writes runtime config and starts child Fabric servers.
-6. Main server transfers players using `ServerTransferS2CPacket`.
+5. `SessionManager.launchSession()` captures assigned main-server operators before players transfer; `ServerLauncher` writes those entries to each child server's `ops.json`.
+6. `ServerLauncher` writes runtime config and starts child Fabric dedicated servers through `java -jar fabric-server-launch.jar nogui`.
+7. Main server transfers players using `ServerTransferS2CPacket`.
 
 Backend server flow:
 
@@ -70,6 +73,8 @@ Backend server flow:
 3. On player join, `SessionBootstrapper` reads `miniverse-session.json`, creates the runtime if needed, applies settings once, adds expected participants, assigns team/role data, and enters the generic lifecycle start sequence when `canStart()` passes.
 4. `MatchLifecycleController` freezes participants, clears inventories, fills food/saturation, shows the minigame title and countdown, then invokes the gamemode `startGame()` callback.
 5. `MinigameEventRouter` first lets `MatchLifecycleController` suppress frozen interactions, then forwards Fabric events only to the active runtime and only through opt-in interfaces.
+6. Backend session GUI requests are answered from the local `miniverse-session.json`; child servers should not rely on the main server's session registry being present in their working directory.
+7. Backend lifecycle stop/return flags must be written to the main server's session registry root recorded in `miniverse-session.json`. This lets the main server's join routing see `stopRequested`/`returnComplete` and prevents returned players from being bounced back into the finished session.
 
 ## Match Lifecycle Framework
 
@@ -122,12 +127,36 @@ Topology belongs to the gamemode. Session code reads it through `SessionGameDesc
 - `SHARED_WORLD`: `SessionManager` launches one primary backend and attaches other groups to that backend. Runtime config includes all groups.
 - `ISOLATED_WORLD`: each group launches its own backend with the same seed plan.
 
+Operator sync follows the same topology boundary. Shared-world backends receive OP entries for all assigned groups hosted by that backend. Isolated-world backends receive OP entries only for the assigned players in their own group.
+
+IDE-launched backend sessions also receive `-Dminiverse.devSession=true` when the main server dev bypass is enabled. A standalone backend is not a Fabric/Loom development environment, so this explicit flag is the only dev-only signal it should use. In that mode, joining players are granted temporary backend operator access dynamically; production continues to rely on `ops.json` snapshots.
+
 Examples:
 
 - Manhunt, Bounty Hunt, Resource Sprint, Death Swap: shared-world.
 - Speedrun: isolated-world.
 
 Do not hardcode topology rules in generic framework systems. Add topology-specific behavior behind gamemode definitions or narrow session abstractions.
+
+## Backend Server Runtime
+
+Backend sessions always launch real standalone Fabric dedicated servers. Do not reintroduce Loom launch internals, `KnotServer`, `devlaunchinjector`, `launch.cfg`, or IDE classpath launching for sessions.
+
+Runtime layout:
+
+- Shared runtime: `fabric-server-launch.jar`, `server.jar`, `libraries/`, `mods/`, `config/`, and optionally `versions/`.
+- Session folder: `world/`, `logs/`, `server.properties`, `eula.txt`, `ops.json`, and `miniverse-session.json`.
+
+Development runtime discovery:
+
+- `-Dminiverse.serverRuntime=<path>` or `MINIVERSE_SERVER_RUNTIME` wins first.
+- In dev, the preferred default is `<project>/server-runtime`.
+- `<project>/run/server-runtime` remains supported as a legacy fallback.
+- In production, the server root is the working directory tree containing `fabric-server-launch.jar` and `mods/`.
+
+Windows backend sessions use directory junctions for runtime directories and hard links for runtime jars when possible. Cleanup must delete junctions as links and must not recurse through them into the shared runtime.
+
+In development, `ServerLauncher` runs `gradlew remapJar --no-daemon` before each backend launch, removes the previous Miniverse jar from the runtime `mods/` folder, and copies the freshly remapped jar from `build/libs`. Other runtime mods, such as Fabric API, must be left intact.
 
 ## Registration
 
@@ -267,6 +296,7 @@ Event rules:
 - Keep `register()` methods idempotent.
 - Use `Properties` for backend bootstrap compatibility and JSON/NBT for structured session data.
 - Use UUIDs for long-lived identity, not `ServerPlayerEntity`.
+- Preserve main-server operator status at backend launch time through `SessionOperatorSnapshot`; session servers are isolated processes and must receive their own `ops.json`.
 - Framework systems should depend on interfaces/definitions, not concrete gamemode classes.
 - Cleanup matters: participants, scoreboards, vanilla teams, pending respawn maps, cooldown maps, and launched processes all need explicit lifecycle handling.
 

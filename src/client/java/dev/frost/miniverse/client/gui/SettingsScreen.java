@@ -162,11 +162,11 @@ public class SettingsScreen extends Screen {
                 .build();
             this.addDrawableChild(stopButton);
 
-            ButtonWidget opButton = ButtonWidget.builder(Text.literal("👑 Grant OP"), button -> this.grantOp(entry.id))
+            ButtonWidget changeSeedButton = ButtonWidget.builder(Text.literal("Change seed"), button -> this.changeSeed(entry.id))
                 .dimensions(buttonX + 95 + BUTTON_GAP, buttonY, 85, BUTTON_HEIGHT)
                 .build();
-            opButton.setTooltip(Tooltip.of(Text.literal("Grant operator role to yourself on this session.")));
-            this.addDrawableChild(opButton);
+            changeSeedButton.setTooltip(Tooltip.of(Text.literal("Restart this session with a new world seed.")));
+            this.addDrawableChild(changeSeedButton);
 
             y += SESSION_ROW_HEIGHT + ROW_GAP;
         }
@@ -175,41 +175,43 @@ public class SettingsScreen extends Screen {
     private void initServerSettings(Layout layout) {
         int startY = layout.listY + 6;
         int rowHeight = 28;
+        int labelWidth = 130;
         int fieldWidth = 90;
         int toggleWidth = 190;
         int saveWidth = 70;
         int x = layout.contentX;
+        int fieldX = x + labelWidth;
         int y = startY;
 
-        this.viewDistanceField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("View Distance"));
+        this.viewDistanceField = new TextFieldWidget(this.textRenderer, fieldX, y, fieldWidth, 20, Text.literal("View Distance"));
         this.viewDistanceField.setMaxLength(2);
         this.viewDistanceField.setText(String.valueOf(this.viewDistanceValue));
         this.addDrawableChild(this.viewDistanceField);
 
         ButtonWidget saveViewDistance = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveViewDistance())
-            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .dimensions(fieldX + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
         saveViewDistance.setTooltip(Tooltip.of(Text.literal("Controls how far chunks are sent to players.")));
         y += rowHeight;
 
-        this.simulationDistanceField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Simulation Distance"));
+        this.simulationDistanceField = new TextFieldWidget(this.textRenderer, fieldX, y, fieldWidth, 20, Text.literal("Simulation Distance"));
         this.simulationDistanceField.setMaxLength(2);
         this.simulationDistanceField.setText(String.valueOf(this.simulationDistanceValue));
         this.addDrawableChild(this.simulationDistanceField);
 
         ButtonWidget saveSimulationDistance = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveSimulationDistance())
-            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .dimensions(fieldX + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
         saveSimulationDistance.setTooltip(Tooltip.of(Text.literal("Controls how far entities tick and spawn.")));
         y += rowHeight;
 
-        this.spawnProtectionField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Spawn Protection"));
+        this.spawnProtectionField = new TextFieldWidget(this.textRenderer, fieldX, y, fieldWidth, 20, Text.literal("Spawn Protection"));
         this.spawnProtectionField.setMaxLength(3);
         this.spawnProtectionField.setText(String.valueOf(this.spawnProtectionValue));
         this.addDrawableChild(this.spawnProtectionField);
 
         ButtonWidget saveSpawnProtection = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveSpawnProtection())
-            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .dimensions(fieldX + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
         saveSpawnProtection.setTooltip(Tooltip.of(Text.literal("Prevents block edits near spawn.")));
         y += rowHeight;
@@ -294,24 +296,24 @@ public class SettingsScreen extends Screen {
         saveMemoryEnabled.setTooltip(Tooltip.of(Text.literal("Applies memory limit toggle.")));
         y += rowHeight;
 
-        this.maxHeapField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Max Heap"));
+        this.maxHeapField = new TextFieldWidget(this.textRenderer, fieldX, y, fieldWidth, 20, Text.literal("Max Heap"));
         this.maxHeapField.setMaxLength(3);
         this.maxHeapField.setText(String.valueOf(this.maxHeapValue));
         this.addDrawableChild(this.maxHeapField);
 
         ButtonWidget saveMaxHeap = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveMaxHeap())
-            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .dimensions(fieldX + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
         saveMaxHeap.setTooltip(Tooltip.of(Text.literal("Maximum heap size per session (GB).")));
         y += rowHeight;
 
-        this.initialHeapField = new TextFieldWidget(this.textRenderer, x, y, fieldWidth, 20, Text.literal("Initial Heap"));
+        this.initialHeapField = new TextFieldWidget(this.textRenderer, fieldX, y, fieldWidth, 20, Text.literal("Initial Heap"));
         this.initialHeapField.setMaxLength(3);
         this.initialHeapField.setText(String.valueOf(this.initialHeapValue));
         this.addDrawableChild(this.initialHeapField);
 
         ButtonWidget saveInitialHeap = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveInitialHeap())
-            .dimensions(x + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
+            .dimensions(fieldX + fieldWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
         saveInitialHeap.setTooltip(Tooltip.of(Text.literal("Initial heap size per session (GB).")));
     }
@@ -532,7 +534,7 @@ public class SettingsScreen extends Screen {
                 }
             }
         } else if (this.activeTab == SettingsTab.SERVER) {
-            context.drawText(this.textRenderer, Text.literal("Hover Save buttons for details."), layout.contentX, layout.listY - 14, TEXT_MUTED, false);
+            this.drawServerFieldLabels(context, layout);
         } else {
             context.drawText(this.textRenderer, Text.literal("Max Concurrent Launches: backend servers allowed to start at the same time"), layout.contentX, layout.listY, TEXT_PRIMARY, false);
             context.drawText(this.textRenderer, Text.literal("Current server value: " + SessionSnapshotData.maxConcurrentLaunches()), layout.contentX, layout.listY + 70, TEXT_PRIMARY, false);
@@ -546,6 +548,22 @@ public class SettingsScreen extends Screen {
         }
 
         super.render(context, mouseX, mouseY, delta);
+    }
+
+    private void drawServerFieldLabels(DrawContext context, Layout layout) {
+        int x = layout.contentX;
+        int y = layout.listY + 6;
+        int rowHeight = 28;
+
+        context.drawText(this.textRenderer, Text.literal("View distance:"), x, y + 6, TEXT_PRIMARY, false);
+        y += rowHeight;
+        context.drawText(this.textRenderer, Text.literal("Simulation distance:"), x, y + 6, TEXT_PRIMARY, false);
+        y += rowHeight;
+        context.drawText(this.textRenderer, Text.literal("Spawn protection:"), x, y + 6, TEXT_PRIMARY, false);
+        y += rowHeight * 6 + 6;
+        context.drawText(this.textRenderer, Text.literal("Max memory:"), x, y + 6, TEXT_PRIMARY, false);
+        y += rowHeight;
+        context.drawText(this.textRenderer, Text.literal("Min memory:"), x, y + 6, TEXT_PRIMARY, false);
     }
 
     private boolean syncSessionsFromSnapshot() {
@@ -617,14 +635,14 @@ public class SettingsScreen extends Screen {
         this.statusMessage = "Stopping session " + sessionId + " and returning to main server...";
     }
 
-    private void grantOp(String sessionId) {
+    private void changeSeed(String sessionId) {
         if (this.client.player == null) {
             this.statusMessage = "Not connected to server.";
             return;
         }
 
-        ClientPlayNetworking.send(new NetworkConstants.GrantOpPayload(sessionId));
-        this.statusMessage = "Operator access granted for session " + sessionId + ".";
+        ClientPlayNetworking.send(new NetworkConstants.ChangeSeedPayload(sessionId));
+        this.statusMessage = "Changing seed for session " + sessionId + "...";
     }
 
     @Override

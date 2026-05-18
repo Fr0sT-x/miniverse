@@ -32,8 +32,12 @@ public final class SessionManager {
     private final Map<String, GameSession> sessions = new LinkedHashMap<>();
     private final Map<UUID, String> playerSessions = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> sessionCounters = new ConcurrentHashMap<>();
+    private final Map<String, List<PendingBackendStop>> pendingSeedChangeStops = new ConcurrentHashMap<>();
     private final ThreadPoolExecutor launcherExecutor = this.createLauncherExecutor();
     private final ServerLauncher serverLauncher = new ServerLauncher();
+
+    private record PendingBackendStop(String groupLabel, Process process) {
+    }
 
     private SessionManager() {
         this.registerShutdownHook();
@@ -211,10 +215,11 @@ public final class SessionManager {
         session.setState(SessionState.LAUNCHING);
 
         List<SessionGroup> groups = new ArrayList<>(session.snapshotGroups());
+        SessionOperatorSnapshot operatorSnapshot = SessionOperatorSnapshot.capture(server, groups);
 
         if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD && groups.size() > 0) {
             SessionGroup primary = groups.get(0);
-            CompletableFuture<SessionGroup> primaryLaunch = this.launchGroupAsync(session, primary);
+            CompletableFuture<SessionGroup> primaryLaunch = this.launchGroupAsync(session, primary, operatorSnapshot.forGroups(groups));
 
             return primaryLaunch.thenApply(launchedGroup -> {
                 BackendInstance backend = launchedGroup.getBackendInstance();
@@ -237,7 +242,7 @@ public final class SessionManager {
 
         List<CompletableFuture<SessionGroup>> launches = new ArrayList<>();
         for (SessionGroup group : groups) {
-            launches.add(this.launchGroupAsync(session, group));
+            launches.add(this.launchGroupAsync(session, group, operatorSnapshot.forGroups(List.of(group))));
         }
 
         return CompletableFuture.allOf(launches.toArray(new CompletableFuture[0]))
@@ -273,11 +278,196 @@ public final class SessionManager {
         }
 
         session.setState(SessionState.STOPPING);
+        this.stopBackendProcesses(session);
+        session.setState(SessionState.STOPPED);
+        this.persistRegistry();
+    }
+
+    public CompletableFuture<GameSession> changeSeedAndRelaunchSession(String sessionId, MinecraftServer server) {
+        SeedPlan seedPlan = SeedPlan.randomSameSeed();
+        synchronized (this) {
+            GameSession session = this.sessions.get(sessionId);
+            if (session == null) {
+                return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown session: " + sessionId));
+            }
+            if (session.isEmpty()) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Session has no assigned players: " + sessionId));
+            }
+
+            session.setState(SessionState.STOPPING);
+            this.stopBackendProcesses(session);
+            session.setSeedPlan(seedPlan);
+            session.setState(SessionState.CREATED);
+            SessionRegistry.clearStopRequested(sessionId);
+            SessionRegistry.clearReturnComplete(sessionId);
+            SessionRegistry.clearSeedChangeRequested(sessionId);
+            this.persistRegistry();
+            Miniverse.LOGGER.info("Changing seed for session {} to {}", sessionId, seedPlan.sharedSeed());
+        }
+
+        return this.launchSession(sessionId, server);
+    }
+
+    public CompletableFuture<GameSession> stageSeedChangeRelaunch(String sessionId, MinecraftServer server) {
+        SeedPlan seedPlan = SeedPlan.randomSameSeed();
+        SeedPlan previousSeedPlan;
+        GameSession session;
+        List<SessionGroup> groups;
+        synchronized (this) {
+            session = this.sessions.get(sessionId);
+            if (session == null) {
+                return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown session: " + sessionId));
+            }
+            if (session.isEmpty()) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Session has no assigned players: " + sessionId));
+            }
+            if (session.getState() == SessionState.LAUNCHING) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Seed change is already staging for " + sessionId));
+            }
+
+            groups = new ArrayList<>(session.snapshotGroups());
+            previousSeedPlan = session.getSeedPlan();
+            this.pendingSeedChangeStops.put(sessionId, pendingStopsFor(session, groups));
+            SessionRegistry.clearSeedChangeTargets(sessionId);
+            SessionRegistry.clearReturnComplete(sessionId);
+            session.setSeedPlan(seedPlan);
+            session.setState(SessionState.LAUNCHING);
+            this.persistRegistry();
+            Miniverse.LOGGER.info("Staging new seed for session {}: {}", sessionId, seedPlan.sharedSeed());
+        }
+
+        SessionOperatorSnapshot operatorSnapshot = SessionOperatorSnapshot.capture(server, groups);
+        String directorySuffix = "seed_" + Long.toUnsignedString(seedPlan.sharedSeed()) + "_" + System.currentTimeMillis();
+
+        if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD) {
+            SessionGroup originalPrimary = groups.getFirst();
+            SessionGroup replacementPrimary = replacementGroup(session, originalPrimary, seedPlan);
+            return this.launchReplacementGroupAsync(session, replacementPrimary, operatorSnapshot.forGroups(groups), directorySuffix)
+                .thenApply(launchedGroup -> {
+                    synchronized (this) {
+                        BackendInstance backend = launchedGroup.getBackendInstance();
+                        originalPrimary.attachBackend(backend);
+                        for (int i = 1; i < groups.size(); i++) {
+                            groups.get(i).attachBackend(backend);
+                        }
+                        session.setState(SessionState.RUNNING);
+                        this.persistRegistry();
+                        SessionRegistry.setSeedChangeTarget(sessionId, originalPrimary.getGroupLabel(), "127.0.0.1", launchedGroup.getPort());
+                    }
+                    return session;
+                })
+                .exceptionally(error -> {
+                    synchronized (this) {
+                        session.setSeedPlan(previousSeedPlan);
+                        session.setState(SessionState.RUNNING);
+                        this.pendingSeedChangeStops.remove(sessionId);
+                        SessionRegistry.clearStopRequested(sessionId);
+                        SessionRegistry.clearSeedChangeRequested(sessionId);
+                        SessionRegistry.clearSeedChangeTargets(sessionId);
+                        this.persistRegistry();
+                    }
+                    this.notifyPlayersOfFailure(session, server, error.getCause() != null ? error.getCause().getMessage() : error.getMessage());
+                    throw new RuntimeException(error);
+                });
+        }
+
+        Map<String, SessionGroup> replacements = new LinkedHashMap<>();
+        List<CompletableFuture<SessionGroup>> launches = new ArrayList<>();
+        for (SessionGroup group : groups) {
+            SessionGroup replacement = replacementGroup(session, group, seedPlan);
+            replacements.put(group.getGroupLabel(), replacement);
+            launches.add(this.launchReplacementGroupAsync(session, replacement, operatorSnapshot.forGroups(List.of(group)), directorySuffix));
+        }
+
+        return CompletableFuture.allOf(launches.toArray(new CompletableFuture[0]))
+            .thenApply(ignored -> {
+                synchronized (this) {
+                    for (SessionGroup group : groups) {
+                        SessionGroup replacement = replacements.get(group.getGroupLabel());
+                        group.attachBackend(replacement.getBackendInstance());
+                        SessionRegistry.setSeedChangeTarget(sessionId, group.getGroupLabel(), "127.0.0.1", replacement.getPort());
+                    }
+                    session.setState(SessionState.RUNNING);
+                    this.persistRegistry();
+                }
+                return session;
+            })
+            .exceptionally(error -> {
+                synchronized (this) {
+                    session.setSeedPlan(previousSeedPlan);
+                    session.setState(SessionState.RUNNING);
+                    this.pendingSeedChangeStops.remove(sessionId);
+                    SessionRegistry.clearStopRequested(sessionId);
+                    SessionRegistry.clearSeedChangeRequested(sessionId);
+                    SessionRegistry.clearSeedChangeTargets(sessionId);
+                    this.persistRegistry();
+                }
+                this.notifyPlayersOfFailure(session, server, error.getCause() != null ? error.getCause().getMessage() : error.getMessage());
+                throw new RuntimeException(error);
+            });
+    }
+
+    public synchronized void completeSeedChangeRelaunch(String sessionId) {
+        List<PendingBackendStop> pending = this.pendingSeedChangeStops.remove(sessionId);
+        if (pending != null) {
+            for (PendingBackendStop backend : pending) {
+                stopProcess(backend.process());
+            }
+        }
+        SessionRegistry.clearStopRequested(sessionId);
+        SessionRegistry.clearReturnComplete(sessionId);
+        SessionRegistry.clearSeedChangeRequested(sessionId);
+        SessionRegistry.clearSeedChangeTargets(sessionId);
+        this.persistRegistry();
+    }
+
+    public synchronized List<String> expectedSeedChangeCompletionGroups(String sessionId) {
+        GameSession session = this.sessions.get(sessionId);
+        if (session == null || session.isEmpty()) {
+            return List.of();
+        }
+        List<SessionGroup> groups = new ArrayList<>(session.snapshotGroups());
+        if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD) {
+            return List.of(groups.getFirst().getGroupLabel());
+        }
+        return groups.stream().map(SessionGroup::getGroupLabel).toList();
+    }
+
+    private void stopBackendProcesses(GameSession session) {
         for (SessionGroup group : session.snapshotGroups()) {
             this.serverLauncher.stop(group);
         }
-        session.setState(SessionState.STOPPED);
-        this.persistRegistry();
+    }
+
+    private static List<PendingBackendStop> pendingStopsFor(GameSession session, List<SessionGroup> groups) {
+        if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD) {
+            SessionGroup primary = groups.getFirst();
+            return primary.getProcess() == null ? List.of() : List.of(new PendingBackendStop(primary.getGroupLabel(), primary.getProcess()));
+        }
+        return groups.stream()
+            .filter(group -> group.getProcess() != null)
+            .map(group -> new PendingBackendStop(group.getGroupLabel(), group.getProcess()))
+            .toList();
+    }
+
+    private static SessionGroup replacementGroup(GameSession session, SessionGroup group, SeedPlan seedPlan) {
+        return new SessionGroup(session.getSessionId(), session.getGameType(), seedPlan, group.getPlannedTeam());
+    }
+
+    private static void stopProcess(Process process) {
+        if (process == null || !process.isAlive()) {
+            return;
+        }
+        process.destroy();
+        try {
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                process.waitFor(10, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+        }
     }
 
     public synchronized void removeSession(String sessionId) {
@@ -349,10 +539,33 @@ public final class SessionManager {
     }
 
     private CompletableFuture<SessionGroup> launchGroupAsync(GameSession session, SessionGroup group) {
+        return this.launchGroupAsync(session, group, SessionOperatorSnapshot.empty());
+    }
+
+    private CompletableFuture<SessionGroup> launchGroupAsync(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot) {
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
-                    return this.serverLauncher.launch(session, group).group();
+                    return this.serverLauncher.launch(session, group, operatorSnapshot).group();
+                } catch (IOException e) {
+                    group.markFailed(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+            }, this.launcherExecutor);
+        } catch (RejectedExecutionException e) {
+            String message = this.launchCapacityMessage(session, group);
+            group.markFailed(message);
+            this.persistRegistry();
+            Miniverse.LOGGER.warn(message);
+            return CompletableFuture.failedFuture(new IllegalStateException(message, e));
+        }
+    }
+
+    private CompletableFuture<SessionGroup> launchReplacementGroupAsync(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, String directorySuffix) {
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return this.serverLauncher.launch(session, group, operatorSnapshot, directorySuffix, false).group();
                 } catch (IOException e) {
                     group.markFailed(e.getMessage());
                     throw new RuntimeException(e);

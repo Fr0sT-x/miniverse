@@ -16,7 +16,7 @@ public final class SessionGroup {
     private final String primaryPlayerName;
     private final String sessionId;
     private final SessionGameDescriptor gameType;
-    private final SeedPlan seedPlan;
+    private SeedPlan seedPlan;
     private final PlannedTeam plannedTeam;
     private final BackendInstance backendInstance = new BackendInstance();
 
@@ -79,6 +79,13 @@ public final class SessionGroup {
 
     public SeedPlan getSeedPlan() {
         return this.seedPlan;
+    }
+
+    public synchronized void setSeedPlan(SeedPlan seedPlan) {
+        if (seedPlan == null) {
+            throw new IllegalArgumentException("Seed plan cannot be null.");
+        }
+        this.seedPlan = seedPlan;
     }
 
     public BackendInstance getBackendInstance() {

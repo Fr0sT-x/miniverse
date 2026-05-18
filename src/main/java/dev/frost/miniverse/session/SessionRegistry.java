@@ -3,6 +3,7 @@ package dev.frost.miniverse.session;
 import dev.frost.miniverse.Miniverse;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.frost.miniverse.common.MiniverseFileUtils;
 import dev.frost.miniverse.common.MiniversePaths;
 
 import java.io.IOException;
@@ -12,9 +13,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 public final class SessionRegistry {
     private static final String SESSION_JSON_FILE_NAME = "session.json";
@@ -26,7 +29,10 @@ public final class SessionRegistry {
     public record Snapshot(String sessionId, String game, String state, long seed, int playerCount, List<String> players) {
     }
 
-    public record StopState(String sessionId, boolean stopRequested, boolean returnComplete) {
+    public record StopState(String sessionId, boolean stopRequested, boolean returnComplete, boolean seedChangeRequested) {
+    }
+
+    public record SeedChangeTarget(String host, int port) {
     }
 
     public static synchronized void writeSnapshot(Collection<GameSession> sessions) {
@@ -79,8 +85,9 @@ public final class SessionRegistry {
                     JsonObject object = json.get();
                     boolean stopRequested = SessionConfigJson.lifecycleFlag(object, "stopRequested");
                     boolean returnComplete = SessionConfigJson.lifecycleFlag(object, "returnComplete");
-                    if (stopRequested || returnComplete) {
-                        stopStates.add(new StopState(sessionId, stopRequested, returnComplete));
+                    boolean seedChangeRequested = SessionConfigJson.lifecycleFlag(object, "seedChangeRequested");
+                    if (stopRequested || returnComplete || seedChangeRequested) {
+                        stopStates.add(new StopState(sessionId, stopRequested, returnComplete, seedChangeRequested));
                     }
                 });
         } catch (IOException e) {
@@ -112,6 +119,86 @@ public final class SessionRegistry {
 
     public static synchronized boolean isReturnComplete(String sessionId) {
         return readJson(sessionId).map(json -> SessionConfigJson.lifecycleFlag(json, "returnComplete")).orElse(false);
+    }
+
+    public static synchronized void markSeedChangeRequested(String sessionId) {
+        updateSeedChangeRequested(sessionId, true);
+    }
+
+    public static synchronized void clearSeedChangeRequested(String sessionId) {
+        updateSeedChangeRequested(sessionId, false);
+    }
+
+    public static synchronized boolean isSeedChangeRequested(String sessionId) {
+        return readJson(sessionId).map(json -> SessionConfigJson.lifecycleFlag(json, "seedChangeRequested")).orElse(false);
+    }
+
+    public static synchronized void setSeedChangeTarget(String sessionId, String groupLabel, String host, int port) {
+        if (groupLabel == null || groupLabel.isBlank() || host == null || host.isBlank() || port <= 0) {
+            return;
+        }
+        updateLifecycleObject(sessionId, lifecycle -> {
+            JsonObject targets = lifecycle.has("seedChangeTargets") && lifecycle.get("seedChangeTargets").isJsonObject()
+                ? lifecycle.getAsJsonObject("seedChangeTargets")
+                : new JsonObject();
+            JsonObject target = new JsonObject();
+            target.addProperty("host", host);
+            target.addProperty("port", port);
+            targets.add(groupLabel, target);
+            lifecycle.add("seedChangeTargets", targets);
+        });
+    }
+
+    public static synchronized Optional<SeedChangeTarget> getSeedChangeTarget(String sessionId, String groupLabel) {
+        if (groupLabel == null || groupLabel.isBlank()) {
+            return Optional.empty();
+        }
+        return readJson(sessionId).flatMap(json -> {
+            JsonObject lifecycle = lifecycleObject(json);
+            if (!lifecycle.has("seedChangeTargets") || !lifecycle.get("seedChangeTargets").isJsonObject()) {
+                return Optional.empty();
+            }
+            JsonObject targets = lifecycle.getAsJsonObject("seedChangeTargets");
+            if (!targets.has(groupLabel) || !targets.get(groupLabel).isJsonObject()) {
+                return Optional.empty();
+            }
+            JsonObject target = targets.getAsJsonObject(groupLabel);
+            String host = SessionConfigJson.string(target, "host", "127.0.0.1");
+            int port = SessionConfigJson.integer(target, "port", 0);
+            return port > 0 ? Optional.of(new SeedChangeTarget(host, port)) : Optional.empty();
+        });
+    }
+
+    public static synchronized void clearSeedChangeTargets(String sessionId) {
+        updateLifecycleObject(sessionId, lifecycle -> {
+            lifecycle.remove("seedChangeTargets");
+            lifecycle.remove("seedChangeCompletedGroups");
+        });
+    }
+
+    public static synchronized void markSeedChangeTransferComplete(String sessionId, String groupLabel) {
+        if (groupLabel == null || groupLabel.isBlank()) {
+            return;
+        }
+        updateLifecycleObject(sessionId, lifecycle -> {
+            Set<String> completed = seedChangeCompletedGroups(lifecycle);
+            completed.add(groupLabel);
+            JsonArray array = new JsonArray();
+            completed.forEach(array::add);
+            lifecycle.add("seedChangeCompletedGroups", array);
+        });
+    }
+
+    public static synchronized boolean areSeedChangeTransfersComplete(String sessionId, Collection<String> expectedGroupLabels) {
+        if (expectedGroupLabels == null || expectedGroupLabels.isEmpty()) {
+            return false;
+        }
+        Optional<JsonObject> json = readJson(sessionId);
+        if (json.isEmpty()) {
+            return false;
+        }
+        Set<String> completed = seedChangeCompletedGroups(lifecycleObject(json.get()));
+        return completed.containsAll(expectedGroupLabels);
     }
 
 
@@ -170,11 +257,16 @@ public final class SessionRegistry {
 
         boolean stopRequested = isStopRequested(session.getSessionId());
         boolean returnComplete = isReturnComplete(session.getSessionId());
+        boolean seedChangeRequested = isSeedChangeRequested(session.getSessionId());
         JsonObject json = SessionConfigJson.baseSession(session);
         json.addProperty("playerCount", session.getGroups().stream().mapToInt(SessionGroup::getPlayerCount).sum());
         json.addProperty("groupCount", session.getGroups().size());
         json.addProperty("assignmentCount", session.getGroups().size());
-        json.add("lifecycle", SessionConfigJson.lifecycle(stopRequested, returnComplete));
+        JsonObject lifecycle = SessionConfigJson.lifecycle(stopRequested, returnComplete, seedChangeRequested);
+        readJson(session.getSessionId())
+            .map(SessionRegistry::lifecycleObject)
+            .ifPresent(existing -> copySeedChangeHandoff(existing, lifecycle));
+        json.add("lifecycle", lifecycle);
         SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
     }
 
@@ -280,7 +372,8 @@ public final class SessionRegistry {
         json.addProperty("playerCount", parseInt(properties.getProperty("playerCount", "0"), 0));
         json.add("lifecycle", SessionConfigJson.lifecycle(
             Boolean.parseBoolean(properties.getProperty("stopRequested", "false")),
-            Boolean.parseBoolean(properties.getProperty("returnComplete", "false"))
+            Boolean.parseBoolean(properties.getProperty("returnComplete", "false")),
+            Boolean.parseBoolean(properties.getProperty("seedChangeRequested", "false"))
         ));
 
         int assignmentCount = parseInt(properties.getProperty("groupCount", properties.getProperty("assignmentCount", "0")), 0);
@@ -309,7 +402,10 @@ public final class SessionRegistry {
             JsonObject json = readJson(sessionId).orElseGet(JsonObject::new);
             json.addProperty("sessionId", sessionId);
             boolean returnComplete = SessionConfigJson.lifecycleFlag(json, "returnComplete");
-            json.add("lifecycle", SessionConfigJson.lifecycle(requested, returnComplete));
+            boolean seedChangeRequested = SessionConfigJson.lifecycleFlag(json, "seedChangeRequested");
+            JsonObject lifecycle = SessionConfigJson.lifecycle(requested, returnComplete, seedChangeRequested);
+            copySeedChangeHandoff(lifecycleObject(json), lifecycle);
+            json.add("lifecycle", lifecycle);
             SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to update session stop flag for {}", sessionId, e);
@@ -327,15 +423,89 @@ public final class SessionRegistry {
             JsonObject json = readJson(sessionId).orElseGet(JsonObject::new);
             json.addProperty("sessionId", sessionId);
             boolean stopRequested = SessionConfigJson.lifecycleFlag(json, "stopRequested");
-            json.add("lifecycle", SessionConfigJson.lifecycle(stopRequested, returnComplete));
+            boolean seedChangeRequested = SessionConfigJson.lifecycleFlag(json, "seedChangeRequested");
+            JsonObject lifecycle = SessionConfigJson.lifecycle(stopRequested, returnComplete, seedChangeRequested);
+            copySeedChangeHandoff(lifecycleObject(json), lifecycle);
+            json.add("lifecycle", lifecycle);
             SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to update session return flag for {}", sessionId, e);
         }
     }
 
+    private static void updateSeedChangeRequested(String sessionId, boolean seedChangeRequested) {
+        Path sessionRoot = sessionsRoot().resolve(sessionId);
+        if (!Files.exists(sessionRoot)) {
+            return;
+        }
+
+        try {
+            Files.createDirectories(sessionRoot);
+            JsonObject json = readJson(sessionId).orElseGet(JsonObject::new);
+            json.addProperty("sessionId", sessionId);
+            boolean stopRequested = SessionConfigJson.lifecycleFlag(json, "stopRequested");
+            boolean returnComplete = SessionConfigJson.lifecycleFlag(json, "returnComplete");
+            JsonObject lifecycle = SessionConfigJson.lifecycle(stopRequested, returnComplete, seedChangeRequested);
+            copySeedChangeHandoff(lifecycleObject(json), lifecycle);
+            json.add("lifecycle", lifecycle);
+            SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
+        } catch (IOException e) {
+            Miniverse.LOGGER.warn("Failed to update session seed change flag for {}", sessionId, e);
+        }
+    }
+
     private static Path sessionsRoot() {
+        if (SessionRuntimeConfig.isSessionServer()) {
+            return SessionRuntimeConfig.getMainSessionsRoot().orElseGet(MiniversePaths::sessionsRoot);
+        }
         return MiniversePaths.sessionsRoot();
+    }
+
+    private static void updateLifecycleObject(String sessionId, java.util.function.Consumer<JsonObject> updater) {
+        Path sessionRoot = sessionsRoot().resolve(sessionId);
+        if (!Files.exists(sessionRoot)) {
+            return;
+        }
+
+        try {
+            Files.createDirectories(sessionRoot);
+            JsonObject json = readJson(sessionId).orElseGet(JsonObject::new);
+            json.addProperty("sessionId", sessionId);
+            JsonObject lifecycle = lifecycleObject(json);
+            updater.accept(lifecycle);
+            json.add("lifecycle", lifecycle);
+            SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
+        } catch (IOException e) {
+            Miniverse.LOGGER.warn("Failed to update session lifecycle for {}", sessionId, e);
+        }
+    }
+
+    private static JsonObject lifecycleObject(JsonObject json) {
+        return json.has("lifecycle") && json.get("lifecycle").isJsonObject()
+            ? json.getAsJsonObject("lifecycle")
+            : json;
+    }
+
+    private static Set<String> seedChangeCompletedGroups(JsonObject lifecycle) {
+        Set<String> completed = new LinkedHashSet<>();
+        if (!lifecycle.has("seedChangeCompletedGroups") || !lifecycle.get("seedChangeCompletedGroups").isJsonArray()) {
+            return completed;
+        }
+        for (var element : lifecycle.getAsJsonArray("seedChangeCompletedGroups")) {
+            if (!element.isJsonNull()) {
+                completed.add(element.getAsString());
+            }
+        }
+        return completed;
+    }
+
+    private static void copySeedChangeHandoff(JsonObject sourceLifecycle, JsonObject targetLifecycle) {
+        if (sourceLifecycle.has("seedChangeTargets")) {
+            targetLifecycle.add("seedChangeTargets", sourceLifecycle.get("seedChangeTargets").deepCopy());
+        }
+        if (sourceLifecycle.has("seedChangeCompletedGroups")) {
+            targetLifecycle.add("seedChangeCompletedGroups", sourceLifecycle.get("seedChangeCompletedGroups").deepCopy());
+        }
     }
 
 
@@ -356,18 +526,8 @@ public final class SessionRegistry {
     }
 
     private static void deleteRecursively(Path root) {
-        if (!Files.exists(root)) {
-            return;
-        }
-
-        try (var walk = Files.walk(root)) {
-            walk.sorted(Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException e) {
-                    Miniverse.LOGGER.warn("Failed to delete session registry path {}", path, e);
-                }
-            });
+        try {
+            MiniverseFileUtils.deleteRecursively(root);
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to delete session registry root {}", root, e);
         }

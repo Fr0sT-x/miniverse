@@ -1,21 +1,29 @@
 package dev.frost.miniverse.session;
 
 import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.common.MiniverseFileUtils;
 import dev.frost.miniverse.common.MiniversePaths;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.nbt.NbtCompound;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import java.io.InputStreamReader;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.jar.JarFile;
 
 public final class ServerLauncher {
 
@@ -23,16 +31,29 @@ public final class ServerLauncher {
     }
 
     public LaunchResult launch(GameSession session, SessionGroup group) throws IOException {
+        return this.launch(session, group, SessionOperatorSnapshot.empty());
+    }
+
+    public LaunchResult launch(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot) throws IOException {
+        return this.launch(session, group, operatorSnapshot, "", true);
+    }
+
+    public LaunchResult launch(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, String directorySuffix) throws IOException {
+        return this.launch(session, group, operatorSnapshot, directorySuffix, true);
+    }
+
+    public LaunchResult launch(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, String directorySuffix, boolean syncDevelopmentRuntime) throws IOException {
         // 1. Detect and validate the shared server runtime
         Path serverRoot = detectServerRoot();
         validateSharedRuntime(serverRoot);
 
-        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+        if (syncDevelopmentRuntime && FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            this.buildLatestModJar();
             this.syncLatestModJar(serverRoot);
         }
 
         // 2. Prepare an isolated working directory for the session
-        Path workingDirectory = this.prepareWorkingDirectory(session, group);
+        Path workingDirectory = this.prepareWorkingDirectory(session, group, directorySuffix);
         int port = this.reservePort();
 
         // 3. Create symbolic links/junctions to the shared runtime files
@@ -41,6 +62,8 @@ public final class ServerLauncher {
         // 4. Write session-specific configuration files into the working directory
         this.writeEula(workingDirectory);
         this.writeSessionConfig(workingDirectory, session, group);
+        SessionOperatorSnapshot snapshot = operatorSnapshot == null ? SessionOperatorSnapshot.empty() : operatorSnapshot;
+        snapshot.writeOpsJson(workingDirectory);
         this.writeServerProperties(workingDirectory, session, group, port);
 
         group.markLaunching(workingDirectory, port);
@@ -52,6 +75,10 @@ public final class ServerLauncher {
         command.add("-Xmx2G");
         command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
         command.add("-Dminiverse.session.game=" + session.getGameType().getCommandName());
+        if (FabricLoader.getInstance().isDevelopmentEnvironment() && SessionPermissions.isDevBypassEnabled()) {
+            command.add("-Dminiverse.devSession=true");
+            command.add("-Dminiverse.session.devBypass=true");
+        }
         command.add("-jar");
         command.add("fabric-server-launch.jar"); // Relative path works due to the symlink/hardlink
         command.add("nogui");
@@ -137,13 +164,17 @@ public final class ServerLauncher {
     /**
      * Creates a clean, isolated working directory for a new session group.
      */
-    private Path prepareWorkingDirectory(GameSession session, SessionGroup group) throws IOException {
+    private Path prepareWorkingDirectory(GameSession session, SessionGroup group, String directorySuffix) throws IOException {
         Path sessionsRoot = MiniversePaths.sessionsRoot();
         String groupFolder = this.sanitize(group.getGroupLabel());
+        if (directorySuffix != null && !directorySuffix.isBlank()) {
+            groupFolder += "_" + this.sanitize(directorySuffix);
+        }
         Path sessionDirectory = sessionsRoot.resolve(session.getSessionId()).resolve(groupFolder);
+        
         if (Files.exists(sessionDirectory)) {
             try {
-                deleteRecursively(sessionDirectory);
+                MiniverseFileUtils.deleteRecursively(sessionDirectory);
             } catch (IOException e) {
                 String fallbackName = groupFolder + "_" + System.currentTimeMillis();
                 Path fallback = sessionsRoot.resolve(session.getSessionId()).resolve(fallbackName);
@@ -151,6 +182,7 @@ public final class ServerLauncher {
                 sessionDirectory = fallback;
             }
         }
+        
         Files.createDirectories(sessionDirectory);
         Files.createDirectories(sessionDirectory.resolve("logs"));
         return sessionDirectory;
@@ -166,6 +198,7 @@ public final class ServerLauncher {
         this.linkDirectory(workingDirectory.resolve("libraries"), serverRoot.resolve("libraries"));
         this.linkDirectory(workingDirectory.resolve("mods"), serverRoot.resolve("mods"));
         this.linkDirectory(workingDirectory.resolve("config"), serverRoot.resolve("config"));
+        this.linkOptionalDirectory(workingDirectory.resolve("versions"), serverRoot.resolve("versions"));
     }
 
     private void linkFile(Path link, Path target) throws IOException {
@@ -192,6 +225,10 @@ public final class ServerLauncher {
     }
 
     private void linkDirectory(Path link, Path target) throws IOException {
+        if (!Files.isDirectory(target)) {
+            throw new IOException("Runtime directory is missing: " + target);
+        }
+
         if (this.isWindows()) {
             try {
                 // Windows directory junctions do not require admin privileges
@@ -212,40 +249,115 @@ public final class ServerLauncher {
         }
     }
 
-    private void syncLatestModJar(Path serverRoot) {
-        Path buildLibs = MiniversePaths.projectRoot().resolve("build").resolve("libs");
-        if (!Files.exists(buildLibs)) {
-            return;
+    private void linkOptionalDirectory(Path link, Path target) throws IOException {
+        if (Files.isDirectory(target)) {
+            this.linkDirectory(link, target);
+        }
+    }
+
+    private void buildLatestModJar() throws IOException {
+        Path projectRoot = MiniversePaths.projectRoot();
+        Path gradleWrapper = projectRoot.resolve(this.isWindows() ? "gradlew.bat" : "gradlew");
+        if (!Files.isRegularFile(gradleWrapper)) {
+            throw new IOException("Cannot build latest Miniverse jar: missing Gradle wrapper at " + gradleWrapper);
         }
 
+        List<String> command = List.of(gradleWrapper.toString(), "remapJar", "--no-daemon");
+        Miniverse.LOGGER.info("Building latest Miniverse backend jar: {}", String.join(" ", command));
+
+        Path buildLog = MiniversePaths.runRoot().resolve("logs").resolve("miniverse-backend-build.log");
+        Files.createDirectories(buildLog.getParent());
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(projectRoot.toFile());
+        builder.redirectOutput(buildLog.toFile());
+        builder.redirectErrorStream(true);
+
+        Process process = builder.start();
         try {
-            Path latestJar = null;
-            long latestTime = 0;
+            if (!process.waitFor(180, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException("Gradle remapJar timed out after 180 seconds. See " + buildLog);
+            }
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new IOException("Gradle remapJar failed with exit code " + exitCode + ". See " + buildLog);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+            throw new IOException("Interrupted while building latest Miniverse jar", e);
+        }
+    }
 
-            try (var stream = Files.list(buildLibs)) {
-                for (Path file : stream.toList()) {
-                    if (file.toString().endsWith(".jar") && !file.toString().endsWith("-sources.jar") && !file.toString().endsWith("-javadoc.jar")) {
-                        long time = Files.getLastModifiedTime(file).toMillis();
-                        if (time > latestTime) {
-                            latestTime = time;
-                            latestJar = file;
-                        }
-                    }
+    private void syncLatestModJar(Path serverRoot) throws IOException {
+        Path buildLibs = MiniversePaths.projectRoot().resolve("build").resolve("libs");
+        if (!Files.exists(buildLibs)) {
+            throw new IOException("Cannot sync latest Miniverse jar: build/libs does not exist");
+        }
+
+        Path latestJar = null;
+        long latestTime = 0;
+
+        try (var stream = Files.list(buildLibs)) {
+            for (Path file : stream.toList()) {
+                if (!this.isCandidateModJar(file)) {
+                    continue;
+                }
+                long time = Files.getLastModifiedTime(file).toMillis();
+                if (time > latestTime) {
+                    latestTime = time;
+                    latestJar = file;
                 }
             }
+        }
 
-            if (latestJar != null) {
-                Path targetMods = serverRoot.resolve("mods");
-                Files.createDirectories(targetMods);
-                Path targetJar = targetMods.resolve(latestJar.getFileName().toString());
+        if (latestJar == null) {
+            throw new IOException("Cannot sync latest Miniverse jar: no runnable mod jar found in " + buildLibs);
+        }
 
-                if (!Files.exists(targetJar) || Files.getLastModifiedTime(targetJar).toMillis() < latestTime) {
-                    Miniverse.LOGGER.info("Syncing latest mod build to dev runtime: {}", latestJar.getFileName());
-                    Files.copy(latestJar, targetJar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Path targetMods = serverRoot.resolve("mods");
+        Files.createDirectories(targetMods);
+        this.deleteExistingMiniverseJars(targetMods);
+
+        Path targetJar = targetMods.resolve(latestJar.getFileName().toString());
+        Miniverse.LOGGER.info("Syncing latest Miniverse mod build to dev runtime: {}", latestJar.getFileName());
+        Files.copy(latestJar, targetJar, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private boolean isCandidateModJar(Path file) {
+        String name = file.getFileName().toString();
+        return Files.isRegularFile(file)
+            && name.endsWith(".jar")
+            && !name.endsWith("-sources.jar")
+            && !name.endsWith("-javadoc.jar")
+            && this.isMiniverseModJar(file);
+    }
+
+    private void deleteExistingMiniverseJars(Path modsDirectory) throws IOException {
+        try (var stream = Files.list(modsDirectory)) {
+            for (Path file : stream.toList()) {
+                if (this.isCandidateModJar(file)) {
+                    Miniverse.LOGGER.info("Removing previous Miniverse runtime jar: {}", file.getFileName());
+                    Files.deleteIfExists(file);
                 }
             }
-        } catch (IOException e) {
-            Miniverse.LOGGER.warn("Failed to sync latest mod jar to dev runtime", e);
+        }
+    }
+
+    private boolean isMiniverseModJar(Path jarPath) {
+        try (JarFile jar = new JarFile(jarPath.toFile())) {
+            var entry = jar.getEntry("fabric.mod.json");
+            if (entry == null) {
+                return false;
+            }
+
+            try (var reader = new InputStreamReader(jar.getInputStream(entry), StandardCharsets.UTF_8)) {
+                JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+                return json.has("id") && "miniverse".equals(json.get("id").getAsString());
+            }
+        } catch (Exception ignored) {
+            return false;
         }
     }
 
@@ -262,7 +374,8 @@ public final class ServerLauncher {
                 Miniverse.LOGGER.error("You must create a real Fabric server runtime in:");
                 Miniverse.LOGGER.error(devRuntime.toString());
                 Miniverse.LOGGER.error("This is required to launch backend sessions in dev.");
-                Miniverse.LOGGER.error("Run the Fabric server installer targeting this folder.");
+                Miniverse.LOGGER.error("Preferred dev path is <project>/server-runtime. Existing legacy path is also supported at <project>/run/server-runtime.");
+                Miniverse.LOGGER.error("You can override it with -Dminiverse.serverRuntime=<path> or MINIVERSE_SERVER_RUNTIME.");
                 Miniverse.LOGGER.error("====================================================");
                 throw new IllegalStateException("Missing development runtime at " + devRuntime);
             }
@@ -341,7 +454,7 @@ public final class ServerLauncher {
 
         SessionConfigJson.write(
                 workingDirectory.resolve("miniverse-session.json"),
-                SessionConfigJson.runtimeSession(session, group, groupsForConfig(session, group), settingsProperties, properties.getProperty("return.host"), this.parsePort(properties.getProperty("return.port"), 25565))
+                SessionConfigJson.runtimeSession(session, group, groupsForConfig(session, group), settingsProperties, properties.getProperty("return.host"), this.parsePort(properties.getProperty("return.port"), 25565), MiniversePaths.sessionsRoot())
         );
     }
 
@@ -468,21 +581,6 @@ public final class ServerLauncher {
             return fallback;
         }
     }
-
-    private static void deleteRecursively(Path root) throws IOException {
-        try (var walk = Files.walk(root)) {
-            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException e) {
-                    throw new java.io.UncheckedIOException(e);
-                }
-            });
-        } catch (java.io.UncheckedIOException e) {
-            throw e.getCause();
-        }
-    }
-
     private boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase().contains("win");
     }

@@ -42,10 +42,16 @@ public final class SessionPermissions {
     }
 
     public static boolean isDevBypassEnabled() {
-        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
-            return false;
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            return Boolean.parseBoolean(System.getProperty(DEV_BYPASS_PROPERTY, DEV_BYPASS_DEFAULT));
         }
 
-        return Boolean.parseBoolean(System.getProperty(DEV_BYPASS_PROPERTY, DEV_BYPASS_DEFAULT));
+        return isBackendDevSessionBypassEnabled();
+    }
+
+    public static boolean isBackendDevSessionBypassEnabled() {
+        return SessionRuntimeConfig.isSessionServer()
+            && Boolean.getBoolean("miniverse.devSession")
+            && Boolean.parseBoolean(System.getProperty(DEV_BYPASS_PROPERTY, "false"));
     }
 }

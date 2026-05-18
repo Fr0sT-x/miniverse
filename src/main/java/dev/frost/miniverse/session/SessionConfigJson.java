@@ -41,7 +41,7 @@ public final class SessionConfigJson {
         return root;
     }
 
-    public static JsonObject runtimeSession(GameSession session, SessionGroup group, Collection<SessionGroup> assignedGroups, Properties gameProperties, String returnHost, int returnPort) {
+    public static JsonObject runtimeSession(GameSession session, SessionGroup group, Collection<SessionGroup> assignedGroups, Properties gameProperties, String returnHost, int returnPort, Path mainSessionsRoot) {
         JsonObject root = baseSession(session);
         root.addProperty("groupLabel", group.getGroupLabel());
         root.addProperty("assignmentLabel", group.getGroupLabel());
@@ -49,13 +49,27 @@ public final class SessionConfigJson {
         root.add("backendAssignments", backendAssignments(assignedGroups));
         root.add("settings", nestedProperties(gameProperties));
         root.add("returnServer", returnServer(returnHost, returnPort));
+        root.add("registry", registry(mainSessionsRoot));
         return root;
     }
 
+    public static JsonObject registry(Path mainSessionsRoot) {
+        JsonObject registry = new JsonObject();
+        if (mainSessionsRoot != null) {
+            registry.addProperty("sessionsRoot", mainSessionsRoot.toAbsolutePath().normalize().toString());
+        }
+        return registry;
+    }
+
     public static JsonObject lifecycle(boolean stopRequested, boolean returnComplete) {
+        return lifecycle(stopRequested, returnComplete, false);
+    }
+
+    public static JsonObject lifecycle(boolean stopRequested, boolean returnComplete, boolean seedChangeRequested) {
         JsonObject lifecycle = new JsonObject();
         lifecycle.addProperty("stopRequested", stopRequested);
         lifecycle.addProperty("returnComplete", returnComplete);
+        lifecycle.addProperty("seedChangeRequested", seedChangeRequested);
         return lifecycle;
     }
 
@@ -212,6 +226,14 @@ public final class SessionConfigJson {
             : new JsonObject();
         properties.setProperty("return.host", string(returnServer, "host", "127.0.0.1"));
         properties.setProperty("return.port", Integer.toString(integer(returnServer, "port", 25565)));
+
+        JsonObject registry = json.has("registry") && json.get("registry").isJsonObject()
+            ? json.getAsJsonObject("registry")
+            : new JsonObject();
+        String sessionsRoot = string(registry, "sessionsRoot", "");
+        if (!sessionsRoot.isBlank()) {
+            properties.setProperty("registry.sessionsRoot", sessionsRoot);
+        }
 
         JsonElement settings = json.get("settings");
         if (settings != null && settings.isJsonObject()) {

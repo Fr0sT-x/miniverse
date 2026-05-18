@@ -13,7 +13,7 @@ import net.minecraft.nbt.NbtCompound;
 public final class GameSession {
     private final String sessionId;
     private final SessionGameDescriptor gameType;
-    private final SeedPlan seedPlan;
+    private SeedPlan seedPlan;
     private final Instant createdAt;
     private final List<SessionGroup> groups = new ArrayList<>();
     private NbtCompound settings = new NbtCompound();
@@ -39,6 +39,17 @@ public final class GameSession {
 
     public SeedPlan getSeedPlan() {
         return this.seedPlan;
+    }
+
+    public synchronized void setSeedPlan(SeedPlan seedPlan) {
+        if (seedPlan == null) {
+            throw new IllegalArgumentException("Seed plan cannot be null.");
+        }
+        this.seedPlan = seedPlan;
+        for (SessionGroup group : this.groups) {
+            group.setSeedPlan(seedPlan);
+        }
+        this.launchedAt = null;
     }
 
     public synchronized NbtCompound getSettings() {
@@ -119,7 +130,7 @@ public final class GameSession {
 
     public synchronized void setState(SessionState state) {
         this.state = state;
-        if (state == SessionState.RUNNING && this.launchedAt == null) {
+        if (state == SessionState.RUNNING) {
             this.launchedAt = Instant.now();
         }
     }
@@ -144,5 +155,4 @@ public final class GameSession {
         return this.snapshotGroups();
     }
 }
-
 

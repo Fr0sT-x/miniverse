@@ -46,10 +46,25 @@ public final class MiniversePaths {
     }
 
     public static Path serverRuntimeRoot() {
+        String override = System.getProperty("miniverse.serverRuntime", System.getenv("MINIVERSE_SERVER_RUNTIME"));
+        if (override != null && !override.isBlank()) {
+            return Paths.get(override).toAbsolutePath().normalize();
+        }
+
         if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
             return projectRoot();
         }
-        return runRoot().resolve("server-runtime");
+
+        Path preferred = projectRoot().resolve("server-runtime");
+        if (Files.exists(preferred)) {
+            return preferred;
+        }
+
+        Path legacy = runRoot().resolve("server-runtime");
+        if (Files.exists(legacy)) {
+            return legacy;
+        }
+        return preferred;
     }
 
     public static Path sessionsRoot() {

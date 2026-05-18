@@ -5,6 +5,8 @@ import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.Properties;
 
+import com.google.gson.JsonObject;
+
 public final class SessionRuntimeConfig {
     private static Properties config;
 
@@ -20,6 +22,10 @@ public final class SessionRuntimeConfig {
         return getConfig().getProperty("return.host", "127.0.0.1");
     }
 
+    public static synchronized String getGroupLabel() {
+        return getConfig().getProperty("groupLabel", "");
+    }
+
     public static synchronized int getReturnPort() {
         String value = getConfig().getProperty("return.port", "25565");
         try {
@@ -31,6 +37,23 @@ public final class SessionRuntimeConfig {
 
     public static synchronized boolean isSessionServer() {
         return getSessionId().isPresent();
+    }
+
+    public static synchronized Optional<Path> getMainSessionsRoot() {
+        String value = getConfig().getProperty("registry.sessionsRoot", "");
+        if (value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(Paths.get(value).toAbsolutePath().normalize());
+    }
+
+    public static synchronized Optional<JsonObject> getSessionJson() {
+        String configPath = System.getProperty("miniverse.session.config", "");
+        if (configPath.isBlank() || !configPath.endsWith(".json")) {
+            return Optional.empty();
+        }
+
+        return SessionConfigJson.read(Paths.get(configPath));
     }
 
     private static synchronized Properties getConfig() {

@@ -193,6 +193,7 @@ public final class MatchLifecycleController {
         for (ServerPlayerEntity player : this.participants()) {
             player.networkHandler.sendPacket(new ServerTransferS2CPacket(host, port));
         }
+        SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markReturnComplete);
         this.completeLifecycle();
     }
 

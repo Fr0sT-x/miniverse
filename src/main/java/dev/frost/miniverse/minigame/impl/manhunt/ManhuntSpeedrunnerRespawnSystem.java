@@ -74,7 +74,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
 
         ServerPlayerEntity target = this.findAliveTarget(speedrunner.getUuid());
 
-        GameMode returnMode = speedrunner.getGameMode();
+        GameMode returnMode = speedrunner.interactionManager.getGameMode();
         if (returnMode == GameMode.SPECTATOR || returnMode == GameMode.CREATIVE || returnMode == GameMode.DEFAULT) {
             returnMode = GameMode.SURVIVAL;
         }
@@ -237,7 +237,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
 
         this.spectators.stopSpectating(player, SpectatorStopReason.RESPAWN);
         ServerWorld targetWorld = (ServerWorld) target.getEntityWorld();
-        player.teleport(targetWorld, target.getX(), target.getY(), target.getZ(), Set.<PositionFlag>of(), target.getYaw(), target.getPitch(), true);
+        player.teleport(targetWorld, target.getX(), target.getY(), target.getZ(), Set.<PositionFlag>of(), target.getYaw(), target.getPitch());
         player.changeGameMode(stored.returnMode());
         player.setHealth(player.getMaxHealth());
         player.getHungerManager().setFoodLevel(20);
@@ -266,7 +266,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
             world = (ServerWorld) player.getEntityWorld();
         }
         BlockPos pos = stored.fallbackPos();
-        player.teleport(world, pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, Set.<PositionFlag>of(), player.getYaw(), player.getPitch(), true);
+        player.teleport(world, pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, Set.<PositionFlag>of(), player.getYaw(), player.getPitch());
         player.changeGameMode(stored.returnMode());
         player.setHealth(player.getMaxHealth());
         player.getHungerManager().setFoodLevel(20);

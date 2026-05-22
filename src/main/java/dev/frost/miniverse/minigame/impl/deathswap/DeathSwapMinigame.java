@@ -31,6 +31,7 @@ import dev.frost.miniverse.team.TeamColorPalette;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
 import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -326,7 +327,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
             if (source == null || target == null) {
                 continue;
             }
-            source.teleport(target.world(), target.x(), target.y(), target.z(), Set.of(), target.yaw(), target.pitch(), true);
+            source.teleport(target.world(), target.x(), target.y(), target.z(), Set.<PositionFlag>of(), target.yaw(), target.pitch());
             source.fallDistance = 0.0F;
             source.setVelocity(this.settings.preserveVelocity() ? target.velocity() : Vec3d.ZERO);
             source.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1.0F, 1.0F);

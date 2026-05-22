@@ -73,7 +73,7 @@ public final class NetworkConstants {
 
     public record RequestSessionsPayload(String marker) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, RequestSessionsPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             RequestSessionsPayload::marker,
             RequestSessionsPayload::new
         );
@@ -86,7 +86,7 @@ public final class NetworkConstants {
 
     public record SessionListPayload(NbtCompound sessions) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, SessionListPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.NBT_COMPOUND.cast(),
+            PacketCodecs.NBT_COMPOUND,
             SessionListPayload::sessions,
             SessionListPayload::new
         );
@@ -99,11 +99,11 @@ public final class NetworkConstants {
 
     public record CreateSessionPayload(String game, String name, NbtCompound plan) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, CreateSessionPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             CreateSessionPayload::game,
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             CreateSessionPayload::name,
-            PacketCodecs.NBT_COMPOUND.cast(),
+            PacketCodecs.NBT_COMPOUND,
             CreateSessionPayload::plan,
             CreateSessionPayload::new
         );
@@ -120,7 +120,7 @@ public final class NetworkConstants {
 
     public record LaunchSessionPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, LaunchSessionPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             LaunchSessionPayload::sessionId,
             LaunchSessionPayload::new
         );
@@ -133,7 +133,7 @@ public final class NetworkConstants {
 
     public record StopSessionPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, StopSessionPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             StopSessionPayload::sessionId,
             StopSessionPayload::new
         );
@@ -146,7 +146,7 @@ public final class NetworkConstants {
 
     public record InspectSessionPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, InspectSessionPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             InspectSessionPayload::sessionId,
             InspectSessionPayload::new
         );
@@ -159,7 +159,7 @@ public final class NetworkConstants {
 
     public record RelaunchSessionPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, RelaunchSessionPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             RelaunchSessionPayload::sessionId,
             RelaunchSessionPayload::new
         );
@@ -172,7 +172,7 @@ public final class NetworkConstants {
 
     public record ChangeSeedPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, ChangeSeedPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             ChangeSeedPayload::sessionId,
             ChangeSeedPayload::new
         );
@@ -186,7 +186,7 @@ public final class NetworkConstants {
 
     public record CleanupPlayerPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, CleanupPlayerPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             CleanupPlayerPayload::sessionId,
             CleanupPlayerPayload::new
         );
@@ -199,7 +199,7 @@ public final class NetworkConstants {
 
     public record LauncherSettingsPayload(NbtCompound settings) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, LauncherSettingsPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.NBT_COMPOUND.cast(),
+            PacketCodecs.NBT_COMPOUND,
             LauncherSettingsPayload::settings,
             LauncherSettingsPayload::new
         );
@@ -212,7 +212,7 @@ public final class NetworkConstants {
 
     public record ServerSettingsPayload(NbtCompound settings) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, ServerSettingsPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.NBT_COMPOUND.cast(),
+            PacketCodecs.NBT_COMPOUND,
             ServerSettingsPayload::settings,
             ServerSettingsPayload::new
         );
@@ -225,7 +225,7 @@ public final class NetworkConstants {
 
     public record ClientConnectionHostPayload(String host) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, ClientConnectionHostPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             ClientConnectionHostPayload::host,
             ClientConnectionHostPayload::new
         );
@@ -238,7 +238,7 @@ public final class NetworkConstants {
 
     public record FreezeStatePayload(boolean frozen) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, FreezeStatePayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.BOOLEAN,
+            PacketCodecs.BOOL,
             FreezeStatePayload::frozen,
             FreezeStatePayload::new
         );
@@ -251,9 +251,9 @@ public final class NetworkConstants {
 
     public record TransitionStartPayload(String token, String context) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, TransitionStartPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             TransitionStartPayload::token,
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             TransitionStartPayload::context,
             TransitionStartPayload::new
         );
@@ -266,7 +266,7 @@ public final class NetworkConstants {
 
     public record TransitionReadyPayload(String token) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, TransitionReadyPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             TransitionReadyPayload::token,
             TransitionReadyPayload::new
         );
@@ -279,7 +279,7 @@ public final class NetworkConstants {
 
     public record ClientMatchReadyPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, ClientMatchReadyPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             ClientMatchReadyPayload::sessionId,
             ClientMatchReadyPayload::new
         );
@@ -292,7 +292,7 @@ public final class NetworkConstants {
 
     public record MatchIntroPayload(NbtCompound data) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, MatchIntroPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.NBT_COMPOUND.cast(),
+            PacketCodecs.NBT_COMPOUND,
             MatchIntroPayload::data,
             MatchIntroPayload::new
         );
@@ -305,15 +305,15 @@ public final class NetworkConstants {
 
     public record MatchReadyStatePayload(String sessionId, int readyPlayers, int totalPlayers, String status, NbtCompound data) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, MatchReadyStatePayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             MatchReadyStatePayload::sessionId,
             PacketCodecs.INTEGER,
             MatchReadyStatePayload::readyPlayers,
             PacketCodecs.INTEGER,
             MatchReadyStatePayload::totalPlayers,
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             MatchReadyStatePayload::status,
-            PacketCodecs.NBT_COMPOUND.cast(),
+            PacketCodecs.NBT_COMPOUND,
             MatchReadyStatePayload::data,
             MatchReadyStatePayload::new
         );
@@ -326,7 +326,7 @@ public final class NetworkConstants {
 
     public record MatchStartPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, MatchStartPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING.cast(),
+            PacketCodecs.STRING,
             MatchStartPayload::sessionId,
             MatchStartPayload::new
         );
@@ -373,7 +373,7 @@ public final class NetworkConstants {
             ProtectionOverlayPayload::overlayId,
             PacketCodecs.INTEGER,
             ProtectionOverlayPayload::remainingTicks,
-            PacketCodecs.BOOLEAN,
+            PacketCodecs.BOOL,
             ProtectionOverlayPayload::active,
             PacketCodecs.INTEGER,
             ProtectionOverlayPayload::argbColor,
@@ -396,7 +396,7 @@ public final class NetworkConstants {
              BountyHuntInvincibilityPayload::playerId,
              PacketCodecs.INTEGER,
              BountyHuntInvincibilityPayload::remainingTicks,
-             PacketCodecs.BOOLEAN,
+             PacketCodecs.BOOL,
              BountyHuntInvincibilityPayload::active,
              BountyHuntInvincibilityPayload::new
         );

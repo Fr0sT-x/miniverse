@@ -854,7 +854,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             return;
         }
         attacker.sendMessage(Text.literal("This target is invincible").formatted(Formatting.YELLOW), false);
-        attacker.playSound(SoundEvents.ITEM_SHIELD_BLOCK.value(), 1.0F, 1.0F);
+        attacker.playSound(SoundEvents.ITEM_SHIELD_BLOCK, 1.0F, 1.0F);
     }
 
     private void sendInvincibilityStatesTo(ServerPlayerEntity player) {
@@ -942,4 +942,3 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         private BlockPos endEntryOverworld;
     }
 }
-

@@ -10,6 +10,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
@@ -130,13 +131,13 @@ public final class TransitionOverlay {
     }
 
     private static void showMatchIntro(NbtCompound data) {
-        matchSessionId = data.getString("sessionId", "");
-        contextText = data.getString("title", contextText);
-        descriptionText = data.getString("description", "");
-        mapText = data.getString("map", "");
-        readyPlayers = data.getInt("readyPlayers").orElse(0);
-        totalPlayers = data.getInt("totalPlayers").orElse(0);
-        teams = parseTeams(data.getList("teams").orElseGet(NbtList::new));
+        matchSessionId = getStringOrDefault(data, "sessionId", "");
+        contextText = getStringOrDefault(data, "title", contextText);
+        descriptionText = getStringOrDefault(data, "description", "");
+        mapText = getStringOrDefault(data, "map", "");
+        readyPlayers = getIntOrDefault(data, "readyPlayers", 0);
+        totalPlayers = getIntOrDefault(data, "totalPlayers", 0);
+        teams = parseTeams(getListOrEmpty(data, "teams", NbtElement.COMPOUND_TYPE));
         awaitingMatchStart = true;
         matchReadySent = false;
         readyTicks = 0;
@@ -156,7 +157,7 @@ public final class TransitionOverlay {
         }
         readyPlayers = Math.max(0, ready);
         totalPlayers = Math.max(0, total);
-        teams = parseTeams(data.getList("teams").orElseGet(NbtList::new));
+        teams = parseTeams(getListOrEmpty(data, "teams", NbtElement.COMPOUND_TYPE));
         serverStatusText = readyLine(status == null || status.isBlank() ? "Waiting for players..." : status);
     }
 
@@ -685,19 +686,19 @@ public final class TransitionOverlay {
     private static List<TeamIntro> parseTeams(NbtList list) {
         List<TeamIntro> parsed = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
-            NbtCompound team = list.getCompoundOrEmpty(i);
+            NbtCompound team = list.getCompound(i);
             List<MemberIntro> players = new ArrayList<>();
-            NbtList playerList = team.getList("players").orElseGet(NbtList::new);
+            NbtList playerList = team.getList("players", NbtElement.COMPOUND_TYPE);
             for (int playerIndex = 0; playerIndex < playerList.size(); playerIndex++) {
-                NbtCompound member = playerList.getCompoundOrEmpty(playerIndex);
-                String name = member.getString("name", "");
+                NbtCompound member = playerList.getCompound(playerIndex);
+                String name = getStringOrDefault(member, "name", "");
                 if (!name.isBlank()) {
-                    players.add(new MemberIntro(name, member.getBoolean("ready").orElse(false)));
+                    players.add(new MemberIntro(name, getBooleanOrDefault(member, "ready", false)));
                 }
             }
             parsed.add(new TeamIntro(
-                team.getString("name", "Team"),
-                team.getInt("color").orElse(ACCENT),
+                getStringOrDefault(team, "name", "Team"),
+                getIntOrDefault(team, "color", ACCENT),
                 List.copyOf(players)
             ));
         }
@@ -728,5 +729,29 @@ public final class TransitionOverlay {
     }
 
     private record MemberIntro(String name, boolean ready) {
+    }
+
+    private static int getIntOrDefault(NbtCompound nbt, String key, int fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getInt(key)
+            : fallback;
+    }
+
+    private static boolean getBooleanOrDefault(NbtCompound nbt, String key, boolean fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getBoolean(key)
+            : fallback;
+    }
+
+    private static String getStringOrDefault(NbtCompound nbt, String key, String fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.STRING_TYPE)
+            ? nbt.getString(key)
+            : fallback;
+    }
+
+    private static NbtList getListOrEmpty(NbtCompound nbt, String key, int listType) {
+        return nbt != null && nbt.contains(key, NbtElement.LIST_TYPE)
+            ? nbt.getList(key, listType)
+            : new NbtList();
     }
 }

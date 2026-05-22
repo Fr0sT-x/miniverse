@@ -456,8 +456,8 @@ public final class MatchLifecycleController {
         Text message = Text.literal("[CANCEL RETURN TELEPORT]")
             .formatted(Formatting.RED, Formatting.BOLD)
             .styled(style -> style
-                .withClickEvent(new ClickEvent.RunCommand("/miniverse_cancel_return"))
-                .withHoverEvent(new HoverEvent.ShowText(Text.literal("Click to keep this match session alive and cancel return teleport."))));
+                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/miniverse_cancel_return"))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("Click to keep this match session alive and cancel return teleport."))));
         this.admins().forEach(player -> player.sendMessage(message, false));
     }
 

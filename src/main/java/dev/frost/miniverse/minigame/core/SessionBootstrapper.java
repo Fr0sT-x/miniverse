@@ -12,6 +12,7 @@ import dev.frost.miniverse.session.SessionRegistry;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
@@ -399,7 +400,7 @@ public final class SessionBootstrapper {
                 member.putString("uuid", uuid.toString());
                 member.putString("name", playerName(properties, uuid));
                 member.putBoolean("ready", this.clientReadyStates.get(uuid) == ClientReadyState.READY);
-                team.getList("players").orElseGet(NbtList::new).add(member);
+                team.getList("players", NbtElement.COMPOUND_TYPE).add(member);
             }
 
             NbtList list = new NbtList();

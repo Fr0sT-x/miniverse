@@ -7,7 +7,7 @@ import org.jetbrains.annotations.Nullable;
 
 public final class SpectatorCameraController {
     public void ensureSpectatorMode(ServerPlayerEntity spectator) {
-        if (spectator.getGameMode() != GameMode.SPECTATOR) {
+        if (spectator.interactionManager.getGameMode() != GameMode.SPECTATOR) {
             spectator.changeGameMode(GameMode.SPECTATOR);
         }
     }

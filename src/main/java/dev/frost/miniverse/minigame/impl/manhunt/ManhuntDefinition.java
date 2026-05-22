@@ -6,6 +6,7 @@ import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameMetadata;
 import dev.frost.miniverse.session.SessionTopology;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.server.command.ServerCommandSource;
 
@@ -56,11 +57,11 @@ public final class ManhuntDefinition implements MinigameDefinition {
         properties.setProperty("manhunt.hunterRespawnDelaySeconds", Integer.toString(settings.hunterRespawnDelaySeconds()));
         properties.setProperty("manhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
 
-        NbtList roles = settingsNbt.getList("roles").orElseGet(NbtList::new);
+        NbtList roles = settingsNbt.getList("roles", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < roles.size(); i++) {
-            NbtCompound role = roles.getCompoundOrEmpty(i);
-            String uuid = role.getString("uuid", "");
-            String roleName = role.getString("role", "");
+            NbtCompound role = roles.getCompound(i);
+            String uuid = role.contains("uuid", NbtElement.STRING_TYPE) ? role.getString("uuid") : "";
+            String roleName = role.contains("role", NbtElement.STRING_TYPE) ? role.getString("role") : "";
             if (!uuid.isBlank() && !roleName.isBlank()) {
                 properties.setProperty("manhunt.role." + uuid, roleName);
             }

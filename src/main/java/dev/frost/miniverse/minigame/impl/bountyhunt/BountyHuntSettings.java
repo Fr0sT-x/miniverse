@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.bountyhunt;
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 
 import java.util.Properties;
 
@@ -38,15 +39,15 @@ public record BountyHuntSettings(
         }
 
         return new BountyHuntSettings(
-            settings.getInt("gracePeriodSeconds", defaults.gracePeriodSeconds()),
-            settings.getInt("respawnInvincibilitySeconds", defaults.respawnInvincibilitySeconds()),
-            settings.getInt("scoreToWin", defaults.scoreToWin()),
-            settings.getInt("targetSwapIntervalSeconds", defaults.targetSwapIntervalSeconds()),
-            settings.getBoolean("trackerEnabled", defaults.trackerEnabled()),
-            settings.getBoolean("netherTracking", defaults.netherTrackingEnabled()),
-            settings.getInt("compassCooldownSeconds", defaults.compassCooldownSeconds()),
-            settings.getString("trackerItemId", defaults.trackerItemId()),
-            settings.getInt("disconnectGraceSeconds", defaults.disconnectGraceSeconds())
+            getIntOrDefault(settings, "gracePeriodSeconds", defaults.gracePeriodSeconds()),
+            getIntOrDefault(settings, "respawnInvincibilitySeconds", defaults.respawnInvincibilitySeconds()),
+            getIntOrDefault(settings, "scoreToWin", defaults.scoreToWin()),
+            getIntOrDefault(settings, "targetSwapIntervalSeconds", defaults.targetSwapIntervalSeconds()),
+            getBooleanOrDefault(settings, "trackerEnabled", defaults.trackerEnabled()),
+            getBooleanOrDefault(settings, "netherTracking", defaults.netherTrackingEnabled()),
+            getIntOrDefault(settings, "compassCooldownSeconds", defaults.compassCooldownSeconds()),
+            getStringOrDefault(settings, "trackerItemId", defaults.trackerItemId()),
+            getIntOrDefault(settings, "disconnectGraceSeconds", defaults.disconnectGraceSeconds())
         ).normalized();
     }
 
@@ -95,6 +96,24 @@ public record BountyHuntSettings(
 
     private static boolean parseBoolean(String value, boolean fallback) {
         return value == null || value.isBlank() ? fallback : Boolean.parseBoolean(value.trim());
+    }
+
+    private static int getIntOrDefault(NbtCompound settings, String key, int fallback) {
+        return settings != null && settings.contains(key, NbtElement.NUMBER_TYPE)
+            ? settings.getInt(key)
+            : fallback;
+    }
+
+    private static boolean getBooleanOrDefault(NbtCompound settings, String key, boolean fallback) {
+        return settings != null && settings.contains(key, NbtElement.NUMBER_TYPE)
+            ? settings.getBoolean(key)
+            : fallback;
+    }
+
+    private static String getStringOrDefault(NbtCompound settings, String key, String fallback) {
+        return settings != null && settings.contains(key, NbtElement.STRING_TYPE)
+            ? settings.getString(key)
+            : fallback;
     }
 }
 

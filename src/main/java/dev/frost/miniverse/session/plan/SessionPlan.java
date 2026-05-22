@@ -3,6 +3,7 @@ package dev.frost.miniverse.session.plan;
 import dev.frost.miniverse.session.SeedPlan;
 import dev.frost.miniverse.session.SessionGameDescriptor;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 
 import java.util.ArrayList;
@@ -57,23 +58,25 @@ public final class SessionPlan {
             );
         }
 
-        NbtCompound settings = payloadPlan.getCompound("settings").orElseGet(NbtCompound::new);
-        String plannedGame = payloadPlan.getString("game", requestedGame);
-        boolean autoLaunch = payloadPlan.getBoolean("launch", false);
+        NbtCompound settings = payloadPlan.contains("settings", NbtElement.COMPOUND_TYPE)
+            ? payloadPlan.getCompound("settings")
+            : new NbtCompound();
+        String plannedGame = getStringOrDefault(payloadPlan, "game", requestedGame);
+        boolean autoLaunch = getBooleanOrDefault(payloadPlan, "launch", false);
 
         SeedPlan seedPlan = resolveSeedPlan(settings);
         String validationError = seedPlan == null ? "Fixed seed was selected but no valid seed value was provided." : null;
 
         List<TeamPlan> teams = new ArrayList<>();
-        NbtList groupList = payloadPlan.getList("groups").orElseGet(NbtList::new);
+        NbtList groupList = payloadPlan.getList("groups", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < groupList.size(); i++) {
-            TeamPlan team = TeamPlan.fromNbt(groupList.getCompoundOrEmpty(i), "Team " + (i + 1));
+            TeamPlan team = TeamPlan.fromNbt(groupList.getCompound(i), "Team " + (i + 1));
             if (!team.isEmpty()) {
                 teams.add(team);
             }
         }
 
-        String resolvedName = payloadPlan.getString("name", sessionName);
+        String resolvedName = getStringOrDefault(payloadPlan, "name", sessionName);
         return new SessionPlan(
             requestedGame,
             resolvedName,
@@ -133,13 +136,11 @@ public final class SessionPlan {
 
     public NbtCompound settingsWithTeamRoles() {
         NbtCompound copy = this.settings.copy();
-        NbtList roles = copy.getList("roles").map(existing -> {
-            NbtList cloned = new NbtList();
-            for (int i = 0; i < existing.size(); i++) {
-                cloned.add(existing.getCompoundOrEmpty(i).copy());
-            }
-            return cloned;
-        }).orElseGet(NbtList::new);
+        NbtList roles = new NbtList();
+        NbtList existing = copy.getList("roles", NbtElement.COMPOUND_TYPE);
+        for (int i = 0; i < existing.size(); i++) {
+            roles.add(existing.getCompound(i).copy());
+        }
 
         for (TeamPlan team : this.teams) {
             for (PlayerRole role : team.roles()) {
@@ -169,13 +170,25 @@ public final class SessionPlan {
     }
 
     private static SeedPlan resolveSeedPlan(NbtCompound settings) {
-        String seedMode = settings.getString("seedMode", "random");
+        String seedMode = getStringOrDefault(settings, "seedMode", "random");
         if (!"fixed".equalsIgnoreCase(seedMode)) {
             return SeedPlan.randomSameSeed();
         }
 
-        return settings.getLong("seed")
-            .map(SeedPlan::fixed)
-            .orElse(null);
+        return settings.contains("seed", NbtElement.NUMBER_TYPE)
+            ? SeedPlan.fixed(settings.getLong("seed"))
+            : null;
+    }
+
+    private static String getStringOrDefault(NbtCompound nbt, String key, String fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.STRING_TYPE)
+            ? nbt.getString(key)
+            : fallback;
+    }
+
+    private static boolean getBooleanOrDefault(NbtCompound nbt, String key, boolean fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getBoolean(key)
+            : fallback;
     }
 }

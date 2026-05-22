@@ -4,6 +4,7 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
@@ -52,10 +53,10 @@ public final class ProtectedItemTags {
             return null;
         }
         NbtCompound nbt = customData.copyNbt();
-        if (nbt.getBoolean(TAG_PROTECTED).orElse(false) == false) {
+        if (!nbt.contains(TAG_PROTECTED, NbtElement.NUMBER_TYPE) || !nbt.getBoolean(TAG_PROTECTED)) {
             return null;
         }
-        String type = nbt.getString(TAG_PROTECTED_TYPE).orElse("");
+        String type = nbt.contains(TAG_PROTECTED_TYPE, NbtElement.STRING_TYPE) ? nbt.getString(TAG_PROTECTED_TYPE) : "";
         if (type.isBlank()) {
             return null;
         }

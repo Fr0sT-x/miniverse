@@ -1,15 +1,13 @@
 package dev.frost.miniverse.session;
 
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.command.permission.LeveledPermissionPredicate;
-import net.minecraft.command.permission.PermissionLevel;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 
 public final class SessionPermissions {
     private static final String DEV_BYPASS_PROPERTY = "miniverse.session.devBypass";
     private static final String DEV_BYPASS_DEFAULT = "true";
-    private static final PermissionLevel REQUIRED_LEVEL = PermissionLevel.fromLevel(2);
+    private static final int REQUIRED_LEVEL = 2;
 
     private SessionPermissions() {
     }
@@ -23,11 +21,7 @@ public final class SessionPermissions {
             return true;
         }
 
-        if (player.getPermissions() instanceof LeveledPermissionPredicate leveled) {
-            return leveled.getLevel().isAtLeast(REQUIRED_LEVEL);
-        }
-
-        return false;
+        return player.hasPermissionLevel(REQUIRED_LEVEL);
     }
 
     public static boolean checkCanManageSessions(ServerPlayerEntity player, String action) {

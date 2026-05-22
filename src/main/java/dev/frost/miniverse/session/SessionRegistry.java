@@ -420,7 +420,7 @@ public final class SessionRegistry {
             return new NbtCompound();
         }
         try {
-            return StringNbtReader.readCompound(snbt);
+            return StringNbtReader.parse(snbt);
         } catch (Exception e) {
             Miniverse.LOGGER.warn("Failed to parse retained session settings for {}", sessionId, e);
             return new NbtCompound();

@@ -9,6 +9,7 @@ import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 
@@ -47,96 +48,126 @@ public class SessionScreen extends Screen {
 
     public static void onServerSnapshot(NbtCompound root) {
         List<SessionSnapshotData.SessionSummary> sessions = new ArrayList<>();
-        NbtList sessionList = root.getList("sessions").orElseGet(NbtList::new);
+        NbtList sessionList = root.getList("sessions", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < sessionList.size(); i++) {
-            NbtCompound entry = sessionList.getCompoundOrEmpty(i);
+            NbtCompound entry = sessionList.getCompound(i);
             sessions.add(new SessionSnapshotData.SessionSummary(
-                entry.getString("id", ""),
-                entry.getString("game", ""),
-                entry.getString("state", ""),
-                entry.getLong("seed").orElse(0L),
-                entry.getInt("playerCount").orElse(0),
-                entry.getLong("createdAt").orElse(0L),
-                entry.getLong("launchedAt").orElse(0L),
-                entry.getLong("updatedAt").orElse(0L),
-                entry.getLong("playedMillis").orElse(0L),
-                entry.getBoolean("inspectable", false),
-                entry.getBoolean("retained", false)
+                getStringOrDefault(entry, "id", ""),
+                getStringOrDefault(entry, "game", ""),
+                getStringOrDefault(entry, "state", ""),
+                getLongOrDefault(entry, "seed", 0L),
+                getIntOrDefault(entry, "playerCount", 0),
+                getLongOrDefault(entry, "createdAt", 0L),
+                getLongOrDefault(entry, "launchedAt", 0L),
+                getLongOrDefault(entry, "updatedAt", 0L),
+                getLongOrDefault(entry, "playedMillis", 0L),
+                getBooleanOrDefault(entry, "inspectable", false),
+                getBooleanOrDefault(entry, "retained", false)
             ));
         }
 
         List<SessionSnapshotData.RosterEntry> roster = new ArrayList<>();
-        NbtList rosterList = root.getList("players").orElseGet(NbtList::new);
+        NbtList rosterList = root.getList("players", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < rosterList.size(); i++) {
-            NbtCompound entry = rosterList.getCompoundOrEmpty(i);
-            roster.add(new SessionSnapshotData.RosterEntry(entry.getString("uuid", ""), entry.getString("name", "")));
+            NbtCompound entry = rosterList.getCompound(i);
+            roster.add(new SessionSnapshotData.RosterEntry(getStringOrDefault(entry, "uuid", ""), getStringOrDefault(entry, "name", "")));
         }
 
         List<SessionSnapshotData.GameMetadata> games = new ArrayList<>();
-        NbtList gameList = root.getList("games").orElseGet(NbtList::new);
+        NbtList gameList = root.getList("games", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < gameList.size(); i++) {
-            NbtCompound entry = gameList.getCompoundOrEmpty(i);
+            NbtCompound entry = gameList.getCompound(i);
             List<SessionSnapshotData.SetupField> fields = new ArrayList<>();
-            NbtList fieldList = entry.getList("fields").orElseGet(NbtList::new);
+            NbtList fieldList = entry.getList("fields", NbtElement.COMPOUND_TYPE);
             for (int fieldIndex = 0; fieldIndex < fieldList.size(); fieldIndex++) {
-                NbtCompound field = fieldList.getCompoundOrEmpty(fieldIndex);
+                NbtCompound field = fieldList.getCompound(fieldIndex);
                 fields.add(new SessionSnapshotData.SetupField(
-                    field.getString("key", ""),
-                    field.getString("label", ""),
-                    field.getString("type", "string"),
-                    field.getString("default", ""),
-                    field.getBoolean("required", false),
-                    field.getInt("min").orElse(0),
-                    field.getInt("max").orElse(0)
+                    getStringOrDefault(field, "key", ""),
+                    getStringOrDefault(field, "label", ""),
+                    getStringOrDefault(field, "type", "string"),
+                    getStringOrDefault(field, "default", ""),
+                    getBooleanOrDefault(field, "required", false),
+                    getIntOrDefault(field, "min", 0),
+                    getIntOrDefault(field, "max", 0)
                 ));
             }
 
             games.add(new SessionSnapshotData.GameMetadata(
-                entry.getString("id", ""),
-                entry.getString("displayName", ""),
-                entry.getString("description", ""),
-                entry.getString("icon", "?"),
-                entry.getString("topology", ""),
-                entry.getString("setupKind", "generic"),
-                entry.getBoolean("enabled", true),
+                getStringOrDefault(entry, "id", ""),
+                getStringOrDefault(entry, "displayName", ""),
+                getStringOrDefault(entry, "description", ""),
+                getStringOrDefault(entry, "icon", "?"),
+                getStringOrDefault(entry, "topology", ""),
+                getStringOrDefault(entry, "setupKind", "generic"),
+                getBooleanOrDefault(entry, "enabled", true),
                 fields
             ));
         }
 
-        NbtCompound launcher = root.getCompound("launcher").orElseGet(NbtCompound::new);
-        NbtCompound memory = root.getCompound("memory").orElseGet(NbtCompound::new);
-        NbtCompound serverSettings = root.getCompound("server").orElseGet(NbtCompound::new);
-        NbtCompound retention = root.getCompound("retention").orElseGet(NbtCompound::new);
+        NbtCompound launcher = getCompoundOrEmpty(root, "launcher");
+        NbtCompound memory = getCompoundOrEmpty(root, "memory");
+        NbtCompound serverSettings = getCompoundOrEmpty(root, "server");
+        NbtCompound retention = getCompoundOrEmpty(root, "retention");
         SessionSnapshotData.update(
             sessions,
             roster,
             games,
-            launcher.getInt("maxConcurrentLaunches").orElse(SessionSnapshotData.maxConcurrentLaunches()),
-            launcher.getInt("queueCapacity").orElse(SessionSnapshotData.launcherQueueCapacity()),
+            getIntOrDefault(launcher, "maxConcurrentLaunches", SessionSnapshotData.maxConcurrentLaunches()),
+            getIntOrDefault(launcher, "queueCapacity", SessionSnapshotData.launcherQueueCapacity()),
             new SessionSnapshotData.MemorySettings(
-                memory.getInt("maxHeapGb").orElse(SessionSnapshotData.memorySettings().maxHeapGb()),
-                memory.getInt("initialHeapGb").orElse(SessionSnapshotData.memorySettings().initialHeapGb()),
-                memory.getBoolean("enabled", SessionSnapshotData.memorySettings().enabled())
+                getIntOrDefault(memory, "maxHeapGb", SessionSnapshotData.memorySettings().maxHeapGb()),
+                getIntOrDefault(memory, "initialHeapGb", SessionSnapshotData.memorySettings().initialHeapGb()),
+                getBooleanOrDefault(memory, "enabled", SessionSnapshotData.memorySettings().enabled())
             ),
             new SessionSnapshotData.ServerSettings(
-                serverSettings.getInt("viewDistance").orElse(SessionSnapshotData.serverSettings().viewDistance()),
-                serverSettings.getInt("simulationDistance").orElse(SessionSnapshotData.serverSettings().simulationDistance()),
-                serverSettings.getBoolean("onlineMode", SessionSnapshotData.serverSettings().onlineMode()),
-                serverSettings.getInt("spawnProtection").orElse(SessionSnapshotData.serverSettings().spawnProtection()),
-                serverSettings.getString("difficulty", SessionSnapshotData.serverSettings().difficulty()),
-                serverSettings.getBoolean("allowFlight", SessionSnapshotData.serverSettings().allowFlight()),
-                serverSettings.getBoolean("acceptsTransfers", SessionSnapshotData.serverSettings().acceptsTransfers()),
-                serverSettings.getString("advertisedHost", SessionSnapshotData.serverSettings().advertisedHost())
+                getIntOrDefault(serverSettings, "viewDistance", SessionSnapshotData.serverSettings().viewDistance()),
+                getIntOrDefault(serverSettings, "simulationDistance", SessionSnapshotData.serverSettings().simulationDistance()),
+                getBooleanOrDefault(serverSettings, "onlineMode", SessionSnapshotData.serverSettings().onlineMode()),
+                getIntOrDefault(serverSettings, "spawnProtection", SessionSnapshotData.serverSettings().spawnProtection()),
+                getStringOrDefault(serverSettings, "difficulty", SessionSnapshotData.serverSettings().difficulty()),
+                getBooleanOrDefault(serverSettings, "allowFlight", SessionSnapshotData.serverSettings().allowFlight()),
+                getBooleanOrDefault(serverSettings, "acceptsTransfers", SessionSnapshotData.serverSettings().acceptsTransfers()),
+                getStringOrDefault(serverSettings, "advertisedHost", SessionSnapshotData.serverSettings().advertisedHost())
             ),
             new SessionSnapshotData.RetentionSettings(
-                retention.getInt("keepLatestSessions").orElse(SessionSnapshotData.retentionSettings().keepLatestSessions()),
-                retention.getInt("maxAgeDays").orElse(SessionSnapshotData.retentionSettings().maxAgeDays())
+                getIntOrDefault(retention, "keepLatestSessions", SessionSnapshotData.retentionSettings().keepLatestSessions()),
+                getIntOrDefault(retention, "maxAgeDays", SessionSnapshotData.retentionSettings().maxAgeDays())
             )
         );
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof SessionScreen sessionScreen) {
             sessionScreen.rebuildWidgets();
         }
+    }
+
+    private static int getIntOrDefault(NbtCompound nbt, String key, int fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getInt(key)
+            : fallback;
+    }
+
+    private static long getLongOrDefault(NbtCompound nbt, String key, long fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getLong(key)
+            : fallback;
+    }
+
+    private static boolean getBooleanOrDefault(NbtCompound nbt, String key, boolean fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getBoolean(key)
+            : fallback;
+    }
+
+    private static String getStringOrDefault(NbtCompound nbt, String key, String fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.STRING_TYPE)
+            ? nbt.getString(key)
+            : fallback;
+    }
+
+    private static NbtCompound getCompoundOrEmpty(NbtCompound nbt, String key) {
+        return nbt != null && nbt.contains(key, NbtElement.COMPOUND_TYPE)
+            ? nbt.getCompound(key)
+            : new NbtCompound();
     }
 
     @Override

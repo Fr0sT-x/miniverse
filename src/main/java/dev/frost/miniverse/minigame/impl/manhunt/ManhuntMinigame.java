@@ -789,7 +789,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             return;
         }
 
-        int fallbackSlot = Math.max(0, hunter.getInventory().getSelectedSlot());
+        int fallbackSlot = Math.max(0, hunter.getInventory().selectedSlot);
         ItemStack displaced = hunter.getInventory().getStack(fallbackSlot);
         hunter.getInventory().setStack(fallbackSlot, stack);
         if (!displaced.isEmpty()) {

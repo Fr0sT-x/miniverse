@@ -2,7 +2,6 @@ package dev.frost.miniverse.session;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvents;
@@ -54,12 +53,11 @@ public final class SessionRoutingEvents {
             return;
         }
 
-        PlayerConfigEntry entry = new PlayerConfigEntry(player.getGameProfile());
-        if (server.getPlayerManager().isOperator(entry)) {
+        if (server.getPlayerManager().isOperator(player.getGameProfile())) {
             return;
         }
 
-        server.getPlayerManager().addToOperators(entry);
+        server.getPlayerManager().addToOperators(player.getGameProfile());
         Miniverse.LOGGER.info("Granted dev session operator access to {} ({})", player.getName().getString(), player.getUuidAsString());
     }
 

@@ -4,9 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import net.minecraft.command.permission.LeveledPermissionPredicate;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.server.OperatorEntry;
-import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 
@@ -89,37 +88,22 @@ public record SessionOperatorSnapshot(List<Entry> entries) {
     }
 
     private static void captureMember(MinecraftServer server, SessionMembership member, Map<UUID, Entry> entries) {
-        PlayerConfigEntry playerEntry = new PlayerConfigEntry(member.playerUuid(), member.playerName());
-        OperatorEntry operatorEntry = findOperatorEntry(server, playerEntry);
+        GameProfile profile = new GameProfile(member.playerUuid(), member.playerName());
+        OperatorEntry operatorEntry = findOperatorEntry(server, profile);
         if (operatorEntry != null) {
             entries.put(member.playerUuid(), Entry.from(operatorEntry, member));
             return;
         }
 
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(member.playerUuid());
-        if (player == null || !server.getPlayerManager().isOperator(new PlayerConfigEntry(player.getGameProfile()))) {
+        if (player == null || !server.getPlayerManager().isOperator(player.getGameProfile())) {
             return;
         }
-
-        int level = player.getPermissions() instanceof LeveledPermissionPredicate leveled
-            ? leveled.getLevel().getLevel()
-            : 4;
-        entries.put(member.playerUuid(), new Entry(member.playerUuid(), player.getName().getString(), normalizeLevel(level), false));
+        entries.put(member.playerUuid(), new Entry(member.playerUuid(), player.getName().getString(), 4, false));
     }
 
-    private static OperatorEntry findOperatorEntry(MinecraftServer server, PlayerConfigEntry playerEntry) {
-        OperatorEntry exact = server.getPlayerManager().getOpList().get(playerEntry);
-        if (exact != null) {
-            return exact;
-        }
-
-        for (OperatorEntry entry : server.getPlayerManager().getOpList().values()) {
-            PlayerConfigEntry key = entry.getKey();
-            if (key != null && key.id().equals(playerEntry.id())) {
-                return entry;
-            }
-        }
-        return null;
+    private static OperatorEntry findOperatorEntry(MinecraftServer server, GameProfile profile) {
+        return server.getPlayerManager().getOpList().get(profile);
     }
 
     private static int normalizeLevel(int level) {
@@ -136,13 +120,12 @@ public record SessionOperatorSnapshot(List<Entry> entries) {
         }
 
         private static Entry from(OperatorEntry operatorEntry, SessionMembership member) {
-            PlayerConfigEntry key = operatorEntry.getKey();
-            UUID uuid = key == null ? member.playerUuid() : key.id();
-            String name = key == null || key.name() == null || key.name().isBlank() ? member.playerName() : key.name();
+            UUID uuid = member.playerUuid();
+            String name = member.playerName();
             return new Entry(
                 uuid,
                 name,
-                operatorEntry.getLevel().getLevel().getLevel(),
+                normalizeLevel(operatorEntry.getPermissionLevel()),
                 operatorEntry.canBypassPlayerLimit()
             );
         }

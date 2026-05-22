@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.manhunt;
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 
 import java.util.Properties;
 
@@ -41,20 +42,22 @@ public record ManhuntSettings(
             return defaults;
         }
 
-        int releaseDelay = settings.getInt("hunterReleaseDelaySeconds")
-            .orElseGet(() -> settings.getInt("gracePeriodSeconds").orElse(defaults.hunterReleaseDelaySeconds()));
+        int releaseDelay = getIntOrDefault(settings, "hunterReleaseDelaySeconds", Integer.MIN_VALUE);
+        if (releaseDelay == Integer.MIN_VALUE) {
+            releaseDelay = getIntOrDefault(settings, "gracePeriodSeconds", defaults.hunterReleaseDelaySeconds());
+        }
 
         return new ManhuntSettings(
             releaseDelay,
-            settings.getInt("speedrunnerRespawnDelaySeconds", defaults.speedrunnerRespawnDelaySeconds()),
-            settings.getBoolean("huntersCompass", defaults.huntersCompassEnabled()),
-            settings.getBoolean("netherTracking", defaults.netherTrackingEnabled()),
-            settings.getInt("compassCooldownSeconds", defaults.compassCooldownSeconds()),
-            settings.getInt("runnerGlowPulseMinutes", defaults.runnerGlowPulseMinutes()),
-            settings.getInt("runnerLives", defaults.runnerLives()),
-            settings.getInt("hunterLives", defaults.hunterLives()),
-            settings.getInt("hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds()),
-            settings.getInt("disconnectGraceSeconds", defaults.disconnectGraceSeconds())
+            getIntOrDefault(settings, "speedrunnerRespawnDelaySeconds", defaults.speedrunnerRespawnDelaySeconds()),
+            getBooleanOrDefault(settings, "huntersCompass", defaults.huntersCompassEnabled()),
+            getBooleanOrDefault(settings, "netherTracking", defaults.netherTrackingEnabled()),
+            getIntOrDefault(settings, "compassCooldownSeconds", defaults.compassCooldownSeconds()),
+            getIntOrDefault(settings, "runnerGlowPulseMinutes", defaults.runnerGlowPulseMinutes()),
+            getIntOrDefault(settings, "runnerLives", defaults.runnerLives()),
+            getIntOrDefault(settings, "hunterLives", defaults.hunterLives()),
+            getIntOrDefault(settings, "hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds()),
+            getIntOrDefault(settings, "disconnectGraceSeconds", defaults.disconnectGraceSeconds())
         ).normalized();
     }
 
@@ -122,5 +125,17 @@ public record ManhuntSettings(
 
     private static boolean parseBoolean(String value, boolean fallback) {
         return value == null || value.isBlank() ? fallback : Boolean.parseBoolean(value.trim());
+    }
+
+    private static int getIntOrDefault(NbtCompound settings, String key, int fallback) {
+        return settings != null && settings.contains(key, NbtElement.NUMBER_TYPE)
+            ? settings.getInt(key)
+            : fallback;
+    }
+
+    private static boolean getBooleanOrDefault(NbtCompound settings, String key, boolean fallback) {
+        return settings != null && settings.contains(key, NbtElement.NUMBER_TYPE)
+            ? settings.getBoolean(key)
+            : fallback;
     }
 }

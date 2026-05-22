@@ -411,7 +411,7 @@ public final class SpectatorService {
     }
 
     private GameMode defaultReturnMode(ServerPlayerEntity player) {
-        GameMode current = player.getGameMode();
+        GameMode current = player.interactionManager.getGameMode();
         if (current == GameMode.SPECTATOR || current == GameMode.DEFAULT) {
             return GameMode.SURVIVAL;
         }

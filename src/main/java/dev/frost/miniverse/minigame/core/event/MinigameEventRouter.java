@@ -22,6 +22,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SignedMessage;
 import net.minecraft.server.MinecraftServer;
@@ -30,6 +31,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
@@ -56,7 +58,7 @@ public final class MinigameEventRouter {
         ServerLivingEntityEvents.AFTER_DEATH.register(MinigameEventRouter::onAfterDeath);
         ServerPlayConnectionEvents.JOIN.register(MinigameEventRouter::onPlayerJoin);
         ServerPlayerEvents.AFTER_RESPAWN.register(MinigameEventRouter::onAfterRespawn);
-        ServerPlayerEvents.LEAVE.register(MinigameEventRouter::onPlayerLeave);
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> onPlayerLeave(handler.player));
         ServerMessageEvents.ALLOW_CHAT_MESSAGE.register(MinigameEventRouter::onAllowChatMessage);
     }
 
@@ -72,17 +74,18 @@ public final class MinigameEventRouter {
         }
     }
 
-    private static ActionResult onUseItem(PlayerEntity player, World world, Hand hand) {
+    private static TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
         if (!(world instanceof ServerWorld) || !(player instanceof ServerPlayerEntity serverPlayer)) {
-            return ActionResult.PASS;
+            return TypedActionResult.pass(player.getStackInHand(hand));
         }
 
         Minigame active = activeMinigame();
         if (active instanceof ItemUseAware itemUseAware) {
-            return itemUseAware.onUseItem(serverPlayer, world, hand);
+            ActionResult result = itemUseAware.onUseItem(serverPlayer, world, hand);
+            return new TypedActionResult<>(result, player.getStackInHand(hand));
         }
 
-        return ActionResult.PASS;
+        return TypedActionResult.pass(player.getStackInHand(hand));
     }
 
     private static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {

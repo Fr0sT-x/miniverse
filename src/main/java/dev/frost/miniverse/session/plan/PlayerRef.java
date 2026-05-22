@@ -1,20 +1,21 @@
 package dev.frost.miniverse.session.plan;
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 
 import java.util.Optional;
 import java.util.UUID;
 
 public record PlayerRef(UUID uuid, String name) {
     public static Optional<PlayerRef> fromNbt(NbtCompound nbt) {
-        String uuidString = nbt.getString("uuid", "");
+        String uuidString = nbt.contains("uuid", NbtElement.STRING_TYPE) ? nbt.getString("uuid") : "";
         if (uuidString.isBlank()) {
             return Optional.empty();
         }
 
         try {
             UUID uuid = UUID.fromString(uuidString);
-            String name = nbt.getString("name", uuidString);
+            String name = nbt.contains("name", NbtElement.STRING_TYPE) ? nbt.getString("name") : uuidString;
             return Optional.of(new PlayerRef(uuid, name));
         } catch (IllegalArgumentException ignored) {
             return Optional.empty();

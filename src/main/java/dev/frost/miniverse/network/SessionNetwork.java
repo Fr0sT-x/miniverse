@@ -20,6 +20,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.server.MinecraftServer;
@@ -244,7 +245,7 @@ public final class SessionNetwork {
             return;
         }
 
-        int maxConcurrentLaunches = payload.settings().getInt("maxConcurrentLaunches").orElse(SessionLauncherConfig.getInstance().maxConcurrentLaunches());
+        int maxConcurrentLaunches = getIntOrDefault(payload.settings(), "maxConcurrentLaunches", SessionLauncherConfig.getInstance().maxConcurrentLaunches());
         SessionManager.getInstance().setMaxConcurrentLaunches(maxConcurrentLaunches);
         int applied = SessionLauncherConfig.getInstance().maxConcurrentLaunches();
         player.sendMessage(Text.literal("Max concurrent session launches set to " + applied + "."), false);
@@ -257,53 +258,53 @@ public final class SessionNetwork {
         }
 
         NbtCompound settings = payload.settings();
-        NbtCompound memory = settings.getCompound("memory").orElseGet(NbtCompound::new);
-        NbtCompound serverSettings = settings.getCompound("server").orElseGet(NbtCompound::new);
-        NbtCompound retentionSettings = settings.getCompound("retention").orElseGet(NbtCompound::new);
+        NbtCompound memory = getCompoundOrEmpty(settings, "memory");
+        NbtCompound serverSettings = getCompoundOrEmpty(settings, "server");
+        NbtCompound retentionSettings = getCompoundOrEmpty(settings, "retention");
 
         SessionMemoryConfig memoryConfig = SessionMemoryConfig.getInstance();
-        if (memory.contains("enabled")) {
-            memoryConfig.setEnabled(memory.getBoolean("enabled", memoryConfig.isEnabled()));
+        if (memory.contains("enabled", NbtElement.NUMBER_TYPE)) {
+            memoryConfig.setEnabled(memory.getBoolean("enabled"));
         }
-        if (memory.contains("maxHeapGb")) {
-            memoryConfig.setMaxHeap(memory.getInt("maxHeapGb").orElse(memoryConfig.getMaxHeap()));
+        if (memory.contains("maxHeapGb", NbtElement.NUMBER_TYPE)) {
+            memoryConfig.setMaxHeap(memory.getInt("maxHeapGb"));
         }
-        if (memory.contains("initialHeapGb")) {
-            memoryConfig.setInitialHeap(memory.getInt("initialHeapGb").orElse(memoryConfig.getInitialHeap()));
+        if (memory.contains("initialHeapGb", NbtElement.NUMBER_TYPE)) {
+            memoryConfig.setInitialHeap(memory.getInt("initialHeapGb"));
         }
 
         SessionServerConfig serverConfig = SessionServerConfig.getInstance();
-        if (serverSettings.contains("viewDistance")) {
-            serverConfig.setViewDistance(serverSettings.getInt("viewDistance").orElse(serverConfig.viewDistance()));
+        if (serverSettings.contains("viewDistance", NbtElement.NUMBER_TYPE)) {
+            serverConfig.setViewDistance(serverSettings.getInt("viewDistance"));
         }
-        if (serverSettings.contains("simulationDistance")) {
-            serverConfig.setSimulationDistance(serverSettings.getInt("simulationDistance").orElse(serverConfig.simulationDistance()));
+        if (serverSettings.contains("simulationDistance", NbtElement.NUMBER_TYPE)) {
+            serverConfig.setSimulationDistance(serverSettings.getInt("simulationDistance"));
         }
-        if (serverSettings.contains("onlineMode")) {
-            serverConfig.setOnlineMode(serverSettings.getBoolean("onlineMode", serverConfig.onlineMode()));
+        if (serverSettings.contains("onlineMode", NbtElement.NUMBER_TYPE)) {
+            serverConfig.setOnlineMode(serverSettings.getBoolean("onlineMode"));
         }
-        if (serverSettings.contains("spawnProtection")) {
-            serverConfig.setSpawnProtection(serverSettings.getInt("spawnProtection").orElse(serverConfig.spawnProtection()));
+        if (serverSettings.contains("spawnProtection", NbtElement.NUMBER_TYPE)) {
+            serverConfig.setSpawnProtection(serverSettings.getInt("spawnProtection"));
         }
-        if (serverSettings.contains("difficulty")) {
-            serverConfig.setDifficulty(serverSettings.getString("difficulty", serverConfig.difficulty()));
+        if (serverSettings.contains("difficulty", NbtElement.STRING_TYPE)) {
+            serverConfig.setDifficulty(serverSettings.getString("difficulty"));
         }
-        if (serverSettings.contains("allowFlight")) {
-            serverConfig.setAllowFlight(serverSettings.getBoolean("allowFlight", serverConfig.allowFlight()));
+        if (serverSettings.contains("allowFlight", NbtElement.NUMBER_TYPE)) {
+            serverConfig.setAllowFlight(serverSettings.getBoolean("allowFlight"));
         }
-        if (serverSettings.contains("acceptsTransfers")) {
-            serverConfig.setAcceptsTransfers(serverSettings.getBoolean("acceptsTransfers", serverConfig.acceptsTransfers()));
+        if (serverSettings.contains("acceptsTransfers", NbtElement.NUMBER_TYPE)) {
+            serverConfig.setAcceptsTransfers(serverSettings.getBoolean("acceptsTransfers"));
         }
-        if (serverSettings.contains("advertisedHost")) {
-            serverConfig.setAdvertisedHost(serverSettings.getString("advertisedHost", serverConfig.advertisedHost()));
+        if (serverSettings.contains("advertisedHost", NbtElement.STRING_TYPE)) {
+            serverConfig.setAdvertisedHost(serverSettings.getString("advertisedHost"));
         }
 
         SessionRetentionConfig retentionConfig = SessionRetentionConfig.getInstance();
-        if (retentionSettings.contains("keepLatestSessions")) {
-            retentionConfig.setKeepLatestSessions(retentionSettings.getInt("keepLatestSessions").orElse(retentionConfig.keepLatestSessions()));
+        if (retentionSettings.contains("keepLatestSessions", NbtElement.NUMBER_TYPE)) {
+            retentionConfig.setKeepLatestSessions(retentionSettings.getInt("keepLatestSessions"));
         }
-        if (retentionSettings.contains("maxAgeDays")) {
-            retentionConfig.setMaxAgeDays(retentionSettings.getInt("maxAgeDays").orElse(retentionConfig.maxAgeDays()));
+        if (retentionSettings.contains("maxAgeDays", NbtElement.NUMBER_TYPE)) {
+            retentionConfig.setMaxAgeDays(retentionSettings.getInt("maxAgeDays"));
         }
 
         sendSessionList(server, player);
@@ -417,6 +418,18 @@ public final class SessionNetwork {
         root.put("retention", retention);
 
         ServerPlayNetworking.send(player, new NetworkConstants.SessionListPayload(root));
+    }
+
+    private static int getIntOrDefault(NbtCompound nbt, String key, int fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getInt(key)
+            : fallback;
+    }
+
+    private static NbtCompound getCompoundOrEmpty(NbtCompound nbt, String key) {
+        return nbt != null && nbt.contains(key, NbtElement.COMPOUND_TYPE)
+            ? nbt.getCompound(key)
+            : new NbtCompound();
     }
 
     private static NbtCompound runtimeSessionToNbt(JsonObject json) {

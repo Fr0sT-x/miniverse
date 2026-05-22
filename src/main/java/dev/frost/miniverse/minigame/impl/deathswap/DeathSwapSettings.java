@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.deathswap;
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 import dev.frost.miniverse.minigame.core.respawn.RespawnMode;
 
@@ -57,17 +58,17 @@ public record DeathSwapSettings(
         }
 
         return new DeathSwapSettings(
-            clamp(nbt.getInt("swapIntervalSeconds", defaults.swapIntervalSeconds()), 1, 3600),
-            clamp(nbt.getInt("initialGracePeriodSeconds", defaults.initialGracePeriodSeconds()), 0, 3600),
-            clamp(nbt.getInt("borderSize", defaults.borderSize()), 16, 60_000),
-            parseSeedMode(nbt.getString("seedMode", defaults.seedMode().nbtValue())),
-            nbt.getLong("seed").orElse(defaults.seed()),
-            nbt.getBoolean("keepInventory", defaults.keepInventory()),
-            nbt.getBoolean("pvpEnabled", defaults.pvpEnabled()),
-            RespawnMode.parse(nbt.getString("respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
-            clamp(nbt.getInt("pointsToWin", defaults.pointsToWin()), 1, 100),
-            nbt.getBoolean("preserveVelocity", defaults.preserveVelocity()),
-            readTeams(nbt.getList("teams").orElseGet(NbtList::new))
+            clamp(getIntOrDefault(nbt, "swapIntervalSeconds", defaults.swapIntervalSeconds()), 1, 3600),
+            clamp(getIntOrDefault(nbt, "initialGracePeriodSeconds", defaults.initialGracePeriodSeconds()), 0, 3600),
+            clamp(getIntOrDefault(nbt, "borderSize", defaults.borderSize()), 16, 60_000),
+            parseSeedMode(getStringOrDefault(nbt, "seedMode", defaults.seedMode().nbtValue())),
+            getLongOrDefault(nbt, "seed", defaults.seed()),
+            getBooleanOrDefault(nbt, "keepInventory", defaults.keepInventory()),
+            getBooleanOrDefault(nbt, "pvpEnabled", defaults.pvpEnabled()),
+            RespawnMode.parse(getStringOrDefault(nbt, "respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
+            clamp(getIntOrDefault(nbt, "pointsToWin", defaults.pointsToWin()), 1, 100),
+            getBooleanOrDefault(nbt, "preserveVelocity", defaults.preserveVelocity()),
+            readTeams(getListOrEmpty(nbt, "teams", NbtElement.COMPOUND_TYPE))
         );
     }
 
@@ -195,19 +196,19 @@ public record DeathSwapSettings(
     private static List<TeamConfig> readTeams(NbtList list) {
         List<TeamConfig> teams = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
-            NbtCompound teamCompound = list.getCompoundOrEmpty(i);
-            String label = teamCompound.getString("label", "Team " + (i + 1)).trim();
-            NbtList membersList = teamCompound.getList("members").orElseGet(NbtList::new);
+            NbtCompound teamCompound = list.getCompound(i);
+            String label = getStringOrDefault(teamCompound, "label", "Team " + (i + 1)).trim();
+            NbtList membersList = getListOrEmpty(teamCompound, "members", NbtElement.COMPOUND_TYPE);
             List<TeamMember> members = new ArrayList<>();
             for (int m = 0; m < membersList.size(); m++) {
-                NbtCompound memberCompound = membersList.getCompoundOrEmpty(m);
-                String uuid = memberCompound.getString("uuid", "").trim();
+                NbtCompound memberCompound = membersList.getCompound(m);
+                String uuid = getStringOrDefault(memberCompound, "uuid", "").trim();
                 if (uuid.isBlank()) {
                     continue;
                 }
                 try {
                     UUID memberUuid = UUID.fromString(uuid);
-                    String name = memberCompound.getString("name", memberUuid.toString()).trim();
+                    String name = getStringOrDefault(memberCompound, "name", memberUuid.toString()).trim();
                     if (name.isBlank()) {
                         name = memberUuid.toString();
                     }
@@ -285,6 +286,36 @@ public record DeathSwapSettings(
 
     private static int clamp(int value, int min, int max) {
         return Math.clamp(value, min, max);
+    }
+
+    private static int getIntOrDefault(NbtCompound nbt, String key, int fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getInt(key)
+            : fallback;
+    }
+
+    private static long getLongOrDefault(NbtCompound nbt, String key, long fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getLong(key)
+            : fallback;
+    }
+
+    private static boolean getBooleanOrDefault(NbtCompound nbt, String key, boolean fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getBoolean(key)
+            : fallback;
+    }
+
+    private static String getStringOrDefault(NbtCompound nbt, String key, String fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.STRING_TYPE)
+            ? nbt.getString(key)
+            : fallback;
+    }
+
+    private static NbtList getListOrEmpty(NbtCompound nbt, String key, int listType) {
+        return nbt != null && nbt.contains(key, NbtElement.LIST_TYPE)
+            ? nbt.getList(key, listType)
+            : new NbtList();
     }
 
     public enum SeedMode {

@@ -1,6 +1,7 @@
 package dev.frost.miniverse.session.plan;
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 
 import java.util.ArrayList;
@@ -16,17 +17,17 @@ public record TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> r
     }
 
     public static TeamPlan fromNbt(NbtCompound nbt, String fallbackLabel) {
-        String label = nbt.getString("label", fallbackLabel);
+        String label = nbt.contains("label", NbtElement.STRING_TYPE) ? nbt.getString("label") : fallbackLabel;
         List<PlayerRef> members = new ArrayList<>();
-        NbtList memberList = nbt.getList("members").orElseGet(NbtList::new);
+        NbtList memberList = nbt.getList("members", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < memberList.size(); i++) {
-            PlayerRef.fromNbt(memberList.getCompoundOrEmpty(i)).ifPresent(members::add);
+            PlayerRef.fromNbt(memberList.getCompound(i)).ifPresent(members::add);
         }
 
         List<PlayerRole> roles = new ArrayList<>();
-        NbtList roleList = nbt.getList("roles").orElseGet(NbtList::new);
+        NbtList roleList = nbt.getList("roles", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < roleList.size(); i++) {
-            PlayerRole.fromNbt(roleList.getCompoundOrEmpty(i)).ifPresent(roles::add);
+            PlayerRole.fromNbt(roleList.getCompound(i)).ifPresent(roles::add);
         }
 
         return new TeamPlan(label, members, roles);

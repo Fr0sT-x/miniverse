@@ -7,6 +7,7 @@ import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 
 import java.util.ArrayList;
@@ -104,15 +105,15 @@ public final class SessionCreationService {
         }
 
         NbtCompound settings = plan.settings();
-        NbtList roles = settings.getList("roles").orElseGet(NbtList::new);
+        NbtList roles = settings.getList("roles", NbtElement.COMPOUND_TYPE);
         if (roles.isEmpty()) {
             return null;
         }
 
         Map<UUID, SessionMembership> members = new LinkedHashMap<>();
         for (int i = 0; i < roles.size(); i++) {
-            NbtCompound roleEntry = roles.getCompoundOrEmpty(i);
-            String uuidText = roleEntry.getString("uuid", "");
+            NbtCompound roleEntry = roles.getCompound(i);
+            String uuidText = roleEntry.contains("uuid", NbtElement.STRING_TYPE) ? roleEntry.getString("uuid") : "";
             if (uuidText.isBlank()) {
                 continue;
             }
@@ -129,7 +130,7 @@ public final class SessionCreationService {
                 continue;
             }
 
-            String role = roleEntry.getString("role", "").trim();
+            String role = roleEntry.contains("role", NbtElement.STRING_TYPE) ? roleEntry.getString("role").trim() : "";
             members.put(uuid, new SessionMembership(uuid, player.getName().getString(), role));
         }
 

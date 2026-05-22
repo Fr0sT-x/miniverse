@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.resourcesprint;
 
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
 
 import java.util.ArrayList;
@@ -39,11 +40,11 @@ public record ResourceSprintSettings(
             return defaults();
         }
 
-        Mode mode = parseMode(nbt.getString("mode", Mode.FIRST_TO_COMPLETE.nbtValue()));
-        TieBreakRule tieBreakRule = parseTieBreakRule(nbt.getString("tieBreakRule", TieBreakRule.SUDDEN_DEATH.nbtValue()));
-        int timeLimitSeconds = Math.max(1, nbt.getInt("timeLimitSeconds").orElse(3600));
-        ObjectiveDistributionMode distributionMode = parseDistributionMode(nbt.getString("objectiveDistributionMode", DEFAULT_DISTRIBUTION_MODE.nbtValue()));
-        List<ObjectiveEntry> objectives = readObjectives(nbt.getList("objectives").orElseGet(NbtList::new));
+        Mode mode = parseMode(getStringOrDefault(nbt, "mode", Mode.FIRST_TO_COMPLETE.nbtValue()));
+        TieBreakRule tieBreakRule = parseTieBreakRule(getStringOrDefault(nbt, "tieBreakRule", TieBreakRule.SUDDEN_DEATH.nbtValue()));
+        int timeLimitSeconds = Math.max(1, getIntOrDefault(nbt, "timeLimitSeconds", 3600));
+        ObjectiveDistributionMode distributionMode = parseDistributionMode(getStringOrDefault(nbt, "objectiveDistributionMode", DEFAULT_DISTRIBUTION_MODE.nbtValue()));
+        List<ObjectiveEntry> objectives = readObjectives(getListOrEmpty(nbt, "objectives", NbtElement.COMPOUND_TYPE));
         if (objectives.isEmpty()) {
             objectives = DEFAULT_OBJECTIVES;
         }
@@ -141,15 +142,42 @@ public record ResourceSprintSettings(
     private static List<ObjectiveEntry> readObjectives(NbtList list) {
         List<ObjectiveEntry> objectives = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
-            NbtCompound compound = list.getCompoundOrEmpty(i);
-            String objective = compound.getString("id", "").trim().toLowerCase(Locale.ROOT);
+            NbtCompound compound = list.getCompound(i);
+            String objective = getStringOrDefault(compound, "id", "").trim().toLowerCase(Locale.ROOT);
             if (!objective.isBlank()) {
-                ObjectiveDifficulty difficulty = ObjectiveDifficulty.fromString(compound.getString("difficulty", ObjectiveDifficulty.EASY.nbtValue()));
-                double probability = compound.getDouble("probability").filter(value -> value > 0).orElse(1.0);
+                ObjectiveDifficulty difficulty = ObjectiveDifficulty.fromString(getStringOrDefault(compound, "difficulty", ObjectiveDifficulty.EASY.nbtValue()));
+                double probability = getDoubleOrDefault(compound, "probability", 1.0);
+                if (probability <= 0) {
+                    probability = 1.0;
+                }
                 objectives.add(new ObjectiveEntry(objective, difficulty, probability));
             }
         }
         return objectives;
+    }
+
+    private static int getIntOrDefault(NbtCompound nbt, String key, int fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getInt(key)
+            : fallback;
+    }
+
+    private static double getDoubleOrDefault(NbtCompound nbt, String key, double fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
+            ? nbt.getDouble(key)
+            : fallback;
+    }
+
+    private static String getStringOrDefault(NbtCompound nbt, String key, String fallback) {
+        return nbt != null && nbt.contains(key, NbtElement.STRING_TYPE)
+            ? nbt.getString(key)
+            : fallback;
+    }
+
+    private static NbtList getListOrEmpty(NbtCompound nbt, String key, int listType) {
+        return nbt != null && nbt.contains(key, NbtElement.LIST_TYPE)
+            ? nbt.getList(key, listType)
+            : new NbtList();
     }
 
     private static List<ObjectiveEntry> readObjectivesFromProperties(Properties properties) {

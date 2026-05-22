@@ -3,14 +3,18 @@ package dev.frost.miniverse.client;
 import dev.frost.miniverse.client.freeze.ClientFreezeHandler;
 import dev.frost.miniverse.client.freeze.ClientFreezeState;
 import dev.frost.miniverse.client.gui.SessionScreen;
+import dev.frost.miniverse.client.protection.ProtectionOverlayClient;
+import dev.frost.miniverse.client.transition.TransitionOverlay;
 import dev.frost.miniverse.common.NetworkConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.util.Identifier;
@@ -25,6 +29,8 @@ public class MiniverseClient implements ClientModInitializer {
 		NetworkConstants.registerPayloadTypes();
 		NightVisionToggle.register();
 		ClientFreezeHandler.register();
+		TransitionOverlay.register();
+		ProtectionOverlayClient.register();
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.miniverse.open_gui",
@@ -57,6 +63,38 @@ public class MiniverseClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.FREEZE_STATE_ID, (payload, context) ->
 			context.client().execute(() -> ClientFreezeState.setFrozen(payload.frozen()))
 		);
+
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			ClientFreezeState.setFrozen(false);
+			ProtectionOverlayClient.clearAll();
+		});
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> sendConnectionHost(client));
+	}
+
+	private static void sendConnectionHost(MinecraftClient client) {
+		ServerInfo serverInfo = client.getCurrentServerEntry();
+		if (serverInfo == null || serverInfo.address == null || serverInfo.address.isBlank()) {
+			return;
+		}
+
+		String host = extractHost(serverInfo.address);
+		if (!host.isBlank() && ClientPlayNetworking.canSend(NetworkConstants.CLIENT_CONNECTION_HOST_ID)) {
+			ClientPlayNetworking.send(new NetworkConstants.ClientConnectionHostPayload(host));
+		}
+	}
+
+	private static String extractHost(String address) {
+		String value = address.trim();
+		if (value.startsWith("[")) {
+			int end = value.indexOf(']');
+			return end > 1 ? value.substring(1, end).trim() : "";
+		}
+
+		int colon = value.lastIndexOf(':');
+		if (colon > 0 && value.indexOf(':') == colon) {
+			return value.substring(0, colon).trim();
+		}
+		return value;
 	}
 
 	private static void openGui() {

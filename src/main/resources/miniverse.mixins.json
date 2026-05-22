@@ -3,7 +3,13 @@
 	"package": "dev.frost.miniverse.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExampleMixin"
+		"ExampleMixin",
+		"ProtectedItemScreenHandlerMixin",
+		"ProtectedItemPlayerDropMixin"
+	],
+	"client": [
+		"ProtectedItemClientHandledScreenMixin",
+		"ProtectedItemClientPlayerEntityMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

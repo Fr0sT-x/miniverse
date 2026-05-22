@@ -13,11 +13,14 @@ public record ManhuntSettings(
     int runnerGlowPulseMinutes,
     int runnerLives,
     int hunterLives,
-    int hunterRespawnDelaySeconds
+    int hunterRespawnDelaySeconds,
+    int disconnectGraceSeconds
 ) {
     public static final int UNLIMITED_LIVES = -1;
 
     public static ManhuntSettings defaults() {
+        int globalGrace = Integer.getInteger("miniverse.lifecycle.disconnectGraceSeconds", 300);
+        int modeGrace = Integer.getInteger("miniverse.manhunt.disconnectGraceSeconds", globalGrace);
         return new ManhuntSettings(
             Integer.getInteger("miniverse.manhunt.hunterReleaseDelaySeconds", 10),
             Integer.getInteger("miniverse.manhunt.respawnDelaySeconds", ManhuntSpeedrunnerRespawnSystem.DEFAULT_RESPAWN_DELAY_SECONDS),
@@ -27,7 +30,8 @@ public record ManhuntSettings(
             Integer.getInteger("miniverse.manhunt.runnerGlowPulseMinutes", 0),
             Integer.getInteger("miniverse.manhunt.runnerLives", UNLIMITED_LIVES),
             Integer.getInteger("miniverse.manhunt.hunterLives", UNLIMITED_LIVES),
-            Integer.getInteger("miniverse.manhunt.hunterRespawnDelaySeconds", 0)
+            Integer.getInteger("miniverse.manhunt.hunterRespawnDelaySeconds", 0),
+            modeGrace
         ).normalized();
     }
 
@@ -49,7 +53,8 @@ public record ManhuntSettings(
             settings.getInt("runnerGlowPulseMinutes", defaults.runnerGlowPulseMinutes()),
             settings.getInt("runnerLives", defaults.runnerLives()),
             settings.getInt("hunterLives", defaults.hunterLives()),
-            settings.getInt("hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds())
+            settings.getInt("hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds()),
+            settings.getInt("disconnectGraceSeconds", defaults.disconnectGraceSeconds())
         ).normalized();
     }
 
@@ -68,10 +73,10 @@ public record ManhuntSettings(
             parseInt(properties.getProperty("manhunt.runnerGlowPulseMinutes"), defaults.runnerGlowPulseMinutes()),
             parseInt(properties.getProperty("manhunt.runnerLives"), defaults.runnerLives()),
             parseInt(properties.getProperty("manhunt.hunterLives"), defaults.hunterLives()),
-            parseInt(properties.getProperty("manhunt.hunterRespawnDelaySeconds"), defaults.hunterRespawnDelaySeconds())
+            parseInt(properties.getProperty("manhunt.hunterRespawnDelaySeconds"), defaults.hunterRespawnDelaySeconds()),
+            parseInt(properties.getProperty("manhunt.disconnectGraceSeconds"), defaults.disconnectGraceSeconds())
         ).normalized();
     }
-
 
     public ManhuntSettings withSpeedrunnerRespawnDelaySeconds(int seconds) {
         return new ManhuntSettings(
@@ -83,7 +88,8 @@ public record ManhuntSettings(
             this.runnerGlowPulseMinutes,
             this.runnerLives,
             this.hunterLives,
-            this.hunterRespawnDelaySeconds
+            this.hunterRespawnDelaySeconds,
+            this.disconnectGraceSeconds
         ).normalized();
     }
 
@@ -97,7 +103,8 @@ public record ManhuntSettings(
             Math.clamp(this.runnerGlowPulseMinutes, 0, 120),
             normalizeLives(this.runnerLives),
             normalizeLives(this.hunterLives),
-            Math.clamp(this.hunterRespawnDelaySeconds, 0, 3600)
+            Math.clamp(this.hunterRespawnDelaySeconds, 0, 3600),
+            Math.clamp(this.disconnectGraceSeconds, 0, 3600)
         );
     }
 

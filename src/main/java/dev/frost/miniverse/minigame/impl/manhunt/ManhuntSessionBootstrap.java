@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.manhunt;
 
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
+import dev.frost.miniverse.minigame.core.lifecycle.DisconnectGraceHandler;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame.ManhuntRole;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -44,8 +45,23 @@ final class ManhuntSessionBootstrap {
 
             @Override
             public MatchLifecycleOptions lifecycleOptions(ManhuntMinigame minigame, Properties properties) {
+                ManhuntSettings settings = minigame.getSettings();
                 return MatchLifecycleOptions.defaults(minigame.getName())
                     .withFreezeEnabled(true)
+                    .withDisconnectGraceSeconds(settings.disconnectGraceSeconds())
+                    .withDisconnectGraceHandler(new DisconnectGraceHandler() {
+                        @Override
+                        public boolean isCritical(dev.frost.miniverse.minigame.core.MinigameRuntime runtime, ServerPlayerEntity player) {
+                            return minigame.getState().isActive()
+                                && minigame.getPlayerRole(player) == ManhuntMinigame.ManhuntRole.SPEEDRUNNER
+                                && minigame.getAliveSpeedrunnerCount() <= 1;
+                        }
+
+                        @Override
+                        public void onGraceExpired(dev.frost.miniverse.minigame.core.MinigameRuntime runtime, java.util.List<java.util.UUID> pendingPlayers) {
+                            minigame.handleDisconnectGraceExpired(pendingPlayers);
+                        }
+                    })
                     .withStartTitle(
                         Text.literal(minigame.getName()),
                         Text.literal("Speedrunners defeat the dragon. Hunters win by stopping every runner.")

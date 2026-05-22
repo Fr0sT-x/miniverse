@@ -21,7 +21,7 @@ public final class SessionGroup {
     private final BackendInstance backendInstance = new BackendInstance();
 
     public SessionGroup(UUID playerUuid, String playerName, String sessionId, SessionGameDescriptor gameType, SeedPlan seedPlan) {
-        this(sessionId, gameType, seedPlan, playerName, List.of(playerUuid), List.of(playerName));
+        this(sessionId, gameType, seedPlan, "Team 1", List.of(playerUuid), List.of(playerName));
     }
 
     public SessionGroup(String sessionId, SessionGameDescriptor gameType, SeedPlan seedPlan, String groupLabel, List<UUID> playerUuids, List<String> playerNames) {

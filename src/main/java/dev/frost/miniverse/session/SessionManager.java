@@ -2,7 +2,10 @@ package dev.frost.miniverse.session;
 
 import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
-import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
+import dev.frost.miniverse.minigame.core.MinigameRegistry;
+import dev.frost.miniverse.network.TransitionTransferCoordinator;
+import dev.frost.miniverse.network.VelocityProxyBridge;
+import dev.frost.miniverse.common.MiniversePaths;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -10,6 +13,7 @@ import net.minecraft.util.Formatting;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -33,6 +37,7 @@ public final class SessionManager {
     private final Map<UUID, String> playerSessions = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> sessionCounters = new ConcurrentHashMap<>();
     private final Map<String, List<PendingBackendStop>> pendingSeedChangeStops = new ConcurrentHashMap<>();
+    private final Map<String, Process> inspectionProcesses = new ConcurrentHashMap<>();
     private final ThreadPoolExecutor launcherExecutor = this.createLauncherExecutor();
     private final ServerLauncher serverLauncher = new ServerLauncher();
 
@@ -55,6 +60,11 @@ public final class SessionManager {
                         }
                     }
                 }
+                for (Map.Entry<String, Process> entry : this.inspectionProcesses.entrySet()) {
+                    Miniverse.LOGGER.info("Terminating inspection backend {}", entry.getKey());
+                    stopProcess(entry.getValue());
+                }
+                this.inspectionProcesses.clear();
             }
             this.launcherExecutor.shutdownNow();
             Miniverse.LOGGER.info("Backend session server cleanup complete.");
@@ -258,7 +268,84 @@ public final class SessionManager {
                 throw new RuntimeException(error);
             });
     }
-    
+
+    public CompletableFuture<GameSession> relaunchRetainedSession(String sessionId, MinecraftServer server) {
+        SessionRegistry.RetainedSession retained = SessionRegistry.loadRetainedSession(sessionId).orElse(null);
+        if (retained == null) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown retained session: " + sessionId));
+        }
+
+        Optional<MinigameDefinition> definition = MinigameRegistry.get(retained.gameId());
+        if (definition.isEmpty()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Unknown game type '" + retained.gameId() + "' for retained session " + sessionId));
+        }
+
+        if (retained.teams().isEmpty()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Retained session " + sessionId + " has no player roster."));
+        }
+
+        GameSession session;
+        synchronized (this) {
+            if (this.sessions.containsKey(sessionId)) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Session is already running: " + sessionId));
+            }
+            SessionGameDescriptor gameType = SessionGameDescriptor.fromDefinition(definition.get());
+            session = new GameSession(sessionId, gameType, retained.seedPlan());
+            session.setSettings(retained.settings());
+            this.sessions.put(sessionId, session);
+            SessionRegistry.clearStopRequested(sessionId);
+            SessionRegistry.clearReturnComplete(sessionId);
+            SessionRegistry.clearSeedChangeRequested(sessionId);
+            session.setState(SessionState.LAUNCHING);
+            this.persistRegistry();
+        }
+
+        for (PlannedTeam team : retained.teams()) {
+            this.createGroup(sessionId, team);
+        }
+
+        Path retainedRoot = MiniversePaths.sessionsRoot().resolve(sessionId);
+        List<SessionGroup> groups = new ArrayList<>(session.snapshotGroups());
+        SessionOperatorSnapshot operatorSnapshot = SessionOperatorSnapshot.capture(server, groups);
+
+        if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD && !groups.isEmpty()) {
+            SessionGroup primary = groups.get(0);
+            CompletableFuture<SessionGroup> primaryLaunch = this.launchRetainedGroupAsync(session, primary, operatorSnapshot.forGroups(groups), retainedRoot);
+            return primaryLaunch.thenApply(launchedGroup -> {
+                BackendInstance backend = launchedGroup.getBackendInstance();
+                for (int i = 1; i < groups.size(); i++) {
+                    groups.get(i).attachBackend(backend);
+                }
+                session.setState(SessionState.RUNNING);
+                this.persistRegistry();
+                return session;
+            }).exceptionally(error -> {
+                session.setState(SessionState.FAILED);
+                this.persistRegistry();
+                this.notifyPlayersOfFailure(session, server, error.getCause() != null ? error.getCause().getMessage() : error.getMessage());
+                throw new RuntimeException(error);
+            });
+        }
+
+        List<CompletableFuture<SessionGroup>> launches = new ArrayList<>();
+        for (SessionGroup group : groups) {
+            launches.add(this.launchRetainedGroupAsync(session, group, operatorSnapshot.forGroups(List.of(group)), retainedRoot));
+        }
+
+        return CompletableFuture.allOf(launches.toArray(new CompletableFuture[0]))
+            .thenApply(ignored -> {
+                session.setState(SessionState.RUNNING);
+                this.persistRegistry();
+                return session;
+            })
+            .exceptionally(error -> {
+                session.setState(SessionState.FAILED);
+                this.persistRegistry();
+                this.notifyPlayersOfFailure(session, server, error.getCause() != null ? error.getCause().getMessage() : error.getMessage());
+                throw new RuntimeException(error);
+            });
+    }
+
     private void notifyPlayersOfFailure(GameSession session, MinecraftServer server, String errorMessage) {
         Text message = Text.literal("Session launch failed: " + errorMessage).formatted(Formatting.RED);
         for (SessionGroup group : session.snapshotGroups()) {
@@ -281,6 +368,74 @@ public final class SessionManager {
         this.stopBackendProcesses(session);
         session.setState(SessionState.STOPPED);
         this.persistRegistry();
+    }
+
+    public synchronized void reapDeadBackends(MinecraftServer server) {
+        boolean changed = false;
+        for (GameSession session : this.sessions.values()) {
+            if (session.getState() != SessionState.RUNNING && session.getState() != SessionState.LAUNCHING) {
+                continue;
+            }
+
+            List<SessionGroup> deadGroups = session.snapshotGroups().stream()
+                .filter(group -> group.getState() == SessionState.RUNNING || group.getState() == SessionState.LAUNCHING)
+                .filter(group -> group.getProcess() != null && !group.getProcess().isAlive())
+                .toList();
+            if (deadGroups.isEmpty()) {
+                continue;
+            }
+
+            session.setState(SessionState.FAILED);
+            for (SessionGroup group : deadGroups) {
+                int exitCode = exitCode(group.getProcess());
+                String error = "Backend process exited unexpectedly" + (exitCode == Integer.MIN_VALUE ? "" : " with exit code " + exitCode);
+                group.markFailed(error);
+                Miniverse.LOGGER.warn(
+                    "{} session {} backend {} is no longer alive: {}.",
+                    session.getGameType().getDisplayName(),
+                    session.getSessionId(),
+                    group.getDisplayName(),
+                    error
+                );
+            }
+
+            Text message = Text.literal("Session backend stopped unexpectedly. Please create or launch a new session.").formatted(Formatting.RED);
+            for (SessionGroup group : session.snapshotGroups()) {
+                for (UUID playerUuid : group.getPlayerUuids()) {
+                    ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerUuid);
+                    if (player != null) {
+                        player.sendMessage(message, false);
+                    }
+                    this.playerSessions.remove(playerUuid, session.getSessionId());
+                }
+            }
+            changed = true;
+        }
+
+        if (changed) {
+            this.persistRegistry();
+        }
+    }
+
+    public CompletableFuture<ServerLauncher.InspectionLaunchResult> launchInspectionAsync(String sessionId, ServerPlayerEntity viewer) {
+        Path sessionRoot = dev.frost.miniverse.common.MiniversePaths.sessionsRoot().resolve(sessionId);
+        if (!SessionRegistry.existingSessionIds().contains(sessionId)) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown retained session: " + sessionId));
+        }
+
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    ServerLauncher.InspectionLaunchResult result = this.serverLauncher.launchInspection(sessionId, sessionRoot, viewer);
+                    this.inspectionProcesses.put(sessionId + ":" + result.port(), result.process());
+                    return result;
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }, this.launcherExecutor);
+        } catch (RejectedExecutionException e) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Cannot queue inspection launch: launcher capacity is full", e));
+        }
     }
 
     public CompletableFuture<GameSession> changeSeedAndRelaunchSession(String sessionId, MinecraftServer server) {
@@ -352,7 +507,7 @@ public final class SessionManager {
                         }
                         session.setState(SessionState.RUNNING);
                         this.persistRegistry();
-                        SessionRegistry.setSeedChangeTarget(sessionId, originalPrimary.getGroupLabel(), "127.0.0.1", launchedGroup.getPort());
+                        SessionRegistry.setSeedChangeTarget(sessionId, originalPrimary.getGroupLabel(), seedChangeTargetHost(), seedChangeTargetPort(launchedGroup.getPort()));
                     }
                     return session;
                 })
@@ -385,7 +540,7 @@ public final class SessionManager {
                     for (SessionGroup group : groups) {
                         SessionGroup replacement = replacements.get(group.getGroupLabel());
                         group.attachBackend(replacement.getBackendInstance());
-                        SessionRegistry.setSeedChangeTarget(sessionId, group.getGroupLabel(), "127.0.0.1", replacement.getPort());
+                        SessionRegistry.setSeedChangeTarget(sessionId, group.getGroupLabel(), seedChangeTargetHost(), seedChangeTargetPort(replacement.getPort()));
                     }
                     session.setState(SessionState.RUNNING);
                     this.persistRegistry();
@@ -454,6 +609,26 @@ public final class SessionManager {
         return new SessionGroup(session.getSessionId(), session.getGameType(), seedPlan, group.getPlannedTeam());
     }
 
+    private static int publicPort(Integer localPort) {
+        if (localPort == null) {
+            return -1;
+        }
+        return SessionLauncherConfig.getInstance().publicPortForLocalPort(localPort);
+    }
+
+    private static String seedChangeTargetHost() {
+        return VelocityProxyConfig.getInstance().velocityEnabled()
+            ? VelocityProxyConfig.getInstance().backendHost()
+            : SessionServerConfig.getInstance().advertisedHost();
+    }
+
+    private static int seedChangeTargetPort(Integer localPort) {
+        if (localPort == null) {
+            return -1;
+        }
+        return VelocityProxyConfig.getInstance().velocityEnabled() ? localPort : publicPort(localPort);
+    }
+
     private static void stopProcess(Process process) {
         if (process == null || !process.isAlive()) {
             return;
@@ -470,12 +645,35 @@ public final class SessionManager {
         }
     }
 
+    private static int exitCode(Process process) {
+        if (process == null || process.isAlive()) {
+            return Integer.MIN_VALUE;
+        }
+        try {
+            return process.exitValue();
+        } catch (IllegalThreadStateException ignored) {
+            return Integer.MIN_VALUE;
+        }
+    }
+
     public synchronized void removeSession(String sessionId) {
         this.stopSession(sessionId);
         this.sessions.remove(sessionId);
         this.playerSessions.entrySet().removeIf(entry -> sessionId.equals(entry.getValue()));
         SessionRegistry.removeSession(sessionId);
         this.persistRegistry();
+    }
+
+    public synchronized void archiveSession(String sessionId) {
+        GameSession session = this.sessions.get(sessionId);
+        if (session != null) {
+            session.setState(SessionState.STOPPED);
+            this.stopBackendProcesses(session);
+            this.persistRegistry();
+        }
+        this.sessions.remove(sessionId);
+        this.playerSessions.entrySet().removeIf(entry -> sessionId.equals(entry.getValue()));
+        Miniverse.LOGGER.info("Archived retained session {} for recovery and inspection.", sessionId);
     }
 
     public void transferAssignedPlayers(MinecraftServer server, GameSession session) {
@@ -499,16 +697,33 @@ public final class SessionManager {
         }
 
         player.sendMessage(net.minecraft.text.Text.literal("Transferring you to your session..."), false);
-        player.networkHandler.sendPacket(new ServerTransferS2CPacket("127.0.0.1", group.getPort()));
+        if (VelocityProxyBridge.isEnabled()) {
+            TransitionTransferCoordinator.transferToVelocityBackend(
+                player,
+                VelocityProxyBridge.serverName(group),
+                group.getPort(),
+                "Joining " + group.getGameType().getDisplayName(),
+                () -> {
+                }
+            );
+            return;
+        }
+
+        TransitionTransferCoordinator.transfer(player, SessionServerConfig.getInstance().advertisedHost(), publicPort(group.getPort()), "Joining " + group.getGameType().getDisplayName());
     }
 
     public void transferPlayer(ServerPlayerEntity player, String host, int port) {
+        this.transferPlayer(player, host, port, () -> {
+        });
+    }
+
+    public void transferPlayer(ServerPlayerEntity player, String host, int port, Runnable afterTransferPacketSent) {
         if (host == null || host.isBlank() || port <= 0) {
             return;
         }
 
         player.sendMessage(net.minecraft.text.Text.literal("Returning you to the main server..."), false);
-        player.networkHandler.sendPacket(new ServerTransferS2CPacket(host, port));
+        TransitionTransferCoordinator.transfer(player, host, port, "Returning to Lobby", afterTransferPacketSent);
     }
 
     public synchronized List<SessionGroup> getGroups(String sessionId) {
@@ -580,6 +795,25 @@ public final class SessionManager {
         }
     }
 
+    private CompletableFuture<SessionGroup> launchRetainedGroupAsync(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, Path retainedRoot) {
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return this.serverLauncher.launchFromRetained(session, group, operatorSnapshot, retainedRoot, true).group();
+                } catch (IOException e) {
+                    group.markFailed(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+            }, this.launcherExecutor);
+        } catch (RejectedExecutionException e) {
+            String message = this.launchCapacityMessage(session, group);
+            group.markFailed(message);
+            this.persistRegistry();
+            Miniverse.LOGGER.warn(message);
+            return CompletableFuture.failedFuture(new IllegalStateException(message, e));
+        }
+    }
+
     private ThreadPoolExecutor createLauncherExecutor() {
         SessionLauncherConfig config = SessionLauncherConfig.getInstance();
         AtomicInteger threadCounter = new AtomicInteger(1);
@@ -611,7 +845,11 @@ public final class SessionManager {
 
     private String nextSessionId(SessionGameDescriptor gameType) {
         AtomicInteger counter = this.sessionCounters.computeIfAbsent(gameType.getCommandName(), ignored -> new AtomicInteger(1));
-        return gameType.getCommandName() + "-" + counter.getAndIncrement();
+        String sessionId;
+        do {
+            sessionId = gameType.getCommandName() + "-" + counter.getAndIncrement();
+        } while (this.sessions.containsKey(sessionId) || SessionRegistry.existingSessionIds().contains(sessionId));
+        return sessionId;
     }
 
     public synchronized GameSession createSession(MinigameDefinition definition) {

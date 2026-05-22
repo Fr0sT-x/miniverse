@@ -35,6 +35,11 @@ public final class SessionConfigJson {
         root.addProperty("topology", session.getGameType().getTopology().name());
         root.addProperty("state", session.getState().name());
         root.addProperty("seed", session.getSeedPlan().sharedSeed());
+        root.addProperty("settingsNbt", session.getSettings().toString());
+        root.addProperty("createdAt", session.getCreatedAt().toEpochMilli());
+        if (session.getLaunchedAt() != null) {
+            root.addProperty("launchedAt", session.getLaunchedAt().toEpochMilli());
+        }
         root.add("lifecycle", lifecycle(false, false));
         root.add("teams", teams(session));
         root.add("backendAssignments", backendAssignments(session));
@@ -50,6 +55,7 @@ public final class SessionConfigJson {
         root.add("settings", nestedProperties(gameProperties));
         root.add("returnServer", returnServer(returnHost, returnPort));
         root.add("registry", registry(mainSessionsRoot));
+        root.add("proxy", proxy(VelocityProxyConfig.getInstance()));
         return root;
     }
 
@@ -78,6 +84,17 @@ public final class SessionConfigJson {
         returnServer.addProperty("host", host == null || host.isBlank() ? "127.0.0.1" : host);
         returnServer.addProperty("port", port <= 0 ? 25565 : port);
         return returnServer;
+    }
+
+    public static JsonObject proxy(VelocityProxyConfig config) {
+        JsonObject proxy = new JsonObject();
+        if (config != null) {
+            proxy.addProperty("velocityEnabled", config.velocityEnabled());
+            proxy.addProperty("lobbyServerName", config.lobbyServerName());
+            proxy.addProperty("backendHost", config.backendHost());
+            proxy.addProperty("serverNamePrefix", config.serverNamePrefix());
+        }
+        return proxy;
     }
 
     public static JsonArray teams(GameSession session) {
@@ -235,6 +252,16 @@ public final class SessionConfigJson {
             properties.setProperty("registry.sessionsRoot", sessionsRoot);
         }
 
+        JsonObject proxy = json.has("proxy") && json.get("proxy").isJsonObject()
+            ? json.getAsJsonObject("proxy")
+            : new JsonObject();
+        if (proxy.has("velocityEnabled")) {
+            properties.setProperty("proxy.velocityEnabled", Boolean.toString(proxy.get("velocityEnabled").getAsBoolean()));
+        }
+        properties.setProperty("proxy.lobbyServerName", string(proxy, "lobbyServerName", ""));
+        properties.setProperty("proxy.backendHost", string(proxy, "backendHost", ""));
+        properties.setProperty("proxy.serverNamePrefix", string(proxy, "serverNamePrefix", ""));
+
         JsonElement settings = json.get("settings");
         if (settings != null && settings.isJsonObject()) {
             flattenJson("", settings.getAsJsonObject(), properties);
@@ -262,6 +289,7 @@ public final class SessionConfigJson {
                         continue;
                     }
                     properties.setProperty("player." + uuid, "true");
+                    properties.setProperty("player." + uuid + ".name", string(member, "name", ""));
                     properties.setProperty("player." + uuid + ".team", label);
                     String role = string(member, "role", "");
                     if (!role.isBlank()) {

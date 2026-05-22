@@ -263,10 +263,6 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
             return;
         }
         new GlobalMatchRules(this.settings.keepInventory(), this.settings.pvpEnabled()).apply(this.server);
-        for (ServerWorld world : this.server.getWorlds()) {
-            world.getWorldBorder().setCenter(0.5D, 0.5D);
-            world.getWorldBorder().setSize(this.settings.borderSize());
-        }
         for (ServerPlayerEntity participant : participants) {
             participant.changeGameMode(GameMode.SURVIVAL);
             participant.setHealth(participant.getMaxHealth());

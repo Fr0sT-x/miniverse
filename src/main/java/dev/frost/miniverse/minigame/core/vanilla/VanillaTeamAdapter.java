@@ -3,6 +3,7 @@ package dev.frost.miniverse.minigame.core.vanilla;
 import dev.frost.miniverse.team.TeamColorPalette;
 import dev.frost.miniverse.team.TeamSnapshot;
 import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.scoreboard.ServerScoreboard;
 import net.minecraft.scoreboard.Team;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -56,8 +57,8 @@ public final class VanillaTeamAdapter {
             Team team = scoreboard.getTeam(teamName);
             if (team == null) {
                 team = scoreboard.addTeam(teamName);
-                this.ownedScoreboardTeams.add(teamName);
             }
+            this.ownedScoreboardTeams.add(teamName);
 
             VanillaTeamOptions options = descriptor.options();
             team.setDisplayName(descriptor.displayName());
@@ -90,7 +91,11 @@ public final class VanillaTeamAdapter {
             }
 
             activeTeamNames.add(teamName);
-            scoreboard.updateScoreboardTeamAndPlayers(team);
+            if (scoreboard instanceof ServerScoreboard serverScoreboard) {
+                serverScoreboard.updateScoreboardTeam(team);
+            } else {
+                scoreboard.updateScoreboardTeam(team);
+            }
         }
 
         for (String teamName : new ArrayList<>(this.ownedScoreboardTeams)) {

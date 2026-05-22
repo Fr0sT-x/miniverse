@@ -7,6 +7,8 @@ import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.nbt.NbtCompound;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -15,19 +17,25 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.jar.JarFile;
+import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class ServerLauncher {
 
     public record LaunchResult(SessionGroup group, Process process, int port, Path workingDirectory) {
+    }
+
+    public record InspectionLaunchResult(Process process, int port, Path workingDirectory) {
     }
 
     public LaunchResult launch(GameSession session, SessionGroup group) throws IOException {
@@ -72,7 +80,7 @@ public final class ServerLauncher {
         String javaExecutable = this.resolveJavaExecutable();
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
-        command.add("-Xmx2G");
+        this.addMemoryArguments(command);
         command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
         command.add("-Dminiverse.session.game=" + session.getGameType().getCommandName());
         if (FabricLoader.getInstance().isDevelopmentEnvironment() && SessionPermissions.isDevBypassEnabled()) {
@@ -102,10 +110,92 @@ public final class ServerLauncher {
         }
 
         long bootTime = System.currentTimeMillis() - startTime;
-        String address = "127.0.0.1:" + port;
+        int publicPort = SessionLauncherConfig.getInstance().publicPortForLocalPort(port);
+        String address = SessionServerConfig.getInstance().advertisedHost() + ":" + publicPort;
         group.markRunning(process, address);
 
-        Miniverse.LOGGER.info("Launched {} session {} for {} at {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, bootTime);
+        if (publicPort != port) {
+            Miniverse.LOGGER.info("Launched {} session {} for {} at {} forwarding to local port {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, port, bootTime);
+        } else {
+            Miniverse.LOGGER.info("Launched {} session {} for {} at {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, bootTime);
+        }
+        return new LaunchResult(group, process, port, workingDirectory);
+    }
+
+    public LaunchResult launchFromRetained(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, Path retainedSessionRoot, boolean syncDevelopmentRuntime) throws IOException {
+        // 1. Detect and validate the shared server runtime
+        Path serverRoot = detectServerRoot();
+        validateSharedRuntime(serverRoot);
+
+        if (syncDevelopmentRuntime && FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            this.buildLatestModJar();
+            this.syncLatestModJar(serverRoot);
+        }
+
+        // 2. Prepare an isolated working directory for the session
+        Path workingDirectory = this.prepareWorkingDirectory(session, group, "relaunch");
+        int port = this.reservePort();
+
+        // 3. Copy retained world state into the new working directory
+        Path retainedWorld = this.findRetainedWorld(retainedSessionRoot, group.getGroupLabel())
+            .orElseThrow(() -> new IOException("No retained world found for session " + session.getSessionId()));
+        this.copyDirectory(retainedWorld, workingDirectory.resolve("world"));
+
+        // 4. Create symbolic links/junctions to the shared runtime files
+        this.createRuntimeSymlinks(workingDirectory, serverRoot);
+
+        // 5. Write session-specific configuration files into the working directory
+        this.writeEula(workingDirectory);
+        this.writeSessionConfig(workingDirectory, session, group);
+        SessionOperatorSnapshot snapshot = operatorSnapshot == null ? SessionOperatorSnapshot.empty() : operatorSnapshot;
+        snapshot.writeOpsJson(workingDirectory);
+        this.writeServerProperties(workingDirectory, session, group, port);
+
+        group.markLaunching(workingDirectory, port);
+
+        // 6. Build the launch command to run from the isolated directory
+        String javaExecutable = this.resolveJavaExecutable();
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutable);
+        this.addMemoryArguments(command);
+        command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
+        command.add("-Dminiverse.session.game=" + session.getGameType().getCommandName());
+        if (FabricLoader.getInstance().isDevelopmentEnvironment() && SessionPermissions.isDevBypassEnabled()) {
+            command.add("-Dminiverse.devSession=true");
+            command.add("-Dminiverse.session.devBypass=true");
+        }
+        command.add("-jar");
+        command.add("fabric-server-launch.jar");
+        command.add("nogui");
+
+        Miniverse.LOGGER.info("Backend relaunch command: {}", String.join(" ", command));
+
+        long startTime = System.currentTimeMillis();
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(workingDirectory.toFile());
+        builder.redirectOutput(workingDirectory.resolve("stdout.log").toFile());
+        builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
+
+        Process process = builder.start();
+
+        // 7. Wait for the server to boot and mark it as running
+        boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
+        if (!booted) {
+            int exitCode = process.isAlive() ? -1 : process.exitValue();
+            throw new IOException("Server failed to boot. Exit code: " + exitCode);
+        }
+
+        long bootTime = System.currentTimeMillis() - startTime;
+        int publicPort = SessionLauncherConfig.getInstance().publicPortForLocalPort(port);
+        String address = SessionServerConfig.getInstance().advertisedHost() + ":" + publicPort;
+        group.markRunning(process, address);
+
+        if (publicPort != port) {
+            Miniverse.LOGGER.info("Relaunched {} session {} for {} at {} forwarding to local port {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, port, bootTime);
+        } else {
+            Miniverse.LOGGER.info("Relaunched {} session {} for {} at {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, bootTime);
+        }
         return new LaunchResult(group, process, port, workingDirectory);
     }
 
@@ -129,6 +219,68 @@ public final class ServerLauncher {
             }
         }
         group.markStopped();
+    }
+
+    public InspectionLaunchResult launchInspection(String sessionId, Path sourceSessionRoot, ServerPlayerEntity viewer) throws IOException {
+        Path sourceWorld = this.findInspectableWorld(sourceSessionRoot)
+            .orElseThrow(() -> new IOException("No inspectable world found for retained session " + sessionId));
+        Path serverRoot = detectServerRoot();
+        validateSharedRuntime(serverRoot);
+
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            this.buildLatestModJar();
+            this.syncLatestModJar(serverRoot);
+        }
+
+        Path workingDirectory = this.prepareInspectionDirectory(sessionId);
+        int port = this.reservePort();
+        this.copyDirectory(sourceWorld, workingDirectory.resolve("world"));
+        this.createRuntimeSymlinks(workingDirectory, serverRoot);
+        this.writeEula(workingDirectory);
+        this.writeInspectionServerProperties(workingDirectory, sessionId, port);
+        this.writeInspectionConfig(workingDirectory);
+        this.writeInspectionOps(workingDirectory, viewer);
+
+        String javaExecutable = this.resolveJavaExecutable();
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutable);
+        this.addMemoryArguments(command);
+        command.add("-Dminiverse.inspection=true");
+        command.add("-jar");
+        command.add("fabric-server-launch.jar");
+        command.add("nogui");
+
+        Miniverse.LOGGER.info("Inspection launch command: {}", String.join(" ", command));
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(workingDirectory.toFile());
+        builder.redirectOutput(workingDirectory.resolve("stdout.log").toFile());
+        builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
+
+        Process process = builder.start();
+        if (!waitForServerBoot(workingDirectory.resolve("stdout.log"), process)) {
+            int exitCode = process.isAlive() ? -1 : process.exitValue();
+            throw new IOException("Inspection server failed to boot. Exit code: " + exitCode);
+        }
+
+        Miniverse.LOGGER.info("Launched inspection copy for retained session {} on local port {}", sessionId, port);
+        return new InspectionLaunchResult(process, port, workingDirectory);
+    }
+
+    private void addMemoryArguments(List<String> command) {
+        SessionMemoryConfig memoryConfig = SessionMemoryConfig.getInstance();
+        if (!memoryConfig.isEnabled()) {
+            Miniverse.LOGGER.info("Session memory limits are disabled; backend JVM will use default heap sizing.");
+            return;
+        }
+
+        command.add(memoryConfig.getInitialHeapArg());
+        command.add(memoryConfig.getMaxHeapArg());
+        Miniverse.LOGGER.info(
+            "Applying session memory limits: initial heap {}, max heap {}.",
+            memoryConfig.getInitialHeapArg(),
+            memoryConfig.getMaxHeapArg()
+        );
     }
 
     /**
@@ -186,6 +338,15 @@ public final class ServerLauncher {
         Files.createDirectories(sessionDirectory);
         Files.createDirectories(sessionDirectory.resolve("logs"));
         return sessionDirectory;
+    }
+
+    private Path prepareInspectionDirectory(String sessionId) throws IOException {
+        Path inspectionsRoot = MiniversePaths.runRoot().resolve("session-inspections");
+        Files.createDirectories(inspectionsRoot);
+        Path directory = inspectionsRoot.resolve(this.sanitize(sessionId) + "_" + System.currentTimeMillis());
+        Files.createDirectories(directory);
+        Files.createDirectories(directory.resolve("logs"));
+        return directory;
     }
 
     /**
@@ -517,6 +678,76 @@ public final class ServerLauncher {
         Files.writeString(workingDirectory.resolve("server.properties"), content.toString(), java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    private void writeInspectionServerProperties(Path workingDirectory, String sessionId, int port) throws IOException {
+        Properties properties = new Properties();
+        SessionServerConfig serverConfig = SessionServerConfig.getInstance();
+        properties.setProperty("accepts-transfers", Boolean.toString(serverConfig.acceptsTransfers()));
+        properties.setProperty("allow-flight", "true");
+        properties.setProperty("allow-nether", "true");
+        properties.setProperty("broadcast-console-to-ops", "true");
+        properties.setProperty("difficulty", "peaceful");
+        properties.setProperty("enable-command-block", "false");
+        properties.setProperty("enable-rcon", "false");
+        properties.setProperty("enable-status", "true");
+        properties.setProperty("enforce-secure-profile", "false");
+        properties.setProperty("force-gamemode", "true");
+        properties.setProperty("gamemode", "spectator");
+        properties.setProperty("level-name", "world");
+        properties.setProperty("max-players", "4");
+        properties.setProperty("motd", "Miniverse inspection copy for " + sessionId);
+        properties.setProperty("network-compression-threshold", "256");
+        properties.setProperty("online-mode", Boolean.toString(serverConfig.onlineMode()));
+        properties.setProperty("op-permission-level", "4");
+        properties.setProperty("player-idle-timeout", "0");
+        properties.setProperty("prevent-proxy-connections", "false");
+        properties.setProperty("pvp", "false");
+        properties.setProperty("query.port", Integer.toString(port));
+        properties.setProperty("rate-limit", "0");
+        properties.setProperty("server-ip", "");
+        properties.setProperty("server-port", Integer.toString(port));
+        properties.setProperty("simulation-distance", Integer.toString(serverConfig.simulationDistance()));
+        properties.setProperty("spawn-monsters", "false");
+        properties.setProperty("spawn-protection", "0");
+        properties.setProperty("sync-chunk-writes", "true");
+        properties.setProperty("use-native-transport", "true");
+        properties.setProperty("view-distance", Integer.toString(serverConfig.viewDistance()));
+        properties.setProperty("white-list", "false");
+
+        StringBuilder content = new StringBuilder();
+        for (String key : properties.stringPropertyNames().stream().sorted().toList()) {
+            content.append(key).append('=').append(properties.getProperty(key)).append('\n');
+        }
+        Files.writeString(workingDirectory.resolve("server.properties"), content.toString(), StandardCharsets.UTF_8);
+    }
+
+    private void writeInspectionConfig(Path workingDirectory) throws IOException {
+        // Create minimal JSON config for inspection server to know how to return
+        JsonObject config = new JsonObject();
+        config.addProperty("return.host", this.resolveReturnHost());
+        config.addProperty("return.port", this.resolveReturnPort());
+        config.addProperty("registry.sessionsRoot", MiniversePaths.sessionsRoot().toString());
+
+        // Write as JSON
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        Files.writeString(
+            workingDirectory.resolve("miniverse-session.json"),
+            gson.toJson(config),
+            StandardCharsets.UTF_8
+        );
+    }
+
+    private void writeInspectionOps(Path workingDirectory, ServerPlayerEntity viewer) throws IOException {
+        if (viewer == null) {
+            return;
+        }
+        new SessionOperatorSnapshot(List.of(new SessionOperatorSnapshot.Entry(
+            viewer.getUuid(),
+            viewer.getName().getString(),
+            4,
+            true
+        ))).writeOpsJson(workingDirectory);
+    }
+
     private String resolveJavaExecutable() {
         String javaHome = System.getProperty("java.home");
         Path javaBin = Paths.get(javaHome, "bin", this.isWindows() ? "java.exe" : "java");
@@ -535,9 +766,30 @@ public final class ServerLauncher {
     }
 
     private int reservePort() throws IOException {
+        SessionLauncherConfig config = SessionLauncherConfig.getInstance();
+        if (config.hasSessionPortRange()) {
+            for (int port = config.sessionPortStart(); port <= config.sessionPortEnd(); port++) {
+                if (this.isPortAvailable(port)) {
+                    return port;
+                }
+            }
+            throw new IOException("No free backend session ports in configured range "
+                + config.sessionPortStart() + "-" + config.sessionPortEnd()
+                + ". Increase config/miniverse/session-launcher.json sessionPortStart/sessionPortEnd or stop an active session.");
+        }
+
         try (ServerSocket socket = new ServerSocket(0)) {
             socket.setReuseAddress(true);
             return socket.getLocalPort();
+        }
+    }
+
+    private boolean isPortAvailable(int port) {
+        try (ServerSocket socket = new ServerSocket(port)) {
+            socket.setReuseAddress(true);
+            return true;
+        } catch (IOException ignored) {
+            return false;
         }
     }
 
@@ -548,7 +800,7 @@ public final class ServerLauncher {
     private String resolveReturnHost() throws IOException {
         Properties properties = this.readMainServerProperties();
         String serverIp = properties.getProperty("server-ip", "").trim();
-        return serverIp.isBlank() ? "127.0.0.1" : serverIp;
+        return serverIp.isBlank() ? SessionServerConfig.getInstance().advertisedHost() : serverIp;
     }
 
     private int resolveReturnPort() throws IOException {
@@ -581,6 +833,68 @@ public final class ServerLauncher {
             return fallback;
         }
     }
+
+    private Optional<Path> findInspectableWorld(Path sourceSessionRoot) throws IOException {
+        if (sourceSessionRoot == null || !Files.isDirectory(sourceSessionRoot)) {
+            return Optional.empty();
+        }
+        try (var stream = Files.list(sourceSessionRoot)) {
+            return stream
+                .filter(path -> Files.isDirectory(path.resolve("world")))
+                .map(path -> path.resolve("world"))
+                .findFirst();
+        }
+    }
+
+    private Optional<Path> findRetainedWorld(Path sourceSessionRoot, String groupLabel) throws IOException {
+        if (sourceSessionRoot == null || !Files.isDirectory(sourceSessionRoot)) {
+            return Optional.empty();
+        }
+        String labelPrefix = groupLabel == null ? "" : this.sanitize(groupLabel).toLowerCase();
+        Path best = null;
+        long bestTime = Long.MIN_VALUE;
+        try (var stream = Files.list(sourceSessionRoot)) {
+            for (Path path : stream.toList()) {
+                if (!Files.isDirectory(path.resolve("world"))) {
+                    continue;
+                }
+                String folderName = path.getFileName().toString().toLowerCase();
+                if (!labelPrefix.isBlank() && !folderName.startsWith(labelPrefix)) {
+                    continue;
+                }
+                long modified = Files.getLastModifiedTime(path).toMillis();
+                if (modified >= bestTime) {
+                    bestTime = modified;
+                    best = path.resolve("world");
+                }
+            }
+        }
+        if (best != null) {
+            return Optional.of(best);
+        }
+        return this.findInspectableWorld(sourceSessionRoot);
+    }
+
+    private void copyDirectory(Path source, Path target) throws IOException {
+        if (!Files.exists(source, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Source directory does not exist: " + source);
+        }
+        Files.createDirectories(target);
+        try (var stream = Files.walk(source)) {
+            for (Path sourcePath : stream.toList()) {
+                Path relative = source.relativize(sourcePath);
+                Path targetPath = target.resolve(relative);
+                BasicFileAttributes attrs = Files.readAttributes(sourcePath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                if (attrs.isDirectory()) {
+                    Files.createDirectories(targetPath);
+                } else if (attrs.isRegularFile()) {
+                    Files.createDirectories(targetPath.getParent());
+                    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS);
+                }
+            }
+        }
+    }
+
     private boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase().contains("win");
     }

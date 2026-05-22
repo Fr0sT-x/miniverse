@@ -139,7 +139,8 @@ public final class BountyHuntCommands {
             current.trackerEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
-            current.trackerItemId()
+            current.trackerItemId(),
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set grace period to " + seconds + "s."), true);
         return 1;
@@ -161,7 +162,8 @@ public final class BountyHuntCommands {
             current.trackerEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
-            current.trackerItemId()
+            current.trackerItemId(),
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set respawn invincibility to " + seconds + "s."), true);
         return 1;
@@ -183,7 +185,8 @@ public final class BountyHuntCommands {
             current.trackerEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
-            current.trackerItemId()
+            current.trackerItemId(),
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set score to win to " + score + "."), true);
         return 1;
@@ -205,7 +208,8 @@ public final class BountyHuntCommands {
             current.trackerEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
-            current.trackerItemId()
+            current.trackerItemId(),
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set target swap interval to " + seconds + "s."), true);
         return 1;
@@ -227,7 +231,8 @@ public final class BountyHuntCommands {
             enabled,
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
-            current.trackerItemId()
+            current.trackerItemId(),
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set tracker enabled to " + enabled + "."), true);
         return 1;
@@ -249,7 +254,8 @@ public final class BountyHuntCommands {
             current.trackerEnabled(),
             enabled,
             current.compassCooldownSeconds(),
-            current.trackerItemId()
+            current.trackerItemId(),
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set nether tracking to " + enabled + "."), true);
         return 1;
@@ -271,7 +277,8 @@ public final class BountyHuntCommands {
             current.trackerEnabled(),
             current.netherTrackingEnabled(),
             seconds,
-            current.trackerItemId()
+            current.trackerItemId(),
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set tracker cooldown to " + seconds + "s."), true);
         return 1;
@@ -293,7 +300,8 @@ public final class BountyHuntCommands {
             current.trackerEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
-            item
+            item,
+            current.disconnectGraceSeconds()
         ));
         context.getSource().sendFeedback(() -> Text.literal("Set tracker item to " + item + "."), true);
         return 1;

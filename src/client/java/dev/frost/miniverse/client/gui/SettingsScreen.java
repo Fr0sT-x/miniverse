@@ -11,7 +11,11 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class SettingsScreen extends Screen {
@@ -32,12 +36,18 @@ public class SettingsScreen extends Screen {
     private static final int TEXT_MUTED = 0xFFB8B8B8;
     private static final String[] DIFFICULTY_VALUES = {"peaceful", "easy", "normal", "hard"};
     private static final String[] DIFFICULTY_LABELS = {"Peaceful", "Easy", "Medium", "Hard"};
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final List<SessionEntry> sessions = new ArrayList<>();
     private String statusMessage = "";
     private final List<ButtonWidget> sessionButtons = new ArrayList<>();
+    private final List<HistoryRow> historyRows = new ArrayList<>();
     private SettingsTab activeTab = SettingsTab.SESSIONS;
+    private int historyScrollOffset;
+    private int historyMaxScroll;
+    private HistorySortOrder historySortOrder = HistorySortOrder.LATEST_PLAYED;
+    private ButtonWidget historySortToggle;
 
     // Memory config state
     private TextFieldWidget maxHeapField;
@@ -51,6 +61,7 @@ public class SettingsScreen extends Screen {
     private TextFieldWidget viewDistanceField;
     private TextFieldWidget simulationDistanceField;
     private TextFieldWidget spawnProtectionField;
+    private TextFieldWidget advertisedHostField;
     private ButtonWidget onlineModeToggle;
     private ButtonWidget allowFlightToggle;
     private ButtonWidget acceptsTransfersToggle;
@@ -62,10 +73,17 @@ public class SettingsScreen extends Screen {
     private boolean allowFlight;
     private boolean acceptsTransfers;
     private String difficultyValue;
+    private String advertisedHostValue;
 
     // Launcher config state
     private TextFieldWidget maxConcurrentLaunchesField;
     private int maxConcurrentLaunchesValue;
+
+    // Retention config state
+    private TextFieldWidget keepLatestSessionsField;
+    private TextFieldWidget maxAgeDaysField;
+    private int keepLatestSessionsValue;
+    private int maxAgeDaysValue;
 
     public SettingsScreen() {
         super(Text.literal("Settings"));
@@ -91,7 +109,11 @@ public class SettingsScreen extends Screen {
         this.allowFlight = serverSettings.allowFlight();
         this.acceptsTransfers = serverSettings.acceptsTransfers();
         this.difficultyValue = serverSettings.difficulty();
+        this.advertisedHostValue = serverSettings.advertisedHost();
         this.maxConcurrentLaunchesValue = SessionSnapshotData.maxConcurrentLaunches();
+        SessionSnapshotData.RetentionSettings retentionSettings = SessionSnapshotData.retentionSettings();
+        this.keepLatestSessionsValue = retentionSettings.keepLatestSessions();
+        this.maxAgeDaysValue = retentionSettings.maxAgeDays();
 
         // Request session list from server
         if (this.client.player != null) {
@@ -121,10 +143,18 @@ public class SettingsScreen extends Screen {
             .dimensions(layout.contentX + 220, layout.panelY + 45, 110, TAB_HEIGHT)
             .build());
 
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("History"), button -> {
+            this.switchTab(SettingsTab.HISTORY);
+        })
+            .dimensions(layout.contentX + 340, layout.panelY + 45, 100, TAB_HEIGHT)
+            .build());
+
         if (this.activeTab == SettingsTab.SERVER) {
             this.initServerSettings(layout);
         } else if (this.activeTab == SettingsTab.LAUNCHER) {
             this.initLauncherSettings(layout);
+        } else if (this.activeTab == SettingsTab.HISTORY) {
+            this.initHistoryActions(layout);
         } else {
             this.initSessionActions(layout);
         }
@@ -138,7 +168,7 @@ public class SettingsScreen extends Screen {
     private void refreshSessionsFromSnapshot() {
         this.sessions.clear();
         for (SessionSnapshotData.SessionSummary session : SessionSnapshotData.sessions()) {
-            this.sessions.add(new SessionEntry(session.id(), session.game(), session.state(), session.players()));
+            this.sessions.add(SessionEntry.from(session));
         }
     }
 
@@ -154,6 +184,9 @@ public class SettingsScreen extends Screen {
     private void initSessionActions(Layout layout) {
         int y = layout.listY;
         for (SessionEntry entry : this.sessions) {
+            if (entry.retained) {
+                continue;
+            }
             int buttonX = layout.contentX + layout.contentWidth - 200;
             int buttonY = y + 8;
 
@@ -170,6 +203,60 @@ public class SettingsScreen extends Screen {
 
             y += SESSION_ROW_HEIGHT + ROW_GAP;
         }
+    }
+
+    private void initHistoryActions(Layout layout) {
+        int x = layout.contentX;
+        int y = layout.listY + 4;
+        int fieldWidth = 58;
+
+        this.keepLatestSessionsField = new TextFieldWidget(this.textRenderer, x + 118, y, fieldWidth, 20, Text.literal("Retained Sessions"));
+        this.keepLatestSessionsField.setMaxLength(2);
+        this.keepLatestSessionsField.setText(String.valueOf(this.keepLatestSessionsValue));
+        this.addDrawableChild(this.keepLatestSessionsField);
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveKeepLatestSessions())
+            .dimensions(x + 184, y, 55, BUTTON_HEIGHT)
+            .build());
+
+        this.maxAgeDaysField = new TextFieldWidget(this.textRenderer, x + 360, y, fieldWidth, 20, Text.literal("Retention Days"));
+        this.maxAgeDaysField.setMaxLength(3);
+        this.maxAgeDaysField.setText(String.valueOf(this.maxAgeDaysValue));
+        this.addDrawableChild(this.maxAgeDaysField);
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveMaxAgeDays())
+            .dimensions(x + 426, y, 55, BUTTON_HEIGHT)
+            .build());
+
+        int sortWidth = 150;
+        int sortX = x + layout.contentWidth - sortWidth;
+        this.historySortToggle = this.addDrawableChild(ButtonWidget.builder(Text.literal(this.getHistorySortLabel()), button -> this.toggleHistorySort())
+            .dimensions(sortX, y, sortWidth, BUTTON_HEIGHT)
+            .build());
+        this.historySortToggle.setTooltip(Tooltip.of(Text.literal("Toggle sort order for retained sessions.")));
+
+        this.historyRows.clear();
+        int rowY = this.historyListStartY(layout);
+        List<SessionEntry> retainedSessions = this.getSortedRetainedSessions();
+        for (SessionEntry entry : retainedSessions) {
+            int buttonX = layout.contentX + layout.contentWidth - 220;
+            ButtonWidget relaunchButton = ButtonWidget.builder(Text.literal("🔄 Relaunch"), button -> this.relaunchSession(entry.id))
+                .dimensions(buttonX, rowY + 8, 105, BUTTON_HEIGHT)
+                .build();
+            relaunchButton.setTooltip(Tooltip.of(Text.literal("Relaunch this retained session.")));
+            this.addDrawableChild(relaunchButton);
+
+            int inspectButtonX = buttonX + 105 + BUTTON_GAP;
+            ButtonWidget inspectButton = ButtonWidget.builder(Text.literal("Inspect Copy"), button -> this.inspectSession(entry.id))
+                .dimensions(inspectButtonX, rowY + 8, 100, BUTTON_HEIGHT)
+                .build();
+            inspectButton.setTooltip(Tooltip.of(Text.literal("Launches a copied spectator world; the retained session folder is not modified.")));
+            this.addDrawableChild(inspectButton);
+
+            this.historyRows.add(new HistoryRow(entry, relaunchButton, inspectButton));
+            rowY += SESSION_ROW_HEIGHT + ROW_GAP;
+        }
+
+        this.updateHistoryScrollBounds(layout, retainedSessions.size());
+        this.applyHistoryRowPositions(layout);
     }
 
     private void initServerSettings(Layout layout) {
@@ -278,6 +365,17 @@ public class SettingsScreen extends Screen {
             .dimensions(x + toggleWidth + 10, y, saveWidth, BUTTON_HEIGHT)
             .build());
         saveAcceptsTransfers.setTooltip(Tooltip.of(Text.literal("Applies transfer policy for new sessions.")));
+        y += rowHeight;
+
+        this.advertisedHostField = new TextFieldWidget(this.textRenderer, fieldX, y, Math.max(fieldWidth, 190), 20, Text.literal("Transfer Host"));
+        this.advertisedHostField.setMaxLength(255);
+        this.advertisedHostField.setText(this.advertisedHostValue);
+        this.addDrawableChild(this.advertisedHostField);
+
+        ButtonWidget saveAdvertisedHost = this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveAdvertisedHost())
+            .dimensions(fieldX + Math.max(fieldWidth, 190) + 10, y, saveWidth, BUTTON_HEIGHT)
+            .build());
+        saveAdvertisedHost.setTooltip(Tooltip.of(Text.literal("Host clients use to join launched sessions.")));
         y += rowHeight + 6;
 
         this.memoryEnabledToggle = this.addDrawableChild(ButtonWidget.builder(
@@ -401,6 +499,19 @@ public class SettingsScreen extends Screen {
         this.statusMessage = "Saved value " + this.acceptsTransfers + ".";
     }
 
+    private void saveAdvertisedHost() {
+        String value = this.advertisedHostField.getText().trim();
+        if (value.isBlank()) {
+            this.statusMessage = "Transfer host cannot be empty.";
+            return;
+        }
+        this.advertisedHostValue = value;
+        NbtCompound server = new NbtCompound();
+        server.putString("advertisedHost", value);
+        this.sendServerSettings(null, server);
+        this.statusMessage = "Saved transfer host " + value + ".";
+    }
+
     private void saveMemoryEnabled() {
         NbtCompound memory = new NbtCompound();
         memory.putBoolean("enabled", this.memoryEnabled);
@@ -447,6 +558,10 @@ public class SettingsScreen extends Screen {
     }
 
     private void sendServerSettings(NbtCompound memorySettings, NbtCompound serverSettings) {
+        this.sendServerSettings(memorySettings, serverSettings, null);
+    }
+
+    private void sendServerSettings(NbtCompound memorySettings, NbtCompound serverSettings, NbtCompound retentionSettings) {
         if (this.client.player == null) {
             this.statusMessage = "Not connected to server.";
             return;
@@ -462,11 +577,39 @@ public class SettingsScreen extends Screen {
             payload.put("server", serverSettings);
             hasUpdates = true;
         }
+        if (retentionSettings != null && !retentionSettings.getKeys().isEmpty()) {
+            payload.put("retention", retentionSettings);
+            hasUpdates = true;
+        }
         if (!hasUpdates) {
             return;
         }
 
         ClientPlayNetworking.send(new NetworkConstants.ServerSettingsPayload(payload));
+    }
+
+    private void saveKeepLatestSessions() {
+        Integer value = this.parseInt(this.keepLatestSessionsField, 1, 50, "Retained sessions");
+        if (value == null) {
+            return;
+        }
+        this.keepLatestSessionsValue = value;
+        NbtCompound retention = new NbtCompound();
+        retention.putInt("keepLatestSessions", value);
+        this.sendServerSettings(null, null, retention);
+        this.statusMessage = "Saved retained session count " + value + ".";
+    }
+
+    private void saveMaxAgeDays() {
+        Integer value = this.parseInt(this.maxAgeDaysField, 1, 365, "Retention days");
+        if (value == null) {
+            return;
+        }
+        this.maxAgeDaysValue = value;
+        NbtCompound retention = new NbtCompound();
+        retention.putInt("maxAgeDays", value);
+        this.sendServerSettings(null, null, retention);
+        this.statusMessage = "Saved retention age " + value + " day(s).";
     }
 
     private void initLauncherSettings(Layout layout) {
@@ -509,7 +652,7 @@ public class SettingsScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         boolean sessionsChanged = this.syncSessionsFromSnapshot();
-        if (sessionsChanged && this.activeTab == SettingsTab.SESSIONS) {
+        if (sessionsChanged && (this.activeTab == SettingsTab.SESSIONS || this.activeTab == SettingsTab.HISTORY)) {
             this.init();
             return;
         }
@@ -523,18 +666,21 @@ public class SettingsScreen extends Screen {
 
         if (this.activeTab == SettingsTab.SESSIONS) {
             // Draw sessions list
-            if (this.sessions.isEmpty()) {
+            List<SessionEntry> activeSessions = this.sessions.stream().filter(entry -> !entry.retained).toList();
+            if (activeSessions.isEmpty()) {
                 context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Waiting for session data..."), titleCenterX, layout.listY + 12, TEXT_PRIMARY);
                 context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("No active sessions."), titleCenterX, layout.listY + 28, TEXT_MUTED);
             } else {
                 int y = layout.listY;
-                for (SessionEntry entry : this.sessions) {
+                for (SessionEntry entry : activeSessions) {
                     this.drawSessionRow(context, layout, y, entry);
                     y += SESSION_ROW_HEIGHT + ROW_GAP;
                 }
             }
         } else if (this.activeTab == SettingsTab.SERVER) {
             this.drawServerFieldLabels(context, layout);
+        } else if (this.activeTab == SettingsTab.HISTORY) {
+            this.drawHistory(context, layout);
         } else {
             context.drawText(this.textRenderer, Text.literal("Max Concurrent Launches: backend servers allowed to start at the same time"), layout.contentX, layout.listY, TEXT_PRIMARY, false);
             context.drawText(this.textRenderer, Text.literal("Current server value: " + SessionSnapshotData.maxConcurrentLaunches()), layout.contentX, layout.listY + 70, TEXT_PRIMARY, false);
@@ -550,6 +696,19 @@ public class SettingsScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
     }
 
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (this.activeTab == SettingsTab.HISTORY && this.historyMaxScroll > 0) {
+            int delta = (int) Math.round(-verticalAmount * 18);
+            if (delta != 0) {
+                this.historyScrollOffset = Math.clamp(this.historyScrollOffset + delta, 0, this.historyMaxScroll);
+                this.applyHistoryRowPositions(this.createLayout());
+                return true;
+            }
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
     private void drawServerFieldLabels(DrawContext context, Layout layout) {
         int x = layout.contentX;
         int y = layout.listY + 6;
@@ -560,7 +719,9 @@ public class SettingsScreen extends Screen {
         context.drawText(this.textRenderer, Text.literal("Simulation distance:"), x, y + 6, TEXT_PRIMARY, false);
         y += rowHeight;
         context.drawText(this.textRenderer, Text.literal("Spawn protection:"), x, y + 6, TEXT_PRIMARY, false);
-        y += rowHeight * 6 + 6;
+        y += rowHeight * 5;
+        context.drawText(this.textRenderer, Text.literal("Transfer host:"), x, y + 6, TEXT_PRIMARY, false);
+        y += rowHeight * 2 + 6;
         context.drawText(this.textRenderer, Text.literal("Max memory:"), x, y + 6, TEXT_PRIMARY, false);
         y += rowHeight;
         context.drawText(this.textRenderer, Text.literal("Min memory:"), x, y + 6, TEXT_PRIMARY, false);
@@ -574,7 +735,7 @@ public class SettingsScreen extends Screen {
 
         this.sessions.clear();
         for (SessionSnapshotData.SessionSummary session : snapshot) {
-            this.sessions.add(new SessionEntry(session.id(), session.game(), session.state(), session.players()));
+            this.sessions.add(SessionEntry.from(session));
         }
         return true;
     }
@@ -583,7 +744,7 @@ public class SettingsScreen extends Screen {
         for (int i = 0; i < snapshot.size(); i++) {
             SessionSnapshotData.SessionSummary summary = snapshot.get(i);
             SessionEntry entry = this.sessions.get(i);
-            if (!entry.id.equals(summary.id()) || !entry.game.equals(summary.game()) || !entry.state.equals(summary.state()) || entry.playerCount != summary.players()) {
+            if (!entry.id.equals(summary.id()) || !entry.game.equals(summary.game()) || !entry.state.equals(summary.state()) || entry.playerCount != summary.players() || entry.inspectable != summary.inspectable() || entry.retained != summary.retained()) {
                 return false;
             }
         }
@@ -604,6 +765,124 @@ public class SettingsScreen extends Screen {
         context.drawText(this.textRenderer, Text.literal("Session: " + entry.id), textX, textY, TEXT_PRIMARY, false);
         context.drawText(this.textRenderer, Text.literal("Game: " + entry.game + " (Players: " + entry.playerCount + ")"), textX, textY + 14, TEXT_PRIMARY, false);
         context.drawText(this.textRenderer, Text.literal("State: " + entry.state), textX, textY + 28, TEXT_MUTED, false);
+    }
+
+    private void drawHistory(DrawContext context, Layout layout) {
+        int x = layout.contentX;
+        int y = layout.listY + 4;
+        context.drawText(this.textRenderer, Text.literal("Retain latest:"), x, y + 6, TEXT_PRIMARY, false);
+        context.drawText(this.textRenderer, Text.literal("Delete older than days:"), x + 248, y + 6, TEXT_PRIMARY, false);
+
+        List<SessionEntry> retainedSessions = this.getSortedRetainedSessions();
+        this.updateHistoryScrollBounds(layout, retainedSessions.size());
+        this.applyHistoryRowPositions(layout);
+        if (retainedSessions.isEmpty()) {
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("No retained sessions."), layout.contentX + layout.contentWidth / 2, layout.listY + 52, TEXT_MUTED);
+            return;
+        }
+
+        int listTopY = this.historyListStartY(layout);
+        int listHeight = this.historyListHeight(layout);
+        context.enableScissor(x, listTopY, x + layout.contentWidth, listTopY + listHeight);
+
+        y = listTopY - this.historyScrollOffset;
+        for (SessionEntry entry : retainedSessions) {
+            context.fill(x, y, x + layout.contentWidth, y + SESSION_ROW_HEIGHT, 0x2AFFFFFF);
+            context.fill(x + 1, y + 1, x + layout.contentWidth - 1, y + SESSION_ROW_HEIGHT - 1, 0xCC1F1F1F);
+
+            int textX = x + 12;
+            int textY = y + 8;
+            context.drawText(this.textRenderer, Text.literal(entry.id + " - " + entry.game), textX, textY, TEXT_PRIMARY, false);
+            context.drawText(this.textRenderer, Text.literal("State: " + entry.state + "  Players: " + entry.playerCount), textX, textY + 14, TEXT_MUTED, false);
+            context.drawText(this.textRenderer, Text.literal("Created: " + formatTime(entry.createdAtMillis) + "  Updated: " + formatTime(entry.updatedAtMillis)), textX, textY + 28, TEXT_MUTED, false);
+            context.drawText(this.textRenderer, Text.literal("Played: " + formatDuration(entry.playedMillis) + "  Seed: " + entry.seed), textX, textY + 42, TEXT_MUTED, false);
+            if (!entry.inspectable) {
+                context.drawText(this.textRenderer, Text.literal("No world copy available"), textX, textY + 56, 0xFFFFB0B0, false);
+            }
+            y += SESSION_ROW_HEIGHT + ROW_GAP;
+        }
+
+        context.disableScissor();
+    }
+
+    private void toggleHistorySort() {
+        this.historySortOrder = this.historySortOrder == HistorySortOrder.LATEST_PLAYED ? HistorySortOrder.OLDEST_PLAYED : HistorySortOrder.LATEST_PLAYED;
+        this.historyScrollOffset = 0;
+        this.init();
+    }
+
+    private String getHistorySortLabel() {
+        return this.historySortOrder == HistorySortOrder.LATEST_PLAYED ? "Sort: Latest Played" : "Sort: Oldest Played";
+    }
+
+    private List<SessionEntry> getSortedRetainedSessions() {
+        Comparator<SessionEntry> comparator = Comparator
+            .comparingLong(this::historySortTimestamp)
+            .thenComparing(entry -> entry.id);
+        if (this.historySortOrder == HistorySortOrder.LATEST_PLAYED) {
+            comparator = comparator.reversed();
+        }
+        return this.sessions.stream()
+            .filter(entry -> entry.retained)
+            .sorted(comparator)
+            .toList();
+    }
+
+    private long historySortTimestamp(SessionEntry entry) {
+        if (entry.updatedAtMillis > 0L) {
+            return entry.updatedAtMillis;
+        }
+        if (entry.launchedAtMillis > 0L) {
+            return entry.launchedAtMillis;
+        }
+        return entry.createdAtMillis;
+    }
+
+    private int historyListStartY(Layout layout) {
+        return layout.listY + 38;
+    }
+
+    private int historyListHeight(Layout layout) {
+        int headerHeight = this.historyListStartY(layout) - layout.listY;
+        return Math.max(0, layout.listHeight - headerHeight);
+    }
+
+    private void updateHistoryScrollBounds(Layout layout, int rowCount) {
+        int listHeight = this.historyListHeight(layout);
+        int totalRowsHeight = rowCount <= 0 ? 0 : (rowCount * (SESSION_ROW_HEIGHT + ROW_GAP)) - ROW_GAP;
+        this.historyMaxScroll = Math.max(0, totalRowsHeight - listHeight);
+        this.historyScrollOffset = Math.clamp(this.historyScrollOffset, 0, this.historyMaxScroll);
+    }
+
+    private void applyHistoryRowPositions(Layout layout) {
+        int listTopY = this.historyListStartY(layout);
+        int listBottomY = listTopY + this.historyListHeight(layout);
+        int rowY = listTopY - this.historyScrollOffset;
+        for (HistoryRow row : this.historyRows) {
+            int buttonY = rowY + 8;
+            boolean visible = rowY + SESSION_ROW_HEIGHT > listTopY && rowY < listBottomY;
+            row.relaunchButton.setY(buttonY);
+            row.relaunchButton.visible = visible;
+            row.relaunchButton.active = visible && row.entry.retained;
+            row.inspectButton.setY(buttonY);
+            row.inspectButton.visible = visible;
+            row.inspectButton.active = visible && row.entry.retained && row.entry.inspectable;
+            rowY += SESSION_ROW_HEIGHT + ROW_GAP;
+        }
+    }
+
+    private static String formatTime(long epochMillis) {
+        if (epochMillis <= 0L) {
+            return "unknown";
+        }
+        return TIME_FORMAT.format(Instant.ofEpochMilli(epochMillis));
+    }
+
+    private static String formatDuration(long millis) {
+        long totalMinutes = Math.max(0L, millis) / 60_000L;
+        long hours = totalMinutes / 60L;
+        long minutes = totalMinutes % 60L;
+        return hours + "h " + minutes + "m";
     }
 
     private void drawShell(DrawContext context, Layout layout) {
@@ -643,6 +922,24 @@ public class SettingsScreen extends Screen {
 
         ClientPlayNetworking.send(new NetworkConstants.ChangeSeedPayload(sessionId));
         this.statusMessage = "Changing seed for session " + sessionId + "...";
+    }
+
+    private void inspectSession(String sessionId) {
+        if (this.client.player == null) {
+            this.statusMessage = "Not connected to server.";
+            return;
+        }
+        ClientPlayNetworking.send(new NetworkConstants.InspectSessionPayload(sessionId));
+        this.statusMessage = "Launching inspection copy for " + sessionId + "...";
+    }
+
+    private void relaunchSession(String sessionId) {
+        if (this.client.player == null) {
+            this.statusMessage = "Not connected to server.";
+            return;
+        }
+        ClientPlayNetworking.send(new NetworkConstants.RelaunchSessionPayload(sessionId));
+        this.statusMessage = "Relaunching session " + sessionId + "...";
     }
 
     @Override
@@ -685,13 +982,37 @@ public class SettingsScreen extends Screen {
     ) {
     }
 
-    private record SessionEntry(String id, String game, String state, int playerCount) {
+    private record SessionEntry(String id, String game, String state, long seed, int playerCount, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, boolean retained) {
+        private static SessionEntry from(SessionSnapshotData.SessionSummary summary) {
+            return new SessionEntry(
+                summary.id(),
+                summary.game(),
+                summary.state(),
+                summary.seed(),
+                summary.players(),
+                summary.createdAtMillis(),
+                summary.launchedAtMillis(),
+                summary.updatedAtMillis(),
+                summary.playedMillis(),
+                summary.inspectable(),
+                summary.retained()
+            );
+        }
+    }
+
+    private record HistoryRow(SessionEntry entry, ButtonWidget relaunchButton, ButtonWidget inspectButton) {
     }
 
     private enum SettingsTab {
         SESSIONS,
         SERVER,
-        LAUNCHER
+        LAUNCHER,
+        HISTORY
+    }
+
+    private enum HistorySortOrder {
+        LATEST_PLAYED,
+        OLDEST_PLAYED
     }
 }
 

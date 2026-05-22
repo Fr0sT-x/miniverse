@@ -161,10 +161,6 @@ public class ResourceSprintMinigame implements Minigame, RuntimeContextAware, Se
         }
 
         this.broadcastMessage(Text.literal("✓ Resource Sprint started!").formatted(Formatting.GREEN));
-        // Major event: game start (title + subtitle)
-        eventMessenger.send(ResourceSprintEventMessenger.Severity.MAJOR,
-            Text.literal("🏃 RESOURCE SPRINT BEGINS!").formatted(Formatting.GOLD),
-            Text.literal("Mode: " + this.describeMode() + " — " + modeStrategyHint()).formatted(Formatting.YELLOW));
         this.broadcastMessage(Text.literal("Teams are sharing this world with isolated objective progress.").formatted(Formatting.YELLOW));
         this.broadcastMessage(Text.literal("Mode: " + this.describeMode() + " | Tie-break: " + this.describeTieBreak()).formatted(Formatting.YELLOW));
         this.broadcastMessage(Text.literal("Objectives complete: 0 / " + this.activeObjectives.size()).formatted(Formatting.AQUA));

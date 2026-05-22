@@ -43,6 +43,7 @@ public final class SessionMemoryConfig {
                 this.config = Config.defaults();
                 this.save();
             }
+            this.normalize();
             Miniverse.LOGGER.info("Loaded session memory configuration: {}", config);
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to load session memory config, using defaults", e);
@@ -94,6 +95,11 @@ public final class SessionMemoryConfig {
 
     public String getInitialHeapArg() {
         return "-Xms" + this.config.initialHeapGb + "G";
+    }
+
+    private void normalize() {
+        this.config.maxHeapGb = Math.max(1, Math.min(this.config.maxHeapGb, 128));
+        this.config.initialHeapGb = Math.max(1, Math.min(this.config.initialHeapGb, this.config.maxHeapGb));
     }
 
     public static final class Config {

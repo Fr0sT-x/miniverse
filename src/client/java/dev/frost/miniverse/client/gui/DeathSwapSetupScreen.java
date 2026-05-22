@@ -445,7 +445,7 @@ public class DeathSwapSetupScreen extends Screen {
     private void soloAll() {
         this.teams.clear();
         for (SessionSnapshotData.RosterEntry entry : this.getSelectedParticipants()) {
-            TeamDraft team = new TeamDraft(entry.name());
+            TeamDraft team = new TeamDraft(this.nextTeamLabel());
             team.add(new TeamDraft.Member(UUID.fromString(entry.uuid()), entry.name()));
             this.teams.add(team);
         }

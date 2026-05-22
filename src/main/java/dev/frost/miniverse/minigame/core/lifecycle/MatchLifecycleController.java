@@ -1,15 +1,16 @@
 package dev.frost.miniverse.minigame.core.lifecycle;
 
 import dev.frost.miniverse.chat.ChatRouter;
+import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
 import dev.frost.miniverse.minigame.core.freeze.FreezeService;
+import dev.frost.miniverse.network.TransitionTransferCoordinator;
 import dev.frost.miniverse.session.SessionPermissions;
 import dev.frost.miniverse.session.SessionRegistry;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
-import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
 import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
 import net.minecraft.server.MinecraftServer;
@@ -19,16 +20,20 @@ import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class MatchLifecycleController {
     private static final MatchLifecycleController INSTANCE = new MatchLifecycleController();
     private static final int TICKS_PER_SECOND = 20;
+    private static final int START_OVERLAY_REVEAL_SECONDS = 10;
 
     private final Map<UUID, ServerPlayerEntity> lifecyclePlayers = new HashMap<>();
     private final FreezeService freezeService = FreezeService.getInstance();
@@ -43,6 +48,10 @@ public final class MatchLifecycleController {
     private int ticksRemaining;
     private int lastAnnouncedSecond = -1;
     private long sequence;
+    private boolean startOverlayReleased;
+    private final Map<UUID, String> disconnectGracePlayers = new HashMap<>();
+    private int disconnectGraceTicksRemaining;
+    private int disconnectGraceLastAnnouncedSecond = -1;
 
     private MatchLifecycleController() {
     }
@@ -60,6 +69,8 @@ public final class MatchLifecycleController {
         this.options = options == null ? MatchLifecycleOptions.defaults(runtime.minigame().getName()) : options;
         this.startCallback = onStart;
         this.endResult = null;
+        this.startOverlayReleased = false;
+        this.clearDisconnectGrace();
         this.sequence++;
         this.snapshotParticipants();
         runtime.setState(GameState.STARTING);
@@ -75,7 +86,6 @@ public final class MatchLifecycleController {
         this.lastAnnouncedSecond = -1;
         runtime.setState(GameState.FROZEN);
         this.freezeParticipants(true);
-        this.showStartTitle();
         this.announceCountdown(this.options.freezeSeconds());
         return true;
     }
@@ -89,6 +99,7 @@ public final class MatchLifecycleController {
         this.options = options == null ? MatchLifecycleOptions.defaults(runtime.minigame().getName()) : options;
         this.endResult = result;
         this.startCallback = null;
+        this.clearDisconnectGrace();
         this.sequence++;
         this.snapshotParticipants();
         this.phase = this.options.returnTeleportEnabled() ? Phase.END_RETURN : Phase.ENDED;
@@ -117,61 +128,114 @@ public final class MatchLifecycleController {
         this.bindServer(server);
         if (this.phase == Phase.START_FREEZE) {
             this.reconcileStartFreezeParticipants();
-        }
-        if (this.phase != Phase.START_FREEZE && this.phase != Phase.END_RETURN) {
-            return;
-        }
+            this.ticksRemaining = Math.max(0, this.ticksRemaining - 1);
+            int secondsRemaining = (this.ticksRemaining + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
+            this.announceCountdown(secondsRemaining);
+            if (secondsRemaining <= START_OVERLAY_REVEAL_SECONDS) {
+                this.releaseTransitionOverlays();
+            }
 
-        this.ticksRemaining = Math.max(0, this.ticksRemaining - 1);
-        int secondsRemaining = (this.ticksRemaining + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
-        this.announceCountdown(secondsRemaining);
+            if (this.ticksRemaining > 0) {
+                return;
+            }
 
-        if (this.ticksRemaining > 0) {
-            return;
-        }
-
-        long currentSequence = this.sequence;
-        if (this.phase == Phase.START_FREEZE) {
             this.startRunning();
-        } else if (this.phase == Phase.END_RETURN && currentSequence == this.sequence) {
-            this.returnPlayers();
+            return;
+        }
+
+        if (this.phase == Phase.END_RETURN) {
+            this.ticksRemaining = Math.max(0, this.ticksRemaining - 1);
+            int secondsRemaining = (this.ticksRemaining + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
+            this.announceCountdown(secondsRemaining);
+            if (this.ticksRemaining > 0) {
+                return;
+            }
+
+            long currentSequence = this.sequence;
+            if (currentSequence == this.sequence) {
+                this.returnPlayers();
+            }
+            return;
+        }
+
+        if (this.phase == Phase.RUNNING) {
+            this.tickDisconnectGrace();
         }
     }
 
-    public synchronized boolean cancelReturn(ServerPlayerEntity admin) {
-        if (this.phase != Phase.END_RETURN) {
-            admin.sendMessage(Text.literal("No return teleport countdown is active.").formatted(Formatting.YELLOW), false);
+    public synchronized void onParticipantLeave(ServerPlayerEntity player) {
+        this.beginDisconnectGrace(player);
+    }
+
+    public synchronized void onParticipantJoin(ServerPlayerEntity player) {
+        if (this.phase == Phase.START_FREEZE && this.runtime != null) {
+            if (this.runtime.context().participants().contains(player)) {
+                this.addStartFreezeParticipant(player);
+            }
+        }
+        this.resolveDisconnectGrace(player);
+    }
+
+    public synchronized boolean beginDisconnectGrace(ServerPlayerEntity player) {
+        if (this.phase != Phase.RUNNING || this.runtime == null) {
+            return false;
+        }
+        if (this.options.disconnectGraceSeconds() <= 0) {
+            return false;
+        }
+        DisconnectGraceHandler handler = this.options.disconnectGraceHandler();
+        if (handler == null || !handler.isCritical(this.runtime, player)) {
             return false;
         }
 
-        this.sequence++;
-        this.phase = Phase.ENDED;
-        this.ticksRemaining = 0;
-        this.runtimeState(GameState.ENDING);
-        Text message = Text.literal(admin.getName().getString() + " cancelled the match return teleport.")
-            .formatted(Formatting.RED, Formatting.BOLD);
-        this.admins().forEach(player -> player.sendMessage(message, false));
-        this.participants().forEach(player -> player.sendMessage(this.options.returnCancelledMessage(), false));
+        boolean added = this.disconnectGracePlayers.put(player.getUuid(), player.getName().getString()) == null;
+        if (added) {
+            this.disconnectGraceTicksRemaining = this.options.disconnectGraceSeconds() * TICKS_PER_SECOND;
+            this.disconnectGraceLastAnnouncedSecond = -1;
+            handler.onGraceStarted(this.runtime, List.copyOf(this.disconnectGracePlayers.keySet()), this.options.disconnectGraceSeconds());
+            this.broadcastDisconnectGraceStart(player.getName().getString());
+        } else {
+            this.disconnectGraceTicksRemaining = Math.max(this.disconnectGraceTicksRemaining, this.options.disconnectGraceSeconds() * TICKS_PER_SECOND);
+        }
         return true;
     }
 
+    public synchronized boolean isDisconnectGraceActive() {
+        return !this.disconnectGracePlayers.isEmpty();
+    }
 
-    public synchronized void onParticipantJoin(ServerPlayerEntity player) {
-        if (this.phase != Phase.START_FREEZE || this.runtime == null) {
+    public synchronized boolean isDisconnectGraceActiveFor(UUID playerId) {
+        return this.disconnectGracePlayers.containsKey(playerId);
+    }
+
+    public synchronized void tickDisconnectGrace() {
+        if (this.disconnectGracePlayers.isEmpty()) {
             return;
         }
-        if (!this.runtime.context().participants().contains(player)) {
+
+        this.disconnectGraceTicksRemaining = Math.max(0, this.disconnectGraceTicksRemaining - 1);
+        int secondsRemaining = (this.disconnectGraceTicksRemaining + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
+        this.announceDisconnectGrace(secondsRemaining);
+        if (this.disconnectGraceTicksRemaining > 0) {
             return;
         }
 
-        this.addStartFreezeParticipant(player);
+        List<UUID> pending = List.copyOf(this.disconnectGracePlayers.keySet());
+        this.disconnectGracePlayers.clear();
+        this.disconnectGraceLastAnnouncedSecond = -1;
+        DisconnectGraceHandler handler = this.options.disconnectGraceHandler();
+        if (handler != null && this.runtime != null) {
+            handler.onGraceExpired(this.runtime, pending);
+        }
     }
 
     private void startRunning() {
+        this.releaseTransitionOverlays();
         this.setParticipantsGameMode(GameMode.SURVIVAL);
         this.unfreezeParticipants();
         this.phase = Phase.RUNNING;
         this.runtimeState(GameState.RUNNING);
+        this.clearDisconnectGrace();
         if (this.options.startSound() != null) {
             this.participants().forEach(player -> player.playSound(this.options.startSound(), 1.0F, 1.0F));
         }
@@ -179,6 +243,19 @@ public final class MatchLifecycleController {
         this.startCallback = null;
         if (callback != null) {
             callback.run();
+        }
+    }
+
+    private void releaseTransitionOverlays() {
+        if (this.startOverlayReleased) {
+            return;
+        }
+        this.startOverlayReleased = true;
+        String sessionId = SessionRuntimeConfig.getSessionId().orElse("");
+        for (ServerPlayerEntity player : this.participants()) {
+            if (ServerPlayNetworking.canSend(player, NetworkConstants.MATCH_START_ID)) {
+                ServerPlayNetworking.send(player, new NetworkConstants.MatchStartPayload(sessionId));
+            }
         }
     }
 
@@ -190,11 +267,22 @@ public final class MatchLifecycleController {
         SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markStopRequested);
         String host = SessionRuntimeConfig.getReturnHost();
         int port = SessionRuntimeConfig.getReturnPort();
-        for (ServerPlayerEntity player : this.participants()) {
-            player.networkHandler.sendPacket(new ServerTransferS2CPacket(host, port));
+        List<ServerPlayerEntity> players = this.participants();
+        if (players.isEmpty()) {
+            SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markReturnComplete);
+            this.completeLifecycle();
+            return;
         }
-        SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markReturnComplete);
-        this.completeLifecycle();
+
+        AtomicInteger pendingTransfers = new AtomicInteger(players.size());
+        for (ServerPlayerEntity player : players) {
+            TransitionTransferCoordinator.transfer(player, host, port, "Returning to Lobby", () -> {
+                if (pendingTransfers.decrementAndGet() == 0) {
+                    SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markReturnComplete);
+                    this.completeLifecycle();
+                }
+            });
+        }
     }
 
     private void bindServer(MinecraftServer server) {
@@ -243,7 +331,6 @@ public final class MatchLifecycleController {
         player.getHungerManager().setSaturationLevel(20.0F);
         player.changeGameMode(GameMode.ADVENTURE);
         this.freeze(player);
-        this.showStartTitleTo(player);
         this.sendCountdownTo(player, this.secondsRemaining());
         ChatRouter.sendTeamChatNotice(List.of(player));
     }
@@ -258,18 +345,6 @@ public final class MatchLifecycleController {
         for (ServerPlayerEntity player : this.participants()) {
             this.freezeService.unfreeze(player, FreezeReason.MATCH_START);
         }
-    }
-
-    private void showStartTitle() {
-        for (ServerPlayerEntity player : this.participants()) {
-            player.networkHandler.sendPacket(new SubtitleS2CPacket(this.options.startSubtitle().copy().formatted(Formatting.YELLOW)));
-            player.networkHandler.sendPacket(new TitleS2CPacket(this.options.startTitle().copy().formatted(Formatting.GOLD, Formatting.BOLD)));
-        }
-    }
-
-    private void showStartTitleTo(ServerPlayerEntity player) {
-        player.networkHandler.sendPacket(new SubtitleS2CPacket(this.options.startSubtitle().copy().formatted(Formatting.YELLOW)));
-        player.networkHandler.sendPacket(new TitleS2CPacket(this.options.startTitle().copy().formatted(Formatting.GOLD, Formatting.BOLD)));
     }
 
     private void sendCountdownTo(ServerPlayerEntity player, int secondsRemaining) {
@@ -321,6 +396,60 @@ public final class MatchLifecycleController {
                 player.playSound(this.options.countdownSound(), 1.0F, 1.0F);
             }
         }
+        // Show team chat notice when start freeze countdown reaches 5 seconds
+        if (this.phase == Phase.START_FREEZE && secondsRemaining == 5) {
+            ChatRouter.sendTeamChatNotice(this.participants());
+        }
+    }
+
+    private void announceDisconnectGrace(int secondsRemaining) {
+        if (secondsRemaining < 0 || secondsRemaining == this.disconnectGraceLastAnnouncedSecond) {
+            return;
+        }
+        this.disconnectGraceLastAnnouncedSecond = secondsRemaining;
+        String pendingNames = String.join(", ", new ArrayList<>(this.disconnectGracePlayers.values()));
+        String label = pendingNames.isBlank() ? "Waiting for reconnect" : "Waiting for " + pendingNames + " to reconnect";
+        Text text = Text.literal(label + " (" + secondsRemaining + "s)").formatted(Formatting.YELLOW);
+        for (ServerPlayerEntity player : this.participants()) {
+            player.sendMessage(text, true);
+        }
+    }
+
+    private void broadcastDisconnectGraceStart(String playerName) {
+        Text message = Text.literal(playerName + " disconnected. Waiting for reconnect before ending the match.")
+            .formatted(Formatting.YELLOW);
+        this.participants().forEach(player -> player.sendMessage(message, false));
+    }
+
+    private void resolveDisconnectGrace(ServerPlayerEntity player) {
+        if (this.disconnectGracePlayers.isEmpty()) {
+            return;
+        }
+
+        if (this.disconnectGracePlayers.remove(player.getUuid()) == null) {
+            return;
+        }
+
+        if (!this.disconnectGracePlayers.isEmpty()) {
+            this.disconnectGraceLastAnnouncedSecond = -1;
+            return;
+        }
+
+        this.disconnectGraceTicksRemaining = 0;
+        this.disconnectGraceLastAnnouncedSecond = -1;
+        DisconnectGraceHandler handler = this.options.disconnectGraceHandler();
+        if (handler != null && this.runtime != null) {
+            handler.onGraceCancelled(this.runtime);
+        }
+        Text message = Text.literal(player.getName().getString() + " reconnected. Match continues.")
+            .formatted(Formatting.GREEN);
+        this.participants().forEach(target -> target.sendMessage(message, false));
+    }
+
+    private void clearDisconnectGrace() {
+        this.disconnectGracePlayers.clear();
+        this.disconnectGraceTicksRemaining = 0;
+        this.disconnectGraceLastAnnouncedSecond = -1;
     }
 
     private void sendAdminCancelMessage() {
@@ -366,6 +495,19 @@ public final class MatchLifecycleController {
             .toList();
     }
 
+    public synchronized boolean cancelReturn(ServerPlayerEntity requester) {
+        if (this.phase != Phase.END_RETURN) {
+            return false;
+        }
+        this.phase = Phase.ENDED;
+        this.ticksRemaining = 0;
+        this.lastAnnouncedSecond = -1;
+        this.runtimeState(GameState.ENDING);
+        Text message = this.options.returnCancelledMessage();
+        this.participants().forEach(player -> player.sendMessage(message, false));
+        return true;
+    }
+
     public synchronized boolean isMatchActive() {
         return this.phase != Phase.IDLE;
     }
@@ -375,6 +517,8 @@ public final class MatchLifecycleController {
         this.phase = Phase.IDLE;
         this.ticksRemaining = 0;
         this.lastAnnouncedSecond = -1;
+        this.startOverlayReleased = false;
+        this.clearDisconnectGrace();
         this.unfreezeParticipants();
         this.lifecyclePlayers.clear();
         this.startCallback = null;
@@ -387,6 +531,8 @@ public final class MatchLifecycleController {
         this.phase = Phase.IDLE;
         this.ticksRemaining = 0;
         this.lastAnnouncedSecond = -1;
+        this.startOverlayReleased = false;
+        this.clearDisconnectGrace();
         this.unfreezeParticipants();
         this.lifecyclePlayers.clear();
         this.startCallback = null;

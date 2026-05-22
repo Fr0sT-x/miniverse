@@ -85,6 +85,10 @@ public final class SessionServerConfig {
         return this.config.acceptsTransfers;
     }
 
+    public String advertisedHost() {
+        return advertisedHostOverride().filter(host -> !host.isBlank()).orElse(this.config.advertisedHost);
+    }
+
     public synchronized void setViewDistance(int value) {
         this.config.viewDistance = value;
         this.config.normalize();
@@ -123,6 +127,27 @@ public final class SessionServerConfig {
         this.save();
     }
 
+    public synchronized void setAdvertisedHost(String value) {
+        this.config.advertisedHost = normalizeHost(value);
+        this.save();
+    }
+
+    private static java.util.Optional<String> advertisedHostOverride() {
+        String property = System.getProperty("miniverse.session.advertisedHost", "").trim();
+        if (!property.isBlank()) {
+            return java.util.Optional.of(property);
+        }
+
+        String environment = System.getenv("MINIVERSE_SESSION_ADVERTISED_HOST");
+        return environment == null || environment.trim().isBlank()
+            ? java.util.Optional.empty()
+            : java.util.Optional.of(environment.trim());
+    }
+
+    private static String normalizeHost(String value) {
+        return value == null || value.trim().isBlank() ? "127.0.0.1" : value.trim();
+    }
+
     private static String normalizeDifficulty(String value) {
         if (value == null) {
             return "easy";
@@ -139,8 +164,9 @@ public final class SessionServerConfig {
         public String difficulty;
         public boolean allowFlight;
         public boolean acceptsTransfers;
+        public String advertisedHost;
 
-        public Config(int viewDistance, int simulationDistance, boolean onlineMode, int spawnProtection, String difficulty, boolean allowFlight, boolean acceptsTransfers) {
+        public Config(int viewDistance, int simulationDistance, boolean onlineMode, int spawnProtection, String difficulty, boolean allowFlight, boolean acceptsTransfers, String advertisedHost) {
             this.viewDistance = viewDistance;
             this.simulationDistance = simulationDistance;
             this.onlineMode = onlineMode;
@@ -148,10 +174,11 @@ public final class SessionServerConfig {
             this.difficulty = difficulty;
             this.allowFlight = allowFlight;
             this.acceptsTransfers = acceptsTransfers;
+            this.advertisedHost = advertisedHost;
         }
 
         public static Config defaults() {
-            return new Config(16, 8, false, 0, "easy", true, true);
+            return new Config(16, 8, false, 0, "easy", true, true, "127.0.0.1");
         }
 
         private void normalize() {
@@ -159,6 +186,7 @@ public final class SessionServerConfig {
             this.simulationDistance = Math.clamp(this.simulationDistance, 2, 32);
             this.spawnProtection = Math.max(0, this.spawnProtection);
             this.difficulty = normalizeDifficulty(this.difficulty);
+            this.advertisedHost = normalizeHost(this.advertisedHost);
         }
 
         @Override
@@ -171,6 +199,7 @@ public final class SessionServerConfig {
                 ", difficulty='" + difficulty + '\'' +
                 ", allowFlight=" + allowFlight +
                 ", acceptsTransfers=" + acceptsTransfers +
+                ", advertisedHost='" + advertisedHost + '\'' +
                 '}';
         }
     }

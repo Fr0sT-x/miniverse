@@ -3,8 +3,12 @@
 	"package": "dev.frost.miniverse.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"ConnectScreenTransitionOverlayMixin",
 		"ExampleClientMixin",
-		"LivingEntityNightVisionMixin"
+		"LevelLoadingScreenTransitionOverlayMixin",
+		"LivingEntityNightVisionMixin",
+		"ProgressScreenTransitionOverlayMixin",
+		"ScreenTransitionOverlayMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

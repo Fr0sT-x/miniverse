@@ -2,22 +2,32 @@ package dev.frost.miniverse.session;
 
 import dev.frost.miniverse.Miniverse;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.frost.miniverse.common.MiniverseFileUtils;
 import dev.frost.miniverse.common.MiniversePaths;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.StringNbtReader;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 
 public final class SessionRegistry {
     private static final String SESSION_JSON_FILE_NAME = "session.json";
@@ -26,9 +36,14 @@ public final class SessionRegistry {
     private SessionRegistry() {
     }
 
-    public record Snapshot(String sessionId, String game, String state, long seed, int playerCount, List<String> players) {
+    public record Snapshot(String sessionId, String game, String state, long seed, int playerCount, List<String> players, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable) {
     }
 
+    public record RetainedSession(String sessionId, String gameId, SeedPlan seedPlan, NbtCompound settings, List<PlannedTeam> teams) {
+    }
+
+    private record CleanupCandidate(Path path, long updatedAtMillis) {
+    }
     public record StopState(String sessionId, boolean stopRequested, boolean returnComplete, boolean seedChangeRequested) {
     }
 
@@ -66,6 +81,41 @@ public final class SessionRegistry {
         return snapshots;
     }
 
+    public static synchronized Optional<RetainedSession> loadRetainedSession(String sessionId) {
+        Optional<JsonObject> json = readJson(sessionId);
+        if (json.isEmpty()) {
+            return Optional.empty();
+        }
+
+        JsonObject object = json.get();
+        String gameId = SessionConfigJson.string(object, "gameId", SessionConfigJson.string(object, "game", ""));
+        if (gameId.isBlank()) {
+            return Optional.empty();
+        }
+
+        long seed = SessionConfigJson.longValue(object, "seed", 0L);
+        SeedPlan seedPlan = SeedPlan.fixed(seed);
+        NbtCompound settings = readSettingsNbt(object, sessionId);
+        List<PlannedTeam> teams = readTeams(object, sessionId);
+        return Optional.of(new RetainedSession(sessionId, gameId, seedPlan, settings, teams));
+    }
+
+    public static synchronized Set<String> existingSessionIds() {
+        Path sessionsRoot = sessionsRoot();
+        if (!Files.exists(sessionsRoot)) {
+            return Set.of();
+        }
+
+        Set<String> ids = new HashSet<>();
+        try (var stream = Files.list(sessionsRoot)) {
+            stream.filter(Files::isDirectory)
+                .map(path -> path.getFileName().toString())
+                .forEach(ids::add);
+        } catch (IOException e) {
+            Miniverse.LOGGER.warn("Failed to scan existing session ids", e);
+        }
+        return ids;
+    }
     public static synchronized List<StopState> loadStopStates() {
         Path sessionsRoot = sessionsRoot();
         if (!Files.exists(sessionsRoot)) {
@@ -233,10 +283,29 @@ public final class SessionRegistry {
             return;
         }
 
+        SessionRetentionConfig retention = SessionRetentionConfig.getInstance();
+        long cutoffMillis = Instant.now().minus(retention.maxAgeDays(), ChronoUnit.DAYS).toEpochMilli();
+        List<CleanupCandidate> sessionCandidates = entries.stream()
+            .filter(Files::isDirectory)
+            .map(path -> new CleanupCandidate(path, lastModifiedMillis(path)))
+            .sorted(Comparator.comparingLong(CleanupCandidate::updatedAtMillis).reversed())
+            .toList();
+        Set<Path> retained = new HashSet<>();
+        for (int index = 0; index < sessionCandidates.size(); index++) {
+            CleanupCandidate candidate = sessionCandidates.get(index);
+            if (index == 0 || index < retention.keepLatestSessions() || candidate.updatedAtMillis() >= cutoffMillis) {
+                retained.add(candidate.path());
+            }
+        }
+
         int removed = 0;
         for (Path entry : entries) {
             try {
                 if (Files.isDirectory(entry)) {
+                    if (retained.contains(entry)) {
+                        Miniverse.LOGGER.info("Session startup cleanup: retained {}", entry.getFileName());
+                        continue;
+                    }
                     deleteRecursively(entry);
                 } else {
                     Files.deleteIfExists(entry);
@@ -248,9 +317,12 @@ public final class SessionRegistry {
             }
         }
 
-        Miniverse.LOGGER.info("Session startup cleanup complete: removed {} item(s).", removed);
+        Miniverse.LOGGER.info(
+            "Session startup cleanup complete: retained {} session folder(s), removed {} stale item(s).",
+            retained.size(),
+            removed
+        );
     }
-
     private static void writeSessionFile(Path sessionsRoot, GameSession session) throws IOException {
         Path sessionRoot = sessionsRoot.resolve(session.getSessionId());
         Files.createDirectories(sessionRoot);
@@ -269,7 +341,6 @@ public final class SessionRegistry {
         json.add("lifecycle", lifecycle);
         SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
     }
-
     private static Optional<Snapshot> loadSnapshot(Path sessionRoot) {
         Path file = sessionRoot.resolve(SESSION_JSON_FILE_NAME);
         if (Files.isRegularFile(file)) {
@@ -304,9 +375,11 @@ public final class SessionRegistry {
             }
         }
 
-        return Optional.of(new Snapshot(sessionId, game, state, seed, playerCount, players));
+        long updatedAt = lastModifiedMillis(sessionRoot);
+        long createdAt = updatedAt;
+        long launchedAt = updatedAt;
+        return Optional.of(new Snapshot(sessionId, game, state, seed, playerCount, players, createdAt, launchedAt, updatedAt, 0L, isInspectable(sessionRoot)));
     }
-
     private static Optional<Snapshot> loadJsonSnapshot(Path sessionRoot, Path file) {
         Optional<JsonObject> json = SessionConfigJson.read(file);
         if (json.isEmpty()) {
@@ -319,6 +392,10 @@ public final class SessionRegistry {
         String state = SessionConfigJson.string(object, "state", SessionState.CREATED.name());
         long seed = SessionConfigJson.longValue(object, "seed", 0L);
         int playerCount = SessionConfigJson.integer(object, "playerCount", 0);
+        long updatedAt = lastModifiedMillis(sessionRoot);
+        long createdAt = SessionConfigJson.longValue(object, "createdAt", updatedAt);
+        long launchedAt = SessionConfigJson.longValue(object, "launchedAt", 0L);
+        long playedMillis = launchedAt > 0L ? Math.max(0L, updatedAt - launchedAt) : 0L;
 
         List<String> players = new ArrayList<>();
         JsonArray assignments = object.has("backendAssignments") && object.get("backendAssignments").isJsonArray()
@@ -334,9 +411,68 @@ public final class SessionRegistry {
             }
         }
 
-        return Optional.of(new Snapshot(sessionId, game, state, seed, playerCount, players));
+        return Optional.of(new Snapshot(sessionId, game, state, seed, playerCount, players, createdAt, launchedAt, updatedAt, playedMillis, isInspectable(sessionRoot)));
     }
 
+    private static NbtCompound readSettingsNbt(JsonObject object, String sessionId) {
+        String snbt = SessionConfigJson.string(object, "settingsNbt", "");
+        if (snbt.isBlank()) {
+            return new NbtCompound();
+        }
+        try {
+            return StringNbtReader.readCompound(snbt);
+        } catch (Exception e) {
+            Miniverse.LOGGER.warn("Failed to parse retained session settings for {}", sessionId, e);
+            return new NbtCompound();
+        }
+    }
+
+    private static List<PlannedTeam> readTeams(JsonObject object, String sessionId) {
+        JsonArray teamsJson = object.has("teams") && object.get("teams").isJsonArray()
+            ? object.getAsJsonArray("teams")
+            : new JsonArray();
+        List<PlannedTeam> teams = new ArrayList<>();
+        int index = 1;
+        for (JsonElement teamElement : teamsJson) {
+            if (!teamElement.isJsonObject()) {
+                continue;
+            }
+            JsonObject teamObject = teamElement.getAsJsonObject();
+            String label = SessionConfigJson.string(teamObject, "label", SessionConfigJson.string(teamObject, "displayName", "Team-" + index));
+            JsonArray membersJson = teamObject.has("members") && teamObject.get("members").isJsonArray()
+                ? teamObject.getAsJsonArray("members")
+                : new JsonArray();
+            List<SessionMembership> members = new ArrayList<>();
+            for (JsonElement memberElement : membersJson) {
+                if (!memberElement.isJsonObject()) {
+                    continue;
+                }
+                JsonObject memberObject = memberElement.getAsJsonObject();
+                String uuidText = SessionConfigJson.string(memberObject, "uuid", "");
+                if (uuidText.isBlank()) {
+                    continue;
+                }
+                UUID uuid;
+                try {
+                    uuid = UUID.fromString(uuidText);
+                } catch (IllegalArgumentException ignored) {
+                    continue;
+                }
+                String name = SessionConfigJson.string(memberObject, "name", "");
+                String role = SessionConfigJson.string(memberObject, "role", "");
+                members.add(new SessionMembership(uuid, name.isBlank() ? uuidText : name, role));
+            }
+            if (!members.isEmpty()) {
+                teams.add(new PlannedTeam(label, members));
+            }
+            index++;
+        }
+
+        if (teams.isEmpty()) {
+            Miniverse.LOGGER.warn("Retained session {} has no team roster in session metadata.", sessionId);
+        }
+        return teams;
+    }
     private static Optional<JsonObject> readJson(String sessionId) {
         Path file = sessionsRoot().resolve(sessionId).resolve(SESSION_JSON_FILE_NAME);
         if (Files.isRegularFile(file)) {
@@ -522,6 +658,69 @@ public final class SessionRegistry {
             return Long.parseLong(value);
         } catch (NumberFormatException ignored) {
             return fallback;
+        }
+    }
+
+    private static long lastModifiedMillis(Path root) {
+        if (!Files.exists(root)) {
+            return 0L;
+        }
+
+        try {
+            return lastModifiedMillis(root, 0);
+        } catch (IOException e) {
+            try {
+                return Files.getLastModifiedTime(root).toMillis();
+            } catch (IOException ignored) {
+                return 0L;
+            }
+        }
+    }
+
+    private static long lastModifiedMillis(Path path, int depth) throws IOException {
+        long latest = Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS).toMillis();
+        if (depth > 8 || isDirectoryLink(path)) {
+            return latest;
+        }
+
+        BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!attrs.isDirectory()) {
+            return latest;
+        }
+
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(path)) {
+            for (Path entry : entries) {
+                latest = Math.max(latest, lastModifiedMillis(entry, depth + 1));
+            }
+        }
+        return latest;
+    }
+
+    private static boolean isInspectable(Path sessionRoot) {
+        try (var stream = Files.list(sessionRoot)) {
+            return stream.anyMatch(path -> Files.isDirectory(path.resolve("world")));
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isDirectoryLink(Path path) {
+        if (Files.isSymbolicLink(path)) {
+            return true;
+        }
+        if (!System.getProperty("os.name", "").toLowerCase().contains("win") || !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            return false;
+        }
+        Path parent = path.getParent();
+        if (parent == null) {
+            return false;
+        }
+        try {
+            Path expectedRealPath = parent.toRealPath().resolve(path.getFileName());
+            Path actualRealPath = path.toRealPath();
+            return !expectedRealPath.toString().equalsIgnoreCase(actualRealPath.toString());
+        } catch (IOException ignored) {
+            return false;
         }
     }
 

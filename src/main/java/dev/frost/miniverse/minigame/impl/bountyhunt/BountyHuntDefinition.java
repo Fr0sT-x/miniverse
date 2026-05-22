@@ -52,6 +52,7 @@ public final class BountyHuntDefinition implements MinigameDefinition {
         properties.setProperty("bountyhunt.netherTracking", Boolean.toString(settings.netherTrackingEnabled()));
         properties.setProperty("bountyhunt.compassCooldownSeconds", Integer.toString(settings.compassCooldownSeconds()));
         properties.setProperty("bountyhunt.trackerItemId", settings.trackerItemId());
+        properties.setProperty("bountyhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
     }
 
     @Override
@@ -65,6 +66,7 @@ public final class BountyHuntDefinition implements MinigameDefinition {
         properties.put("miniverse.bountyhunt.netherTracking", Boolean.toString(settings.netherTrackingEnabled()));
         properties.put("miniverse.bountyhunt.compassCooldownSeconds", Integer.toString(settings.compassCooldownSeconds()));
         properties.put("miniverse.bountyhunt.trackerItemId", settings.trackerItemId());
+        properties.put("miniverse.bountyhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
     }
 
     @Override

@@ -4,6 +4,7 @@ import dev.frost.miniverse.chat.ChatRouter;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
@@ -64,6 +65,7 @@ public final class MinigameEventRouter {
         SessionBootstrapper.tick(server);
         MatchLifecycleController.getInstance().tick(server);
         SpectatorService.getInstance().tick(server);
+        ProtectedItemService.getInstance().tick(server);
         Minigame active = activeMinigame();
         if (active instanceof ServerTickAware tickAware) {
             tickAware.onServerTick(server);
@@ -117,6 +119,7 @@ public final class MinigameEventRouter {
 
     private static void onAfterRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
         SpectatorService.getInstance().onPlayerRespawn(oldPlayer, newPlayer, alive);
+        ProtectedItemService.getInstance().onPlayerRespawn(oldPlayer, newPlayer, alive);
         Minigame active = activeMinigame();
         if (active instanceof PlayerRespawnAware respawnAware) {
             respawnAware.onPlayerRespawn(oldPlayer, newPlayer, alive);
@@ -124,6 +127,7 @@ public final class MinigameEventRouter {
     }
 
     private static void onPlayerLeave(ServerPlayerEntity player) {
+        MatchLifecycleController.getInstance().onParticipantLeave(player);
         SpectatorService.getInstance().onPlayerLeave(player);
         Minigame active = activeMinigame();
         if (active instanceof PlayerLeaveAware leaveAware) {

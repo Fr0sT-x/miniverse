@@ -54,6 +54,7 @@ public final class ManhuntDefinition implements MinigameDefinition {
         properties.setProperty("manhunt.runnerLives", Integer.toString(settings.runnerLives()));
         properties.setProperty("manhunt.hunterLives", Integer.toString(settings.hunterLives()));
         properties.setProperty("manhunt.hunterRespawnDelaySeconds", Integer.toString(settings.hunterRespawnDelaySeconds()));
+        properties.setProperty("manhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
 
         NbtList roles = settingsNbt.getList("roles").orElseGet(NbtList::new);
         for (int i = 0; i < roles.size(); i++) {
@@ -78,6 +79,7 @@ public final class ManhuntDefinition implements MinigameDefinition {
         properties.put("miniverse.manhunt.runnerLives", Integer.toString(settings.runnerLives()));
         properties.put("miniverse.manhunt.hunterLives", Integer.toString(settings.hunterLives()));
         properties.put("miniverse.manhunt.hunterRespawnDelaySeconds", Integer.toString(settings.hunterRespawnDelaySeconds()));
+        properties.put("miniverse.manhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
     }
 
     @Override

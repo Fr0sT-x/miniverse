@@ -8,6 +8,8 @@ import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.session.SessionCommands;
 import dev.frost.miniverse.session.SessionRoutingEvents;
 import dev.frost.miniverse.network.SessionNetwork;
+import dev.frost.miniverse.network.TransitionTransferCoordinator;
+import dev.frost.miniverse.network.ClientConnectionHosts;
 import dev.frost.miniverse.session.SessionRegistry;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -44,7 +46,9 @@ public class Miniverse implements ModInitializer {
 
 		// Register shared session GUI payloads and server-side receivers.
 		NetworkConstants.registerPayloadTypes();
+		ClientConnectionHosts.register();
 		SessionNetwork.register();
+		TransitionTransferCoordinator.register();
 
 		LOGGER.info("Miniverse initialized. {} minigame(s) registered.", MinigameRegistry.getDefinitions().size());
 	}

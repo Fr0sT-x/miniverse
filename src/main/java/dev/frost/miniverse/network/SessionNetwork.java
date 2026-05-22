@@ -3,6 +3,7 @@ package dev.frost.miniverse.network;
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
+import dev.frost.miniverse.minigame.core.SessionBootstrapper;
 import dev.frost.miniverse.session.GameSession;
 import dev.frost.miniverse.session.SessionCreationService;
 import dev.frost.miniverse.session.SessionGroup;
@@ -11,6 +12,7 @@ import dev.frost.miniverse.session.SessionRegistry;
 import dev.frost.miniverse.session.SessionManager;
 import dev.frost.miniverse.session.SessionPermissions;
 import dev.frost.miniverse.session.SessionMemoryConfig;
+import dev.frost.miniverse.session.SessionRetentionConfig;
 import dev.frost.miniverse.session.SessionServerConfig;
 import dev.frost.miniverse.session.SessionConfigJson;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
@@ -43,10 +45,18 @@ public final class SessionNetwork {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_SESSION_ID, (payload, context) -> handleCreate(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCH_SESSION_ID, (payload, context) -> handleLaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.STOP_SESSION_ID, (payload, context) -> handleStop(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.INSPECT_SESSION_ID, (payload, context) -> handleInspect(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RELAUNCH_SESSION_ID, (payload, context) -> handleRelaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CHANGE_SEED_ID, (payload, context) -> handleChangeSeed(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLEANUP_PLAYER_ID, (payload, context) -> handleCleanupPlayer(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCHER_SETTINGS_ID, (payload, context) -> handleLauncherSettings(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.SERVER_SETTINGS_ID, (payload, context) -> handleServerSettings(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLIENT_CONNECTION_HOST_ID, (payload, context) ->
+            ClientConnectionHosts.remember(context.player(), payload.host())
+        );
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLIENT_MATCH_READY_ID, (payload, context) ->
+            SessionBootstrapper.markClientReady(context.player(), payload.sessionId())
+        );
 
         registered = true;
     }
@@ -148,6 +158,71 @@ public final class SessionNetwork {
         sendSessionList(server, player);
     }
 
+    private static void handleInspect(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.InspectSessionPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "inspect retained sessions")) {
+            return;
+        }
+
+        String sessionId = payload.sessionId();
+        player.sendMessage(Text.literal("Launching inspection copy for session " + sessionId + "..."), false);
+        SessionManager.getInstance().launchInspectionAsync(sessionId, player).whenComplete((result, error) -> server.execute(() -> {
+            if (error != null) {
+                player.sendMessage(Text.literal("Failed to launch inspection copy for " + sessionId + ": " + error.getMessage()).formatted(Formatting.RED), false);
+                sendSessionList(server, player);
+                return;
+            }
+
+            String context = "Inspecting " + sessionId;
+            if (VelocityProxyBridge.isEnabled()) {
+                TransitionTransferCoordinator.transferToVelocityBackend(
+                    player,
+                    VelocityProxyBridge.serverName(sessionId, "inspection-" + result.port()),
+                    result.port(),
+                    context,
+                    () -> {
+                    }
+                );
+            } else {
+                TransitionTransferCoordinator.transfer(
+                    player,
+                    SessionServerConfig.getInstance().advertisedHost(),
+                    SessionLauncherConfig.getInstance().publicPortForLocalPort(result.port()),
+                    context
+                );
+            }
+            player.sendMessage(Text.literal("Inspection copy launched for " + sessionId + "."), false);
+            sendSessionList(server, player);
+        }));
+    }
+
+    private static void handleRelaunch(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.RelaunchSessionPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "relaunch retained sessions")) {
+            return;
+        }
+
+        String sessionId = payload.sessionId();
+        SessionManager manager = SessionManager.getInstance();
+
+        if (manager.getSession(sessionId).isPresent()) {
+            player.sendMessage(Text.literal("Session " + sessionId + " is already running. Stop it first to relaunch."), false);
+            sendSessionList(server, player);
+            return;
+        }
+
+        player.sendMessage(Text.literal("Relaunching session " + sessionId + "..."), false);
+        manager.relaunchRetainedSession(sessionId, server).whenComplete((session, error) -> server.execute(() -> {
+            if (error != null) {
+                player.sendMessage(Text.literal("Failed to relaunch session " + sessionId + ": " + error.getMessage()).formatted(Formatting.RED), false);
+                sendSessionList(server, player);
+                return;
+            }
+
+            manager.transferAssignedPlayers(server, session);
+            player.sendMessage(Text.literal("Relaunched session " + session.getSessionId() + "."), false);
+            sendSessionList(server, player);
+        }));
+    }
+
     private static void handleCleanupPlayer(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CleanupPlayerPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "run session cleanup")) {
             return;
@@ -184,6 +259,7 @@ public final class SessionNetwork {
         NbtCompound settings = payload.settings();
         NbtCompound memory = settings.getCompound("memory").orElseGet(NbtCompound::new);
         NbtCompound serverSettings = settings.getCompound("server").orElseGet(NbtCompound::new);
+        NbtCompound retentionSettings = settings.getCompound("retention").orElseGet(NbtCompound::new);
 
         SessionMemoryConfig memoryConfig = SessionMemoryConfig.getInstance();
         if (memory.contains("enabled")) {
@@ -218,6 +294,17 @@ public final class SessionNetwork {
         if (serverSettings.contains("acceptsTransfers")) {
             serverConfig.setAcceptsTransfers(serverSettings.getBoolean("acceptsTransfers", serverConfig.acceptsTransfers()));
         }
+        if (serverSettings.contains("advertisedHost")) {
+            serverConfig.setAdvertisedHost(serverSettings.getString("advertisedHost", serverConfig.advertisedHost()));
+        }
+
+        SessionRetentionConfig retentionConfig = SessionRetentionConfig.getInstance();
+        if (retentionSettings.contains("keepLatestSessions")) {
+            retentionConfig.setKeepLatestSessions(retentionSettings.getInt("keepLatestSessions").orElse(retentionConfig.keepLatestSessions()));
+        }
+        if (retentionSettings.contains("maxAgeDays")) {
+            retentionConfig.setMaxAgeDays(retentionSettings.getInt("maxAgeDays").orElse(retentionConfig.maxAgeDays()));
+        }
 
         sendSessionList(server, player);
     }
@@ -240,6 +327,12 @@ public final class SessionNetwork {
                 entry.putString("game", session.getGameType().getDisplayName());
                 entry.putString("state", session.getState().name());
                 entry.putLong("seed", session.getSeedPlan().sharedSeed());
+                entry.putLong("createdAt", session.getCreatedAt().toEpochMilli());
+                entry.putLong("launchedAt", session.getLaunchedAt() == null ? 0L : session.getLaunchedAt().toEpochMilli());
+                entry.putLong("updatedAt", System.currentTimeMillis());
+                entry.putLong("playedMillis", session.getLaunchedAt() == null ? 0L : Math.max(0L, System.currentTimeMillis() - session.getLaunchedAt().toEpochMilli()));
+                entry.putBoolean("inspectable", false);
+                entry.putBoolean("retained", false);
 
                 NbtList players = new NbtList();
                 session.getAssignments().forEach(assignment -> players.add(NbtString.of(assignment.getDisplayName())));
@@ -254,6 +347,12 @@ public final class SessionNetwork {
                 entry.putString("game", snapshot.game());
                 entry.putString("state", snapshot.state());
                 entry.putLong("seed", snapshot.seed());
+                entry.putLong("createdAt", snapshot.createdAtMillis());
+                entry.putLong("launchedAt", snapshot.launchedAtMillis());
+                entry.putLong("updatedAt", snapshot.updatedAtMillis());
+                entry.putLong("playedMillis", snapshot.playedMillis());
+                entry.putBoolean("inspectable", snapshot.inspectable());
+                entry.putBoolean("retained", SessionManager.getInstance().getSession(snapshot.sessionId()).isEmpty());
 
                 NbtList players = new NbtList();
                 for (String name : snapshot.players()) {
@@ -286,6 +385,10 @@ public final class SessionNetwork {
         SessionLauncherConfig launcherConfig = SessionLauncherConfig.getInstance();
         launcher.putInt("maxConcurrentLaunches", launcherConfig.maxConcurrentLaunches());
         launcher.putInt("queueCapacity", launcherConfig.queueCapacity());
+        launcher.putInt("sessionPortStart", launcherConfig.sessionPortStart());
+        launcher.putInt("sessionPortEnd", launcherConfig.sessionPortEnd());
+        launcher.putInt("publicSessionPortStart", launcherConfig.publicSessionPortStart());
+        launcher.putInt("publicSessionPortEnd", launcherConfig.publicSessionPortEnd());
         root.put("launcher", launcher);
 
         NbtCompound memory = new NbtCompound();
@@ -304,7 +407,14 @@ public final class SessionNetwork {
         serverSettings.putString("difficulty", serverConfig.difficulty());
         serverSettings.putBoolean("allowFlight", serverConfig.allowFlight());
         serverSettings.putBoolean("acceptsTransfers", serverConfig.acceptsTransfers());
+        serverSettings.putString("advertisedHost", serverConfig.advertisedHost());
         root.put("server", serverSettings);
+
+        NbtCompound retention = new NbtCompound();
+        SessionRetentionConfig retentionConfig = SessionRetentionConfig.getInstance();
+        retention.putInt("keepLatestSessions", retentionConfig.keepLatestSessions());
+        retention.putInt("maxAgeDays", retentionConfig.maxAgeDays());
+        root.put("retention", retention);
 
         ServerPlayNetworking.send(player, new NetworkConstants.SessionListPayload(root));
     }
@@ -315,6 +425,12 @@ public final class SessionNetwork {
         entry.putString("game", SessionConfigJson.string(json, "gameDisplayName", SessionConfigJson.string(json, "gameId", "")));
         entry.putString("state", "RUNNING");
         entry.putLong("seed", SessionConfigJson.longValue(json, "seed", 0L));
+        entry.putLong("createdAt", SessionConfigJson.longValue(json, "createdAt", 0L));
+        entry.putLong("launchedAt", SessionConfigJson.longValue(json, "launchedAt", 0L));
+        entry.putLong("updatedAt", System.currentTimeMillis());
+        entry.putLong("playedMillis", Math.max(0L, System.currentTimeMillis() - SessionConfigJson.longValue(json, "launchedAt", System.currentTimeMillis())));
+        entry.putBoolean("inspectable", false);
+        entry.putBoolean("retained", false);
         entry.putInt("playerCount", runtimePlayerCount(json));
         return entry;
     }

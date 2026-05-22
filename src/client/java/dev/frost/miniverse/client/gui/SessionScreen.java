@@ -55,7 +55,13 @@ public class SessionScreen extends Screen {
                 entry.getString("game", ""),
                 entry.getString("state", ""),
                 entry.getLong("seed").orElse(0L),
-                entry.getInt("playerCount").orElse(0)
+                entry.getInt("playerCount").orElse(0),
+                entry.getLong("createdAt").orElse(0L),
+                entry.getLong("launchedAt").orElse(0L),
+                entry.getLong("updatedAt").orElse(0L),
+                entry.getLong("playedMillis").orElse(0L),
+                entry.getBoolean("inspectable", false),
+                entry.getBoolean("retained", false)
             ));
         }
 
@@ -100,6 +106,7 @@ public class SessionScreen extends Screen {
         NbtCompound launcher = root.getCompound("launcher").orElseGet(NbtCompound::new);
         NbtCompound memory = root.getCompound("memory").orElseGet(NbtCompound::new);
         NbtCompound serverSettings = root.getCompound("server").orElseGet(NbtCompound::new);
+        NbtCompound retention = root.getCompound("retention").orElseGet(NbtCompound::new);
         SessionSnapshotData.update(
             sessions,
             roster,
@@ -118,7 +125,12 @@ public class SessionScreen extends Screen {
                 serverSettings.getInt("spawnProtection").orElse(SessionSnapshotData.serverSettings().spawnProtection()),
                 serverSettings.getString("difficulty", SessionSnapshotData.serverSettings().difficulty()),
                 serverSettings.getBoolean("allowFlight", SessionSnapshotData.serverSettings().allowFlight()),
-                serverSettings.getBoolean("acceptsTransfers", SessionSnapshotData.serverSettings().acceptsTransfers())
+                serverSettings.getBoolean("acceptsTransfers", SessionSnapshotData.serverSettings().acceptsTransfers()),
+                serverSettings.getString("advertisedHost", SessionSnapshotData.serverSettings().advertisedHost())
+            ),
+            new SessionSnapshotData.RetentionSettings(
+                retention.getInt("keepLatestSessions").orElse(SessionSnapshotData.retentionSettings().keepLatestSessions()),
+                retention.getInt("maxAgeDays").orElse(SessionSnapshotData.retentionSettings().maxAgeDays())
             )
         );
         MinecraftClient client = MinecraftClient.getInstance();

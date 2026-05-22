@@ -7,13 +7,17 @@ import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.ItemUseAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemRule;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemTags;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemTypes;
+import dev.frost.miniverse.minigame.core.item.TrackingItemNameFormatter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
@@ -24,17 +28,13 @@ import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
-import dev.frost.miniverse.team.TeamMembership;
 import dev.frost.miniverse.team.TeamRole;
-import dev.frost.miniverse.team.TeamSnapshot;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LodestoneTrackerComponent;
-import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -51,7 +51,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
-import net.minecraft.util.TypeFilter;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.util.math.Vec3d;
@@ -83,9 +82,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
     // Track which speedrunner each hunter is currently following
     private final Map<UUID, Integer> hunterTrackingIndexes = new ConcurrentHashMap<>();
 
-    private static final String MANHUNT_COMPASS_TAG = "Manhunt_tracker";
-    private static final String SCOREBOARD_OBJECTIVE = "manhunt_display";
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Manhunt"));
+    private static final String TRACKER_TYPE = ProtectedItemTypes.TRACKER_COMPASS;
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("manhunt");
 
     private final Map<UUID, RunnerTrackingData> runnerTracking = new ConcurrentHashMap<>();
@@ -152,6 +149,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
     public void startGame() {
         this.state = GameState.RUNNING;
         this.setRuntimeState(GameState.RUNNING);
+        this.registerProtectedItems();
 
         // Initialize tracking
         this.aliveSpeedrunners.clear();
@@ -185,10 +183,14 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             Text.literal("Hunters release in " + this.settings.hunterReleaseDelaySeconds() + "s.").formatted(Formatting.YELLOW)
         );
 
+        if (this.leadTicksRemaining > 0) {
+            this.sendLeadActionBar(this.leadSecondsRemaining());
+        }
+
         if (this.leadTicksRemaining <= 0) {
             this.beginHunt();
         }
-        this.updateScoreboard();
+        this.syncVanillaTeams();
     }
 
     @Override
@@ -213,6 +215,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         this.compassCooldownUntilTicks.clear();
         this.speedrunnerRespawns.reset();
         this.clearVanillaTeams();
+        ProtectedItemService.getInstance().clearRules();
 
         // Remove all participants from the minigame
         this.clearParticipants();
@@ -261,6 +264,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             if (this.aliveSpeedrunners.isEmpty()) {
                 this.endGameWithHunterVictory();
             }
+            this.syncVanillaTeams();
             return;
         }
 
@@ -278,6 +282,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             this.speedrunnerRespawns.retargetWaitingRunners();
             this.updateHunterCompasses();
         }
+        this.syncVanillaTeams();
     }
 
     /**
@@ -305,10 +310,6 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         if (this.settings.hunterRespawnDelaySeconds() > 0) {
             this.pendingHunterRespawns.put(hunterUuid, this.gameTicks + (long) this.settings.hunterRespawnDelaySeconds() * 20L);
         }
-
-        this.broadcastMessage(
-            Text.literal(hunter.getName().getString() + " (Hunter) died but will respawn!").formatted(Formatting.YELLOW)
-        );
     }
 
     /**
@@ -332,7 +333,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         );
 
         this.startStandardEndSequence(this.getActiveHunters(), Text.literal("Hunters"));
-        this.clearScoreboard();
+        this.clearVanillaTeams();
     }
 
     private void endGameWithRunnerVictory(Text reason) {
@@ -351,7 +352,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         );
 
         this.startStandardEndSequence(this.getSpeedrunners(), Text.literal("Runners"));
-        this.clearScoreboard();
+        this.clearVanillaTeams();
     }
 
     private void startStandardEndSequence(Collection<ServerPlayerEntity> winners, Text winnerLabel) {
@@ -390,16 +391,15 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             this.tickCounter = 0;
             this.updateRunnerTracking();
             this.pulseRunnerGlow();
-            this.updateScoreboard();
 
             if (this.state == GameState.RUNNING && !this.huntStarted) {
+                this.sendLeadActionBar(this.leadSecondsRemaining());
                 this.leadTicksRemaining = Math.max(0, this.leadTicksRemaining - 20);
                 if (this.leadTicksRemaining <= 0) {
                     this.beginHunt();
                 }
             } else if (this.state == GameState.RUNNING && this.huntStarted) {
                 this.updateHunterCompasses();
-                this.cleanupDroppedCompasses();
             }
         }
     }
@@ -463,8 +463,15 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             float remaining = player.getHealth() - amount;
             if (remaining <= 0.0F && !this.speedrunnerRespawns.hasPendingRespawn(player)) {
                 this.dropSpeedrunnerLoot(player);
+                // Check if this is the last alive speedrunner before removing them from the list
+                boolean isLastAliveSpeedrunner = this.aliveSpeedrunners.size() == 1 && this.aliveSpeedrunners.contains(player.getUuid());
                 this.handleSpeedrunnerDeath(player);
-                this.showSpeedrunnerDeathTitle(player);
+                // Show the appropriate death title
+                if (isLastAliveSpeedrunner) {
+                    this.showLastSpeedrunnerDeathTitle(player);
+                } else {
+                    this.showSpeedrunnerDeathTitle(player);
+                }
                 return false;
             }
         }
@@ -513,6 +520,8 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             }
         }
 
+        this.sendActionBarToHunters(Text.literal("GO!").formatted(Formatting.GREEN));
+        this.sendActionBarToSpeedrunners(Text.literal("Hunters are released!").formatted(Formatting.RED));
         this.broadcastMessage(Text.literal("Hunters released!").formatted(Formatting.GREEN));
     }
 
@@ -527,7 +536,9 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
 
         this.pruneDisconnectedSpeedrunners();
         if (this.aliveSpeedrunners.isEmpty()) {
-            this.endGameWithHunterVictory();
+            if (!MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+                this.endGameWithHunterVictory();
+            }
             return;
         }
 
@@ -631,11 +642,11 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
 
         Optional<GlobalPos> trackingTarget = this.resolveTrackingTarget(hunter, target);
         if (trackingTarget.isEmpty()) {
-            this.setCompassMad(hunter);
+            this.setCompassMad(hunter, target);
             return;
         }
 
-        this.updateCompassStacks(hunter, trackingTarget.get(), false);
+        this.updateCompassStacks(hunter, trackingTarget.get(), false, target);
     }
 
     private Optional<GlobalPos> resolveTrackingTarget(ServerPlayerEntity hunter, ServerPlayerEntity target) {
@@ -687,36 +698,38 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         }
     }
 
-    private void updateCompassStacks(ServerPlayerEntity hunter, GlobalPos target, boolean tracked) {
+    private void updateCompassStacks(ServerPlayerEntity hunter, GlobalPos target, boolean tracked, ServerPlayerEntity trackedPlayer) {
         LodestoneTrackerComponent tracker = new LodestoneTrackerComponent(Optional.of(target), tracked);
 
         for (int slot = 0; slot < hunter.getInventory().size(); slot++) {
             ItemStack stack = hunter.getInventory().getStack(slot);
-            if (!this.isManhuntCompass(stack)) {
+            if (!isTrackerCompass(stack)) {
                 continue;
             }
 
             stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
         }
+        TrackingItemNameFormatter.applyTrackingName(hunter.getInventory(), ManhuntMinigame::isTrackerCompass, trackedPlayer.getDisplayName());
     }
 
-    private void setCompassMad(ServerPlayerEntity hunter) {
+    private void setCompassMad(ServerPlayerEntity hunter, ServerPlayerEntity trackedPlayer) {
         LodestoneTrackerComponent tracker = new LodestoneTrackerComponent(Optional.empty(), true);
         for (int slot = 0; slot < hunter.getInventory().size(); slot++) {
             ItemStack stack = hunter.getInventory().getStack(slot);
-            if (!this.isManhuntCompass(stack)) {
+            if (!isTrackerCompass(stack)) {
                 continue;
             }
 
             stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
         }
+        TrackingItemNameFormatter.applyTrackingName(hunter.getInventory(), ManhuntMinigame::isTrackerCompass, trackedPlayer.getDisplayName());
     }
 
     private void grantHunterCompass(ServerPlayerEntity hunter, boolean announce) {
         if (!this.hunterHasCompass(hunter)) {
             ItemStack stack = Items.COMPASS.getDefaultStack();
-            this.markManhuntCompass(stack);
-            hunter.getInventory().insertStack(stack);
+            tagTrackerCompass(stack);
+            this.insertTrackerCompass(hunter, stack);
         }
         this.hunterTrackingIndexes.put(hunter.getUuid(), 0);
         if (this.state == GameState.RUNNING) {
@@ -726,29 +739,66 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
 
     private boolean hunterHasCompass(ServerPlayerEntity hunter) {
         for (int slot = 0; slot < hunter.getInventory().size(); slot++) {
-            if (this.isManhuntCompass(hunter.getInventory().getStack(slot))) {
+            if (isTrackerCompass(hunter.getInventory().getStack(slot))) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isManhuntCompass(ItemStack stack) {
+    static boolean isTrackerCompass(ItemStack stack) {
         if (!stack.isOf(Items.COMPASS)) {
             return false;
         }
-
-        NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
-        if (customData == null) {
-            return false;
-        }
-
-        NbtCompound nbt = customData.copyNbt();
-        return nbt.getBoolean(MANHUNT_COMPASS_TAG, false);
+        return ProtectedItemTags.hasType(stack, TRACKER_TYPE);
     }
 
-    private void markManhuntCompass(ItemStack stack) {
-        NbtComponent.set(DataComponentTypes.CUSTOM_DATA, stack, nbt -> nbt.putBoolean(MANHUNT_COMPASS_TAG, true));
+    static void tagTrackerCompass(ItemStack stack) {
+        ProtectedItemTags.mark(stack, TRACKER_TYPE);
+    }
+
+    private void registerProtectedItems() {
+        ProtectedItemService service = ProtectedItemService.getInstance();
+        service.clearRules();
+        service.registerRule(ProtectedItemRule.builder(TRACKER_TYPE)
+            .preventDrop()
+            .preventExternalStorage()
+            .preventDeletion()
+            .preventDeathLoss()
+            .preventDuplication()
+            .autoRestore()
+            .allowRearrange(true)
+            .allowOffhandSwap(true)
+            .maxStacks(1)
+            .cleanupWorldDrops()
+            .canHold(player -> this.settings.huntersCompassEnabled() && this.getPlayerRole(player) == ManhuntRole.HUNTER)
+            .shouldHave(player -> this.settings.huntersCompassEnabled() && this.getPlayerRole(player) == ManhuntRole.HUNTER)
+            .restoreAction(player -> this.grantHunterCompass(player, false))
+            .build());
+    }
+
+    private void insertTrackerCompass(ServerPlayerEntity hunter, ItemStack stack) {
+        if (hunter.getInventory().insertStack(stack)) {
+            return;
+        }
+
+        int emptySlot = hunter.getInventory().getEmptySlot();
+        if (emptySlot >= 0) {
+            hunter.getInventory().setStack(emptySlot, stack);
+            hunter.getInventory().markDirty();
+            return;
+        }
+
+        int fallbackSlot = Math.max(0, hunter.getInventory().getSelectedSlot());
+        ItemStack displaced = hunter.getInventory().getStack(fallbackSlot);
+        hunter.getInventory().setStack(fallbackSlot, stack);
+        if (!displaced.isEmpty()) {
+            hunter.getInventory().insertStack(displaced);
+            if (!displaced.isEmpty()) {
+                hunter.dropItem(displaced, false);
+            }
+        }
+        hunter.getInventory().markDirty();
     }
 
     /**
@@ -998,6 +1048,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         if (role == null) {
             return;
         }
+
         if (role == ManhuntRole.HUNTER) {
             this.clearLeadEffects(player);
         }
@@ -1015,12 +1066,36 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         this.compassCooldownUntilTicks.remove(playerUuid);
 
         if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive() && this.aliveSpeedrunners.isEmpty()) {
-            this.broadcastMessage(
-                Text.literal(player.getName().getString() + " (Speedrunner) left the game.").formatted(Formatting.RED)
-            );
-            this.endGameWithHunterVictory();
+            if (!MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(player.getUuid())) {
+                this.broadcastMessage(
+                    Text.literal(player.getName().getString() + " (Speedrunner) left the game.").formatted(Formatting.RED)
+                );
+                this.endGameWithHunterVictory();
+            }
         }
         this.syncVanillaTeams();
+    }
+
+    void handleDisconnectGraceExpired(List<UUID> pendingPlayers) {
+        if (!this.state.isActive()) {
+            return;
+        }
+        if (!this.aliveSpeedrunners.isEmpty()) {
+            return;
+        }
+        this.broadcastMessage(Text.literal("Disconnect grace expired. Hunters win.").formatted(Formatting.RED));
+        this.endGameWithHunterVictory();
+    }
+
+    int getAliveSpeedrunnerCount() {
+        int count = 0;
+        for (UUID speedrunnerUuid : this.aliveSpeedrunners) {
+            ServerPlayerEntity player = this.getPlayerByUuid(speedrunnerUuid);
+            if (player != null && !player.isDisconnected()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public void setSpeedrunnerRespawnDelaySeconds(int seconds) {
@@ -1067,7 +1142,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             this.aliveSpeedrunners.add(playerUuid);
         }
         this.updateHunterCompasses();
-        this.updateScoreboard();
+        this.syncVanillaTeams();
     }
 
     void endGameBecauseNoAliveSpeedrunners() {
@@ -1148,47 +1223,31 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         this.broadcastMessage(Text.literal("Speedrunners are glowing briefly.").formatted(Formatting.GOLD));
     }
 
-    private void cleanupDroppedCompasses() {
-        if (this.server == null) {
+
+    private void sendLeadActionBar(int secondsRemaining) {
+        if (secondsRemaining <= 0) {
             return;
         }
+        Text hunterText = Text.literal("Releasing in " + secondsRemaining + "s").formatted(Formatting.GREEN);
+        Text runnerText = Text.literal("Hunters releasing in " + secondsRemaining + "s").formatted(Formatting.RED);
+        this.sendActionBarToHunters(hunterText);
+        this.sendActionBarToSpeedrunners(runnerText);
+    }
 
-        for (ServerWorld world : this.server.getWorlds()) {
-            List<? extends ItemEntity> items = world.getEntitiesByType(TypeFilter.instanceOf(ItemEntity.class),
-                entity -> this.isManhuntCompass(entity.getStack()));
-            for (ItemEntity item : items) {
-                item.discard();
-            }
+    private int leadSecondsRemaining() {
+        return Math.max(1, (this.leadTicksRemaining + 19) / 20);
+    }
+
+    private void sendActionBarToHunters(Text message) {
+        for (ServerPlayerEntity hunter : this.getActiveHunters()) {
+            hunter.sendMessage(message, true);
         }
     }
 
-    private void updateScoreboard() {
-        if (this.server == null) {
-            return;
+    private void sendActionBarToSpeedrunners(Text message) {
+        for (ServerPlayerEntity speedrunner : this.getAliveSpeedrunners()) {
+            speedrunner.sendMessage(message, true);
         }
-        this.syncVanillaTeams();
-
-        SCOREBOARD.setScore(this.server, "Speedrunners", this.getSpeedrunners().size());
-        SCOREBOARD.setScore(this.server, "Alive Runners", this.aliveSpeedrunners.size());
-        SCOREBOARD.setScore(this.server, "Hunters", this.getActiveHunters().size());
-        SCOREBOARD.setScore(this.server, "Runner Lives", this.settings.runnerLives());
-        SCOREBOARD.setScore(this.server, "Hunter Lives", this.settings.hunterLives());
-
-        if (!this.huntStarted && this.leadTicksRemaining > 0) {
-            int secondsLeft = Math.max(0, this.leadTicksRemaining / 20);
-            SCOREBOARD.setScore(this.server, "Lead", secondsLeft);
-        } else {
-            SCOREBOARD.setScore(this.server, "Lead", 0);
-        }
-    }
-
-    private void clearScoreboard() {
-        if (this.server == null) {
-            return;
-        }
-
-        SCOREBOARD.clear(this.server);
-        this.clearVanillaTeams();
     }
 
     private void syncVanillaTeams() {
@@ -1224,19 +1283,12 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         this.vanillaTeams.sync(this.server, descriptors);
     }
 
-    private List<TeamMembership> membershipsFor(List<ServerPlayerEntity> players, TeamRole role) {
-        return players.stream().map(player -> TeamMembership.of(player, role)).toList();
-    }
-
     private void clearVanillaTeams() {
         if (this.server != null) {
             this.vanillaTeams.clear(this.server);
         }
     }
 
-    private void showGameOverTitle(Text title) {
-        GameMessenger.showGameOverTitle(this.getParticipants(), title);
-    }
 
     private void applyLeadEffects(ServerPlayerEntity hunter) {
         int leadTicks = this.settings.hunterReleaseDelaySeconds() * 20;
@@ -1260,6 +1312,13 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             ? Text.literal("You will respawn now.").formatted(Formatting.YELLOW)
             : Text.literal("You will respawn in " + this.formatMinutes(seconds) + " minutes").formatted(Formatting.YELLOW);
         player.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("YOU DIED").formatted(Formatting.RED, Formatting.BOLD)));
+        player.networkHandler.sendPacket(new SubtitleS2CPacket(subtitle));
+    }
+
+    private void showLastSpeedrunnerDeathTitle(ServerPlayerEntity player) {
+        Text title = Text.literal("YOU LOST").formatted(Formatting.RED, Formatting.BOLD);
+        Text subtitle = Text.literal("There is no alive speedrunner teammate!").formatted(Formatting.YELLOW);
+        player.networkHandler.sendPacket(new TitleS2CPacket(title));
         player.networkHandler.sendPacket(new SubtitleS2CPacket(subtitle));
     }
 

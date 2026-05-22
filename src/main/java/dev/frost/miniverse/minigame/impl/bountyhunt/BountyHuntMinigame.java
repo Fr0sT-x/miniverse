@@ -12,20 +12,27 @@ import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.ItemUseAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.event.PlayerJoinAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemRule;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemTags;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemTypes;
+import dev.frost.miniverse.minigame.core.item.TrackingItemNameFormatter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.protection.ProtectionOverlaySender;
+import dev.frost.miniverse.minigame.core.protection.ProtectionOverlayPresets;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.team.TeamMembership;
 import dev.frost.miniverse.team.TeamRole;
 import dev.frost.miniverse.team.TeamSnapshot;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LodestoneTrackerComponent;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.item.Item;
@@ -35,13 +42,11 @@ import net.minecraft.registry.Registries;
 import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.TypeFilter;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.world.World;
@@ -55,11 +60,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.sound.SoundEvents;
 
-public class BountyHuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware {
+public class BountyHuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, PlayerJoinAware {
     private static final String NAME = "Bounty Hunt";
-    private static final String TRACKER_TAG = "BountyHunt_tracker";
+    private static final String TRACKER_TYPE = ProtectedItemTypes.TRACKER_COMPASS;
     private static final String SCOREBOARD_OBJECTIVE = "bountyhunt_display";
+    private static final Identifier RESPAWN_PROTECTION_OVERLAY = ProtectionOverlayPresets.RESPAWN_PROTECTION.overlayId();
+    private static final Identifier GRACE_PROTECTION_OVERLAY = ProtectionOverlayPresets.GRACE_PERIOD.overlayId();
     private static final ScoreboardController SCOREBOARD = new ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Bounty Hunt"));
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("bountyhunt");
 
@@ -120,6 +128,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     public void startGame() {
         this.state = GameState.STARTING;
         this.setRuntimeState(GameState.STARTING);
+        this.registerProtectedItems();
         this.targetAssignments.clear();
         this.scores.clear();
         this.invincibleUntilTicks.clear();
@@ -139,6 +148,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         this.broadcastMessage(Text.literal("Only kills on your assigned target give points.").formatted(Formatting.AQUA));
         this.broadcastMessage(Text.literal("Your tracker points to your current target.").formatted(Formatting.AQUA));
         if (this.graceTicksRemaining > 0) {
+            this.broadcastGraceProtectionState(this.graceTicksRemaining, true);
             this.broadcastMessage(Text.literal("Grace period active: PvP enabled in " + this.formatDuration(this.settings.gracePeriodSeconds()) + ".")
                 .formatted(Formatting.YELLOW));
         } else {
@@ -152,12 +162,14 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         this.state = GameState.ENDING;
         this.targetAssignments.clear();
         this.scores.clear();
-        this.invincibleUntilTicks.clear();
+        this.clearInvincibilityStates();
+        this.clearGraceProtectionStates();
         this.compassCooldownUntilTicks.clear();
         this.trackingData.clear();
         this.clearScoreboard();
         this.clearVanillaTeams();
         this.clearParticipants();
+        ProtectedItemService.getInstance().clearRules();
     }
 
     @Override
@@ -194,7 +206,6 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
 
         this.assignNewTarget(player);
         this.grantTracker(player);
-        this.applyRespawnInvincibility(player);
 
         if (scored && killer != null) {
             this.assignNewTarget(killer);
@@ -220,7 +231,6 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             this.tickInvincibilityWindows();
             if (this.state == GameState.IN_PROGRESS && this.settings.trackerEnabled()) {
                 this.updateTrackers();
-                this.cleanupDroppedTrackers();
             }
             this.updateScoreboard();
         }
@@ -272,9 +282,16 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         }
     }
 
+    @Override
+    public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
+        this.sendInvincibilityStatesTo(player);
+        this.sendGraceProtectionStatesTo(player);
+    }
+
     public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
         this.grantTracker(newPlayer);
         this.syncTrackerTarget(newPlayer, false);
+        this.applyRespawnInvincibility(newPlayer);
         this.syncVanillaTeams();
     }
 
@@ -285,6 +302,10 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         this.invincibleUntilTicks.remove(playerUuid);
         this.compassCooldownUntilTicks.remove(playerUuid);
         this.trackingData.remove(playerUuid);
+        ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, RESPAWN_PROTECTION_OVERLAY);
+        if (this.state == GameState.STARTING && this.graceTicksRemaining > 0) {
+            ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, GRACE_PROTECTION_OVERLAY);
+        }
 
         for (Map.Entry<UUID, UUID> entry : new ArrayList<>(this.targetAssignments.entrySet())) {
             if (playerUuid.equals(entry.getValue())) {
@@ -297,12 +318,36 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         }
 
         if (this.getParticipants().size() <= 1 && this.state != GameState.ENDING) {
-            ServerPlayerEntity remaining = this.getParticipants().stream().findFirst().orElse(null);
-            if (remaining != null) {
-                this.endGameWithWinner(remaining);
+            if (!MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(player.getUuid())) {
+                ServerPlayerEntity remaining = this.getParticipants().stream().findFirst().orElse(null);
+                if (remaining != null) {
+                    this.endGameWithWinner(remaining);
+                }
             }
         }
         this.syncVanillaTeams();
+    }
+
+    void handleDisconnectGraceExpired(List<UUID> pendingPlayers) {
+        if (!this.state.isActive()) {
+            return;
+        }
+        if (this.getParticipants().size() > 1) {
+            return;
+        }
+        ServerPlayerEntity remaining = this.getParticipants().stream().findFirst().orElse(null);
+        if (remaining != null) {
+            this.broadcastMessage(Text.literal("Disconnect grace expired. Ending match.").formatted(Formatting.YELLOW));
+            this.endGameWithWinner(remaining);
+        }
+    }
+
+    int getActiveParticipantCount() {
+        return this.getParticipants().size();
+    }
+
+    boolean isActiveParticipant(ServerPlayerEntity player) {
+        return this.context != null && this.context.participants().contains(player);
     }
 
     public boolean shouldCancelDamage(ServerPlayerEntity player, DamageSource source) {
@@ -311,6 +356,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         }
 
         if (this.isInvincible(player)) {
+            this.notifyInvincibleHit(source);
             return true;
         }
 
@@ -369,14 +415,14 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
 
         Optional<GlobalPos> trackingTarget = this.resolveTrackingTarget(player, target);
         if (trackingTarget.isEmpty()) {
-            this.setTrackerMad(player);
+            this.setTrackerMad(player, target);
             if (announce) {
                 player.sendMessage(Text.literal("Target not traceable in this dimension."), true);
             }
             return;
         }
 
-        this.updateTrackerStacks(player, trackingTarget.get());
+        this.updateTrackerStacks(player, trackingTarget.get(), target);
         if (announce) {
             player.sendMessage(Text.literal("Tracking: " + target.getName().getString()).formatted(Formatting.AQUA), true);
         }
@@ -418,6 +464,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         int secondsLeft = this.graceTicksRemaining / 20;
         this.maybeAnnounceGraceCountdown(secondsLeft);
         if (this.graceTicksRemaining <= 0) {
+            this.broadcastGraceProtectionState(0, false);
             this.beginHunt();
         }
     }
@@ -513,17 +560,11 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         if (!stack.isOf(trackerItem)) {
             return false;
         }
-
-        NbtComponent customData = stack.get(DataComponentTypes.CUSTOM_DATA);
-        if (customData == null) {
-            return false;
-        }
-
-        return customData.copyNbt().getBoolean(TRACKER_TAG, false);
+        return ProtectedItemTags.hasType(stack, TRACKER_TYPE);
     }
 
     private void markTracker(ItemStack stack) {
-        NbtComponent.set(DataComponentTypes.CUSTOM_DATA, stack, nbt -> nbt.putBoolean(TRACKER_TAG, true));
+        ProtectedItemTags.mark(stack, TRACKER_TYPE);
     }
 
     private void updateTrackers() {
@@ -559,48 +600,58 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         return Optional.of(GlobalPos.create(World.OVERWORLD, overworldPos));
     }
 
-    private void updateTrackerStacks(ServerPlayerEntity hunter, GlobalPos target) {
-        if (!this.resolveTrackerItem().equals(Items.COMPASS)) {
-            return;
-        }
-
-        LodestoneTrackerComponent tracker = new LodestoneTrackerComponent(Optional.of(target), false);
+    private void updateTrackerStacks(ServerPlayerEntity hunter, GlobalPos target, ServerPlayerEntity trackedPlayer) {
+        boolean isCompass = this.resolveTrackerItem().equals(Items.COMPASS);
+        LodestoneTrackerComponent tracker = isCompass
+            ? new LodestoneTrackerComponent(Optional.of(target), false)
+            : null;
         for (int slot = 0; slot < hunter.getInventory().size(); slot++) {
             ItemStack stack = hunter.getInventory().getStack(slot);
             if (!this.isTrackerItem(stack)) {
                 continue;
             }
-            stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
+            if (tracker != null) {
+                stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
+            }
         }
+        TrackingItemNameFormatter.applyTrackingName(hunter.getInventory(), this::isTrackerItem, trackedPlayer.getDisplayName());
     }
 
-    private void setTrackerMad(ServerPlayerEntity hunter) {
-        if (!this.resolveTrackerItem().equals(Items.COMPASS)) {
-            return;
-        }
-
-        LodestoneTrackerComponent tracker = new LodestoneTrackerComponent(Optional.empty(), true);
+    private void setTrackerMad(ServerPlayerEntity hunter, ServerPlayerEntity trackedPlayer) {
+        boolean isCompass = this.resolveTrackerItem().equals(Items.COMPASS);
+        LodestoneTrackerComponent tracker = isCompass
+            ? new LodestoneTrackerComponent(Optional.empty(), true)
+            : null;
         for (int slot = 0; slot < hunter.getInventory().size(); slot++) {
             ItemStack stack = hunter.getInventory().getStack(slot);
             if (!this.isTrackerItem(stack)) {
                 continue;
             }
-            stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
-        }
-    }
-
-    private void cleanupDroppedTrackers() {
-        if (this.server == null) {
-            return;
-        }
-
-        for (ServerWorld world : this.server.getWorlds()) {
-            List<? extends ItemEntity> items = world.getEntitiesByType(TypeFilter.instanceOf(ItemEntity.class),
-                entity -> this.isTrackerItem(entity.getStack()));
-            for (ItemEntity item : items) {
-                item.discard();
+            if (tracker != null) {
+                stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
             }
         }
+        TrackingItemNameFormatter.applyTrackingName(hunter.getInventory(), this::isTrackerItem, trackedPlayer.getDisplayName());
+    }
+
+    private void registerProtectedItems() {
+        ProtectedItemService service = ProtectedItemService.getInstance();
+        service.clearRules();
+        service.registerRule(ProtectedItemRule.builder(TRACKER_TYPE)
+            .preventDrop()
+            .preventExternalStorage()
+            .preventDeletion()
+            .preventDeathLoss()
+            .preventDuplication()
+            .autoRestore()
+            .allowRearrange(true)
+            .allowOffhandSwap(true)
+            .maxStacks(1)
+            .cleanupWorldDrops()
+            .canHold(player -> this.settings.trackerEnabled() && this.isParticipant(player))
+            .shouldHave(player -> this.settings.trackerEnabled() && this.isParticipant(player))
+            .restoreAction(this::grantTracker)
+            .build());
     }
 
     private void updateTrackingData() {
@@ -632,19 +683,28 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             return;
         }
 
-        this.invincibleUntilTicks.put(player.getUuid(),
-            this.gameTicks + (long) this.settings.respawnInvincibilitySeconds() * 20L);
+        int durationTicks = this.settings.respawnInvincibilitySeconds() * 20;
+        this.invincibleUntilTicks.put(player.getUuid(), this.gameTicks + durationTicks);
+        ProtectionOverlaySender.broadcastRespawnProtection(this.server, player.getUuid(), durationTicks);
         player.sendMessage(Text.literal("You are invincible for " + this.formatDuration(this.settings.respawnInvincibilitySeconds()) + " after respawn.")
             .formatted(Formatting.YELLOW), true);
     }
 
     private void tickInvincibilityWindows() {
         for (Map.Entry<UUID, Long> entry : new ArrayList<>(this.invincibleUntilTicks.entrySet())) {
-            if (entry.getValue() > this.gameTicks) {
+            long remainingTicks = entry.getValue() - this.gameTicks;
+            if (remainingTicks > 0) {
+                int secondsRemaining = (int) Math.max(1L, (remainingTicks + 19L) / 20L);
+                ServerPlayerEntity player = this.getPlayerByUuid(entry.getKey());
+                if (player != null && !player.isDisconnected()) {
+                    player.sendMessage(Text.literal("Invincible: " + this.formatDuration(secondsRemaining))
+                        .formatted(Formatting.GOLD), true);
+                }
                 continue;
             }
 
             this.invincibleUntilTicks.remove(entry.getKey());
+            ProtectionOverlaySender.broadcastClearOverlay(this.server, entry.getKey(), RESPAWN_PROTECTION_OVERLAY);
             ServerPlayerEntity player = this.getPlayerByUuid(entry.getKey());
             if (player != null && !player.isDisconnected()) {
                 player.sendMessage(Text.literal("Invincibility ended. You are vulnerable again.")
@@ -786,6 +846,77 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         GameMessenger.broadcast(this.getParticipants(), message);
     }
 
+    private void notifyInvincibleHit(DamageSource source) {
+        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
+            return;
+        }
+        if (!this.isParticipant(attacker)) {
+            return;
+        }
+        attacker.sendMessage(Text.literal("This target is invincible").formatted(Formatting.YELLOW), false);
+        attacker.playSound(SoundEvents.ITEM_SHIELD_BLOCK.value(), 1.0F, 1.0F);
+    }
+
+    private void sendInvincibilityStatesTo(ServerPlayerEntity player) {
+        for (Map.Entry<UUID, Long> entry : this.invincibleUntilTicks.entrySet()) {
+            long remainingTicks = entry.getValue() - this.gameTicks;
+            if (remainingTicks <= 0) {
+                continue;
+            }
+            ProtectionOverlaySender.sendRespawnProtection(
+                player,
+                entry.getKey(),
+                (int) remainingTicks
+            );
+        }
+    }
+
+    private void sendGraceProtectionStatesTo(ServerPlayerEntity recipient) {
+        if (this.state != GameState.STARTING || this.graceTicksRemaining <= 0) {
+            return;
+        }
+
+        for (ServerPlayerEntity participant : this.getParticipants()) {
+            if (participant.isDisconnected()) {
+                continue;
+            }
+            ProtectionOverlaySender.sendGracePeriod(
+                recipient,
+                participant.getUuid(),
+                this.graceTicksRemaining
+            );
+        }
+    }
+
+    private void broadcastGraceProtectionState(int remainingTicks, boolean active) {
+        if (this.server == null) {
+            return;
+        }
+        for (ServerPlayerEntity protectedParticipant : this.getParticipants()) {
+            if (protectedParticipant.isDisconnected()) {
+                continue;
+            }
+            if (active) {
+                ProtectionOverlaySender.broadcastGracePeriod(this.server, protectedParticipant.getUuid(), remainingTicks);
+            } else {
+                ProtectionOverlaySender.broadcastClearOverlay(this.server, protectedParticipant.getUuid(), GRACE_PROTECTION_OVERLAY);
+            }
+        }
+    }
+    private void clearGraceProtectionStates() {
+        if (this.state != GameState.STARTING && this.graceTicksRemaining <= 0) {
+            return;
+        }
+        broadcastGraceProtectionState(0, false);
+    }
+
+    private void clearInvincibilityStates() {
+        for (UUID playerId : new ArrayList<>(this.invincibleUntilTicks.keySet())) {
+            ProtectionOverlaySender.broadcastClearOverlay(this.server, playerId, RESPAWN_PROTECTION_OVERLAY);
+        }
+        this.invincibleUntilTicks.clear();
+    }
+
     private void endGameWithWinner(ServerPlayerEntity winner) {
         this.state = GameState.ENDING;
         this.setRuntimeState(GameState.ENDING);
@@ -811,10 +942,4 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         private BlockPos endEntryOverworld;
     }
 }
-
-
-
-
-
-
 

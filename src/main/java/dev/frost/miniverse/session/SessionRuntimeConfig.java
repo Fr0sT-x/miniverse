@@ -35,6 +35,26 @@ public final class SessionRuntimeConfig {
         }
     }
 
+    public static synchronized Optional<Boolean> getProxyVelocityEnabled() {
+        String value = getConfig().getProperty("proxy.velocityEnabled", "");
+        if (value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(Boolean.parseBoolean(value));
+    }
+
+    public static synchronized Optional<String> getProxyLobbyServerName() {
+        return optionalString("proxy.lobbyServerName");
+    }
+
+    public static synchronized Optional<String> getProxyBackendHost() {
+        return optionalString("proxy.backendHost");
+    }
+
+    public static synchronized Optional<String> getProxyServerNamePrefix() {
+        return optionalString("proxy.serverNamePrefix");
+    }
+
     public static synchronized boolean isSessionServer() {
         return getSessionId().isPresent();
     }
@@ -70,5 +90,10 @@ public final class SessionRuntimeConfig {
         Path path = Paths.get(configPath);
         config = SessionConfigJson.readRuntimeProperties(path);
         return config;
+    }
+
+    private static Optional<String> optionalString(String key) {
+        String value = getConfig().getProperty(key, "");
+        return value.isBlank() ? Optional.empty() : Optional.of(value);
     }
 }

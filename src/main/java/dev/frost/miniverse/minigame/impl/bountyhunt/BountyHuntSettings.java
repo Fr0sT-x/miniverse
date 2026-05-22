@@ -12,9 +12,12 @@ public record BountyHuntSettings(
     boolean trackerEnabled,
     boolean netherTrackingEnabled,
     int compassCooldownSeconds,
-    String trackerItemId
+    String trackerItemId,
+    int disconnectGraceSeconds
 ) {
     public static BountyHuntSettings defaults() {
+        int globalGrace = Integer.getInteger("miniverse.lifecycle.disconnectGraceSeconds", 300);
+        int modeGrace = Integer.getInteger("miniverse.bountyhunt.disconnectGraceSeconds", globalGrace);
         return new BountyHuntSettings(
             Integer.getInteger("miniverse.bountyhunt.gracePeriodSeconds", 300),
             Integer.getInteger("miniverse.bountyhunt.respawnInvincibilitySeconds", 120),
@@ -23,7 +26,8 @@ public record BountyHuntSettings(
             Boolean.parseBoolean(System.getProperty("miniverse.bountyhunt.trackerEnabled", "true")),
             Boolean.parseBoolean(System.getProperty("miniverse.bountyhunt.netherTracking", "true")),
             Integer.getInteger("miniverse.bountyhunt.compassCooldownSeconds", 2),
-            System.getProperty("miniverse.bountyhunt.trackerItemId", "minecraft:compass")
+            System.getProperty("miniverse.bountyhunt.trackerItemId", "minecraft:compass"),
+            modeGrace
         ).normalized();
     }
 
@@ -41,7 +45,8 @@ public record BountyHuntSettings(
             settings.getBoolean("trackerEnabled", defaults.trackerEnabled()),
             settings.getBoolean("netherTracking", defaults.netherTrackingEnabled()),
             settings.getInt("compassCooldownSeconds", defaults.compassCooldownSeconds()),
-            settings.getString("trackerItemId", defaults.trackerItemId())
+            settings.getString("trackerItemId", defaults.trackerItemId()),
+            settings.getInt("disconnectGraceSeconds", defaults.disconnectGraceSeconds())
         ).normalized();
     }
 
@@ -59,10 +64,10 @@ public record BountyHuntSettings(
             parseBoolean(properties.getProperty("bountyhunt.trackerEnabled"), defaults.trackerEnabled()),
             parseBoolean(properties.getProperty("bountyhunt.netherTracking"), defaults.netherTrackingEnabled()),
             parseInt(properties.getProperty("bountyhunt.compassCooldownSeconds"), defaults.compassCooldownSeconds()),
-            properties.getProperty("bountyhunt.trackerItemId", defaults.trackerItemId())
+            properties.getProperty("bountyhunt.trackerItemId", defaults.trackerItemId()),
+            parseInt(properties.getProperty("bountyhunt.disconnectGraceSeconds"), defaults.disconnectGraceSeconds())
         ).normalized();
     }
-
     private BountyHuntSettings normalized() {
         String itemId = this.trackerItemId == null || this.trackerItemId.isBlank()
             ? "minecraft:compass"
@@ -75,7 +80,8 @@ public record BountyHuntSettings(
             this.trackerEnabled,
             this.netherTrackingEnabled,
             Math.clamp(this.compassCooldownSeconds, 0, 300),
-            itemId
+            itemId,
+            Math.clamp(this.disconnectGraceSeconds, 0, 3600)
         );
     }
 

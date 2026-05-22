@@ -204,7 +204,8 @@ public final class ManhuntCommands {
             current.runnerGlowPulseMinutes(),
             current.runnerLives(),
             current.hunterLives(),
-            current.hunterRespawnDelaySeconds()
+            current.hunterRespawnDelaySeconds(),
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter release delay to " + seconds + " second(s)."), true);
         return 1;
@@ -228,7 +229,8 @@ public final class ManhuntCommands {
             current.runnerGlowPulseMinutes(),
             current.runnerLives(),
             current.hunterLives(),
-            current.hunterRespawnDelaySeconds()
+            current.hunterRespawnDelaySeconds(),
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter compass to " + enabled + "."), true);
         return 1;
@@ -252,7 +254,8 @@ public final class ManhuntCommands {
             current.runnerGlowPulseMinutes(),
             current.runnerLives(),
             current.hunterLives(),
-            current.hunterRespawnDelaySeconds()
+            current.hunterRespawnDelaySeconds(),
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt Nether tracking to " + enabled + "."), true);
         return 1;
@@ -276,7 +279,8 @@ public final class ManhuntCommands {
             current.runnerGlowPulseMinutes(),
             current.runnerLives(),
             current.hunterLives(),
-            current.hunterRespawnDelaySeconds()
+            current.hunterRespawnDelaySeconds(),
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt compass cooldown to " + seconds + " second(s)."), true);
         return 1;
@@ -300,7 +304,8 @@ public final class ManhuntCommands {
             minutes,
             current.runnerLives(),
             current.hunterLives(),
-            current.hunterRespawnDelaySeconds()
+            current.hunterRespawnDelaySeconds(),
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt runner glow pulse to every " + minutes + " minute(s). 0 disables it."), true);
         return 1;
@@ -324,7 +329,8 @@ public final class ManhuntCommands {
             current.runnerGlowPulseMinutes(),
             lives,
             current.hunterLives(),
-            current.hunterRespawnDelaySeconds()
+            current.hunterRespawnDelaySeconds(),
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt runner lives to " + formatLives(lives) + "."), true);
         return 1;
@@ -348,7 +354,8 @@ public final class ManhuntCommands {
             current.runnerGlowPulseMinutes(),
             current.runnerLives(),
             lives,
-            current.hunterRespawnDelaySeconds()
+            current.hunterRespawnDelaySeconds(),
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter lives to " + formatLives(lives) + "."), true);
         return 1;
@@ -372,7 +379,8 @@ public final class ManhuntCommands {
             current.runnerGlowPulseMinutes(),
             current.runnerLives(),
             current.hunterLives(),
-            seconds
+            seconds,
+            current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter respawn delay to " + seconds + " second(s)."), true);
         return 1;

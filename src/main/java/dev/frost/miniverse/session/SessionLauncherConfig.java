@@ -69,13 +69,65 @@ public final class SessionLauncherConfig {
         return this.config.queueCapacity;
     }
 
+    public int sessionPortStart() {
+        return this.config.sessionPortStart;
+    }
+
+    public int sessionPortEnd() {
+        return this.config.sessionPortEnd;
+    }
+
+    public int publicSessionPortStart() {
+        return this.config.publicSessionPortStart;
+    }
+
+    public int publicSessionPortEnd() {
+        return this.config.publicSessionPortEnd;
+    }
+
+    public boolean hasSessionPortRange() {
+        return this.config.sessionPortStart > 0 && this.config.sessionPortEnd >= this.config.sessionPortStart;
+    }
+
+    public boolean hasPublicSessionPortRange() {
+        return this.config.publicSessionPortStart > 0 && this.config.publicSessionPortEnd >= this.config.publicSessionPortStart;
+    }
+
+    public int publicPortForLocalPort(int localPort) {
+        if (!this.hasSessionPortRange() || !this.hasPublicSessionPortRange()) {
+            return localPort;
+        }
+
+        if (localPort < this.config.sessionPortStart || localPort > this.config.sessionPortEnd) {
+            return localPort;
+        }
+
+        return this.config.publicSessionPortStart + (localPort - this.config.sessionPortStart);
+    }
+
     public static final class Config {
         public int maxConcurrentLaunches;
         public int queueCapacity;
+        public int sessionPortStart;
+        public int sessionPortEnd;
+        public int publicSessionPortStart;
+        public int publicSessionPortEnd;
 
         public Config(int maxConcurrentLaunches, int queueCapacity) {
+            this(maxConcurrentLaunches, queueCapacity, 0, 0, 0, 0);
+        }
+
+        public Config(int maxConcurrentLaunches, int queueCapacity, int sessionPortStart, int sessionPortEnd) {
+            this(maxConcurrentLaunches, queueCapacity, sessionPortStart, sessionPortEnd, 0, 0);
+        }
+
+        public Config(int maxConcurrentLaunches, int queueCapacity, int sessionPortStart, int sessionPortEnd, int publicSessionPortStart, int publicSessionPortEnd) {
             this.maxConcurrentLaunches = maxConcurrentLaunches;
             this.queueCapacity = queueCapacity;
+            this.sessionPortStart = sessionPortStart;
+            this.sessionPortEnd = sessionPortEnd;
+            this.publicSessionPortStart = publicSessionPortStart;
+            this.publicSessionPortEnd = publicSessionPortEnd;
         }
 
         public static Config defaults() {
@@ -85,6 +137,25 @@ public final class SessionLauncherConfig {
         private void normalize() {
             this.maxConcurrentLaunches = Math.clamp(this.maxConcurrentLaunches, 1, 64);
             this.queueCapacity = Math.clamp(this.queueCapacity, 1, 1024);
+            if (this.sessionPortStart <= 0 || this.sessionPortEnd <= 0) {
+                this.sessionPortStart = 0;
+                this.sessionPortEnd = 0;
+                return;
+            }
+            this.sessionPortStart = Math.clamp(this.sessionPortStart, 1024, 65535);
+            this.sessionPortEnd = Math.clamp(this.sessionPortEnd, this.sessionPortStart, 65535);
+            if (this.publicSessionPortStart <= 0 || this.publicSessionPortEnd <= 0) {
+                this.publicSessionPortStart = 0;
+                this.publicSessionPortEnd = 0;
+                return;
+            }
+            int localRangeSize = this.sessionPortEnd - this.sessionPortStart;
+            int highestPublicStart = Math.max(1024, 65535 - localRangeSize);
+            this.publicSessionPortStart = Math.clamp(this.publicSessionPortStart, 1024, highestPublicStart);
+            this.publicSessionPortEnd = Math.clamp(this.publicSessionPortEnd, this.publicSessionPortStart, 65535);
+            if (this.publicSessionPortEnd - this.publicSessionPortStart != localRangeSize) {
+                this.publicSessionPortEnd = this.publicSessionPortStart + localRangeSize;
+            }
         }
 
         @Override
@@ -92,6 +163,10 @@ public final class SessionLauncherConfig {
             return "Config{" +
                 "maxConcurrentLaunches=" + this.maxConcurrentLaunches +
                 ", queueCapacity=" + this.queueCapacity +
+                ", sessionPortStart=" + this.sessionPortStart +
+                ", sessionPortEnd=" + this.sessionPortEnd +
+                ", publicSessionPortStart=" + this.publicSessionPortStart +
+                ", publicSessionPortEnd=" + this.publicSessionPortEnd +
                 '}';
         }
     }

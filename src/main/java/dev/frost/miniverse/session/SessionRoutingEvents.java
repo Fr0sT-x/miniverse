@@ -2,7 +2,6 @@ package dev.frost.miniverse.session;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.network.packet.s2c.common.ServerTransferS2CPacket;
 import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -12,12 +11,15 @@ import net.minecraft.util.Formatting;
 
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.network.TransitionTransferCoordinator;
+import dev.frost.miniverse.network.VelocityProxyBridge;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Set;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class SessionRoutingEvents {
     private static final long RETURN_RETRY_DELAY_MS = 2000L;
@@ -94,13 +96,22 @@ public final class SessionRoutingEvents {
             List<ServerPlayerEntity> players = playersToReturn(minigameManager, server);
 
             Miniverse.LOGGER.info("Session server {} received stop request; returning players to {}:{}", sessionId, returnHost, returnPort);
-            for (ServerPlayerEntity player : players) {
-                Miniverse.LOGGER.info("Returning player {} ({}) to {}:{}", player.getName().getString(), player.getUuidAsString(), returnHost, returnPort);
-                sessionManager.transferPlayer(player, returnHost, returnPort);
+            if (players.isEmpty()) {
+                minigameManager.reset();
+                SessionRegistry.markReturnComplete(sessionId);
+                return;
             }
 
-            minigameManager.reset();
-            SessionRegistry.markReturnComplete(sessionId);
+            AtomicInteger pendingTransfers = new AtomicInteger(players.size());
+            for (ServerPlayerEntity player : players) {
+                Miniverse.LOGGER.info("Returning player {} ({}) to {}:{}", player.getName().getString(), player.getUuidAsString(), returnHost, returnPort);
+                sessionManager.transferPlayer(player, returnHost, returnPort, () -> {
+                    if (pendingTransfers.decrementAndGet() == 0) {
+                        minigameManager.reset();
+                        SessionRegistry.markReturnComplete(sessionId);
+                    }
+                });
+            }
         });
     }
 
@@ -119,10 +130,31 @@ public final class SessionRoutingEvents {
             }
 
             Miniverse.LOGGER.info("Session server {} transferring players directly to replacement seed backend {}:{}.", sessionId, target.host(), target.port());
-            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                player.networkHandler.sendPacket(new ServerTransferS2CPacket(target.host(), target.port()));
+            List<ServerPlayerEntity> players = List.copyOf(server.getPlayerManager().getPlayerList());
+            if (players.isEmpty()) {
+                SessionRegistry.markSeedChangeTransferComplete(sessionId, groupLabel);
+                return;
             }
-            SessionRegistry.markSeedChangeTransferComplete(sessionId, groupLabel);
+
+            AtomicInteger pendingTransfers = new AtomicInteger(players.size());
+            for (ServerPlayerEntity player : players) {
+                Runnable afterTransfer = () -> {
+                    if (pendingTransfers.decrementAndGet() == 0) {
+                        SessionRegistry.markSeedChangeTransferComplete(sessionId, groupLabel);
+                    }
+                };
+                if (VelocityProxyBridge.isEnabled()) {
+                    TransitionTransferCoordinator.transferToVelocityBackend(
+                        player,
+                        VelocityProxyBridge.serverName(sessionId, groupLabel),
+                        target.port(),
+                        "Changing Seed",
+                        afterTransfer
+                    );
+                } else {
+                    TransitionTransferCoordinator.transfer(player, target.host(), target.port(), "Changing Seed", afterTransfer);
+                }
+            }
         });
     }
 
@@ -163,12 +195,14 @@ public final class SessionRoutingEvents {
     }
 
     private static void handleMainServerStop(MinecraftServer server) {
+        SessionManager sessionManager = SessionManager.getInstance();
+        sessionManager.reapDeadBackends(server);
+
         List<SessionRegistry.StopState> stopStates = SessionRegistry.loadStopStates();
         if (stopStates.isEmpty()) {
             return;
         }
 
-        SessionManager sessionManager = SessionManager.getInstance();
         for (SessionRegistry.StopState stopState : stopStates) {
             GameSession session = sessionManager.getSession(stopState.sessionId()).orElse(null);
             if (session == null) {
@@ -206,8 +240,8 @@ public final class SessionRoutingEvents {
             }
 
             if (stopState.returnComplete()) {
-                Miniverse.LOGGER.info("Main server cleaning up session {} after return complete.", stopState.sessionId());
-                sessionManager.removeSession(stopState.sessionId());
+                Miniverse.LOGGER.info("Main server archiving session {} after return complete.", stopState.sessionId());
+                sessionManager.archiveSession(stopState.sessionId());
             }
         }
     }

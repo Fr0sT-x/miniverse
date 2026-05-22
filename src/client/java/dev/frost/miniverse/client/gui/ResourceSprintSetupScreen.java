@@ -766,8 +766,9 @@ public class ResourceSprintSetupScreen extends Screen {
         }
 
         this.teams.clear();
+        this.nextTeamNumber = 1;
         for (SessionSnapshotData.RosterEntry entry : roster) {
-            TeamDraft team = new TeamDraft(entry.name());
+            TeamDraft team = new TeamDraft(this.nextTeamLabel());
             team.add(new TeamDraft.Member(UUID.fromString(entry.uuid()), entry.name()));
             this.teams.add(team);
         }

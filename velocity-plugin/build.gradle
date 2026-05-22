@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+}
+
+version = rootProject.version
+group = rootProject.group
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'Paper'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    compileOnly 'com.velocitypowered:velocity-api:3.5.0-SNAPSHOT'
+    annotationProcessor 'com.velocitypowered:velocity-api:3.5.0-SNAPSHOT'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}

@@ -12,7 +12,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class NightVisionToggle {
 	private static final String KEY_TRANSLATION = "key.miniverse.night_vision";
-	private static final KeyBinding.Category KEY_CATEGORY = KeyBinding.Category.MISC;
+	private static final String KEY_CATEGORY = KeyBinding.MISC_CATEGORY;
 	private static final String MESSAGE_TRANSLATION = "miniverse.night_vision.message";
 	private static final String ON_TRANSLATION = "miniverse.night_vision.on";
 	private static final String OFF_TRANSLATION = "miniverse.night_vision.off";

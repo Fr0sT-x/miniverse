@@ -246,9 +246,7 @@ public class ResourceSprintSetupScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
-        double mouseX = click.x();
-        double mouseY = click.y();
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         Layout layout = this.createLayout();
 
         int selectedObjectiveRow = this.getObjectiveRowAt(mouseX, mouseY, layout);
@@ -270,7 +268,7 @@ public class ResourceSprintSetupScreen extends Screen {
             return true;
         }
 
-        return super.mouseClicked(click, doubled);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override

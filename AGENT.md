@@ -2,6 +2,8 @@
 
 This project is a Fabric Minecraft minigame framework. It runs a main server with session management UI, then launches child backend servers for individual minigame sessions.
 
+Minecraft version - 1.21.1
+
 Use this file as the first stop before changing framework code.
 
 After changing any framework / implementing new frameworks, make sure to update this AGENT.md file. (if any)
@@ -17,6 +19,7 @@ After changing any framework / implementing new frameworks, make sure to update 
 - `session/plan` parses GUI-created NBT plans into validated session/team/role plans.
 - `team` is the gameplay team authority used by minigame runtimes.
 - `network` and `common/NetworkConstants` define Fabric custom payloads for the session GUI.
+- Client transition overlays are coordinated through `network/TransitionTransferCoordinator` and `client/transition/TransitionOverlay` so server transfers are hidden behind a persistent global renderer instead of a normal Screen.
 
 ## Core Concepts
 
@@ -45,12 +48,18 @@ After changing any framework / implementing new frameworks, make sure to update 
 - `minigame/core/lifecycle`: generic match start/end sequencing, countdowns, player freeze enforcement, admin return cancellation, and backend return transfer.
 - `minigame/core/freeze`: reusable freeze service for movement blocking, freeze reasons, and lifecycle integration.
 - `minigame/core/spectator`: reusable spectator framework (sessions, policies, camera control, target providers, restrictions, and lifecycle cleanup).
+- `minigame/core/protection`: reusable protection overlay broadcaster utilities for invincibility/grace visuals.
 - `minigame/core/vanilla`: adapter for mirroring custom teams into vanilla scoreboard teams.
 - `network/SessionNetwork`: server-side GUI payload handlers and session snapshot creation.
+- `network/TransitionTransferCoordinator`: wraps server transfer packets with a client overlay handshake. It sends `transition_start`, waits for `transition_ready`, then sends `ServerTransferS2CPacket`, with a short timeout fallback.
+- Velocity production mode is enabled by `config/miniverse/proxy.json` with `velocityEnabled=true`. In that mode `TransitionTransferCoordinator` keeps the overlay handshake but sends `miniverse:velocity` proxy plugin messages instead of `ServerTransferS2CPacket`; the companion Velocity plugin dynamically registers child backends and moves players through the proxy.
+- Backend match startup has a separate readiness handshake from transfer covering. `SessionBootstrapper` marks expected players as `LOADING` on backend join, freezes them with `MATCH_LOADING`, sends match intro data and team/member readiness data to the global transition overlay, and waits for `client_match_ready` after the client reports world/chunk/render readiness. `MatchLifecycleController.beginMatch(...)` must only run after all expected clients are ready. If any expected client times out, startup is aborted, remaining players are unfrozen and returned to the lobby instead of being left behind the overlay.
 - `session/SessionManager`: in-memory session registry, player assignment, backend launching, transfer packets, and stop/remove lifecycle.
 - `session/ServerLauncher`: prepares backend working dirs, links them to a standalone Fabric server runtime, writes `miniverse-session.json`, `ops.json`, and `server.properties`, builds the child JVM command, and waits for ports.
+- Session backend ports are configured in `config/miniverse/session-launcher.json`. `sessionPortStart`/`sessionPortEnd` are the local child server bind ports; optional `publicSessionPortStart`/`publicSessionPortEnd` map those local ports to the externally forwarded ports sent in transfer packets. If the public range is omitted, transfers use the local port numbers directly.
 - `session/SessionOperatorSnapshot`: captures assigned players who are vanilla operators on the main server before backend launch and writes equivalent backend `ops.json` entries.
 - `session/SessionRegistry`: persists session snapshots under `run/sessions/<sessionId>/session.json`; still reads legacy `session.properties`. Seed-change restarts are coordinated through registry lifecycle flags and per-group replacement targets so the main server can stage a new backend while players remain in the old backend, then the old backend transfers them directly to the replacement.
+- Session startup cleanup is retention-based, not destructive. Keep the newest retained session folders and prune only older stale folders according to `config/miniverse/session-retention.json`; do not delete every previous session on startup.
 - `common/MiniverseFileUtils`: shared filesystem helpers for link-aware session cleanup. Use this for deleting session folders so Windows junctions are removed as links instead of traversed into the shared runtime.
 - `client/gui`: session selector, setup screens, session snapshot cache, and NBT plan builders.
 
@@ -70,11 +79,14 @@ Backend server flow:
 
 1. Child server starts with `-Dminiverse.session.config=<path>`.
 2. Each gamemode bootstrapper uses `SessionBootstrapper.register(...)`.
-3. On player join, `SessionBootstrapper` reads `miniverse-session.json`, creates the runtime if needed, applies settings once, adds expected participants, assigns team/role data, and enters the generic lifecycle start sequence when `canStart()` passes.
-4. `MatchLifecycleController` freezes participants, clears inventories, fills food/saturation, shows the minigame title and countdown, then invokes the gamemode `startGame()` callback.
-5. `MinigameEventRouter` first lets `MatchLifecycleController` suppress frozen interactions, then forwards Fabric events only to the active runtime and only through opt-in interfaces.
-6. Backend session GUI requests are answered from the local `miniverse-session.json`; child servers should not rely on the main server's session registry being present in their working directory.
-7. Backend lifecycle stop/return flags must be written to the main server's session registry root recorded in `miniverse-session.json`. This lets the main server's join routing see `stopRequested`/`returnComplete` and prevents returned players from being bounced back into the finished session.
+3. On player join, `SessionBootstrapper` reads `miniverse-session.json`, creates the runtime if needed, applies settings once, adds expected participants, assigns team/role data, marks them `LOADING`, and sends reusable match-introduction data to the transition overlay.
+4. Clients keep the global transition overlay visible until their world, player, local chunk, and renderer are stable for the configured grace ticks, then send `client_match_ready` to the backend. Players who never become ready within 60 seconds are disconnected from the backend.
+5. Once all expected online players are client-ready and the gamemode reports `canStart()`, `MatchLifecycleController` starts the frozen countdown. The overlay remains visible through the countdown and is released by the controller exactly when the match enters `RUNNING`.
+6. `MatchLifecycleController` freezes participants, clears inventories, fills food/saturation, shows the countdown actionbar, then invokes the gamemode `startGame()` callback. The gamemode title/objective remains on the transition overlay instead of being sent as a vanilla title at match start.
+7. `MinigameEventRouter` first lets `MatchLifecycleController` suppress frozen interactions, then forwards Fabric events only to the active runtime and only through opt-in interfaces.
+8. Backend session GUI requests are answered from the local `miniverse-session.json`; child servers should not rely on the main server's session registry being present in their working directory.
+9. Backend lifecycle stop/return flags must be written to the main server's session registry root recorded in `miniverse-session.json`. This lets the main server's join routing see `stopRequested`/`returnComplete` and prevents returned players from being bounced back into the finished session.
+| 10. Retained session worlds may be inspected from the settings history tab. Inspection launches must copy the retained `world/` into `run/session-inspections/` and launch that copy in spectator-safe mode; never boot or mutate the retained session folder directly. The inspection copy receives a minimal `miniverse-session.json` with only `return.host`, `return.port`, and `registry.sessionsRoot` so players can return to the main server. Inspection backends are launched with `-Dminiverse.inspection=true` and run in spectator gamemode, preventing mutations to the world.
 
 ## Match Lifecycle Framework
 
@@ -82,10 +94,10 @@ Backend server flow:
 
 Start flow:
 
-1. `SessionBootstrapper` calls `MatchLifecycleController.beginMatch(runtime, options, minigame::startGame)` when all expected players are online and the gamemode reports it can start.
-2. The controller transitions through `STARTING`/`FROZEN`, freezes participants for the configured duration, clears inventories, fills food and saturation, shows the minigame title plus gamemode-specific subtitle, and displays countdown actionbar text.
+1. `SessionBootstrapper` calls `MatchLifecycleController.beginMatch(runtime, options, minigame::startGame)` when all expected players are online, all expected clients have sent `client_match_ready`, and the gamemode reports it can start.
+2. The controller transitions through `STARTING`/`FROZEN`, freezes participants for the configured duration, clears inventories, fills food and saturation, and displays countdown actionbar text. The default start freeze is 15 seconds; the transition overlay reveals at 5 seconds remaining so players see the loaded world for the last 10 seconds while still frozen.
 3. Late-joining participants during `START_FREEZE` are added and frozen through `MatchLifecycleController.onParticipantJoin(...)` (invoked from `MinigameEventRouter`).
-4. During freeze, global routing blocks movement input via the freeze service, prevents frozen interactions, and keeps participants immobile without per-tick teleport spam.
+4. During freeze, global routing blocks movement input via the freeze service, prevents frozen interactions, and keeps participants immobile without per-tick teleport spam. Gamemode-specific post-start freezes, such as Manhunt's hunter release delay, should begin from the gamemode `startGame()` callback after the shared match freeze ends.
 5. When the countdown ends, the controller unfreezes participants, moves the runtime into `RUNNING`, and invokes the gamemode start callback.
 
 End flow:
@@ -98,11 +110,27 @@ End flow:
 
 Default phases are `WAITING`/`WAITING_FOR_PLAYERS`, `STARTING`, `FROZEN`, `RUNNING`/`IN_PROGRESS`, `ENDING`, `RETURNING`, and `FINISHED`. Existing `WAITING_FOR_PLAYERS` and `IN_PROGRESS` names remain for compatibility, but new lifecycle code should prefer the generic phases where possible.
 
-Gamemodes customize lifecycle behavior by passing `MatchLifecycleOptions`; do not hardcode game ids in lifecycle code. Backend bootstrappers can override `SessionBootstrapper.Handler.lifecycleOptions(...)` to provide the start title/subtitle, freeze duration, return duration, sounds, and teleport behavior. Use the subtitle for one concise sentence explaining the mode objective or win condition.
+Gamemodes customize lifecycle behavior by passing `MatchLifecycleOptions`; do not hardcode game ids in lifecycle code. Backend bootstrappers can override `SessionBootstrapper.Handler.lifecycleOptions(...)` to provide transition-overlay title/subtitle text, freeze duration, return duration, sounds, and teleport behavior. Use the subtitle for one concise sentence explaining the mode objective or win condition.
+Disconnect grace: use `MatchLifecycleOptions.disconnectGraceSeconds` with a `DisconnectGraceHandler` to delay critical win conditions when key players disconnect, and restore the match if they reconnect in time.
+
+## Protection Overlay Framework
+
+`minigame/core/protection` provides translucent client-side rendering for temporary player protection effects (respawn invincibility, grace periods, etc). The system uses Fabric 1.21.1 entity feature renderers with proper depth testing, so overlays automatically hide behind walls without manual line-of-sight checks. The client tracks overlays by player UUID and overlay id, then renders the highest-priority active effect as a low-alpha second pass over the player model. Key components:
+
+- `ProtectionOverlayClient`: Client-side overlay state manager with automatic expiration tracking
+- `ProtectionOverlayFeatureRenderer`: Fabric feature renderer for translucent aura rendering over player models
+- `ProtectionOverlaySender`: Server-side broadcaster with convenience methods for standard overlay types
+- `ProtectionOverlayPresets`: Pre-configured overlay styles (respawn protection, grace period, etc.)
+
+Gamemodes send overlays via `ProtectionOverlaySender.broadcast(...)` or `send(...)` with custom ARGB colors and durations. The overlay framework automatically handles network syncing, client-side expiration, and proper translucent rendering with GPU depth testing (no flickering, no wallhacks). See `markdown/PROTECTION_OVERLAY_ARCHITECTURE.md` and `markdown/PROTECTION_OVERLAY_QUICK_START.md` for detailed documentation.
 
 ## Spectator Framework
 
 `minigame/core/spectator` provides a reusable spectator system with per-player `SpectatorSession` state, policy-driven restrictions, and a camera controller that locks/validates targets to prevent freecam exploits. Gamemodes should request spectator behavior through `SpectatorService.startSpectating(...)` and supply a `SpectatorPolicy` plus `SpectatorTargetProvider` instead of embedding custom spectator logic. The service integrates with `MinigameEventRouter` for join/leave/respawn/death events and validates active sessions on server tick to reattach cameras and enforce restrictions.
+
+## Protected Item Framework
+
+`minigame/core/item` defines server-authoritative protected item rules (drop/transfer/deletion/duplication controls, optional slot locking, optional auto-restore) and centralized validation for inventory interactions. Gamemodes register protected item types and rules (identified by data components/NBT) while the framework enforces all handling in one place; gamemodes only provide item tagging plus restoration behavior when enabled. The enforcement pass treats the active screen-handler cursor stack as a temporary holder, so auto-restore must not duplicate items that are being moved inside the player inventory. Use `TrackingItemNameFormatter` to standardize tracking item display names across gamemodes.
 
 ## Team System
 
@@ -192,6 +220,7 @@ The plan should contain:
 - `setupKind=CUSTOM` requires a custom setup screen mapped in `SessionScreen.CUSTOM_SETUP_SCREENS`.
 - `setupKind=GENERIC` uses `GenericSetupScreen` and `MinigameMetadata.SetupField`.
 - In-game HUD/scoreboard is currently server-side scoreboard based. Use `ScoreboardController` for sidebar objectives and `GameMessenger` for chat/title events.
+- Transfer and match startup hiding is client-side and global: `client/transition/TransitionOverlay` renders through HUD and screen hooks, persists across server/world changes, waits for player/world/chunk render readiness, sends backend client-ready once stable, presents game/team/map context with all teams, members, and per-member loading indicators, and only slides away when the backend releases it at match start. The overlay includes a `Disconnect` button so players can leave safely if a transfer or backend readiness flow stalls.
 
 ## Networking and Events
 
@@ -299,6 +328,7 @@ Event rules:
 - Preserve main-server operator status at backend launch time through `SessionOperatorSnapshot`; session servers are isolated processes and must receive their own `ops.json`.
 - Framework systems should depend on interfaces/definitions, not concrete gamemode classes.
 - Cleanup matters: participants, scoreboards, vanilla teams, pending respawn maps, cooldown maps, and launched processes all need explicit lifecycle handling.
+- Startup cleanup must preserve recovery/debug data. Do not restore "delete all sessions on startup"; use `SessionRetentionConfig` and link-aware deletion through `MiniverseFileUtils`.
 
 ## Common Mistakes
 

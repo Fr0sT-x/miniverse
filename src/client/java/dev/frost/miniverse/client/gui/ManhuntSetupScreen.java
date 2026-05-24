@@ -97,6 +97,10 @@ public class ManhuntSetupScreen extends Screen {
     private SeedMode seedMode = SeedMode.RANDOM;
     private final List<ButtonWidget> numericSettingButtons = new ArrayList<>();
     private String statusMessage = "";
+    private long lastClickNanos;
+    private double lastClickX = Double.NaN;
+    private double lastClickY = Double.NaN;
+    private int lastClickButton = -1;
 
     public ManhuntSetupScreen() {
         super(Text.literal("Manhunt Setup"));
@@ -334,9 +338,8 @@ public class ManhuntSetupScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
-        double mouseX = click.x();
-        double mouseY = click.y();
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        boolean doubled = this.isDoubleClick(mouseX, mouseY, button);
         boolean shiftDown = this.isShiftDown();
         Layout layout = this.createLayout();
 
@@ -362,7 +365,7 @@ public class ManhuntSetupScreen extends Screen {
             }
         }
 
-        return super.mouseClicked(click, doubled);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
@@ -1030,8 +1033,21 @@ public class ManhuntSetupScreen extends Screen {
     }
 
     private boolean isShiftDown() {
-        return InputUtil.isKeyPressed(this.client.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-            || InputUtil.isKeyPressed(this.client.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+        return InputUtil.isKeyPressed(this.client.getWindow().getHandle(), GLFW.GLFW_KEY_LEFT_SHIFT)
+            || InputUtil.isKeyPressed(this.client.getWindow().getHandle(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+    }
+
+    private boolean isDoubleClick(double mouseX, double mouseY, int button) {
+        long now = System.nanoTime();
+        boolean doubled = button == this.lastClickButton
+            && now - this.lastClickNanos <= 250_000_000L
+            && Math.abs(mouseX - this.lastClickX) <= 4.0D
+            && Math.abs(mouseY - this.lastClickY) <= 4.0D;
+        this.lastClickNanos = now;
+        this.lastClickX = mouseX;
+        this.lastClickY = mouseY;
+        this.lastClickButton = button;
+        return doubled;
     }
 
     private SeedMode parseSeedModeField() {

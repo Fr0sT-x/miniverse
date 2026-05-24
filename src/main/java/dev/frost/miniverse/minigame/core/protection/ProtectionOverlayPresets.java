@@ -27,7 +27,13 @@ public final class ProtectionOverlayPresets {
      */
     public static final ProtectionOverlayPreset RESPAWN_PROTECTION = new ProtectionOverlayPreset(
         Identifier.of("miniverse", "respawn_protection"),
-        0xE6FFDD00  // ARGB: 90% opacity, gold/yellow (R=255, G=221, B=0)
+        0xE6FFDD00,
+        ProtectionOverlaySettings.DEFAULT
+            .withStyle(ProtectionOverlayStyle.VANILLA_GLOW)
+            .withGlowColor(0xFFFFDD00)
+            .withOutlineColor(0xFFFFFFFF)
+            .withAlpha(0.78F)
+            .withIntensity(1.05F)
     );
 
     /**
@@ -42,7 +48,13 @@ public final class ProtectionOverlayPresets {
      */
     public static final ProtectionOverlayPreset GRACE_PERIOD = new ProtectionOverlayPreset(
         Identifier.of("miniverse", "grace_period"),
-        0xE6FFDD00  // ARGB: 90% opacity, gold/yellow
+        0xC8FFDD00,
+        ProtectionOverlaySettings.DEFAULT
+            .withStyle(ProtectionOverlayStyle.SLIM_GLOW)
+            .withGlowColor(0xFFFFDD00)
+            .withOutlineColor(0xFFFFFFFF)
+            .withAlpha(0.62F)
+            .withIntensity(0.85F)
     );
 
     /**
@@ -57,7 +69,13 @@ public final class ProtectionOverlayPresets {
      */
     public static final ProtectionOverlayPreset RESPAWN_PROTECTION_WARM = new ProtectionOverlayPreset(
         Identifier.of("miniverse", "respawn_protection_warm"),
-        0xE6FFDD00  // ARGB: 90% opacity, gold/yellow (R=255, G=221, B=0)
+        0xE6FFB800,
+        ProtectionOverlaySettings.DEFAULT
+            .withStyle(ProtectionOverlayStyle.VANILLA_GLOW)
+            .withGlowColor(0xFFFFB800)
+            .withOutlineColor(0xFFFFF2C2)
+            .withAlpha(0.78F)
+            .withIntensity(1.0F)
     );
 
     /**
@@ -72,16 +90,23 @@ public final class ProtectionOverlayPresets {
      */
     public static final ProtectionOverlayPreset SPECTATOR = new ProtectionOverlayPreset(
         Identifier.of("miniverse", "spectator"),
-        0x20CC88FF  // ARGB: 12% opacity, purple
+        0x60CC88FF,
+        ProtectionOverlaySettings.DEFAULT
+            .withStyle(ProtectionOverlayStyle.FILLED_GLOW)
+            .withGlowColor(0xFFCC88FF)
+            .withOutlineColor(0xFFE5CCFF)
+            .withAlpha(0.28F)
+            .withIntensity(0.65F)
     );
 
     /**
      * Represents a reusable protection overlay configuration.
      *
      * @param overlayId Unique identifier for this overlay type
-     * @param argbColor ARGB color value (alpha in high byte)
+     * @param argbColor Legacy ARGB color value (alpha in high byte)
+     * @param settings Full renderer settings
      */
-    public record ProtectionOverlayPreset(Identifier overlayId, int argbColor) {
+    public record ProtectionOverlayPreset(Identifier overlayId, int argbColor, ProtectionOverlaySettings settings) {
     }
 }
 

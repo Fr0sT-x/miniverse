@@ -27,7 +27,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.jar.Attributes;
 import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class ServerLauncher {
@@ -577,6 +579,8 @@ public final class ServerLauncher {
         if (!missing.isEmpty()) {
             throw new IOException("Shared server runtime is missing required files/directories: " + String.join(", ", missing));
         }
+
+        this.validateFabricLauncherClasspath(serverRoot);
         
         // Ensure config exists but don't fail if it doesn't, just create it
         if (!Files.isDirectory(serverRoot.resolve("config"))) {
@@ -584,6 +588,48 @@ public final class ServerLauncher {
         }
 
         Miniverse.LOGGER.info("Shared runtime integrity check passed at {}", serverRoot);
+    }
+
+    private void validateFabricLauncherClasspath(Path serverRoot) throws IOException {
+        Path launcherJar = serverRoot.resolve("fabric-server-launch.jar");
+        List<String> missing = new ArrayList<>();
+
+        try (JarFile jar = new JarFile(launcherJar.toFile())) {
+            Manifest manifest = jar.getManifest();
+            if (manifest == null) {
+                throw new IOException("fabric-server-launch.jar is missing META-INF/MANIFEST.MF");
+            }
+
+            Attributes attributes = manifest.getMainAttributes();
+            String mainClass = attributes.getValue(Attributes.Name.MAIN_CLASS);
+            if (mainClass == null || mainClass.isBlank()) {
+                throw new IOException("fabric-server-launch.jar manifest is missing Main-Class");
+            }
+
+            String classPath = attributes.getValue(Attributes.Name.CLASS_PATH);
+            if (classPath == null || classPath.isBlank()) {
+                throw new IOException("fabric-server-launch.jar manifest is missing Class-Path");
+            }
+
+            for (String entry : classPath.trim().split("\\s+")) {
+                Path dependency = serverRoot.resolve(entry.replace('/', java.io.File.separatorChar)).normalize();
+                if (!dependency.startsWith(serverRoot.normalize()) || !Files.exists(dependency)) {
+                    missing.add(entry);
+                }
+            }
+        }
+
+        if (!missing.isEmpty()) {
+            throw new IOException(
+                "Shared server runtime is incomplete for the current Fabric launcher. Missing launcher classpath entries: "
+                    + String.join(", ", missing)
+                    + ". Reinstall the dev runtime for Minecraft "
+                    + FabricLoader.getInstance().getModContainer("minecraft").map(container -> container.getMetadata().getVersion().getFriendlyString()).orElse("the configured version")
+                    + " and Fabric Loader "
+                    + FabricLoader.getInstance().getModContainer("fabricloader").map(container -> container.getMetadata().getVersion().getFriendlyString()).orElse("the configured version")
+                    + "."
+            );
+        }
     }
 
     private void writeEula(Path workingDirectory) throws IOException {

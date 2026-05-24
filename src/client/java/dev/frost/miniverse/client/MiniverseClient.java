@@ -17,7 +17,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 public class MiniverseClient implements ClientModInitializer {
@@ -36,7 +35,7 @@ public class MiniverseClient implements ClientModInitializer {
 			"key.miniverse.open_gui",
 			InputUtil.Type.KEYSYM,
 			GLFW.GLFW_KEY_RIGHT_SHIFT,
-			KeyBinding.Category.create(Identifier.of(NetworkConstants.MOD_ID, "miniverse"))
+			"category." + NetworkConstants.MOD_ID + ".miniverse"
 		));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {

@@ -2,9 +2,9 @@ package dev.frost.miniverse.client.freeze;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.input.Input;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.PlayerInput;
 import org.lwjgl.glfw.GLFW;
 
 public final class ClientFreezeHandler {
@@ -45,8 +45,19 @@ public final class ClientFreezeHandler {
         suppressKey(client.options.sprintKey);
 
         if (client.player.input != null) {
-            client.player.input.playerInput = PlayerInput.DEFAULT;
+            clearInput(client.player.input);
         }
+    }
+
+    private static void clearInput(Input input) {
+        input.movementSideways = 0.0F;
+        input.movementForward = 0.0F;
+        input.pressingForward = false;
+        input.pressingBack = false;
+        input.pressingLeft = false;
+        input.pressingRight = false;
+        input.jumping = false;
+        input.sneaking = false;
     }
 
     private static void suppressKey(KeyBinding key) {
@@ -60,7 +71,7 @@ public final class ClientFreezeHandler {
         boolean pressed = false;
 
         if (boundKey.getCategory() == InputUtil.Type.KEYSYM) {
-            pressed = InputUtil.isKeyPressed(client.getWindow(), boundKey.getCode());
+            pressed = InputUtil.isKeyPressed(client.getWindow().getHandle(), boundKey.getCode());
         } else if (boundKey.getCategory() == InputUtil.Type.MOUSE) {
             pressed = GLFW.glfwGetMouseButton(client.getWindow().getHandle(), boundKey.getCode()) == GLFW.GLFW_PRESS;
         }

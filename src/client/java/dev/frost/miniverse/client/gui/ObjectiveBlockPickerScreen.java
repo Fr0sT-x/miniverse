@@ -127,9 +127,7 @@ public class ObjectiveBlockPickerScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
-        double mouseX = click.x();
-        double mouseY = click.y();
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         Layout layout = this.layout();
         int index = this.getBlockAt(mouseX, mouseY, layout);
         if (index >= 0) {
@@ -139,7 +137,7 @@ public class ObjectiveBlockPickerScreen extends Screen {
             return true;
         }
 
-        return super.mouseClicked(click, doubled);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override

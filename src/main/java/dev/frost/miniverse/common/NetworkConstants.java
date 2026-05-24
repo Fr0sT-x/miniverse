@@ -357,7 +357,13 @@ public final class NetworkConstants {
                                            Identifier overlayId,
                                            int remainingTicks,
                                            boolean active,
-                                           int argbColor) implements CustomPayload {
+                                           int argbColor,
+                                           String style,
+                                           String renderMode,
+                                           int glowColor,
+                                           int outlineColor,
+                                           float alpha,
+                                           float intensity) implements CustomPayload {
         private static final PacketCodec<RegistryByteBuf, java.util.UUID> UUID_CODEC = PacketCodec.of(
             (uuid, buffer) -> buffer.writeUuid(uuid),
             (RegistryByteBuf buffer) -> buffer.readUuid()
@@ -366,19 +372,54 @@ public final class NetworkConstants {
             (identifier, buffer) -> buffer.writeIdentifier(identifier),
             (RegistryByteBuf buffer) -> buffer.readIdentifier()
         );
-        public static final PacketCodec<RegistryByteBuf, ProtectionOverlayPayload> CODEC = PacketCodec.tuple(
-            UUID_CODEC,
-            ProtectionOverlayPayload::playerId,
-            IDENTIFIER_CODEC,
-            ProtectionOverlayPayload::overlayId,
-            PacketCodecs.INTEGER,
-            ProtectionOverlayPayload::remainingTicks,
-            PacketCodecs.BOOL,
-            ProtectionOverlayPayload::active,
-            PacketCodecs.INTEGER,
-            ProtectionOverlayPayload::argbColor,
-            ProtectionOverlayPayload::new
+        public static final PacketCodec<RegistryByteBuf, ProtectionOverlayPayload> CODEC = PacketCodec.of(
+            (payload, buffer) -> {
+                buffer.writeUuid(payload.playerId);
+                buffer.writeIdentifier(payload.overlayId);
+                buffer.writeInt(payload.remainingTicks);
+                buffer.writeBoolean(payload.active);
+                buffer.writeInt(payload.argbColor);
+                buffer.writeString(payload.style);
+                buffer.writeString(payload.renderMode);
+                buffer.writeInt(payload.glowColor);
+                buffer.writeInt(payload.outlineColor);
+                buffer.writeFloat(payload.alpha);
+                buffer.writeFloat(payload.intensity);
+            },
+            buffer -> new ProtectionOverlayPayload(
+                buffer.readUuid(),
+                buffer.readIdentifier(),
+                buffer.readInt(),
+                buffer.readBoolean(),
+                buffer.readInt(),
+                buffer.readString(),
+                buffer.readString(),
+                buffer.readInt(),
+                buffer.readInt(),
+                buffer.readFloat(),
+                buffer.readFloat()
+            )
         );
+
+        public ProtectionOverlayPayload(java.util.UUID playerId,
+                                        Identifier overlayId,
+                                        int remainingTicks,
+                                        boolean active,
+                                        int argbColor) {
+            this(
+                playerId,
+                overlayId,
+                remainingTicks,
+                active,
+                argbColor,
+                "vanilla_glow",
+                "depth_tested",
+                0xFF000000 | (argbColor & 0x00FFFFFF),
+                0xFFFFFFFF,
+                ((argbColor >>> 24) & 0xFF) / 255.0F,
+                1.0F
+            );
+        }
 
         @Override
         public Id<? extends CustomPayload> getId() {

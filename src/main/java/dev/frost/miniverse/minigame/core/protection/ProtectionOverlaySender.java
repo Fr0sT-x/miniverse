@@ -42,12 +42,35 @@ public final class ProtectionOverlaySender {
                             int remainingTicks,
                             boolean active,
                             int argbColor) {
+        send(recipient, playerId, overlayId, remainingTicks, active, argbColor, ProtectionOverlaySettings.legacy(argbColor));
+    }
+
+    public static void send(ServerPlayerEntity recipient,
+                            UUID playerId,
+                            Identifier overlayId,
+                            int remainingTicks,
+                            boolean active,
+                            int argbColor,
+                            ProtectionOverlaySettings settings) {
         if (!ServerPlayNetworking.canSend(recipient, NetworkConstants.PROTECTION_OVERLAY_ID)) {
             return;
         }
+        ProtectionOverlaySettings safeSettings = settings == null ? ProtectionOverlaySettings.legacy(argbColor) : settings;
         ServerPlayNetworking.send(
             recipient,
-            new NetworkConstants.ProtectionOverlayPayload(playerId, overlayId, remainingTicks, active, argbColor)
+            new NetworkConstants.ProtectionOverlayPayload(
+                playerId,
+                overlayId,
+                remainingTicks,
+                active,
+                argbColor,
+                safeSettings.style().id(),
+                safeSettings.renderMode().id(),
+                safeSettings.glowColor(),
+                safeSettings.outlineColor(),
+                safeSettings.alpha(),
+                safeSettings.intensity()
+            )
         );
     }
 
@@ -67,11 +90,21 @@ public final class ProtectionOverlaySender {
                                  int remainingTicks,
                                  boolean active,
                                  int argbColor) {
+        broadcast(server, playerId, overlayId, remainingTicks, active, argbColor, ProtectionOverlaySettings.legacy(argbColor));
+    }
+
+    public static void broadcast(MinecraftServer server,
+                                 UUID playerId,
+                                 Identifier overlayId,
+                                 int remainingTicks,
+                                 boolean active,
+                                 int argbColor,
+                                 ProtectionOverlaySettings settings) {
         if (server == null) {
             return;
         }
         for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
-            send(online, playerId, overlayId, remainingTicks, active, argbColor);
+            send(online, playerId, overlayId, remainingTicks, active, argbColor, settings);
         }
     }
 
@@ -92,7 +125,8 @@ public final class ProtectionOverlaySender {
             ProtectionOverlayPresets.RESPAWN_PROTECTION.overlayId(),
             durationTicks,
             true,
-            ProtectionOverlayPresets.RESPAWN_PROTECTION.argbColor()
+            ProtectionOverlayPresets.RESPAWN_PROTECTION.argbColor(),
+            ProtectionOverlayPresets.RESPAWN_PROTECTION.settings()
         );
     }
 
@@ -112,7 +146,8 @@ public final class ProtectionOverlaySender {
             ProtectionOverlayPresets.RESPAWN_PROTECTION.overlayId(),
             durationTicks,
             true,
-            ProtectionOverlayPresets.RESPAWN_PROTECTION.argbColor()
+            ProtectionOverlayPresets.RESPAWN_PROTECTION.argbColor(),
+            ProtectionOverlayPresets.RESPAWN_PROTECTION.settings()
         );
     }
 
@@ -133,7 +168,8 @@ public final class ProtectionOverlaySender {
             ProtectionOverlayPresets.GRACE_PERIOD.overlayId(),
             durationTicks,
             true,
-            ProtectionOverlayPresets.GRACE_PERIOD.argbColor()
+            ProtectionOverlayPresets.GRACE_PERIOD.argbColor(),
+            ProtectionOverlayPresets.GRACE_PERIOD.settings()
         );
     }
 
@@ -153,7 +189,8 @@ public final class ProtectionOverlaySender {
             ProtectionOverlayPresets.GRACE_PERIOD.overlayId(),
             durationTicks,
             true,
-            ProtectionOverlayPresets.GRACE_PERIOD.argbColor()
+            ProtectionOverlayPresets.GRACE_PERIOD.argbColor(),
+            ProtectionOverlayPresets.GRACE_PERIOD.settings()
         );
     }
 

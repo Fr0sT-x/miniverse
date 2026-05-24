@@ -7,6 +7,10 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.DisconnectedScreen;
+import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
+import net.minecraft.client.input.Input;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.nbt.NbtCompound;
@@ -15,7 +19,6 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.PlayerInput;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -582,9 +585,20 @@ public final class TransitionOverlay {
         suppressKey(client.options.sprintKey);
 
         if (client.player.input != null) {
-            client.player.input.playerInput = PlayerInput.DEFAULT;
+            clearInput(client.player.input);
         }
         wasSuppressingInput = true;
+    }
+
+    private static void clearInput(Input input) {
+        input.movementSideways = 0.0F;
+        input.movementForward = 0.0F;
+        input.pressingForward = false;
+        input.pressingBack = false;
+        input.pressingLeft = false;
+        input.pressingRight = false;
+        input.jumping = false;
+        input.sneaking = false;
     }
 
     private static void updateDisconnectButton(MinecraftClient client) {
@@ -616,7 +630,11 @@ public final class TransitionOverlay {
         matchReadySent = false;
         readySent = false;
         cursorUnlockedByOverlay = false;
-        client.disconnect(Text.literal("Disconnected from match transfer."));
+        client.disconnect(new DisconnectedScreen(
+            new MultiplayerScreen(new TitleScreen()),
+            Text.literal("Disconnected"),
+            Text.literal("Disconnected from match transfer.")
+        ));
         finish();
     }
 
@@ -664,7 +682,7 @@ public final class TransitionOverlay {
         boolean pressed = false;
 
         if (boundKey.getCategory() == InputUtil.Type.KEYSYM) {
-            pressed = InputUtil.isKeyPressed(client.getWindow(), boundKey.getCode());
+            pressed = InputUtil.isKeyPressed(client.getWindow().getHandle(), boundKey.getCode());
         } else if (boundKey.getCategory() == InputUtil.Type.MOUSE) {
             pressed = GLFW.glfwGetMouseButton(client.getWindow().getHandle(), boundKey.getCode()) == GLFW.GLFW_PRESS;
         }

@@ -23,8 +23,11 @@ import dev.frost.miniverse.minigame.core.item.TrackingItemNameFormatter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.protection.ProtectionOverlayRenderMode;
 import dev.frost.miniverse.minigame.core.protection.ProtectionOverlaySender;
 import dev.frost.miniverse.minigame.core.protection.ProtectionOverlayPresets;
+import dev.frost.miniverse.minigame.core.protection.ProtectionOverlaySettings;
+import dev.frost.miniverse.minigame.core.protection.ProtectionOverlayStyle;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import dev.frost.miniverse.common.NetworkConstants;
@@ -68,6 +71,14 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     private static final String SCOREBOARD_OBJECTIVE = "bountyhunt_display";
     private static final Identifier RESPAWN_PROTECTION_OVERLAY = ProtectionOverlayPresets.RESPAWN_PROTECTION.overlayId();
     private static final Identifier GRACE_PROTECTION_OVERLAY = ProtectionOverlayPresets.GRACE_PERIOD.overlayId();
+    private static final int BOUNTY_PROTECTION_COLOR = 0xE6FFFFFF;
+    private static final ProtectionOverlaySettings BOUNTY_PROTECTION_OVERLAY = ProtectionOverlaySettings.DEFAULT
+        .withStyle(ProtectionOverlayStyle.VANILLA_GLOW)
+        .withRenderMode(ProtectionOverlayRenderMode.DEPTH_TESTED)
+        .withGlowColor(0xFFFFFFFF)
+        .withOutlineColor(0xFFFFFFFF)
+        .withAlpha(0.82F)
+        .withIntensity(1.0F);
     private static final ScoreboardController SCOREBOARD = new ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Bounty Hunt"));
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("bountyhunt");
 
@@ -685,7 +696,15 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
 
         int durationTicks = this.settings.respawnInvincibilitySeconds() * 20;
         this.invincibleUntilTicks.put(player.getUuid(), this.gameTicks + durationTicks);
-        ProtectionOverlaySender.broadcastRespawnProtection(this.server, player.getUuid(), durationTicks);
+        ProtectionOverlaySender.broadcast(
+            this.server,
+            player.getUuid(),
+            RESPAWN_PROTECTION_OVERLAY,
+            durationTicks,
+            true,
+            BOUNTY_PROTECTION_COLOR,
+            BOUNTY_PROTECTION_OVERLAY
+        );
         player.sendMessage(Text.literal("You are invincible for " + this.formatDuration(this.settings.respawnInvincibilitySeconds()) + " after respawn.")
             .formatted(Formatting.YELLOW), true);
     }
@@ -863,10 +882,14 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             if (remainingTicks <= 0) {
                 continue;
             }
-            ProtectionOverlaySender.sendRespawnProtection(
+            ProtectionOverlaySender.send(
                 player,
                 entry.getKey(),
-                (int) remainingTicks
+                RESPAWN_PROTECTION_OVERLAY,
+                (int) remainingTicks,
+                true,
+                BOUNTY_PROTECTION_COLOR,
+                BOUNTY_PROTECTION_OVERLAY
             );
         }
     }
@@ -880,10 +903,14 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             if (participant.isDisconnected()) {
                 continue;
             }
-            ProtectionOverlaySender.sendGracePeriod(
+            ProtectionOverlaySender.send(
                 recipient,
                 participant.getUuid(),
-                this.graceTicksRemaining
+                GRACE_PROTECTION_OVERLAY,
+                this.graceTicksRemaining,
+                true,
+                BOUNTY_PROTECTION_COLOR,
+                BOUNTY_PROTECTION_OVERLAY
             );
         }
     }
@@ -897,7 +924,15 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
                 continue;
             }
             if (active) {
-                ProtectionOverlaySender.broadcastGracePeriod(this.server, protectedParticipant.getUuid(), remainingTicks);
+                ProtectionOverlaySender.broadcast(
+                    this.server,
+                    protectedParticipant.getUuid(),
+                    GRACE_PROTECTION_OVERLAY,
+                    remainingTicks,
+                    true,
+                    BOUNTY_PROTECTION_COLOR,
+                    BOUNTY_PROTECTION_OVERLAY
+                );
             } else {
                 ProtectionOverlaySender.broadcastClearOverlay(this.server, protectedParticipant.getUuid(), GRACE_PROTECTION_OVERLAY);
             }

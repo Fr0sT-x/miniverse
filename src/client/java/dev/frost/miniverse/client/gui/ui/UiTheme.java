@@ -24,7 +24,7 @@ public final class UiTheme {
     public static final int WARNING = 0xFFFFD070;
     public static final int SUCCESS = 0xFFA0FFA0;
 
-    public static final int SIDEBAR_WIDTH = 142;
+    public static final int SIDEBAR_WIDTH = 216;
     public static final int TOOLBAR_HEIGHT = 34;
     public static final int GAP = 10;
     public static final int PADDING = 14;

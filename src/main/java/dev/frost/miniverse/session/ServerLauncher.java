@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
@@ -38,6 +39,9 @@ public final class ServerLauncher {
     }
 
     public record InspectionLaunchResult(Process process, int port, Path workingDirectory) {
+    }
+
+    public record LaunchProgress(String stage, String detail, int progress) {
     }
 
     public LaunchResult launch(GameSession session, SessionGroup group) throws IOException {
@@ -53,6 +57,14 @@ public final class ServerLauncher {
     }
 
     public LaunchResult launch(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, String directorySuffix, boolean syncDevelopmentRuntime) throws IOException {
+        return this.launch(session, group, operatorSnapshot, directorySuffix, syncDevelopmentRuntime, progress -> {
+        });
+    }
+
+    public LaunchResult launch(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, String directorySuffix, boolean syncDevelopmentRuntime, Consumer<LaunchProgress> progressConsumer) throws IOException {
+        Consumer<LaunchProgress> progress = progressConsumer == null ? ignored -> {
+        } : progressConsumer;
+        progress.accept(new LaunchProgress("Preparing files", group.getDisplayName(), 20));
         // 1. Detect and validate the shared server runtime
         Path serverRoot = detectServerRoot();
         validateSharedRuntime(serverRoot);
@@ -65,6 +77,7 @@ public final class ServerLauncher {
         // 2. Prepare an isolated working directory for the session
         Path workingDirectory = this.prepareWorkingDirectory(session, group, directorySuffix);
         int port = this.reservePort();
+        progress.accept(new LaunchProgress("Preparing files", "Reserved backend port " + port, 35));
 
         // 3. Create symbolic links/junctions to the shared runtime files
         this.createRuntimeSymlinks(workingDirectory, serverRoot);
@@ -77,6 +90,7 @@ public final class ServerLauncher {
         this.writeServerProperties(workingDirectory, session, group, port);
 
         group.markLaunching(workingDirectory, port);
+        progress.accept(new LaunchProgress("Starting server", "Launching backend process", 55));
 
         // 5. Build the launch command to run from the isolated directory
         String javaExecutable = this.resolveJavaExecutable();
@@ -103,6 +117,7 @@ public final class ServerLauncher {
         builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
+        progress.accept(new LaunchProgress("Waiting for boot", "Backend is starting", 70));
 
         // 6. Wait for the server to boot and mark it as running
         boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
@@ -115,6 +130,7 @@ public final class ServerLauncher {
         int publicPort = SessionLauncherConfig.getInstance().publicPortForLocalPort(port);
         String address = SessionServerConfig.getInstance().advertisedHost() + ":" + publicPort;
         group.markRunning(process, address);
+        progress.accept(new LaunchProgress("Ready", "Backend is ready at " + address, 95));
 
         if (publicPort != port) {
             Miniverse.LOGGER.info("Launched {} session {} for {} at {} forwarding to local port {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, port, bootTime);
@@ -125,6 +141,14 @@ public final class ServerLauncher {
     }
 
     public LaunchResult launchFromRetained(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, Path retainedSessionRoot, boolean syncDevelopmentRuntime) throws IOException {
+        return this.launchFromRetained(session, group, operatorSnapshot, retainedSessionRoot, syncDevelopmentRuntime, progress -> {
+        });
+    }
+
+    public LaunchResult launchFromRetained(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, Path retainedSessionRoot, boolean syncDevelopmentRuntime, Consumer<LaunchProgress> progressConsumer) throws IOException {
+        Consumer<LaunchProgress> progress = progressConsumer == null ? ignored -> {
+        } : progressConsumer;
+        progress.accept(new LaunchProgress("Preparing files", "Copying retained world for " + group.getDisplayName(), 20));
         // 1. Detect and validate the shared server runtime
         Path serverRoot = detectServerRoot();
         validateSharedRuntime(serverRoot);
@@ -142,6 +166,7 @@ public final class ServerLauncher {
         Path retainedWorld = this.findRetainedWorld(retainedSessionRoot, group.getGroupLabel())
             .orElseThrow(() -> new IOException("No retained world found for session " + session.getSessionId()));
         this.copyDirectory(retainedWorld, workingDirectory.resolve("world"));
+        progress.accept(new LaunchProgress("Preparing files", "Retained world copied", 40));
 
         // 4. Create symbolic links/junctions to the shared runtime files
         this.createRuntimeSymlinks(workingDirectory, serverRoot);
@@ -154,6 +179,7 @@ public final class ServerLauncher {
         this.writeServerProperties(workingDirectory, session, group, port);
 
         group.markLaunching(workingDirectory, port);
+        progress.accept(new LaunchProgress("Starting server", "Launching backend process", 55));
 
         // 6. Build the launch command to run from the isolated directory
         String javaExecutable = this.resolveJavaExecutable();
@@ -180,6 +206,7 @@ public final class ServerLauncher {
         builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
+        progress.accept(new LaunchProgress("Waiting for boot", "Backend is starting", 70));
 
         // 7. Wait for the server to boot and mark it as running
         boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
@@ -192,6 +219,7 @@ public final class ServerLauncher {
         int publicPort = SessionLauncherConfig.getInstance().publicPortForLocalPort(port);
         String address = SessionServerConfig.getInstance().advertisedHost() + ":" + publicPort;
         group.markRunning(process, address);
+        progress.accept(new LaunchProgress("Ready", "Backend is ready at " + address, 95));
 
         if (publicPort != port) {
             Miniverse.LOGGER.info("Relaunched {} session {} for {} at {} forwarding to local port {} (Boot time: {}ms)", session.getGameType().getDisplayName(), session.getSessionId(), group.getDisplayName(), address, port, bootTime);

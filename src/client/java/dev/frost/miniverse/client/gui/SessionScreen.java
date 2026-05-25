@@ -2,9 +2,9 @@ package dev.frost.miniverse.client.gui;
 
 import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
-import dev.frost.miniverse.client.gui.ui.UiPrimitives;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.workspace.AdminWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.AppearanceWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.ManhuntWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.WorkspaceView;
@@ -20,10 +20,13 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class SessionScreen extends Screen {
@@ -41,9 +44,8 @@ public class SessionScreen extends Screen {
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final List<MinigameEntry> minigameEntries = new ArrayList<>();
     private final Map<String, UiAnimation.Value> cardHover = new HashMap<>();
-    private final UiPrimitives.UiSidebar sidebar = new UiPrimitives.UiSidebar();
-    private final UiPrimitives.UiButton settingsButton = new UiPrimitives.UiButton("Settings", this::openSettingsPlaceholder).accent(UiTheme.ACCENT_BLUE);
-    private final UiPrimitives.UiButton closeButton = new UiPrimitives.UiButton("Close", this::close).accent(UiTheme.ACCENT_RED);
+    private final Map<SidebarSection, UiAnimation.Value> sidebarAnimations = new EnumMap<>(SidebarSection.class);
+    private final Set<SidebarSection> expandedSections = EnumSet.of(SidebarSection.GAMEMODES);
     private TextFieldWidget searchField;
     private WorkspaceView workspaceView;
     private String statusMessage = "";
@@ -51,12 +53,9 @@ public class SessionScreen extends Screen {
 
     public SessionScreen() {
         super(Text.literal("Miniverse"));
-        this.sidebar
-            .item(">", "Gamemodes", () -> this.statusMessage = "Choose a gamemode card to configure a session.")
-            .item("#", "Sessions", () -> this.statusMessage = "Session management is available from Settings.")
-            .item("~", "Appearance", this::openAppearance)
-            .item("*", "Settings", this::openSettingsPlaceholder)
-            .item("+", "Cosmetics", () -> this.statusMessage = "Cosmetics workspace reserved for future expansion.");
+        for (SidebarSection section : SidebarSection.values()) {
+            this.sidebarAnimations.put(section, new UiAnimation.Value(this.expandedSections.contains(section) ? 1.0F : 0.0F));
+        }
     }
 
     public static void onServerSnapshot(NbtCompound root) {
@@ -150,6 +149,9 @@ public class SessionScreen extends Screen {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof SessionScreen sessionScreen) {
             sessionScreen.rebuildEntries();
+            if (sessionScreen.workspaceView instanceof AdminWorkspaceView) {
+                sessionScreen.rebuildWorkspaceChildren();
+            }
             if (sessionScreen.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
                 manhuntWorkspaceView.refreshRoster();
             }
@@ -209,9 +211,6 @@ public class SessionScreen extends Screen {
     private void rebuildWorkspaceChildren() {
         this.clearChildren();
         Layout layout = this.createLayout();
-        this.sidebar.setBounds(layout.sidebar());
-        this.settingsButton.setBounds(new UiLayout.Rect(layout.toolbar().x() + layout.toolbar().width() - TOOLBAR_BUTTON_WIDTH * 2 - 8, layout.toolbar().y() + 6, TOOLBAR_BUTTON_WIDTH, UiTheme.BUTTON_HEIGHT));
-        this.closeButton.setBounds(new UiLayout.Rect(layout.toolbar().x() + layout.toolbar().width() - TOOLBAR_BUTTON_WIDTH, layout.toolbar().y() + 6, TOOLBAR_BUTTON_WIDTH, UiTheme.BUTTON_HEIGHT));
         if (this.workspaceView == null) {
             this.searchField = new TextFieldWidget(this.textRenderer, layout.search().x(), layout.search().y(), layout.search().width(), layout.search().height(), Text.literal("Search gamemodes"));
             this.searchField.setMaxLength(64);
@@ -236,12 +235,7 @@ public class SessionScreen extends Screen {
         float time = (System.currentTimeMillis() - this.openedAt) / 1000.0F;
         UiRenderer.workspace(context, this.width, this.height, time);
 
-        this.sidebar.setBounds(layout.sidebar());
-        if (this.workspaceView == null) {
-            this.sidebar.render(context, this.textRenderer, mouseX, mouseY, delta);
-        } else {
-            this.drawWorkspaceNavigation(context, layout.sidebar());
-        }
+        this.drawWorkspaceNavigation(context, layout.sidebar(), mouseX, mouseY);
         UiRenderer.panel(context, layout.toolbar().x(), layout.toolbar().y(), layout.toolbar().width(), layout.toolbar().height(), UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
         String toolbarTitle = this.workspaceView == null ? "Miniverse Multiplayer Platform" : this.workspaceView.title();
         String toolbarSubtitle = this.workspaceView == null ? "Gamemode studio" : this.workspaceView.subtitle();
@@ -261,8 +255,7 @@ public class SessionScreen extends Screen {
             context.drawText(this.textRenderer, Text.literal("Filter gamemodes..."), layout.search().x() + 6, layout.search().y() + 6, UiTheme.TEXT_DIM, false);
         }
 
-        this.settingsButton.render(context, this.textRenderer, mouseX, mouseY, delta);
-        this.closeButton.render(context, this.textRenderer, mouseX, mouseY, delta);
+        this.renderToolbarClose(context, layout.toolbar(), mouseX, mouseY);
         if (this.workspaceView == null) {
             this.drawGamemodeCards(context, layout.cards(), mouseX, mouseY);
         } else {
@@ -273,28 +266,63 @@ public class SessionScreen extends Screen {
         }
     }
 
-    private void drawWorkspaceNavigation(DrawContext context, UiLayout.Rect sidebar) {
+    private void drawWorkspaceNavigation(DrawContext context, UiLayout.Rect sidebar, int mouseX, int mouseY) {
         UiRenderer.panel(context, sidebar.x(), sidebar.y(), sidebar.width(), sidebar.height(), UiTheme.SIDEBAR, UiTheme.BORDER_SUBTLE);
         context.drawText(this.textRenderer, Text.literal("MINIVERSE"), sidebar.x() + 12, sidebar.y() + 12, UiTheme.TEXT, false);
-        context.drawText(this.textRenderer, Text.literal("Setup Modules"), sidebar.x() + 12, sidebar.y() + 24, UiTheme.TEXT_DIM, false);
-        this.drawNavItem(context, sidebar, sidebar.y() + 50, "<", "Gamemodes", false);
-        this.drawNavItem(context, sidebar, sidebar.y() + sidebar.height() - 40, "~", "Appearance", this.workspaceView instanceof AppearanceWorkspaceView);
-        if (this.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
-            int y = sidebar.y() + 84;
-            for (ManhuntWorkspaceView.Module module : ManhuntWorkspaceView.Module.values()) {
-                this.drawNavItem(context, sidebar, y, module.icon(), module.label(), manhuntWorkspaceView.activeModule() == module);
-                y += 28;
-            }
+        context.drawText(this.textRenderer, Text.literal("Workspace"), sidebar.x() + 12, sidebar.y() + 24, UiTheme.TEXT_DIM, false);
+        int y = sidebar.y() + 50;
+        for (SidebarSection section : SidebarSection.values()) {
+            y = this.drawSidebarSection(context, sidebar, section, y, mouseX, mouseY);
         }
     }
 
-    private void drawNavItem(DrawContext context, UiLayout.Rect sidebar, int y, String icon, String label, boolean selected) {
-        context.fill(sidebar.x() + 7, y, sidebar.x() + sidebar.width() - 7, y + 24, selected ? 0x442F4154 : 0x00000000);
-        if (selected) {
-            context.fill(sidebar.x() + 7, y, sidebar.x() + 10, y + 24, UiTheme.ACCENT_RED);
+    private int drawSidebarSection(DrawContext context, UiLayout.Rect sidebar, SidebarSection section, int y, int mouseX, int mouseY) {
+        UiAnimation.Value animation = this.sidebarAnimations.get(section);
+        animation.animateTo(this.expandedSections.contains(section) ? 1.0F : 0.0F, UiTheme.TRANSITION_MS, UiAnimation::easeInOutQuad);
+        float progress = animation.get();
+        boolean hovered = this.navRowContains(sidebar, y, mouseX, mouseY);
+        this.drawNavItem(context, sidebar, y, this.expandedSections.contains(section) ? "⌄" : ">", section.label, false, hovered, 0);
+        y += 28;
+
+        List<SidebarChild> children = this.childrenFor(section);
+        int childHeight = children.size() * 24;
+        int visibleHeight = Math.round(childHeight * progress);
+        if (visibleHeight > 0) {
+            context.enableScissor(sidebar.x(), y, sidebar.x() + sidebar.width(), y + visibleHeight);
+            for (int i = 0; i < children.size(); i++) {
+                SidebarChild child = children.get(i);
+                int childY = y + i * 24;
+                boolean childHovered = this.navRowContains(sidebar, childY, mouseX, mouseY);
+                this.drawNavItem(context, sidebar, childY, child.icon, child.label, child.selected.getAsBoolean(), childHovered, child.indent);
+            }
+            context.disableScissor();
         }
-        context.drawText(this.textRenderer, Text.literal(icon), sidebar.x() + 16, y + 8, selected ? UiTheme.ACCENT_RED : UiTheme.ACCENT, false);
-        context.drawText(this.textRenderer, Text.literal(label), sidebar.x() + 34, y + 8, selected ? UiTheme.TEXT : UiTheme.TEXT_MUTED, false);
+        return y + visibleHeight + 4;
+    }
+
+    private void drawNavItem(DrawContext context, UiLayout.Rect sidebar, int y, String icon, String label, boolean selected, boolean hovered, int indent) {
+        int fill = selected ? 0x442F4154 : hovered ? 0x2AFFFFFF : 0x00000000;
+        int highlightX = sidebar.x() + 7 + indent;
+        context.fill(highlightX, y, sidebar.x() + sidebar.width() - 7, y + 22, fill);
+        if (selected) {
+            context.fill(highlightX, y, highlightX + 3, y + 22, UiTheme.ACCENT_RED);
+        }
+        int textX = sidebar.x() + 34 + indent;
+        int maxTextWidth = Math.max(20, sidebar.x() + sidebar.width() - 14 - textX);
+        context.drawText(this.textRenderer, Text.literal(icon), sidebar.x() + 16 + indent, y + 7, selected ? UiTheme.ACCENT_RED : UiTheme.ACCENT, false);
+        context.drawText(this.textRenderer, Text.literal(this.textRenderer.trimToWidth(label, maxTextWidth)), textX, y + 7, selected ? UiTheme.TEXT : UiTheme.TEXT_MUTED, false);
+    }
+
+    private boolean navRowContains(UiLayout.Rect sidebar, int y, double mouseX, double mouseY) {
+        return mouseX >= sidebar.x() + 7 && mouseX <= sidebar.x() + sidebar.width() - 7 && mouseY >= y && mouseY <= y + 22;
+    }
+
+    private void renderToolbarClose(DrawContext context, UiLayout.Rect toolbar, int mouseX, int mouseY) {
+        UiLayout.Rect close = this.closeButtonBounds(toolbar);
+        boolean hovered = close.contains(mouseX, mouseY);
+        int fill = UiAnimation.lerpColor(UiTheme.PANEL_RAISED, UiAnimation.alpha(UiTheme.ACCENT_RED, 0.30F), hovered ? 1.0F : 0.0F);
+        UiRenderer.panel(context, close.x(), close.y(), close.width(), close.height(), fill, hovered ? UiTheme.ACCENT_RED : UiTheme.BORDER_SUBTLE);
+        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Close"), close.x() + close.width() / 2, close.y() + 7, UiTheme.TEXT);
     }
 
     private void drawGamemodeCards(DrawContext context, UiLayout.Rect area, int mouseX, int mouseY) {
@@ -360,25 +388,20 @@ public class SessionScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        Layout layout = this.createLayout();
+        if (button == 0 && this.handleWorkspaceNavigationClick(layout.sidebar(), mouseX, mouseY)) {
+            return true;
+        }
+        if (button == 0 && this.closeButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
+            this.close();
+            return true;
+        }
         if (this.workspaceView != null) {
-            Layout layout = this.createLayout();
-            if (button == 0 && this.handleWorkspaceNavigationClick(layout.sidebar(), mouseX, mouseY)) {
-                return true;
-            }
-            if (this.settingsButton.mouseClicked(mouseX, mouseY, button) || this.closeButton.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
             if (this.workspaceView.mouseClicked(mouseX, mouseY, button)) {
                 return true;
             }
             return super.mouseClicked(mouseX, mouseY, button);
         }
-        if (this.sidebar.mouseClicked(mouseX, mouseY, button)
-            || this.settingsButton.mouseClicked(mouseX, mouseY, button)
-            || this.closeButton.mouseClicked(mouseX, mouseY, button)) {
-            return true;
-        }
-        Layout layout = this.createLayout();
         List<MinigameEntry> entries = this.filteredEntries();
         int columns = this.cardColumns(layout.cards().width());
         for (int i = 0; i < entries.size(); i++) {
@@ -401,25 +424,22 @@ public class SessionScreen extends Screen {
             return false;
         }
         int y = sidebar.y() + 50;
-        if (mouseY >= y && mouseY <= y + 24) {
-            this.openSelectorWorkspace();
-            return true;
-        }
-        int appearanceY = sidebar.y() + sidebar.height() - 40;
-        if (mouseY >= appearanceY && mouseY <= appearanceY + 24) {
-            this.openAppearance();
-            return true;
-        }
-        if (this.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
-            y = sidebar.y() + 84;
-            for (ManhuntWorkspaceView.Module module : ManhuntWorkspaceView.Module.values()) {
-                if (mouseY >= y && mouseY <= y + 24) {
-                    manhuntWorkspaceView.setActiveModule(module);
-                    this.rebuildWorkspaceChildren();
+        for (SidebarSection section : SidebarSection.values()) {
+            if (this.navRowContains(sidebar, y, mouseX, mouseY)) {
+                this.toggleSection(section);
+                return true;
+            }
+            y += 28;
+            List<SidebarChild> children = this.childrenFor(section);
+            int visibleHeight = Math.round(children.size() * 24 * this.sidebarAnimations.get(section).get());
+            if (visibleHeight > 0 && mouseY >= y && mouseY <= y + visibleHeight) {
+                int index = (int) ((mouseY - y) / 24);
+                if (index >= 0 && index < children.size()) {
+                    children.get(index).action.run();
                     return true;
                 }
-                y += 28;
             }
+            y += visibleHeight + 4;
         }
         return false;
     }
@@ -465,6 +485,61 @@ public class SessionScreen extends Screen {
             ));
         }
         return entries;
+    }
+
+    private List<SidebarChild> childrenFor(SidebarSection section) {
+        List<SidebarChild> children = new ArrayList<>();
+        switch (section) {
+            case GAMEMODES -> {
+                children.add(new SidebarChild("*", "All gamemodes", this::openSelectorWorkspace, () -> this.workspaceView == null));
+                for (MinigameEntry entry : this.minigameEntries) {
+                    children.add(new SidebarChild(entry.icon(), entry.name(), () -> this.openGamemode(entry), () -> this.isCurrentGamemodeWorkspace(entry.id())));
+                    if ("manhunt".equals(entry.id()) && this.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
+                        for (ManhuntWorkspaceView.Module module : ManhuntWorkspaceView.Module.values()) {
+                            children.add(new SidebarChild(module.icon(), module.label(), () -> this.openManhuntModule(module), () -> manhuntWorkspaceView.activeModule() == module, 24));
+                        }
+                    }
+                }
+            }
+            case SESSION -> {
+                children.add(new SidebarChild("#", "Live sessions", this::openSessionsWorkspace, () -> this.isAdminMode(AdminWorkspaceView.Mode.SESSIONS)));
+                children.add(new SidebarChild(":", "History", this::openHistoryWorkspace, () -> this.isAdminMode(AdminWorkspaceView.Mode.HISTORY)));
+            }
+            case SERVER -> children.add(new SidebarChild("!", "Session server properties", this::openServerWorkspace, () -> this.isAdminMode(AdminWorkspaceView.Mode.SERVER)));
+            case APPEARANCE -> children.add(new SidebarChild("~", "Workspace", this::openAppearance, () -> this.workspaceView instanceof AppearanceWorkspaceView));
+        }
+        return children;
+    }
+
+    private void toggleSection(SidebarSection section) {
+        if (this.expandedSections.contains(section)) {
+            this.expandedSections.remove(section);
+        } else {
+            this.expandedSections.add(section);
+        }
+    }
+
+    private void openGamemode(MinigameEntry entry) {
+        if (entry.enabled()) {
+            entry.activate(this);
+        } else {
+            this.statusMessage = "That gamemode is not available in this client build.";
+        }
+    }
+
+    private boolean isCurrentGamemodeWorkspace(String id) {
+        return "manhunt".equals(id) && this.workspaceView instanceof ManhuntWorkspaceView;
+    }
+
+    private void openManhuntModule(ManhuntWorkspaceView.Module module) {
+        if (this.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
+            manhuntWorkspaceView.setActiveModule(module);
+            this.rebuildWorkspaceChildren();
+        }
+    }
+
+    private UiLayout.Rect closeButtonBounds(UiLayout.Rect toolbar) {
+        return new UiLayout.Rect(toolbar.x() + toolbar.width() - TOOLBAR_BUTTON_WIDTH, toolbar.y() + 6, TOOLBAR_BUTTON_WIDTH, UiTheme.BUTTON_HEIGHT);
     }
 
     private List<MinigameEntry> filteredEntries() {
@@ -583,6 +658,22 @@ public class SessionScreen extends Screen {
         this.openWorkspaceView(new AppearanceWorkspaceView());
     }
 
+    private void openSessionsWorkspace() {
+        this.openWorkspaceView(new AdminWorkspaceView(AdminWorkspaceView.Mode.SESSIONS));
+    }
+
+    private void openHistoryWorkspace() {
+        this.openWorkspaceView(new AdminWorkspaceView(AdminWorkspaceView.Mode.HISTORY));
+    }
+
+    private void openServerWorkspace() {
+        this.openWorkspaceView(new AdminWorkspaceView(AdminWorkspaceView.Mode.SERVER));
+    }
+
+    private boolean isAdminMode(AdminWorkspaceView.Mode mode) {
+        return this.workspaceView instanceof AdminWorkspaceView adminWorkspaceView && adminWorkspaceView.mode() == mode;
+    }
+
     private void openSpeedrun() {
         this.client.setScreen(new SpeedrunSetupScreen());
     }
@@ -603,10 +694,6 @@ public class SessionScreen extends Screen {
         this.client.setScreen(new GenericSetupScreen(entry));
     }
 
-    private void openSettingsPlaceholder() {
-        this.client.setScreen(new SettingsScreen());
-    }
-
     private void requestSnapshot() {
         if (this.client.player != null) {
             ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload("metadata"));
@@ -619,5 +706,24 @@ public class SessionScreen extends Screen {
     }
 
     private record Layout(UiLayout.Rect sidebar, UiLayout.Rect toolbar, UiLayout.Rect search, UiLayout.Rect cards, UiLayout.Rect detail, UiLayout.Rect content) {
+    }
+
+    private record SidebarChild(String icon, String label, Runnable action, java.util.function.BooleanSupplier selected, int indent) {
+        private SidebarChild(String icon, String label, Runnable action, java.util.function.BooleanSupplier selected) {
+            this(icon, label, action, selected, 12);
+        }
+    }
+
+    private enum SidebarSection {
+        GAMEMODES("Gamemodes"),
+        SESSION("Session"),
+        SERVER("Server"),
+        APPEARANCE("Appearance");
+
+        private final String label;
+
+        SidebarSection(String label) {
+            this.label = label;
+        }
     }
 }

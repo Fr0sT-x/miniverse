@@ -4,6 +4,7 @@ import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.network.TransitionTransferCoordinator;
+import dev.frost.miniverse.network.SessionNetwork;
 import dev.frost.miniverse.network.VelocityProxyBridge;
 import dev.frost.miniverse.common.MiniversePaths;
 import net.minecraft.server.MinecraftServer;
@@ -229,7 +230,7 @@ public final class SessionManager {
 
         if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD && groups.size() > 0) {
             SessionGroup primary = groups.get(0);
-            CompletableFuture<SessionGroup> primaryLaunch = this.launchGroupAsync(session, primary, operatorSnapshot.forGroups(groups));
+            CompletableFuture<SessionGroup> primaryLaunch = this.launchGroupAsync(session, primary, operatorSnapshot.forGroups(groups), server);
 
             return primaryLaunch.thenApply(launchedGroup -> {
                 BackendInstance backend = launchedGroup.getBackendInstance();
@@ -252,7 +253,7 @@ public final class SessionManager {
 
         List<CompletableFuture<SessionGroup>> launches = new ArrayList<>();
         for (SessionGroup group : groups) {
-            launches.add(this.launchGroupAsync(session, group, operatorSnapshot.forGroups(List.of(group))));
+            launches.add(this.launchGroupAsync(session, group, operatorSnapshot.forGroups(List.of(group)), server));
         }
 
         return CompletableFuture.allOf(launches.toArray(new CompletableFuture[0]))
@@ -310,7 +311,7 @@ public final class SessionManager {
 
         if (session.getGameType().getTopology() == SessionTopology.SHARED_WORLD && !groups.isEmpty()) {
             SessionGroup primary = groups.get(0);
-            CompletableFuture<SessionGroup> primaryLaunch = this.launchRetainedGroupAsync(session, primary, operatorSnapshot.forGroups(groups), retainedRoot);
+            CompletableFuture<SessionGroup> primaryLaunch = this.launchRetainedGroupAsync(session, primary, operatorSnapshot.forGroups(groups), retainedRoot, server);
             return primaryLaunch.thenApply(launchedGroup -> {
                 BackendInstance backend = launchedGroup.getBackendInstance();
                 for (int i = 1; i < groups.size(); i++) {
@@ -329,7 +330,7 @@ public final class SessionManager {
 
         List<CompletableFuture<SessionGroup>> launches = new ArrayList<>();
         for (SessionGroup group : groups) {
-            launches.add(this.launchRetainedGroupAsync(session, group, operatorSnapshot.forGroups(List.of(group)), retainedRoot));
+            launches.add(this.launchRetainedGroupAsync(session, group, operatorSnapshot.forGroups(List.of(group)), retainedRoot, server));
         }
 
         return CompletableFuture.allOf(launches.toArray(new CompletableFuture[0]))
@@ -758,10 +759,19 @@ public final class SessionManager {
     }
 
     private CompletableFuture<SessionGroup> launchGroupAsync(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot) {
+        return this.launchGroupAsync(session, group, operatorSnapshot, null);
+    }
+
+    private CompletableFuture<SessionGroup> launchGroupAsync(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, @Nullable MinecraftServer server) {
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
-                    return this.serverLauncher.launch(session, group, operatorSnapshot).group();
+                    if (server == null) {
+                        return this.serverLauncher.launch(session, group, operatorSnapshot).group();
+                    }
+                    return this.serverLauncher.launch(session, group, operatorSnapshot, "", true, progress ->
+                        SessionNetwork.broadcastLaunchProgress(server, session, progress.stage(), progress.detail(), progress.progress(), false)
+                    ).group();
                 } catch (IOException e) {
                     group.markFailed(e.getMessage());
                     throw new RuntimeException(e);
@@ -795,11 +805,13 @@ public final class SessionManager {
         }
     }
 
-    private CompletableFuture<SessionGroup> launchRetainedGroupAsync(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, Path retainedRoot) {
+    private CompletableFuture<SessionGroup> launchRetainedGroupAsync(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, Path retainedRoot, MinecraftServer server) {
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
-                    return this.serverLauncher.launchFromRetained(session, group, operatorSnapshot, retainedRoot, true).group();
+                    return this.serverLauncher.launchFromRetained(session, group, operatorSnapshot, retainedRoot, true, progress ->
+                        SessionNetwork.broadcastLaunchProgress(server, session, progress.stage(), progress.detail(), progress.progress(), false)
+                    ).group();
                 } catch (IOException e) {
                     group.markFailed(e.getMessage());
                     throw new RuntimeException(e);

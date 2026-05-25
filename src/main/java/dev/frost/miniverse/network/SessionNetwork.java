@@ -30,6 +30,9 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.UUID;
 
 public final class SessionNetwork {
     private static boolean registered;
@@ -90,13 +93,16 @@ public final class SessionNetwork {
         }
 
         player.sendMessage(Text.literal("Launching session " + session.getSessionId() + "..."), false);
+        broadcastLaunchProgress(server, session, "Queued", "Session launch requested by " + player.getName().getString(), 8, false);
         manager.launchSession(session.getSessionId(), server).whenComplete((launched, error) -> server.execute(() -> {
             if (error != null) {
+                broadcastLaunchProgress(server, session, "Failed", error.getMessage(), 100, true);
                 player.sendMessage(Text.literal("Failed to launch session " + session.getSessionId() + ": " + error.getMessage()), false);
                 sendSessionList(server, player);
                 return;
             }
 
+            broadcastLaunchProgress(server, launched, "Transferring players", "Moving players to the session server", 100, true);
             manager.transferAssignedPlayers(server, launched);
             player.sendMessage(Text.literal("Launched session " + launched.getSessionId() + "."), false);
             sendSessionList(server, player);
@@ -117,13 +123,16 @@ public final class SessionNetwork {
         }
 
         player.sendMessage(Text.literal("Launching session " + sessionId + "..."), false);
+        manager.getSession(sessionId).ifPresent(session -> broadcastLaunchProgress(server, session, "Queued", "Session launch requested by " + player.getName().getString(), 8, false));
         manager.launchSession(sessionId, server).whenComplete((session, error) -> server.execute(() -> {
             if (error != null) {
+                manager.getSession(sessionId).ifPresent(failed -> broadcastLaunchProgress(server, failed, "Failed", error.getMessage(), 100, true));
                 player.sendMessage(Text.literal("Failed to launch session " + sessionId + ": " + error.getMessage()), false);
                 sendSessionList(server, player);
                 return;
             }
 
+            broadcastLaunchProgress(server, session, "Transferring players", "Moving players to the session server", 100, true);
             manager.transferAssignedPlayers(server, session);
             player.sendMessage(Text.literal("Launched session " + session.getSessionId() + "."), false);
             sendSessionList(server, player);
@@ -211,17 +220,63 @@ public final class SessionNetwork {
         }
 
         player.sendMessage(Text.literal("Relaunching session " + sessionId + "..."), false);
+        broadcastLaunchProgress(server, sessionId, "Relaunching " + sessionId, "Queued", "Retained session relaunch requested by " + player.getName().getString(), 8, false);
         manager.relaunchRetainedSession(sessionId, server).whenComplete((session, error) -> server.execute(() -> {
             if (error != null) {
+                broadcastLaunchProgress(server, sessionId, "Relaunching " + sessionId, "Failed", error.getMessage(), 100, true);
                 player.sendMessage(Text.literal("Failed to relaunch session " + sessionId + ": " + error.getMessage()).formatted(Formatting.RED), false);
                 sendSessionList(server, player);
                 return;
             }
 
+            broadcastLaunchProgress(server, session, "Transferring players", "Moving players to the session server", 100, true);
             manager.transferAssignedPlayers(server, session);
             player.sendMessage(Text.literal("Relaunched session " + session.getSessionId() + "."), false);
             sendSessionList(server, player);
         }));
+    }
+
+    public static void broadcastLaunchProgress(MinecraftServer server, GameSession session, String stage, String detail, int progress, boolean done) {
+        String title = session.getGameType().getDisplayName() + " " + session.getSessionId();
+        server.execute(() -> {
+            Set<UUID> recipients = new LinkedHashSet<>();
+            for (SessionGroup group : session.snapshotGroups()) {
+                recipients.addAll(group.getPlayerUuids());
+            }
+            for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                if (SessionPermissions.canManageSessions(online)) {
+                    recipients.add(online.getUuid());
+                }
+            }
+            sendLaunchProgress(server, recipients, session.getSessionId(), title, stage, detail, progress, done);
+        });
+    }
+
+    private static void broadcastLaunchProgress(MinecraftServer server, String sessionId, String title, String stage, String detail, int progress, boolean done) {
+        server.execute(() -> {
+            Set<UUID> recipients = new LinkedHashSet<>();
+            for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                if (SessionPermissions.canManageSessions(online)) {
+                    recipients.add(online.getUuid());
+                }
+            }
+            sendLaunchProgress(server, recipients, sessionId, title, stage, detail, progress, done);
+        });
+    }
+
+    private static void sendLaunchProgress(MinecraftServer server, Set<UUID> recipients, String sessionId, String title, String stage, String detail, int progress, boolean done) {
+        NetworkConstants.LaunchProgressPayload payload = new NetworkConstants.LaunchProgressPayload(sessionId, title, stage, detail == null ? "" : detail, Math.clamp(progress, 0, 100), done);
+        Text message = Text.literal(title + ": " + stage).formatted(done ? Formatting.GREEN : Formatting.YELLOW);
+        for (UUID recipient : recipients) {
+            ServerPlayerEntity target = server.getPlayerManager().getPlayer(recipient);
+            if (target == null) {
+                continue;
+            }
+            ServerPlayNetworking.send(target, payload);
+            if (progress <= 10 || done) {
+                target.sendMessage(message, false);
+            }
+        }
     }
 
     private static void handleCleanupPlayer(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CleanupPlayerPayload payload) {

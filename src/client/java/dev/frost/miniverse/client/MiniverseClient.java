@@ -2,6 +2,7 @@ package dev.frost.miniverse.client;
 
 import dev.frost.miniverse.client.freeze.ClientFreezeHandler;
 import dev.frost.miniverse.client.freeze.ClientFreezeState;
+import dev.frost.miniverse.client.gui.SessionLaunchStatus;
 import dev.frost.miniverse.client.gui.SessionScreen;
 import dev.frost.miniverse.client.protection.ProtectionOverlayClient;
 import dev.frost.miniverse.client.transition.TransitionOverlay;
@@ -30,6 +31,7 @@ public class MiniverseClient implements ClientModInitializer {
 		ClientFreezeHandler.register();
 		TransitionOverlay.register();
 		ProtectionOverlayClient.register();
+		SessionLaunchStatus.register();
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.miniverse.open_gui",
@@ -65,6 +67,7 @@ public class MiniverseClient implements ClientModInitializer {
 
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientFreezeState.setFrozen(false);
+			SessionLaunchStatus.clear();
 			ProtectionOverlayClient.clearAll();
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> sendConnectionHost(client));

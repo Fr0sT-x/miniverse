@@ -14,6 +14,7 @@ public final class NetworkConstants {
 
     public static final CustomPayload.Id<RequestSessionsPayload> REQUEST_SESSIONS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_request"));
     public static final CustomPayload.Id<SessionListPayload> SESSION_LIST_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_list"));
+    public static final CustomPayload.Id<LaunchProgressPayload> LAUNCH_PROGRESS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "launch_progress"));
     public static final CustomPayload.Id<CreateSessionPayload> CREATE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_create"));
     public static final CustomPayload.Id<LaunchSessionPayload> LAUNCH_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_launch"));
     public static final CustomPayload.Id<StopSessionPayload> STOP_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_stop"));
@@ -59,6 +60,7 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(TRANSITION_READY_ID, TransitionReadyPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CLIENT_MATCH_READY_ID, ClientMatchReadyPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SESSION_LIST_ID, SessionListPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(LAUNCH_PROGRESS_ID, LaunchProgressPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(FREEZE_STATE_ID, FreezeStatePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(TRANSITION_START_ID, TransitionStartPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MATCH_INTRO_ID, MatchIntroPayload.CODEC);
@@ -94,6 +96,29 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return SESSION_LIST_ID;
+        }
+    }
+
+    public record LaunchProgressPayload(String sessionId, String title, String stage, String detail, int progress, boolean done) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, LaunchProgressPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            LaunchProgressPayload::sessionId,
+            PacketCodecs.STRING,
+            LaunchProgressPayload::title,
+            PacketCodecs.STRING,
+            LaunchProgressPayload::stage,
+            PacketCodecs.STRING,
+            LaunchProgressPayload::detail,
+            PacketCodecs.INTEGER,
+            LaunchProgressPayload::progress,
+            PacketCodecs.BOOL,
+            LaunchProgressPayload::done,
+            LaunchProgressPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return LAUNCH_PROGRESS_ID;
         }
     }
 

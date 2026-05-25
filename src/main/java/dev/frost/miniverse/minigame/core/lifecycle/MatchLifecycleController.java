@@ -74,7 +74,6 @@ public final class MatchLifecycleController {
         this.sequence++;
         this.snapshotParticipants();
         runtime.setState(GameState.STARTING);
-        ChatRouter.sendTeamChatNotice(this.participants());
 
         if (!this.options.freezeEnabled() || this.options.freezeSeconds() <= 0) {
             this.startRunning();

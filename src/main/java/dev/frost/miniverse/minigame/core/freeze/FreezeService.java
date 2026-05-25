@@ -53,7 +53,7 @@ public final class FreezeService {
         this.reasonsByPlayer.clear();
     }
 
-    private synchronized boolean isFrozen(ServerPlayerEntity player) {
+    public synchronized boolean isFrozen(ServerPlayerEntity player) {
         return player != null && this.reasonsByPlayer.containsKey(player.getUuid());
     }
 

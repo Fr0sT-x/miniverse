@@ -4,6 +4,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import dev.frost.miniverse.minigame.core.freeze.FreezeService;
+import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import org.jetbrains.annotations.Nullable;
@@ -86,10 +87,32 @@ public class MinigameManager {
     }
 
     public void tickRuntimeClock(MinecraftServer server) {
-        if (this.runtime != null) {
+        if (this.runtime != null && this.runtime.state() != GameState.PAUSED) {
             this.runtime.bindServer(server);
             this.runtime.context().clock().tick();
         }
+    }
+
+    public boolean pauseActiveGame() {
+        if (this.runtime == null || !this.runtime.pause()) {
+            return false;
+        }
+        for (ServerPlayerEntity player : this.runtime.context().liveParticipants()) {
+            FreezeService.getInstance().freeze(player, FreezeReason.ADMIN_PAUSE);
+        }
+        MinigameSessionStore.save(this.runtime);
+        return true;
+    }
+
+    public boolean resumeActiveGame() {
+        if (this.runtime == null || !this.runtime.resume()) {
+            return false;
+        }
+        for (ServerPlayerEntity player : this.runtime.context().liveParticipants()) {
+            FreezeService.getInstance().unfreeze(player, FreezeReason.ADMIN_PAUSE);
+        }
+        MinigameSessionStore.save(this.runtime);
+        return true;
     }
 
     /**

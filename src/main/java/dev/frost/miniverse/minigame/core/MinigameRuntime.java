@@ -7,6 +7,7 @@ public final class MinigameRuntime {
     private final Minigame minigame;
     private final MinigameContext context;
     private GameState state;
+    private GameState stateBeforePause;
 
     public MinigameRuntime(Minigame minigame, @Nullable MinecraftServer server) {
         this.minigame = minigame;
@@ -45,6 +46,31 @@ public final class MinigameRuntime {
     public void setState(GameState state) {
         this.state = state;
         this.minigame.setState(state);
+    }
+
+    public boolean pause() {
+        if (this.state == GameState.PAUSED || this.state == null || this.state.isTerminal()) {
+            return false;
+        }
+        this.stateBeforePause = this.state;
+        this.setState(GameState.PAUSED);
+        if (this.minigame instanceof PauseAwareMinigame pauseAware) {
+            pauseAware.onPause(this.stateBeforePause);
+        }
+        return true;
+    }
+
+    public boolean resume() {
+        if (this.state != GameState.PAUSED) {
+            return false;
+        }
+        GameState resumedState = this.stateBeforePause == null ? GameState.RUNNING : this.stateBeforePause;
+        this.stateBeforePause = null;
+        this.setState(resumedState);
+        if (this.minigame instanceof PauseAwareMinigame pauseAware) {
+            pauseAware.onResume(resumedState);
+        }
+        return true;
     }
 
     public void stop() {

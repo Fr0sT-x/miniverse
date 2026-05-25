@@ -4,7 +4,10 @@ import dev.frost.miniverse.chat.ChatRouter;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
+import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
+import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
+import dev.frost.miniverse.minigame.core.freeze.FreezeService;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
@@ -68,6 +71,9 @@ public final class MinigameEventRouter {
         MatchLifecycleController.getInstance().tick(server);
         SpectatorService.getInstance().tick(server);
         ProtectedItemService.getInstance().tick(server);
+        if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
+            return;
+        }
         Minigame active = activeMinigame();
         if (active instanceof ServerTickAware tickAware) {
             tickAware.onServerTick(server);
@@ -77,6 +83,10 @@ public final class MinigameEventRouter {
     private static TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
         if (!(world instanceof ServerWorld) || !(player instanceof ServerPlayerEntity serverPlayer)) {
             return TypedActionResult.pass(player.getStackInHand(hand));
+        }
+
+        if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
+            return TypedActionResult.fail(player.getStackInHand(hand));
         }
 
         Minigame active = activeMinigame();
@@ -91,6 +101,10 @@ public final class MinigameEventRouter {
     private static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
         if (!(entity instanceof ServerPlayerEntity player)) {
             return true;
+        }
+
+        if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
+            return false;
         }
 
         Minigame active = activeMinigame();
@@ -116,6 +130,10 @@ public final class MinigameEventRouter {
             joinAware.onPlayerJoin(handler.player, server);
         }
         MatchLifecycleController.getInstance().onParticipantJoin(handler.player);
+        if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED
+            && MinigameManager.getInstance().isParticipant(handler.player)) {
+            FreezeService.getInstance().freeze(handler.player, FreezeReason.ADMIN_PAUSE);
+        }
         SpectatorService.getInstance().onPlayerJoin(handler.player);
         ChatRouter.notifyPlayerIfMatchActive(handler.player);
     }

@@ -1,12 +1,18 @@
 package dev.frost.miniverse.client.gui;
 
+import dev.frost.miniverse.client.gui.ui.UiAnimation;
+import dev.frost.miniverse.client.gui.ui.UiLayout;
+import dev.frost.miniverse.client.gui.ui.UiPrimitives;
+import dev.frost.miniverse.client.gui.ui.UiRenderer;
+import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.workspace.AppearanceWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.ManhuntWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.WorkspaceView;
 import dev.frost.miniverse.common.NetworkConstants;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
@@ -14,21 +20,16 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 
 public class SessionScreen extends Screen {
-    private static final int GRID_COLUMNS = 2;
-    private static final int PANEL_PADDING = 16;
-    private static final int PANEL_MAX_WIDTH = 520;
-    private static final int GRID_START_OFFSET = 96;
-    private static final int GRID_ROW_GAP = 10;
-    private static final int CARD_HEIGHT = 58;
-    private static final int FOOTER_TOP_GAP = 16;
-    private static final int FOOTER_BUTTON_HEIGHT = 20;
-    private static final int SETTINGS_BUTTON_WIDTH = 92;
-    private static final int CLOSE_BUTTON_WIDTH = 68;
+    private static final int CARD_HEIGHT = 84;
+    private static final int CARD_GAP = 12;
+    private static final int TOOLBAR_BUTTON_WIDTH = 84;
     private static final Map<String, Consumer<SessionScreen>> CUSTOM_SETUP_SCREENS = Map.of(
         "manhunt", SessionScreen::openManhunt,
         "speedrun", SessionScreen::openSpeedrun,
@@ -39,11 +40,23 @@ public class SessionScreen extends Screen {
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final List<MinigameEntry> minigameEntries = new ArrayList<>();
+    private final Map<String, UiAnimation.Value> cardHover = new HashMap<>();
+    private final UiPrimitives.UiSidebar sidebar = new UiPrimitives.UiSidebar();
+    private final UiPrimitives.UiButton settingsButton = new UiPrimitives.UiButton("Settings", this::openSettingsPlaceholder).accent(UiTheme.ACCENT_BLUE);
+    private final UiPrimitives.UiButton closeButton = new UiPrimitives.UiButton("Close", this::close).accent(UiTheme.ACCENT_RED);
     private TextFieldWidget searchField;
+    private WorkspaceView workspaceView;
     private String statusMessage = "";
+    private long openedAt;
 
     public SessionScreen() {
-        super(Text.literal("Minigame Selector"));
+        super(Text.literal("Miniverse"));
+        this.sidebar
+            .item(">", "Gamemodes", () -> this.statusMessage = "Choose a gamemode card to configure a session.")
+            .item("#", "Sessions", () -> this.statusMessage = "Session management is available from Settings.")
+            .item("~", "Appearance", this::openAppearance)
+            .item("*", "Settings", this::openSettingsPlaceholder)
+            .item("+", "Cosmetics", () -> this.statusMessage = "Cosmetics workspace reserved for future expansion.");
     }
 
     public static void onServerSnapshot(NbtCompound root) {
@@ -136,132 +149,303 @@ public class SessionScreen extends Screen {
         );
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof SessionScreen sessionScreen) {
-            sessionScreen.rebuildWidgets();
+            sessionScreen.rebuildEntries();
+            if (sessionScreen.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
+                manhuntWorkspaceView.refreshRoster();
+            }
         }
     }
 
     private static int getIntOrDefault(NbtCompound nbt, String key, int fallback) {
-        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
-            ? nbt.getInt(key)
-            : fallback;
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE) ? nbt.getInt(key) : fallback;
     }
 
     private static long getLongOrDefault(NbtCompound nbt, String key, long fallback) {
-        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
-            ? nbt.getLong(key)
-            : fallback;
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE) ? nbt.getLong(key) : fallback;
     }
 
     private static boolean getBooleanOrDefault(NbtCompound nbt, String key, boolean fallback) {
-        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE)
-            ? nbt.getBoolean(key)
-            : fallback;
+        return nbt != null && nbt.contains(key, NbtElement.NUMBER_TYPE) ? nbt.getBoolean(key) : fallback;
     }
 
     private static String getStringOrDefault(NbtCompound nbt, String key, String fallback) {
-        return nbt != null && nbt.contains(key, NbtElement.STRING_TYPE)
-            ? nbt.getString(key)
-            : fallback;
+        return nbt != null && nbt.contains(key, NbtElement.STRING_TYPE) ? nbt.getString(key) : fallback;
     }
 
     private static NbtCompound getCompoundOrEmpty(NbtCompound nbt, String key) {
-        return nbt != null && nbt.contains(key, NbtElement.COMPOUND_TYPE)
-            ? nbt.getCompound(key)
-            : new NbtCompound();
+        return nbt != null && nbt.contains(key, NbtElement.COMPOUND_TYPE) ? nbt.getCompound(key) : new NbtCompound();
     }
 
     @Override
     protected void init() {
         super.init();
-        this.rebuildWidgets();
+        this.openedAt = System.currentTimeMillis();
+        this.rebuildEntries();
+        this.rebuildWorkspaceChildren();
         this.requestSnapshot();
     }
 
-    private void rebuildWidgets() {
-        this.clearChildren();
+    private void rebuildEntries() {
         this.minigameEntries.clear();
         this.minigameEntries.addAll(this.createMinigameEntries());
+    }
 
-        Layout layout = this.createLayout(this.minigameEntries.size());
+    public <T extends net.minecraft.client.gui.Element & net.minecraft.client.gui.Drawable & net.minecraft.client.gui.Selectable> T addWorkspaceChild(T child) {
+        return this.addDrawableChild(child);
+    }
 
-        this.searchField = new TextFieldWidget(this.textRenderer, layout.searchX(), layout.searchY(), layout.searchWidth(), 20, Text.literal("search"));
-        this.searchField.setMaxLength(64);
-        this.searchField.setText("");
-        this.addDrawableChild(this.searchField);
+    public void openSelectorWorkspace() {
+        this.workspaceView = null;
+        this.statusMessage = "";
+        this.rebuildWorkspaceChildren();
+    }
 
-        int totalSlots = layout.gridRows() * GRID_COLUMNS;
-        for (int index = 0; index < totalSlots; index++) {
-            int column = index % GRID_COLUMNS;
-            int row = index / GRID_COLUMNS;
-            int x = layout.gridX() + column * (layout.cardWidth() + GRID_ROW_GAP);
-            int y = layout.gridY() + row * (CARD_HEIGHT + GRID_ROW_GAP);
+    private void openWorkspaceView(WorkspaceView view) {
+        this.workspaceView = view;
+        this.statusMessage = "";
+        this.rebuildWorkspaceChildren();
+    }
 
-            if (index < this.minigameEntries.size()) {
-                MinigameEntry entry = this.minigameEntries.get(index);
-                ButtonWidget button = ButtonWidget.builder(entry.buttonLabel(), unused -> entry.activate(this))
-                    .dimensions(x, y, layout.cardWidth(), CARD_HEIGHT)
-                    .build();
-                button.active = entry.enabled();
-                button.setTooltip(Tooltip.of(Text.literal(entry.description())));
-                this.addDrawableChild(button);
-            } else {
-                ButtonWidget button = ButtonWidget.builder(Text.literal("Coming Soon"), unused -> { })
-                    .dimensions(x, y, layout.cardWidth(), CARD_HEIGHT)
-                    .build();
-                button.active = false;
-                button.setTooltip(Tooltip.of(Text.literal("Reserved for future gamemodes.")));
-                this.addDrawableChild(button);
-            }
+    private void rebuildWorkspaceChildren() {
+        this.clearChildren();
+        Layout layout = this.createLayout();
+        this.sidebar.setBounds(layout.sidebar());
+        this.settingsButton.setBounds(new UiLayout.Rect(layout.toolbar().x() + layout.toolbar().width() - TOOLBAR_BUTTON_WIDTH * 2 - 8, layout.toolbar().y() + 6, TOOLBAR_BUTTON_WIDTH, UiTheme.BUTTON_HEIGHT));
+        this.closeButton.setBounds(new UiLayout.Rect(layout.toolbar().x() + layout.toolbar().width() - TOOLBAR_BUTTON_WIDTH, layout.toolbar().y() + 6, TOOLBAR_BUTTON_WIDTH, UiTheme.BUTTON_HEIGHT));
+        if (this.workspaceView == null) {
+            this.searchField = new TextFieldWidget(this.textRenderer, layout.search().x(), layout.search().y(), layout.search().width(), layout.search().height(), Text.literal("Search gamemodes"));
+            this.searchField.setMaxLength(64);
+            this.addDrawableChild(this.searchField);
+        } else {
+            this.searchField = null;
+            this.workspaceView.init(this, layout.content());
         }
+    }
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("⚙ Settings"), unused -> this.openSettingsPlaceholder())
-            .dimensions(layout.settingsButtonX(), layout.footerY(), SETTINGS_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT)
-            .build());
-
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("✕ Close"), unused -> this.close())
-            .dimensions(layout.closeButtonX(), layout.footerY(), CLOSE_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT)
-            .build());
+    @Override
+    public void tick() {
+        super.tick();
+        if (this.workspaceView != null) {
+            this.workspaceView.tick();
+        }
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        Layout layout = this.createLayout(this.minigameEntries.size());
+        Layout layout = this.createLayout();
+        float time = (System.currentTimeMillis() - this.openedAt) / 1000.0F;
+        UiRenderer.workspace(context, this.width, this.height, time);
 
-        this.drawShell(context, layout);
+        this.sidebar.setBounds(layout.sidebar());
+        if (this.workspaceView == null) {
+            this.sidebar.render(context, this.textRenderer, mouseX, mouseY, delta);
+        } else {
+            this.drawWorkspaceNavigation(context, layout.sidebar());
+        }
+        UiRenderer.panel(context, layout.toolbar().x(), layout.toolbar().y(), layout.toolbar().width(), layout.toolbar().height(), UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
+        String toolbarTitle = this.workspaceView == null ? "Miniverse Multiplayer Platform" : this.workspaceView.title();
+        String toolbarSubtitle = this.workspaceView == null ? "Gamemode studio" : this.workspaceView.subtitle();
+        context.drawText(this.textRenderer, Text.literal(toolbarTitle), layout.toolbar().x() + 12, layout.toolbar().y() + 8, UiTheme.TEXT, false);
+        context.drawText(this.textRenderer, Text.literal(toolbarSubtitle), layout.toolbar().x() + 12, layout.toolbar().y() + 20, UiTheme.TEXT_DIM, false);
 
-        int titleCenterX = layout.panelX() + layout.panelWidth() / 2;
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, titleCenterX, layout.panelY() + 12, 0xFFFFFF);
-        context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("Choose a gamemode to configure it before starting a session."), titleCenterX, layout.panelY() + 26, 0xB0B0B0);
+        if (this.workspaceView == null) {
+            UiRenderer.panel(context, layout.detail().x(), layout.detail().y(), layout.detail().width(), layout.detail().height(), UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
+            this.drawDetailPanel(context, layout.detail());
 
-        context.drawText(this.textRenderer, Text.literal("Search"), layout.searchX(), layout.searchY() - 10, 0xFFE0E0E0, false);
-        if (!this.statusMessage.isEmpty()) {
-            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(this.statusMessage), titleCenterX, layout.footerY() + FOOTER_BUTTON_HEIGHT + 10, 0xA0FFA0);
+            context.drawText(this.textRenderer, Text.literal("Search"), layout.search().x(), layout.search().y() - 11, UiTheme.TEXT_MUTED, false);
+        } else {
+            this.workspaceView.renderBackground(context, this.textRenderer, layout.content(), mouseX, mouseY, delta);
+        }
+        super.render(context, mouseX, mouseY, delta);
+        if (this.workspaceView == null && this.searchField != null && this.searchField.getText().isEmpty()) {
+            context.drawText(this.textRenderer, Text.literal("Filter gamemodes..."), layout.search().x() + 6, layout.search().y() + 6, UiTheme.TEXT_DIM, false);
         }
 
-        super.render(context, mouseX, mouseY, delta);
-
-        if (this.searchField != null && this.searchField.getText().isEmpty()) {
-            context.drawText(this.textRenderer, Text.literal("Search..."), layout.searchX() + 6, layout.searchY() + 6, 0xFF808080, false);
+        this.settingsButton.render(context, this.textRenderer, mouseX, mouseY, delta);
+        this.closeButton.render(context, this.textRenderer, mouseX, mouseY, delta);
+        if (this.workspaceView == null) {
+            this.drawGamemodeCards(context, layout.cards(), mouseX, mouseY);
+        } else {
+            this.workspaceView.renderForeground(context, this.textRenderer, layout.content(), mouseX, mouseY, delta);
+        }
+        if (this.workspaceView == null && !this.statusMessage.isEmpty()) {
+            context.drawText(this.textRenderer, Text.literal(this.statusMessage), layout.cards().x(), layout.cards().y() + layout.cards().height() + 10, UiTheme.SUCCESS, false);
         }
     }
 
-    private void drawShell(DrawContext context, Layout layout) {
-        int x = layout.panelX();
-        int y = layout.panelY();
-        int width = layout.panelWidth();
-        int height = layout.panelHeight();
+    private void drawWorkspaceNavigation(DrawContext context, UiLayout.Rect sidebar) {
+        UiRenderer.panel(context, sidebar.x(), sidebar.y(), sidebar.width(), sidebar.height(), UiTheme.SIDEBAR, UiTheme.BORDER_SUBTLE);
+        context.drawText(this.textRenderer, Text.literal("MINIVERSE"), sidebar.x() + 12, sidebar.y() + 12, UiTheme.TEXT, false);
+        context.drawText(this.textRenderer, Text.literal("Setup Modules"), sidebar.x() + 12, sidebar.y() + 24, UiTheme.TEXT_DIM, false);
+        this.drawNavItem(context, sidebar, sidebar.y() + 50, "<", "Gamemodes", false);
+        this.drawNavItem(context, sidebar, sidebar.y() + sidebar.height() - 40, "~", "Appearance", this.workspaceView instanceof AppearanceWorkspaceView);
+        if (this.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
+            int y = sidebar.y() + 84;
+            for (ManhuntWorkspaceView.Module module : ManhuntWorkspaceView.Module.values()) {
+                this.drawNavItem(context, sidebar, y, module.icon(), module.label(), manhuntWorkspaceView.activeModule() == module);
+                y += 28;
+            }
+        }
+    }
 
-        context.fill(x, y, x + width, y + height, 0xD0121212);
-        context.fill(x + 1, y + 1, x + width - 1, y + 32, 0xCC1F1F1F);
-        context.fill(x + 1, y + 33, x + width - 1, y + height - 1, 0xAA181818);
-        context.fill(x, y, x + width, y + 1, 0x66FFFFFF);
-        context.fill(x, y + height - 1, x + width, y + height, 0x66FFFFFF);
-        context.fill(x, y, x + 1, y + height, 0x66FFFFFF);
-        context.fill(x + width - 1, y, x + width, y + height, 0x66FFFFFF);
+    private void drawNavItem(DrawContext context, UiLayout.Rect sidebar, int y, String icon, String label, boolean selected) {
+        context.fill(sidebar.x() + 7, y, sidebar.x() + sidebar.width() - 7, y + 24, selected ? 0x442F4154 : 0x00000000);
+        if (selected) {
+            context.fill(sidebar.x() + 7, y, sidebar.x() + 10, y + 24, UiTheme.ACCENT_RED);
+        }
+        context.drawText(this.textRenderer, Text.literal(icon), sidebar.x() + 16, y + 8, selected ? UiTheme.ACCENT_RED : UiTheme.ACCENT, false);
+        context.drawText(this.textRenderer, Text.literal(label), sidebar.x() + 34, y + 8, selected ? UiTheme.TEXT : UiTheme.TEXT_MUTED, false);
+    }
 
-        int gridTop = layout.gridY() - 8;
-        int gridBottom = layout.footerY() - 8;
-        context.fill(x + PANEL_PADDING - 4, gridTop, x + width - PANEL_PADDING + 4, gridBottom, 0x1AFFFFFF);
+    private void drawGamemodeCards(DrawContext context, UiLayout.Rect area, int mouseX, int mouseY) {
+        List<MinigameEntry> entries = this.filteredEntries();
+        int columns = this.cardColumns(area.width());
+        for (int i = 0; i < entries.size(); i++) {
+            MinigameEntry entry = entries.get(i);
+            UiLayout.Rect card = UiLayout.grid(area, i, columns, CARD_HEIGHT, CARD_GAP);
+            UiAnimation.Value hoverValue = this.cardHover.computeIfAbsent(entry.id(), ignored -> new UiAnimation.Value(0.0F));
+            hoverValue.animateTo(card.contains(mouseX, mouseY) && entry.enabled() ? 1.0F : 0.0F, UiTheme.HOVER_MS);
+            float hover = hoverValue.get();
+            int accent = this.accentFor(entry.id(), i);
+            UiRenderer.card(context, card.x(), card.y(), card.width(), card.height(), hover, accent);
+            context.drawText(this.textRenderer, Text.literal(entry.icon()), card.x() + 14, card.y() + 13, accent, false);
+            context.drawText(this.textRenderer, entry.buttonLabel(), card.x() + 36, card.y() + 12, entry.enabled() ? UiTheme.TEXT : UiTheme.TEXT_DIM, false);
+            List<String> descriptionLines = this.wrapText(entry.description(), Math.max(24, card.width() - 50), 3);
+            int descriptionY = card.y() + 28;
+            for (String line : descriptionLines) {
+                context.drawText(this.textRenderer, Text.literal(line), card.x() + 36, descriptionY, UiTheme.TEXT_MUTED, false);
+                descriptionY += 11;
+            }
+            context.drawText(this.textRenderer, Text.literal(displayTopology(entry.id())), card.x() + 36, card.y() + 65, UiTheme.TEXT_DIM, false);
+            if (!entry.enabled()) {
+                context.drawText(this.textRenderer, Text.literal("Unavailable"), card.x() + card.width() - 74, card.y() + 55, UiTheme.WARNING, false);
+            }
+        }
+        if (entries.isEmpty()) {
+            UiRenderer.panel(context, area.x(), area.y(), area.width(), 64, UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("No gamemodes match the current search."), area.x() + area.width() / 2, area.y() + 26, UiTheme.TEXT_MUTED);
+        }
+    }
+
+    private void drawDetailPanel(DrawContext context, UiLayout.Rect detail) {
+        context.drawText(this.textRenderer, Text.literal("Live Workspace"), detail.x() + 12, detail.y() + 12, UiTheme.TEXT, false);
+        UiRenderer.divider(context, detail.x() + 12, detail.y() + 28, detail.width() - 24);
+        int y = detail.y() + 42;
+        drawMetric(context, detail.x() + 14, y, "Players Online", Integer.toString(SessionSnapshotData.roster().size()), UiTheme.ACCENT_GREEN);
+        y += 38;
+        drawMetric(context, detail.x() + 14, y, "Registered Modes", Integer.toString(SessionSnapshotData.games().size()), UiTheme.ACCENT_BLUE);
+        y += 38;
+        drawMetric(context, detail.x() + 14, y, "Tracked Sessions", Integer.toString(SessionSnapshotData.sessions().size()), UiTheme.ACCENT);
+        y += 48;
+        context.drawText(this.textRenderer, Text.literal("Active Players"), detail.x() + 14, y, UiTheme.TEXT_MUTED, false);
+        y += 14;
+        int shown = 0;
+        for (SessionSnapshotData.RosterEntry player : SessionSnapshotData.roster()) {
+            if (shown >= 6) {
+                context.drawText(this.textRenderer, Text.literal("+" + (SessionSnapshotData.roster().size() - shown) + " more"), detail.x() + 14, y, UiTheme.TEXT_DIM, false);
+                break;
+            }
+            context.fill(detail.x() + 14, y + 2, detail.x() + 18, y + 6, UiTheme.ACCENT_GREEN);
+            context.drawText(this.textRenderer, Text.literal(player.name()), detail.x() + 24, y, UiTheme.TEXT_MUTED, false);
+            y += 12;
+            shown++;
+        }
+    }
+
+    private void drawMetric(DrawContext context, int x, int y, String label, String value, int accent) {
+        context.fill(x, y, x + 4, y + 28, accent);
+        context.drawText(this.textRenderer, Text.literal(value), x + 12, y, UiTheme.TEXT, false);
+        context.drawText(this.textRenderer, Text.literal(label), x + 12, y + 13, UiTheme.TEXT_DIM, false);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (this.workspaceView != null) {
+            Layout layout = this.createLayout();
+            if (button == 0 && this.handleWorkspaceNavigationClick(layout.sidebar(), mouseX, mouseY)) {
+                return true;
+            }
+            if (this.settingsButton.mouseClicked(mouseX, mouseY, button) || this.closeButton.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+            if (this.workspaceView.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+        if (this.sidebar.mouseClicked(mouseX, mouseY, button)
+            || this.settingsButton.mouseClicked(mouseX, mouseY, button)
+            || this.closeButton.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        Layout layout = this.createLayout();
+        List<MinigameEntry> entries = this.filteredEntries();
+        int columns = this.cardColumns(layout.cards().width());
+        for (int i = 0; i < entries.size(); i++) {
+            UiLayout.Rect card = UiLayout.grid(layout.cards(), i, columns, CARD_HEIGHT, CARD_GAP);
+            if (button == 0 && card.contains(mouseX, mouseY)) {
+                MinigameEntry entry = entries.get(i);
+                if (entry.enabled()) {
+                    entry.activate(this);
+                } else {
+                    this.statusMessage = "That gamemode is not available in this client build.";
+                }
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private boolean handleWorkspaceNavigationClick(UiLayout.Rect sidebar, double mouseX, double mouseY) {
+        if (mouseX < sidebar.x() || mouseX > sidebar.x() + sidebar.width()) {
+            return false;
+        }
+        int y = sidebar.y() + 50;
+        if (mouseY >= y && mouseY <= y + 24) {
+            this.openSelectorWorkspace();
+            return true;
+        }
+        int appearanceY = sidebar.y() + sidebar.height() - 40;
+        if (mouseY >= appearanceY && mouseY <= appearanceY + 24) {
+            this.openAppearance();
+            return true;
+        }
+        if (this.workspaceView instanceof ManhuntWorkspaceView manhuntWorkspaceView) {
+            y = sidebar.y() + 84;
+            for (ManhuntWorkspaceView.Module module : ManhuntWorkspaceView.Module.values()) {
+                if (mouseY >= y && mouseY <= y + 24) {
+                    manhuntWorkspaceView.setActiveModule(module);
+                    this.rebuildWorkspaceChildren();
+                    return true;
+                }
+                y += 28;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (this.workspaceView != null && this.workspaceView.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) {
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (this.workspaceView != null && this.workspaceView.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.workspaceView != null && this.workspaceView.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     private List<MinigameEntry> createMinigameEntries() {
@@ -282,35 +466,121 @@ public class SessionScreen extends Screen {
         }
         return entries;
     }
-    private Layout createLayout(int entryCount) {
-        int panelWidth = Math.min(PANEL_MAX_WIDTH, this.width - 24);
-        int gridRows = Math.max(2, (entryCount + GRID_COLUMNS - 1) / GRID_COLUMNS);
-        int cardWidth = (panelWidth - (PANEL_PADDING * 2) - GRID_ROW_GAP) / GRID_COLUMNS;
-        int gridHeight = gridRows * CARD_HEIGHT + Math.max(0, gridRows - 1) * GRID_ROW_GAP;
-        int panelHeight = GRID_START_OFFSET + gridHeight + FOOTER_TOP_GAP + FOOTER_BUTTON_HEIGHT + PANEL_PADDING;
-        int panelX = (this.width - panelWidth) / 2;
-        int panelY = Math.max(12, (this.height - panelHeight) / 2);
 
-        return new Layout(
-            panelX,
-            panelY,
-            panelWidth,
-            panelHeight,
-            panelX + PANEL_PADDING,
-            panelY + 58,
-            panelWidth - (PANEL_PADDING * 2),
-            panelX + PANEL_PADDING,
-            panelY + GRID_START_OFFSET,
-            cardWidth,
-            gridRows,
-            panelY + GRID_START_OFFSET + gridHeight + FOOTER_TOP_GAP,
-            panelX + PANEL_PADDING,
-            panelX + panelWidth - PANEL_PADDING - CLOSE_BUTTON_WIDTH
-        );
+    private List<MinigameEntry> filteredEntries() {
+        String query = this.searchField == null ? "" : this.searchField.getText().trim().toLowerCase();
+        if (query.isEmpty()) {
+            return this.minigameEntries;
+        }
+        List<MinigameEntry> filtered = new ArrayList<>();
+        for (MinigameEntry entry : this.minigameEntries) {
+            if (entry.name().toLowerCase().contains(query)
+                || entry.description().toLowerCase().contains(query)
+                || entry.id().toLowerCase().contains(query)) {
+                filtered.add(entry);
+            }
+        }
+        return filtered;
+    }
+
+    private Layout createLayout() {
+        int margin = 12;
+        UiLayout.Rect sidebarRect = new UiLayout.Rect(margin, margin, UiTheme.SIDEBAR_WIDTH, this.height - margin * 2);
+        int workspaceX = sidebarRect.x() + sidebarRect.width() + UiTheme.GAP;
+        int workspaceWidth = Math.max(1, this.width - workspaceX - margin);
+        UiLayout.Rect toolbar = new UiLayout.Rect(workspaceX, margin, workspaceWidth, UiTheme.TOOLBAR_HEIGHT);
+        int detailWidth = Math.min(230, Math.max(180, workspaceWidth / 4));
+        UiLayout.Rect detail = new UiLayout.Rect(workspaceX + workspaceWidth - detailWidth, toolbar.y() + toolbar.height() + UiTheme.GAP, detailWidth, this.height - toolbar.height() - margin * 2 - UiTheme.GAP);
+        UiLayout.Rect search = new UiLayout.Rect(workspaceX, toolbar.y() + toolbar.height() + UiTheme.GAP + 14, Math.max(140, workspaceWidth - detailWidth - UiTheme.GAP), UiTheme.INPUT_HEIGHT);
+        UiLayout.Rect cards = new UiLayout.Rect(workspaceX, search.y() + search.height() + 18, Math.max(1, workspaceWidth - detailWidth - UiTheme.GAP), Math.max(1, this.height - search.y() - search.height() - 42));
+        UiLayout.Rect content = new UiLayout.Rect(workspaceX, toolbar.y() + toolbar.height() + UiTheme.GAP, workspaceWidth, Math.max(1, this.height - toolbar.y() - toolbar.height() - UiTheme.GAP - margin));
+        return new Layout(sidebarRect, toolbar, search, cards, detail, content);
+    }
+
+    private int cardColumns(int width) {
+        if (width >= 760) {
+            return 3;
+        }
+        if (width >= 470) {
+            return 2;
+        }
+        return 1;
+    }
+
+    private int accentFor(String id, int index) {
+        if ("manhunt".equals(id)) {
+            return UiTheme.ACCENT_RED;
+        }
+        if ("speedrun".equals(id)) {
+            return UiTheme.ACCENT_GREEN;
+        }
+        if ("bountyhunt".equals(id)) {
+            return UiTheme.ACCENT;
+        }
+        if ("resource_sprint".equals(id)) {
+            return UiTheme.ACCENT_BLUE;
+        }
+        return switch (index % 4) {
+            case 0 -> UiTheme.ACCENT_BLUE;
+            case 1 -> UiTheme.ACCENT_RED;
+            case 2 -> UiTheme.ACCENT_GREEN;
+            default -> UiTheme.ACCENT;
+        };
+    }
+
+    private List<String> wrapText(String text, int maxWidth, int maxLines) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isBlank() || maxWidth <= 0 || maxLines <= 0) {
+            return lines;
+        }
+
+        String[] words = text.trim().split("\\s+");
+        StringBuilder line = new StringBuilder();
+        for (String word : words) {
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (this.textRenderer.getWidth(candidate) <= maxWidth) {
+                line = new StringBuilder(candidate);
+                continue;
+            }
+
+            if (!line.isEmpty()) {
+                lines.add(line.toString());
+                if (lines.size() >= maxLines) {
+                    return lines;
+                }
+                line = new StringBuilder();
+            }
+
+            if (this.textRenderer.getWidth(word) <= maxWidth) {
+                line.append(word);
+            } else {
+                lines.add(this.textRenderer.trimToWidth(word, maxWidth));
+                if (lines.size() >= maxLines) {
+                    return lines;
+                }
+            }
+        }
+
+        if (!line.isEmpty() && lines.size() < maxLines) {
+            lines.add(line.toString());
+        }
+        return lines;
+    }
+
+    private static String displayTopology(String id) {
+        return switch (id.toLowerCase(Locale.ROOT)) {
+            case "speedrun" -> "Isolated worlds";
+            case "manhunt", "bountyhunt", "resource_sprint", "deathswap" -> "Shared arena";
+            default -> "Session ready";
+        };
     }
 
     private void openManhunt() {
-        this.client.setScreen(new ManhuntSetupScreen());
+        this.openWorkspaceView(new ManhuntWorkspaceView());
+    }
+
+    private void openAppearance() {
+        this.openWorkspaceView(new AppearanceWorkspaceView());
     }
 
     private void openSpeedrun() {
@@ -342,33 +612,12 @@ public class SessionScreen extends Screen {
             ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload("metadata"));
         }
     }
+
     @Override
     public boolean shouldCloseOnEsc() {
         return true;
     }
 
-    private record Layout(
-        int panelX,
-        int panelY,
-        int panelWidth,
-        int panelHeight,
-        int searchX,
-        int searchY,
-        int searchWidth,
-        int gridX,
-        int gridY,
-        int cardWidth,
-        int gridRows,
-        int footerY,
-        int settingsButtonX,
-        int closeButtonX
-    ) {
+    private record Layout(UiLayout.Rect sidebar, UiLayout.Rect toolbar, UiLayout.Rect search, UiLayout.Rect cards, UiLayout.Rect detail, UiLayout.Rect content) {
     }
 }
-
-
-
-
-
-
-

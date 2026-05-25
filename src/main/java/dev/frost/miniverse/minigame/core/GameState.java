@@ -27,6 +27,11 @@ public enum GameState {
     IN_PROGRESS,
 
     /**
+     * The game is temporarily paused by an administrator.
+     */
+    PAUSED,
+
+    /**
      * The game is ending or has ended.
      */
     ENDING,

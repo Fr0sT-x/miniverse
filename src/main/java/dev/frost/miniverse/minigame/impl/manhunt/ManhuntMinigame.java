@@ -1,11 +1,15 @@
 package dev.frost.miniverse.minigame.impl.manhunt;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.PersistentMinigame;
+import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.ItemUseAware;
@@ -28,7 +32,9 @@ import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamMembership;
 import dev.frost.miniverse.team.TeamRole;
+import dev.frost.miniverse.team.TeamSnapshot;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LodestoneTrackerComponent;
 import net.minecraft.entity.LivingEntity;
@@ -66,7 +72,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * In this game, Speedrunners try to reach the End while Hunters try to stop them.
  * If a Speedrunner dies, the Hunters win. Hunters can respawn upon death.
  */
-public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider {
+public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider, PauseAwareMinigame, PersistentMinigame {
     private static final String NAME = "Manhunt";
 
     private GameState state;
@@ -502,7 +508,6 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
         if (this.isParticipant(player)) {
-            this.removeParticipant(player);
             this.handlePlayerLeave(player);
         }
     }
@@ -958,8 +963,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
 
     private void pruneDisconnectedSpeedrunners() {
         for (UUID speedrunnerUuid : new ArrayList<>(this.aliveSpeedrunners)) {
-            ServerPlayerEntity speedrunner = this.getPlayerByUuid(speedrunnerUuid);
-            if (speedrunner == null || speedrunner.isDisconnected()) {
+            if (this.roleFor(speedrunnerUuid) != ManhuntRole.SPEEDRUNNER) {
                 this.aliveSpeedrunners.remove(speedrunnerUuid);
             }
         }
@@ -1052,20 +1056,10 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         if (role == ManhuntRole.HUNTER) {
             this.clearLeadEffects(player);
         }
-        this.teams.remove(playerUuid);
-
-        this.aliveSpeedrunners.remove(playerUuid);
-        this.deadSpeedrunners.remove(playerUuid);
-        this.hunterTrackingIndexes.remove(player.getUuid());
-        this.runnerTracking.remove(player.getUuid());
         this.huntersNotifiedMissingNether.remove(player.getUuid());
         this.huntersNotifiedEndPortalHint.remove(player.getUuid());
-        this.speedrunnerRespawns.removePlayer(player);
-        this.pendingHunterRespawns.remove(playerUuid);
-        this.eliminatedHunters.remove(playerUuid);
-        this.compassCooldownUntilTicks.remove(playerUuid);
 
-        if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive() && this.aliveSpeedrunners.isEmpty()) {
+        if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive() && this.getAliveSpeedrunnerCount() <= 0) {
             if (!MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(player.getUuid())) {
                 this.broadcastMessage(
                     Text.literal(player.getName().getString() + " (Speedrunner) left the game.").formatted(Formatting.RED)
@@ -1080,7 +1074,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         if (!this.state.isActive()) {
             return;
         }
-        if (!this.aliveSpeedrunners.isEmpty()) {
+        if (this.getAliveSpeedrunnerCount() > 0) {
             return;
         }
         this.broadcastMessage(Text.literal("Disconnect grace expired. Hunters win.").formatted(Formatting.RED));
@@ -1117,6 +1111,85 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
     public void applySettings(ManhuntSettings settings) {
         this.settings = settings == null ? ManhuntSettings.defaults() : settings;
         this.speedrunnerRespawns.setRespawnDelaySeconds(this.settings.speedrunnerRespawnDelaySeconds());
+    }
+
+    @Override
+    public void onPause(GameState previousState) {
+        this.broadcastMessage(Text.literal("Manhunt paused.").formatted(Formatting.YELLOW));
+    }
+
+    @Override
+    public void onResume(GameState resumedState) {
+        this.broadcastMessage(Text.literal("Manhunt resumed.").formatted(Formatting.GREEN));
+        if (resumedState == GameState.RUNNING && this.huntStarted && this.settings.huntersCompassEnabled()) {
+            this.updateHunterCompasses();
+        }
+    }
+
+    @Override
+    public JsonObject saveRuntimeState() {
+        JsonObject root = new JsonObject();
+        root.addProperty("state", this.state.name());
+        root.addProperty("leadTicksRemaining", this.leadTicksRemaining);
+        root.addProperty("huntStarted", this.huntStarted);
+        root.addProperty("tickCounter", this.tickCounter);
+        root.addProperty("gameTicks", this.gameTicks);
+
+        root.add("teams", this.writeTeams());
+        root.add("aliveSpeedrunners", writeUuidArray(this.aliveSpeedrunners));
+        root.add("deadSpeedrunners", writeUuidArray(this.deadSpeedrunners));
+        root.add("eliminatedHunters", writeUuidArray(this.eliminatedHunters));
+        root.add("hunterTrackingIndexes", writeUuidIntMap(this.hunterTrackingIndexes));
+        root.add("speedrunnerDeaths", writeUuidIntMap(this.speedrunnerDeaths));
+        root.add("hunterDeaths", writeUuidIntMap(this.hunterDeaths));
+        root.add("pendingHunterRespawns", writeUuidLongMap(this.pendingHunterRespawns));
+        root.add("compassCooldownUntilTicks", writeUuidLongMap(this.compassCooldownUntilTicks));
+        root.add("runnerTracking", this.writeRunnerTracking());
+        root.add("speedrunnerRespawns", this.speedrunnerRespawns.saveRuntimeState());
+        return root;
+    }
+
+    @Override
+    public void loadRuntimeState(JsonObject root) {
+        if (root == null) {
+            return;
+        }
+
+        this.teams.clear();
+        this.deadSpeedrunners.clear();
+        this.aliveSpeedrunners.clear();
+        this.hunterTrackingIndexes.clear();
+        this.runnerTracking.clear();
+        this.huntersNotifiedMissingNether.clear();
+        this.huntersNotifiedEndPortalHint.clear();
+        this.speedrunnerDeaths.clear();
+        this.hunterDeaths.clear();
+        this.pendingHunterRespawns.clear();
+        this.eliminatedHunters.clear();
+        this.compassCooldownUntilTicks.clear();
+
+        this.state = parseState(stringValue(root, "state", GameState.WAITING_FOR_PLAYERS.name()));
+        this.setRuntimeState(this.state);
+        this.leadTicksRemaining = intValue(root, "leadTicksRemaining", 0);
+        this.huntStarted = booleanValue(root, "huntStarted", false);
+        this.tickCounter = intValue(root, "tickCounter", 0);
+        this.gameTicks = longValue(root, "gameTicks", 0L);
+
+        this.readTeams(root);
+        this.aliveSpeedrunners.addAll(readUuidArray(root, "aliveSpeedrunners"));
+        this.deadSpeedrunners.addAll(readUuidArray(root, "deadSpeedrunners"));
+        this.eliminatedHunters.addAll(readUuidArray(root, "eliminatedHunters"));
+        this.hunterTrackingIndexes.putAll(readUuidIntMap(root, "hunterTrackingIndexes"));
+        this.speedrunnerDeaths.putAll(readUuidIntMap(root, "speedrunnerDeaths"));
+        this.hunterDeaths.putAll(readUuidIntMap(root, "hunterDeaths"));
+        this.pendingHunterRespawns.putAll(readUuidLongMap(root, "pendingHunterRespawns"));
+        this.compassCooldownUntilTicks.putAll(readUuidLongMap(root, "compassCooldownUntilTicks"));
+        this.readRunnerTracking(root);
+        if (root.has("speedrunnerRespawns") && root.get("speedrunnerRespawns").isJsonObject()) {
+            this.speedrunnerRespawns.loadRuntimeState(root.getAsJsonObject("speedrunnerRespawns"));
+        }
+        this.registerProtectedItems();
+        this.syncVanillaTeams();
     }
 
     ServerPlayerEntity getPlayerByUuid(UUID uuid) {
@@ -1324,6 +1397,240 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
 
     private int formatMinutes(int totalSeconds) {
         return Math.max(1, (totalSeconds + 59) / 60);
+    }
+
+    private JsonArray writeTeams() {
+        JsonArray teams = new JsonArray();
+        for (TeamSnapshot snapshot : this.teams.snapshots()) {
+            JsonObject team = new JsonObject();
+            team.addProperty("id", snapshot.id());
+            team.addProperty("label", snapshot.label());
+            JsonArray members = new JsonArray();
+            for (TeamMembership membership : snapshot.members()) {
+                JsonObject member = new JsonObject();
+                member.addProperty("uuid", membership.playerUuid().toString());
+                member.addProperty("name", membership.playerName());
+                member.addProperty("role", membership.role().name());
+                members.add(member);
+            }
+            team.add("members", members);
+            teams.add(team);
+        }
+        return teams;
+    }
+
+    private void readTeams(JsonObject root) {
+        if (!root.has("teams") || !root.get("teams").isJsonArray()) {
+            return;
+        }
+        for (var teamElement : root.getAsJsonArray("teams")) {
+            if (!teamElement.isJsonObject()) {
+                continue;
+            }
+            JsonObject team = teamElement.getAsJsonObject();
+            String teamId = stringValue(team, "id", "");
+            String label = stringValue(team, "label", teamId);
+            if (teamId.isBlank() || !team.has("members") || !team.get("members").isJsonArray()) {
+                continue;
+            }
+            for (var memberElement : team.getAsJsonArray("members")) {
+                if (!memberElement.isJsonObject()) {
+                    continue;
+                }
+                JsonObject member = memberElement.getAsJsonObject();
+                UUID uuid = uuidValue(member, "uuid");
+                if (uuid == null) {
+                    continue;
+                }
+                TeamRole role = parseTeamRole(stringValue(member, "role", TeamRole.MEMBER.name()));
+                String name = stringValue(member, "name", uuid.toString());
+                this.teams.assign(uuid, name, teamId, label, role);
+                this.context().participants().add(uuid);
+            }
+        }
+    }
+
+    private JsonArray writeRunnerTracking() {
+        JsonArray entries = new JsonArray();
+        for (Map.Entry<UUID, RunnerTrackingData> entry : this.runnerTracking.entrySet()) {
+            JsonObject object = new JsonObject();
+            object.addProperty("uuid", entry.getKey().toString());
+            RunnerTrackingData data = entry.getValue();
+            putBlockPos(object, "lastOverworld", data.lastOverworld);
+            putBlockPos(object, "lastNether", data.lastNether);
+            putBlockPos(object, "lastEnd", data.lastEnd);
+            putBlockPos(object, "endEntryOverworld", data.endEntryOverworld);
+            entries.add(object);
+        }
+        return entries;
+    }
+
+    private void readRunnerTracking(JsonObject root) {
+        if (!root.has("runnerTracking") || !root.get("runnerTracking").isJsonArray()) {
+            return;
+        }
+        for (var element : root.getAsJsonArray("runnerTracking")) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject object = element.getAsJsonObject();
+            UUID uuid = uuidValue(object, "uuid");
+            if (uuid == null) {
+                continue;
+            }
+            RunnerTrackingData data = new RunnerTrackingData();
+            data.lastOverworld = readBlockPos(object, "lastOverworld");
+            data.lastNether = readBlockPos(object, "lastNether");
+            data.lastEnd = readBlockPos(object, "lastEnd");
+            data.endEntryOverworld = readBlockPos(object, "endEntryOverworld");
+            this.runnerTracking.put(uuid, data);
+        }
+    }
+
+    private static JsonArray writeUuidArray(Collection<UUID> uuids) {
+        JsonArray array = new JsonArray();
+        for (UUID uuid : uuids) {
+            array.add(uuid.toString());
+        }
+        return array;
+    }
+
+    private static List<UUID> readUuidArray(JsonObject object, String key) {
+        List<UUID> uuids = new ArrayList<>();
+        if (!object.has(key) || !object.get(key).isJsonArray()) {
+            return uuids;
+        }
+        for (var element : object.getAsJsonArray(key)) {
+            if (!element.isJsonPrimitive()) {
+                continue;
+            }
+            try {
+                uuids.add(UUID.fromString(element.getAsString()));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return uuids;
+    }
+
+    private static JsonObject writeUuidIntMap(Map<UUID, Integer> map) {
+        JsonObject object = new JsonObject();
+        for (Map.Entry<UUID, Integer> entry : map.entrySet()) {
+            object.addProperty(entry.getKey().toString(), entry.getValue());
+        }
+        return object;
+    }
+
+    private static Map<UUID, Integer> readUuidIntMap(JsonObject root, String key) {
+        Map<UUID, Integer> map = new LinkedHashMap<>();
+        if (!root.has(key) || !root.get(key).isJsonObject()) {
+            return map;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+            try {
+                map.put(UUID.fromString(entry.getKey()), entry.getValue().getAsInt());
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return map;
+    }
+
+    private static JsonObject writeUuidLongMap(Map<UUID, Long> map) {
+        JsonObject object = new JsonObject();
+        for (Map.Entry<UUID, Long> entry : map.entrySet()) {
+            object.addProperty(entry.getKey().toString(), entry.getValue());
+        }
+        return object;
+    }
+
+    private static Map<UUID, Long> readUuidLongMap(JsonObject root, String key) {
+        Map<UUID, Long> map = new LinkedHashMap<>();
+        if (!root.has(key) || !root.get(key).isJsonObject()) {
+            return map;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+            try {
+                map.put(UUID.fromString(entry.getKey()), entry.getValue().getAsLong());
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return map;
+    }
+
+    private static void putBlockPos(JsonObject object, String key, @Nullable BlockPos pos) {
+        if (pos == null) {
+            return;
+        }
+        JsonObject value = new JsonObject();
+        value.addProperty("x", pos.getX());
+        value.addProperty("y", pos.getY());
+        value.addProperty("z", pos.getZ());
+        object.add(key, value);
+    }
+
+    @Nullable
+    private static BlockPos readBlockPos(JsonObject object, String key) {
+        if (!object.has(key) || !object.get(key).isJsonObject()) {
+            return null;
+        }
+        JsonObject value = object.getAsJsonObject(key);
+        return new BlockPos(intValue(value, "x", 0), intValue(value, "y", 0), intValue(value, "z", 0));
+    }
+
+    private static GameState parseState(String value) {
+        try {
+            return GameState.valueOf(value);
+        } catch (IllegalArgumentException ignored) {
+            return GameState.WAITING_FOR_PLAYERS;
+        }
+    }
+
+    private static TeamRole parseTeamRole(String value) {
+        try {
+            return TeamRole.valueOf(value);
+        } catch (IllegalArgumentException ignored) {
+            return TeamRole.MEMBER;
+        }
+    }
+
+    @Nullable
+    private static UUID uuidValue(JsonObject object, String key) {
+        String value = stringValue(object, key, "");
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private static String stringValue(JsonObject object, String key, String fallback) {
+        return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsString() : fallback;
+    }
+
+    private static boolean booleanValue(JsonObject object, String key, boolean fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsBoolean() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private static int intValue(JsonObject object, String key, int fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsInt() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private static long longValue(JsonObject object, String key, long fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsLong() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
     }
 
     public enum ManhuntRole {

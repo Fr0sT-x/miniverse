@@ -18,6 +18,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.world.GameMode;
 
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -100,6 +101,7 @@ public final class SessionBootstrapper {
         private boolean loggedWaitingRoles;
         private boolean loggedWaitingClientReady;
         private boolean startupAborted;
+        private boolean savedStateLoaded;
         private final Map<UUID, ClientReadyState> clientReadyStates = new HashMap<>();
         private final Map<UUID, Integer> loadingStartTicks = new HashMap<>();
 
@@ -118,7 +120,8 @@ public final class SessionBootstrapper {
                 return;
             }
 
-            if (!properties.containsKey("player." + player.getUuid())) {
+            boolean expectedPlayer = properties.containsKey("player." + player.getUuid());
+            if (!expectedPlayer && !this.acceptsLateJoin()) {
                 return;
             }
 
@@ -131,14 +134,31 @@ public final class SessionBootstrapper {
                 this.handler.applySettings(minigame, properties);
                 this.settingsApplied = true;
             }
+            this.loadSavedStateIfPresent();
 
             MinigameManager.getInstance().addParticipant(player);
-            this.markLoading(player);
+            if (expectedPlayer) {
+                this.markLoading(player);
+            } else {
+                player.changeGameMode(GameMode.SPECTATOR);
+                player.sendMessage(Text.literal("Joined active match as unassigned spectator. Ask an admin for a team assignment."), false);
+            }
             MatchLifecycleController.getInstance().onParticipantJoin(player);
             this.handler.onPlayerJoin(minigame, player, properties);
-            this.sendMatchIntro(player, minigame, properties);
-            this.broadcastReadyState(properties, "Waiting for players...");
-            this.maybeStart(minigame, properties);
+            if (expectedPlayer) {
+                this.sendMatchIntro(player, minigame, properties);
+                this.broadcastReadyState(properties, "Waiting for players...");
+                this.maybeStart(minigame, properties);
+            }
+        }
+
+        private boolean acceptsLateJoin() {
+            MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+            if (runtime == null) {
+                return false;
+            }
+            GameState state = runtime.state();
+            return state == GameState.PAUSED || state.isActive();
         }
 
         private void onTick(MinecraftServer server) {
@@ -160,6 +180,7 @@ public final class SessionBootstrapper {
                 this.handler.applySettings(minigame, properties);
                 this.settingsApplied = true;
             }
+            this.loadSavedStateIfPresent();
 
             if (!this.loggedReady) {
                 Miniverse.LOGGER.info("Session bootstrap ready for {}.", this.handler.gameId());
@@ -169,6 +190,17 @@ public final class SessionBootstrapper {
             this.addOnlineExpectedPlayers(server, properties);
             this.checkReadyTimeouts(server, properties);
             this.maybeStart(minigame, properties);
+        }
+
+        private void loadSavedStateIfPresent() {
+            if (this.savedStateLoaded) {
+                return;
+            }
+            this.savedStateLoaded = true;
+            MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+            if (MinigameSessionStore.loadInto(runtime)) {
+                Miniverse.LOGGER.info("Loaded saved runtime state for {} from {}.", this.handler.gameId(), MinigameSessionStore.savePath());
+            }
         }
 
         private void addOnlineExpectedPlayers(MinecraftServer server, Properties properties) {

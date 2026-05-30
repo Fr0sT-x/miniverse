@@ -4,6 +4,7 @@ import dev.frost.miniverse.team.TeamColorPalette;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamRole;
+import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.MinigameContext;
@@ -42,7 +43,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class ResourceSprintMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider {
+public class ResourceSprintMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider, DynamicParticipantMinigame {
     private static final int TICKS_PER_SECOND = 20;
     private static final String NAME = "Resource Sprint";
 
@@ -123,6 +124,21 @@ public class ResourceSprintMinigame implements Minigame, RuntimeContextAware, Se
     }
 
     @Override
+    public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
+        if (!this.isParticipant(player)) {
+            this.context().participants().add(player);
+        }
+        String resolvedTeam = this.normalizeTeamLabel(teamId);
+        this.setPlayerTeam(player, resolvedTeam);
+        if (this.state == GameState.IN_PROGRESS) {
+            TeamProgress progress = this.teamProgress.computeIfAbsent(resolvedTeam, ignored -> new TeamProgress());
+            player.sendMessage(Text.literal("Joined Resource Sprint in progress for " + resolvedTeam + ".").formatted(Formatting.GREEN), false);
+            this.broadcastCurrentObjective(resolvedTeam, progress);
+            this.updateScoreboard();
+        }
+    }
+
+    @Override
     public void initialize() {
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.settings = ResourceSprintSettings.defaults();
@@ -199,6 +215,9 @@ public class ResourceSprintMinigame implements Minigame, RuntimeContextAware, Se
         }
 
         if (this.getParticipants().isEmpty()) {
+            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+                return;
+            }
             this.stopGame();
             return;
         }

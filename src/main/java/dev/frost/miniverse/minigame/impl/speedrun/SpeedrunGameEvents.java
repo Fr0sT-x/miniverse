@@ -8,6 +8,7 @@ public final class SpeedrunGameEvents {
     }
 
     public static void register() {
+        SpeedrunSessionBootstrap.register();
     }
 }
 

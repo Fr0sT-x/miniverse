@@ -47,7 +47,12 @@ public final class SessionConfigJson {
     }
 
     public static JsonObject runtimeSession(GameSession session, SessionGroup group, Collection<SessionGroup> assignedGroups, Properties gameProperties, String returnHost, int returnPort, Path mainSessionsRoot) {
+        return runtimeSession(session, group, assignedGroups, gameProperties, returnHost, returnPort, mainSessionsRoot, BackendLaunchMode.NEW_SESSION);
+    }
+
+    public static JsonObject runtimeSession(GameSession session, SessionGroup group, Collection<SessionGroup> assignedGroups, Properties gameProperties, String returnHost, int returnPort, Path mainSessionsRoot, BackendLaunchMode launchMode) {
         JsonObject root = baseSession(session);
+        root.addProperty("launchMode", (launchMode == null ? BackendLaunchMode.NEW_SESSION : launchMode).name());
         root.addProperty("groupLabel", group.getGroupLabel());
         root.addProperty("assignmentLabel", group.getGroupLabel());
         root.add("teams", teams(assignedGroups));
@@ -72,10 +77,15 @@ public final class SessionConfigJson {
     }
 
     public static JsonObject lifecycle(boolean stopRequested, boolean returnComplete, boolean seedChangeRequested) {
+        return lifecycle(stopRequested, returnComplete, seedChangeRequested, false);
+    }
+
+    public static JsonObject lifecycle(boolean stopRequested, boolean returnComplete, boolean seedChangeRequested, boolean pauseRequested) {
         JsonObject lifecycle = new JsonObject();
         lifecycle.addProperty("stopRequested", stopRequested);
         lifecycle.addProperty("returnComplete", returnComplete);
         lifecycle.addProperty("seedChangeRequested", seedChangeRequested);
+        lifecycle.addProperty("pauseRequested", pauseRequested);
         return lifecycle;
     }
 
@@ -232,9 +242,10 @@ public final class SessionConfigJson {
         return value != null && !value.isJsonNull() && value.getAsBoolean();
     }
 
-    private static void flattenRuntimeJson(JsonObject json, Properties properties) {
+    public static void flattenRuntimeJson(JsonObject json, Properties properties) {
         properties.setProperty("game", string(json, "gameId", string(json, "game", "")));
         properties.setProperty("sessionId", string(json, "sessionId", ""));
+        properties.setProperty("launchMode", string(json, "launchMode", BackendLaunchMode.NEW_SESSION.name()));
         properties.setProperty("groupLabel", string(json, "groupLabel", ""));
         properties.setProperty("assignmentLabel", string(json, "assignmentLabel", properties.getProperty("groupLabel", "")));
 

@@ -42,6 +42,10 @@ public final class TeamColorPalette {
         if (normalized.contains("spec") || normalized.contains("dead")) {
             return new TeamColor(Formatting.GRAY, "GRAY");
         }
+        normalized = normalized.replaceAll("[^a-z0-9_\\-]", "_").replaceAll("_+", "_");
+        if (normalized.isBlank()) {
+            normalized = "team";
+        }
         int index = Math.floorMod(normalized.hashCode(), COLORS.length);
         return COLORS[index];
     }

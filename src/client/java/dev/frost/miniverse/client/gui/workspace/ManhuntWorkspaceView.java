@@ -23,7 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class ManhuntWorkspaceView implements WorkspaceView {
+public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider, GamemodeWorkspaceView.RosterRefreshable {
     private static final int ROW_HEIGHT = 20;
     private static final int COLUMN_HEADER_HEIGHT = 22;
     private static final int COLUMN_GAP = 12;
@@ -48,7 +48,6 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
     private double dragX;
     private double dragY;
 
-    private TextFieldWidget sessionNameField;
     private TextFieldWidget gracePeriodField;
     private TextFieldWidget seedValueField;
     private TextFieldWidget respawnDelayField;
@@ -89,8 +88,8 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
         this.clearButton = new UiLayout.Rect(mainPanel.x() + 124, mainPanel.y() + 50, 62, BUTTON_HEIGHT);
         this.startButton = new UiLayout.Rect(mainPanel.x() + mainPanel.width() - 126, mainPanel.y() + 10, 112, BUTTON_HEIGHT);
 
-        if (this.activeModule == Module.SESSION_INFO) {
-            this.addSessionInfoWidgets(screen, mainPanel);
+        if (this.activeModule == Module.SEED_SETTINGS) {
+            this.addSeedWidgets(screen, mainPanel);
         } else if (this.activeModule == Module.MATCH_RULES) {
             this.gracePeriodField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 96, Integer.toString(this.gracePeriodSeconds), "Hunter release seconds");
             this.addStepper(screen, this.gracePeriodField, mainPanel.x() + 338, mainPanel.y() + 96, 0, 3600, 5);
@@ -120,7 +119,7 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
             this.addStepper(screen, this.hunterRespawnDelayField, mainPanel.x() + 338, mainPanel.y() + 200, 0, 3600, 5);
         } else if (this.activeModule == Module.DIFFICULTY) {
             this.runnerGlowPulseField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 96, Integer.toString(this.runnerGlowPulseMinutes), "Runner glow pulse minutes");
-            this.addStepper(screen, this.runnerGlowPulseField, mainPanel.x() + 338, mainPanel.y() + 96, 0, 120, 1);
+            this.addStepper(screen, this.runnerGlowPulseField, mainPanel.x() + 338, mainPanel.y() + 96, 0, 120, 5);
         }
     }
 
@@ -250,13 +249,30 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
         this.getColumn(ColumnKind.HUNTER).members.removeIf(entry -> !this.isOnline(entry.uuid()));
     }
 
-    public Module activeModule() {
-        return this.activeModule;
+    @Override
+    public String gameId() {
+        return ManhuntDefinition.ID;
     }
 
-    public void setActiveModule(Module activeModule) {
+    @Override
+    public java.util.List<WorkspaceModule> modules() {
+        java.util.List<WorkspaceModule> modules = new java.util.ArrayList<>();
+        for (Module module : Module.values()) {
+            String group = module == Module.SUMMARY ? "Summary" : module == Module.TEAMS ? "Setup" : "Rules";
+            modules.add(new WorkspaceModule(module.id(), module.icon(), module.label(), group));
+        }
+        return modules;
+    }
+
+    @Override
+    public String activeModuleId() {
+        return this.activeModule.id();
+    }
+
+    @Override
+    public void setActiveModule(String moduleId) {
         this.syncStateFromWidgets();
-        this.activeModule = activeModule;
+        this.activeModule = Module.fromId(moduleId).orElse(this.activeModule);
     }
 
     @Override
@@ -283,10 +299,9 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
         int labelX = mainPanel.x() + 38;
         int y = mainPanel.y() + 102;
         switch (this.activeModule) {
-            case SESSION_INFO -> {
-                context.drawText(textRenderer, Text.literal("Session Name"), labelX, y, UiTheme.TEXT_MUTED, false);
-                context.drawText(textRenderer, Text.literal("Seed Mode"), labelX, y + 32, UiTheme.TEXT_MUTED, false);
-                context.drawText(textRenderer, Text.literal("Fixed Seed"), labelX, y + 64, UiTheme.TEXT_MUTED, false);
+            case SEED_SETTINGS -> {
+                context.drawText(textRenderer, Text.literal("Seed Mode"), labelX, y, UiTheme.TEXT_MUTED, false);
+                context.drawText(textRenderer, Text.literal("Fixed Seed"), labelX, y + 32, UiTheme.TEXT_MUTED, false);
             }
             case MATCH_RULES -> context.drawText(textRenderer, Text.literal("Hunter Release Delay"), labelX, y, UiTheme.TEXT_MUTED, false);
             case TRACKING -> {
@@ -306,13 +321,12 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
         }
     }
 
-    private void addSessionInfoWidgets(SessionScreen screen, UiLayout.Rect mainPanel) {
-        this.sessionNameField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 96, this.sessionName, "Session name");
-        this.seedModeButton = this.addButton(screen, this.seedMode.displayName, mainPanel.x() + 180, mainPanel.y() + 128, SETTINGS_FIELD_WIDTH, () -> {
+    private void addSeedWidgets(SessionScreen screen, UiLayout.Rect mainPanel) {
+        this.seedModeButton = this.addButton(screen, this.seedMode.displayName, mainPanel.x() + 180, mainPanel.y() + 96, SETTINGS_FIELD_WIDTH, () -> {
             this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
             this.seedModeButton.setMessage(Text.literal(this.seedMode.displayName));
         });
-        this.seedValueField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 160, Long.toString(this.seedValue), "Fixed seed");
+        this.seedValueField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 128, Long.toString(this.seedValue), "Fixed seed");
     }
 
     private ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, Runnable action) {
@@ -495,9 +509,6 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
     }
 
     private void syncStateFromWidgets() {
-        if (this.sessionNameField != null) {
-            this.sessionName = this.sessionNameField.getText().trim();
-        }
         this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
         this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 0, 3600);
         this.hunterRespawnDelaySeconds = readClamped(this.hunterRespawnDelayField, this.hunterRespawnDelaySeconds, 0, 3600);
@@ -649,24 +660,30 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
     }
 
     public enum Module {
-        TEAMS(">", "Teams", "Assign players into speedrunners and hunters.", UiTheme.ACCENT_RED),
-        SESSION_INFO("i", "Session Info", "Name the session and choose seed behavior.", UiTheme.ACCENT),
-        MATCH_RULES("r", "Match Rules", "Tune release timing and match startup rules.", UiTheme.ACCENT),
-        TRACKING("t", "Tracking", "Configure compass behavior and Nether tracking.", UiTheme.ACCENT_BLUE),
-        LIVES_RESPAWNS("l", "Lives & Respawns", "Set life limits and respawn delays.", UiTheme.ACCENT_RED),
-        DIFFICULTY("d", "Difficulty", "Add pressure and visibility modifiers.", UiTheme.ACCENT_GREEN),
-        SUMMARY("s", "Summary", "Review and launch the configured match.", UiTheme.ACCENT);
+        TEAMS("teams", ">", "Teams", "Assign players into speedrunners and hunters.", UiTheme.ACCENT_RED),
+        SEED_SETTINGS("seed", "w", "World Seed", "Choose the world seed behavior.", UiTheme.ACCENT),
+        MATCH_RULES("rules", "r", "Match Rules", "Tune release timing and match startup rules.", UiTheme.ACCENT),
+        TRACKING("tracking", "t", "Tracking", "Configure compass behavior and Nether tracking.", UiTheme.ACCENT_BLUE),
+        LIVES_RESPAWNS("lives", "l", "Lives & Respawns", "Set life limits and respawn delays.", UiTheme.ACCENT_RED),
+        DIFFICULTY("difficulty", "d", "Difficulty", "Add pressure and visibility modifiers.", UiTheme.ACCENT_GREEN),
+        SUMMARY("summary", "s", "Summary", "Review and launch the configured match.", UiTheme.ACCENT);
 
+        private final String id;
         private final String icon;
         private final String label;
         private final String description;
         private final int accent;
 
-        Module(String icon, String label, String description, int accent) {
+        Module(String id, String icon, String label, String description, int accent) {
+            this.id = id;
             this.icon = icon;
             this.label = label;
             this.description = description;
             this.accent = accent;
+        }
+
+        public String id() {
+            return this.id;
         }
 
         public String icon() {
@@ -683,6 +700,18 @@ public final class ManhuntWorkspaceView implements WorkspaceView {
 
         private int accent() {
             return this.accent;
+        }
+
+        private static java.util.Optional<Module> fromId(String id) {
+            if (id == null) {
+                return java.util.Optional.empty();
+            }
+            for (Module module : values()) {
+                if (module.id.equalsIgnoreCase(id)) {
+                    return java.util.Optional.of(module);
+                }
+            }
+            return java.util.Optional.empty();
         }
     }
 

@@ -7,6 +7,7 @@ import dev.frost.miniverse.minigame.core.SessionBootstrapper;
 import dev.frost.miniverse.session.GameSession;
 import dev.frost.miniverse.session.SessionCreationService;
 import dev.frost.miniverse.session.SessionGroup;
+import dev.frost.miniverse.session.PendingSessionJoinManager;
 import dev.frost.miniverse.session.SessionLauncherConfig;
 import dev.frost.miniverse.session.SessionRegistry;
 import dev.frost.miniverse.session.SessionManager;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Locale;
 
 public final class SessionNetwork {
     private static boolean registered;
@@ -49,8 +51,11 @@ public final class SessionNetwork {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_SESSION_ID, (payload, context) -> handleCreate(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCH_SESSION_ID, (payload, context) -> handleLaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.STOP_SESSION_ID, (payload, context) -> handleStop(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.PAUSE_SESSION_ID, (payload, context) -> handlePause(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.ASSIGN_MID_GAME_PLAYER_ID, (payload, context) -> handleAssignMidGame(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.INSPECT_SESSION_ID, (payload, context) -> handleInspect(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RELAUNCH_SESSION_ID, (payload, context) -> handleRelaunch(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_SESSION_ID, (payload, context) -> handleDeleteRetained(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CHANGE_SEED_ID, (payload, context) -> handleChangeSeed(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLEANUP_PLAYER_ID, (payload, context) -> handleCleanupPlayer(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCHER_SETTINGS_ID, (payload, context) -> handleLauncherSettings(context.server(), context.player(), payload));
@@ -150,6 +155,119 @@ public final class SessionNetwork {
         sendSessionList(server, player);
     }
 
+    private static void handlePause(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.PauseSessionPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, payload.paused() ? "pause sessions" : "resume sessions")) {
+            return;
+        }
+
+        String sessionId = payload.sessionId();
+        if (!SessionRuntimeConfig.isSessionServer() && SessionManager.getInstance().getSession(sessionId).isEmpty()) {
+            player.sendMessage(Text.literal("Unknown session '" + sessionId + "'."), false);
+            return;
+        }
+
+        if (payload.paused()) {
+            SessionRegistry.markPauseRequested(sessionId);
+            player.sendMessage(Text.literal("Pause requested for session " + sessionId + "."), false);
+        } else {
+            SessionRegistry.clearPauseRequested(sessionId);
+            player.sendMessage(Text.literal("Resume requested for session " + sessionId + "."), false);
+        }
+        sendSessionList(server, player);
+    }
+
+    private static void handleAssignMidGame(MinecraftServer server, ServerPlayerEntity admin, NetworkConstants.AssignMidGamePlayerPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(admin, "assign late players")) {
+            return;
+        }
+
+        UUID playerId;
+        try {
+            playerId = UUID.fromString(payload.playerUuid());
+        } catch (IllegalArgumentException e) {
+            admin.sendMessage(Text.literal("Invalid player id: " + payload.playerUuid()).formatted(Formatting.RED), false);
+            return;
+        }
+
+        if (SessionRuntimeConfig.isSessionServer()) {
+            String currentSessionId = SessionRuntimeConfig.getSessionId().orElse(payload.sessionId());
+            if (!currentSessionId.equals(payload.sessionId())) {
+                admin.sendMessage(Text.literal("Cannot assign players to a different backend session from here.").formatted(Formatting.RED), false);
+                return;
+            }
+            if (!validateMidGameRoleForSession(payload.sessionId(), payload.role(), admin)) {
+                sendSessionList(server, admin);
+                return;
+            }
+            SessionRegistry.addMidGameAssignmentRequest(
+                payload.sessionId(),
+                playerId,
+                payload.teamLabel(),
+                payload.role(),
+                admin.getName().getString()
+            );
+            admin.sendMessage(Text.literal("Assignment requested. The main server will transfer the player into this session.").formatted(Formatting.YELLOW), false);
+            sendSessionList(server, admin);
+            return;
+        }
+
+        ServerPlayerEntity target = server.getPlayerManager().getPlayer(playerId);
+        if (target == null) {
+            admin.sendMessage(Text.literal("That player is no longer online.").formatted(Formatting.YELLOW), false);
+            PendingSessionJoinManager.getInstance().remove(playerId);
+            sendSessionList(server, admin);
+            return;
+        }
+
+        SessionManager manager = SessionManager.getInstance();
+        try {
+            if (!validateMidGameRoleForSession(payload.sessionId(), payload.role(), admin)) {
+                sendSessionList(server, admin);
+                return;
+            }
+            manager.assignPlayerMidGameAsync(payload.sessionId(), target, payload.teamLabel(), payload.role(), server)
+                .whenComplete((group, error) -> server.execute(() -> {
+                    if (error != null) {
+                        admin.sendMessage(Text.literal(error.getCause() == null ? error.getMessage() : error.getCause().getMessage()).formatted(Formatting.RED), false);
+                        sendSessionList(server, admin);
+                        return;
+                    }
+
+                    PendingSessionJoinManager.getInstance().remove(playerId);
+                    manager.transferPlayer(target, group);
+                    admin.sendMessage(Text.literal("Assigned " + target.getName().getString() + " to " + payload.sessionId() + "."), false);
+                    sendSessionList(server, admin);
+                }));
+        } catch (RuntimeException e) {
+            admin.sendMessage(Text.literal(e.getMessage()).formatted(Formatting.RED), false);
+            sendSessionList(server, admin);
+            return;
+        }
+    }
+
+    private static boolean validateMidGameRoleForSession(String sessionId, String role, ServerPlayerEntity admin) {
+        if (!isManhuntSession(sessionId)) {
+            return true;
+        }
+        String normalized = role == null ? "" : role.trim().toLowerCase(Locale.ROOT);
+        boolean valid = normalized.equals("speedrunner") || normalized.equals("runner") || normalized.equals("hunter");
+        if (!valid) {
+            admin.sendMessage(Text.literal("Manhunt late joins require choosing Speedrunner or Hunter before transfer.").formatted(Formatting.RED), false);
+        }
+        return valid;
+    }
+
+    private static boolean isManhuntSession(String sessionId) {
+        if (SessionRuntimeConfig.isSessionServer()) {
+            return SessionRuntimeConfig.getSessionJson()
+                .map(json -> "manhunt".equalsIgnoreCase(SessionConfigJson.string(json, "gameId", SessionConfigJson.string(json, "game", ""))))
+                .orElse(false);
+        }
+        return SessionManager.getInstance().getSession(sessionId)
+            .map(session -> "manhunt".equalsIgnoreCase(session.getGameType().getCommandName()))
+            .orElse(false);
+    }
+
     private static void handleChangeSeed(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.ChangeSeedPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "change session seed")) {
             return;
@@ -206,34 +324,48 @@ public final class SessionNetwork {
     }
 
     private static void handleRelaunch(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.RelaunchSessionPayload payload) {
-        if (!SessionPermissions.checkCanManageSessions(player, "relaunch retained sessions")) {
+        if (!SessionPermissions.checkCanManageSessions(player, "relaunch sessions")) {
             return;
         }
-
-        String sessionId = payload.sessionId();
         SessionManager manager = SessionManager.getInstance();
-
+        String sessionId = payload.sessionId();
         if (manager.getSession(sessionId).isPresent()) {
-            player.sendMessage(Text.literal("Session " + sessionId + " is already running. Stop it first to relaunch."), false);
-            sendSessionList(server, player);
+            player.sendMessage(Text.literal("Session " + sessionId + " is already running."), false);
             return;
         }
-
         player.sendMessage(Text.literal("Relaunching session " + sessionId + "..."), false);
-        broadcastLaunchProgress(server, sessionId, "Relaunching " + sessionId, "Queued", "Retained session relaunch requested by " + player.getName().getString(), 8, false);
-        manager.relaunchRetainedSession(sessionId, server).whenComplete((session, error) -> server.execute(() -> {
-            if (error != null) {
-                broadcastLaunchProgress(server, sessionId, "Relaunching " + sessionId, "Failed", error.getMessage(), 100, true);
-                player.sendMessage(Text.literal("Failed to relaunch session " + sessionId + ": " + error.getMessage()).formatted(Formatting.RED), false);
+        manager.relaunchRetainedSession(sessionId, server)
+            .whenComplete((session, error) -> server.execute(() -> {
+                if (error != null) {
+                    player.sendMessage(Text.literal("Failed to relaunch session " + sessionId + ": " + error.getMessage()), false);
+                    sendSessionList(server, player);
+                    return;
+                }
+                player.sendMessage(Text.literal("Relaunched session " + sessionId + "."), false);
                 sendSessionList(server, player);
-                return;
-            }
+            }));
+    }
 
-            broadcastLaunchProgress(server, session, "Transferring players", "Moving players to the session server", 100, true);
-            manager.transferAssignedPlayers(server, session);
-            player.sendMessage(Text.literal("Relaunched session " + session.getSessionId() + "."), false);
-            sendSessionList(server, player);
-        }));
+    private static void handleDeleteRetained(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.DeleteSessionPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "delete sessions")) {
+            return;
+        }
+        String sessionId = payload.sessionId();
+        if (sessionId == null || sessionId.isBlank()) {
+            player.sendMessage(Text.literal("Invalid session id."), false);
+            return;
+        }
+        if (SessionManager.getInstance().getSession(sessionId).isPresent()) {
+            player.sendMessage(Text.literal("Session " + sessionId + " is still active. Stop it before deleting."), false);
+            return;
+        }
+        if (SessionRegistry.loadSnapshot(sessionId).isEmpty()) {
+            player.sendMessage(Text.literal("Unknown session '" + sessionId + "'."), false);
+            return;
+        }
+        SessionRegistry.removeSession(sessionId);
+        player.sendMessage(Text.literal("Deleted retained session " + sessionId + "."), false);
+        sendSessionList(server, player);
     }
 
     public static void broadcastLaunchProgress(MinecraftServer server, GameSession session, String stage, String detail, int progress, boolean done) {
@@ -278,7 +410,6 @@ public final class SessionNetwork {
             }
         }
     }
-
     private static void handleCleanupPlayer(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CleanupPlayerPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "run session cleanup")) {
             return;
@@ -394,6 +525,7 @@ public final class SessionNetwork {
                 session.getAssignments().forEach(assignment -> players.add(NbtString.of(assignment.getDisplayName())));
                 entry.put("players", players);
                 entry.putInt("playerCount", session.getAssignments().stream().mapToInt(SessionGroup::getPlayerCount).sum());
+                addGroups(entry, session.getAssignments());
                 sessions.add(entry);
             }
         } else {
@@ -416,6 +548,8 @@ public final class SessionNetwork {
                 }
                 entry.put("players", players);
                 entry.putInt("playerCount", snapshot.playerCount());
+                SessionManager.getInstance().getSession(snapshot.sessionId())
+                    .ifPresent(session -> addGroups(entry, session.getAssignments()));
                 sessions.add(entry);
             }
         }
@@ -436,6 +570,23 @@ public final class SessionNetwork {
             roster.add(entry);
         }
         root.put("players", roster);
+
+        NbtList pendingJoiners = new NbtList();
+        List<PendingSessionJoinManager.PendingJoiner> pending = SessionRuntimeConfig.isSessionServer()
+            ? SessionRuntimeConfig.getSessionId()
+                .map(sessionId -> SessionRegistry.listPendingJoinNotices(sessionId).stream()
+                    .map(notice -> new PendingSessionJoinManager.PendingJoiner(notice.playerId(), notice.playerName(), notice.joinedAtMillis()))
+                    .toList())
+                .orElse(List.of())
+            : PendingSessionJoinManager.getInstance().list(server);
+        for (PendingSessionJoinManager.PendingJoiner pendingJoiner : pending) {
+            NbtCompound entry = new NbtCompound();
+            entry.putString("uuid", pendingJoiner.playerId().toString());
+            entry.putString("name", pendingJoiner.playerName());
+            entry.putLong("joinedAt", pendingJoiner.joinedAtMillis());
+            pendingJoiners.add(entry);
+        }
+        root.put("pendingJoiners", pendingJoiners);
 
         NbtCompound launcher = new NbtCompound();
         SessionLauncherConfig launcherConfig = SessionLauncherConfig.getInstance();
@@ -472,6 +623,8 @@ public final class SessionNetwork {
         retention.putInt("maxAgeDays", retentionConfig.maxAgeDays());
         root.put("retention", retention);
 
+        root.putBoolean("sessionServer", SessionRuntimeConfig.isSessionServer());
+
         ServerPlayNetworking.send(player, new NetworkConstants.SessionListPayload(root));
     }
 
@@ -489,9 +642,10 @@ public final class SessionNetwork {
 
     private static NbtCompound runtimeSessionToNbt(JsonObject json) {
         NbtCompound entry = new NbtCompound();
-        entry.putString("id", SessionConfigJson.string(json, "sessionId", ""));
+        String sessionId = SessionConfigJson.string(json, "sessionId", "");
+        entry.putString("id", sessionId);
         entry.putString("game", SessionConfigJson.string(json, "gameDisplayName", SessionConfigJson.string(json, "gameId", "")));
-        entry.putString("state", "RUNNING");
+        entry.putString("state", SessionRegistry.isPauseRequested(sessionId) ? "PAUSED" : "RUNNING");
         entry.putLong("seed", SessionConfigJson.longValue(json, "seed", 0L));
         entry.putLong("createdAt", SessionConfigJson.longValue(json, "createdAt", 0L));
         entry.putLong("launchedAt", SessionConfigJson.longValue(json, "launchedAt", 0L));
@@ -500,7 +654,45 @@ public final class SessionNetwork {
         entry.putBoolean("inspectable", false);
         entry.putBoolean("retained", false);
         entry.putInt("playerCount", runtimePlayerCount(json));
+        entry.put("groups", runtimeGroups(json));
         return entry;
+    }
+
+    private static void addGroups(NbtCompound entry, List<SessionGroup> groups) {
+        NbtList groupList = new NbtList();
+        for (SessionGroup group : groups) {
+            NbtCompound groupNbt = new NbtCompound();
+            groupNbt.putString("label", group.getGroupLabel());
+            groupNbt.putString("displayName", group.getDisplayName());
+            groupNbt.putString("state", group.getState().name());
+            groupNbt.putInt("playerCount", group.getPlayerCount());
+            groupList.add(groupNbt);
+        }
+        entry.put("groups", groupList);
+    }
+
+    private static NbtList runtimeGroups(JsonObject json) {
+        JsonArray teams = json.has("teams") && json.get("teams").isJsonArray()
+            ? json.getAsJsonArray("teams")
+            : new JsonArray();
+        NbtList groupList = new NbtList();
+        for (var teamElement : teams) {
+            if (!teamElement.isJsonObject()) {
+                continue;
+            }
+            JsonObject team = teamElement.getAsJsonObject();
+            NbtCompound groupNbt = new NbtCompound();
+            String label = SessionConfigJson.string(team, "label", "");
+            String displayName = SessionConfigJson.string(team, "displayName", label);
+            groupNbt.putString("label", label);
+            groupNbt.putString("displayName", displayName);
+            groupNbt.putString("state", SessionConfigJson.string(team, "state", "RUNNING"));
+            groupNbt.putInt("playerCount", team.has("members") && team.get("members").isJsonArray()
+                ? team.getAsJsonArray("members").size()
+                : SessionConfigJson.integer(team, "playerCount", 0));
+            groupList.add(groupNbt);
+        }
+        return groupList;
     }
 
     private static int runtimePlayerCount(JsonObject json) {

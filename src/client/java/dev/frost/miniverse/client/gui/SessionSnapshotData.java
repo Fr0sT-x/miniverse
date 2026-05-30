@@ -3,10 +3,16 @@ package dev.frost.miniverse.client.gui;
 import java.util.List;
 
 public final class SessionSnapshotData {
-    public record SessionSummary(String id, String game, String state, long seed, int players, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, boolean retained) {
+    public record SessionSummary(String id, String game, String state, long seed, int players, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, boolean retained, List<GroupSummary> groups) {
+    }
+
+    public record GroupSummary(String label, String displayName, String state, int playerCount) {
     }
 
     public record RosterEntry(String uuid, String name) {
+    }
+
+    public record PendingJoiner(String uuid, String name, long joinedAtMillis) {
     }
 
     public record GameMetadata(
@@ -53,12 +59,14 @@ public final class SessionSnapshotData {
 
     private static volatile List<SessionSummary> sessions = List.of();
     private static volatile List<RosterEntry> roster = List.of();
+    private static volatile List<PendingJoiner> pendingJoiners = List.of();
     private static volatile List<GameMetadata> games = List.of();
     private static volatile int maxConcurrentLaunches = 2;
     private static volatile int launcherQueueCapacity = 64;
     private static volatile MemorySettings memorySettings = new MemorySettings(2, 1, true);
     private static volatile ServerSettings serverSettings = new ServerSettings(16, 8, false, 0, "easy", true, true, "127.0.0.1");
     private static volatile RetentionSettings retentionSettings = new RetentionSettings(3, 7);
+    private static volatile boolean sessionServer = false;
 
     private SessionSnapshotData() {
     }
@@ -69,6 +77,10 @@ public final class SessionSnapshotData {
 
     public static List<RosterEntry> roster() {
         return roster;
+    }
+
+    public static List<PendingJoiner> pendingJoiners() {
+        return pendingJoiners;
     }
 
     public static List<GameMetadata> games() {
@@ -95,18 +107,28 @@ public final class SessionSnapshotData {
         return retentionSettings;
     }
 
-    public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity, MemorySettings newMemorySettings, ServerSettings newServerSettings, RetentionSettings newRetentionSettings) {
+    public static boolean sessionServer() {
+        return sessionServer;
+    }
+
+    public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity, MemorySettings newMemorySettings, ServerSettings newServerSettings, RetentionSettings newRetentionSettings, boolean newSessionServer) {
+        update(newSessions, newRoster, pendingJoiners, newGames, newMaxConcurrentLaunches, newLauncherQueueCapacity, newMemorySettings, newServerSettings, newRetentionSettings, newSessionServer);
+    }
+
+    public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<PendingJoiner> newPendingJoiners, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity, MemorySettings newMemorySettings, ServerSettings newServerSettings, RetentionSettings newRetentionSettings, boolean newSessionServer) {
         sessions = List.copyOf(newSessions);
         roster = List.copyOf(newRoster);
+        pendingJoiners = List.copyOf(newPendingJoiners);
         games = List.copyOf(newGames);
         maxConcurrentLaunches = Math.clamp(newMaxConcurrentLaunches, 1, 64);
         launcherQueueCapacity = Math.max(1, newLauncherQueueCapacity);
         memorySettings = newMemorySettings;
         serverSettings = newServerSettings;
         retentionSettings = newRetentionSettings;
+        sessionServer = newSessionServer;
     }
 
     public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity) {
-        update(newSessions, newRoster, newGames, newMaxConcurrentLaunches, newLauncherQueueCapacity, memorySettings, serverSettings, retentionSettings);
+        update(newSessions, newRoster, newGames, newMaxConcurrentLaunches, newLauncherQueueCapacity, memorySettings, serverSettings, retentionSettings, sessionServer);
     }
 }

@@ -129,10 +129,23 @@ public final class SessionGroup {
     }
 
     public void attachBackend(BackendInstance backendInstance) {
-        if (backendInstance.getWorkingDirectory() != null && backendInstance.getPort() != null) {
-            this.backendInstance.markLaunching(backendInstance.getWorkingDirectory(), backendInstance.getPort());
+        if (backendInstance == null) {
+            return;
         }
-        this.backendInstance.markRunning(backendInstance.getProcess(), backendInstance.getConnectionAddress());
+        if (backendInstance.getState() == SessionState.RUNNING) {
+            if (backendInstance.getWorkingDirectory() != null && backendInstance.getPort() != null) {
+                this.backendInstance.markLaunching(backendInstance.getWorkingDirectory(), backendInstance.getPort());
+            }
+            this.backendInstance.markRunning(backendInstance.getProcess(), backendInstance.getConnectionAddress());
+        } else if (backendInstance.getState() == SessionState.LAUNCHING
+            && backendInstance.getWorkingDirectory() != null
+            && backendInstance.getPort() != null) {
+            this.backendInstance.markLaunching(backendInstance.getWorkingDirectory(), backendInstance.getPort());
+        } else if (backendInstance.getState() == SessionState.STOPPED) {
+            this.backendInstance.markStopped();
+        } else if (backendInstance.getState() == SessionState.FAILED) {
+            this.backendInstance.markFailed(backendInstance.getLastError());
+        }
     }
 
     public synchronized void markLaunching(Path workingDirectory, int port) {

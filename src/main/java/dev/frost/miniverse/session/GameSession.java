@@ -76,6 +76,47 @@ public final class GameSession {
         return this.addGroup(playerName, List.of(playerUuid), List.of(playerName));
     }
 
+    public synchronized SessionGroup addMemberToGroup(String groupLabel, SessionMembership membership) {
+        if (membership == null) {
+            throw new IllegalArgumentException("Session membership cannot be null.");
+        }
+        List<SessionGroup> rebuiltGroups = new ArrayList<>();
+        SessionGroup existing = this.groups.stream()
+            .filter(group -> group.getGroupLabel().equalsIgnoreCase(groupLabel))
+            .findFirst()
+            .orElse(null);
+        if (existing == null) {
+            for (SessionGroup group : this.groups) {
+                SessionGroup withoutMember = this.withoutMember(group, membership.playerUuid());
+                if (withoutMember != null) {
+                    rebuiltGroups.add(withoutMember);
+                }
+            }
+            this.groups.clear();
+            this.groups.addAll(rebuiltGroups);
+            return this.addGroup(new PlannedTeam(groupLabel, List.of(membership)));
+        }
+
+        List<SessionMembership> members = new ArrayList<>(existing.getPlannedTeam().members());
+        members.removeIf(member -> member.playerUuid().equals(membership.playerUuid()));
+        members.add(membership);
+        SessionGroup replacement = new SessionGroup(this.sessionId, this.gameType, this.seedPlan, new PlannedTeam(existing.getGroupLabel(), members));
+        replacement.attachBackend(existing.getBackendInstance());
+        for (SessionGroup group : this.groups) {
+            if (group == existing) {
+                rebuiltGroups.add(replacement);
+                continue;
+            }
+            SessionGroup withoutMember = this.withoutMember(group, membership.playerUuid());
+            if (withoutMember != null) {
+                rebuiltGroups.add(withoutMember);
+            }
+        }
+        this.groups.clear();
+        this.groups.addAll(rebuiltGroups);
+        return replacement;
+    }
+
     public synchronized SessionGroup addGroup(PlannedTeam plannedTeam) {
         SessionGroup group = new SessionGroup(
             this.sessionId,
@@ -119,9 +160,29 @@ public final class GameSession {
     public synchronized SessionGroup removePlayer(UUID playerUuid) {
         SessionGroup group = this.getGroup(playerUuid).orElse(null);
         if (group != null) {
+            SessionGroup replacement = this.withoutMember(group, playerUuid);
+            int index = this.groups.indexOf(group);
             this.groups.remove(group);
+            if (replacement != null) {
+                this.groups.add(Math.max(0, index), replacement);
+            }
         }
         return group;
+    }
+
+    private SessionGroup withoutMember(SessionGroup group, UUID playerUuid) {
+        if (group == null || playerUuid == null || !group.containsPlayer(playerUuid)) {
+            return group;
+        }
+        List<SessionMembership> members = group.getPlannedTeam().members().stream()
+            .filter(member -> !member.playerUuid().equals(playerUuid))
+            .toList();
+        if (members.isEmpty()) {
+            return null;
+        }
+        SessionGroup replacement = new SessionGroup(this.sessionId, this.gameType, this.seedPlan, new PlannedTeam(group.getGroupLabel(), members));
+        replacement.attachBackend(group.getBackendInstance());
+        return replacement;
     }
 
     public synchronized boolean isEmpty() {
@@ -155,4 +216,3 @@ public final class GameSession {
         return this.snapshotGroups();
     }
 }
-

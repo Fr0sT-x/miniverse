@@ -6,6 +6,7 @@ import dev.frost.miniverse.minigame.core.event.MinigameEventRouter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleCommands;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.session.SessionCommands;
+import dev.frost.miniverse.session.SessionRecoveryService;
 import dev.frost.miniverse.session.SessionRoutingEvents;
 import dev.frost.miniverse.network.SessionNetwork;
 import dev.frost.miniverse.network.TransitionTransferCoordinator;
@@ -13,6 +14,7 @@ import dev.frost.miniverse.network.ClientConnectionHosts;
 import dev.frost.miniverse.session.SessionRegistry;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +45,7 @@ public class Miniverse implements ModInitializer {
 		MinigameEventRouter.register();
 		MinigameRegistry.registerEvents();
 		SessionRoutingEvents.register();
+		ServerLifecycleEvents.SERVER_STARTED.register(SessionRecoveryService::recoverUnfinishedSessions);
 
 		// Register shared session GUI payloads and server-side receivers.
 		NetworkConstants.registerPayloadTypes();

@@ -18,6 +18,13 @@ public final class SessionRuntimeConfig {
         return sessionId.isBlank() ? Optional.empty() : Optional.of(sessionId);
     }
 
+    public static synchronized BackendLaunchMode getLaunchMode() {
+        if (Boolean.getBoolean("miniverse.inspection")) {
+            return BackendLaunchMode.INSPECTION_SESSION;
+        }
+        return BackendLaunchMode.fromString(getConfig().getProperty("launchMode", ""));
+    }
+
     public static synchronized String getReturnHost() {
         return getConfig().getProperty("return.host", "127.0.0.1");
     }

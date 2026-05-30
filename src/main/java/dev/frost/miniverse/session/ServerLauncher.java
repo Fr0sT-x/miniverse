@@ -14,6 +14,8 @@ import com.google.gson.JsonParser;
 
 import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -34,6 +36,8 @@ import java.util.jar.Manifest;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class ServerLauncher {
+    private static final int DEFAULT_SESSION_MAX_PLAYERS = 20;
+    private static final int MIN_LATE_JOIN_HEADROOM = 8;
 
     public record LaunchResult(SessionGroup group, Process process, int port, Path workingDirectory) {
     }
@@ -84,7 +88,10 @@ public final class ServerLauncher {
 
         // 4. Write session-specific configuration files into the working directory
         this.writeEula(workingDirectory);
-        this.writeSessionConfig(workingDirectory, session, group);
+        SessionRegistry.clearStopRequested(session.getSessionId());
+        SessionRegistry.clearReturnComplete(session.getSessionId());
+        SessionRegistry.clearSeedChangeRequested(session.getSessionId());
+        this.writeSessionConfig(workingDirectory, session, group, BackendLaunchMode.NEW_SESSION);
         SessionOperatorSnapshot snapshot = operatorSnapshot == null ? SessionOperatorSnapshot.empty() : operatorSnapshot;
         snapshot.writeOpsJson(workingDirectory);
         this.writeServerProperties(workingDirectory, session, group, port);
@@ -148,7 +155,7 @@ public final class ServerLauncher {
     public LaunchResult launchFromRetained(GameSession session, SessionGroup group, SessionOperatorSnapshot operatorSnapshot, Path retainedSessionRoot, boolean syncDevelopmentRuntime, Consumer<LaunchProgress> progressConsumer) throws IOException {
         Consumer<LaunchProgress> progress = progressConsumer == null ? ignored -> {
         } : progressConsumer;
-        progress.accept(new LaunchProgress("Preparing files", "Copying retained world for " + group.getDisplayName(), 20));
+        progress.accept(new LaunchProgress("Preparing files", "Resuming retained files for " + group.getDisplayName(), 20));
         // 1. Detect and validate the shared server runtime
         Path serverRoot = detectServerRoot();
         validateSharedRuntime(serverRoot);
@@ -158,22 +165,22 @@ public final class ServerLauncher {
             this.syncLatestModJar(serverRoot);
         }
 
-        // 2. Prepare an isolated working directory for the session
-        Path workingDirectory = this.prepareWorkingDirectory(session, group, "relaunch");
+        // 2. Reuse the retained backend folder so world, playerdata, and runtime saves stay authoritative.
+        Path workingDirectory = this.findRetainedGroupDirectory(retainedSessionRoot, group.getGroupLabel())
+            .orElseThrow(() -> new IOException("No retained backend folder found for session " + session.getSessionId()));
+        Files.createDirectories(workingDirectory.resolve("logs"));
         int port = this.reservePort();
 
-        // 3. Copy retained world state into the new working directory
-        Path retainedWorld = this.findRetainedWorld(retainedSessionRoot, group.getGroupLabel())
-            .orElseThrow(() -> new IOException("No retained world found for session " + session.getSessionId()));
-        this.copyDirectory(retainedWorld, workingDirectory.resolve("world"));
-        progress.accept(new LaunchProgress("Preparing files", "Retained world copied", 40));
+        // 3. Refresh runtime links/junctions without touching session-owned data.
+        this.replaceRuntimeSymlinks(workingDirectory, serverRoot);
+        progress.accept(new LaunchProgress("Preparing files", "Retained backend folder ready", 40));
 
-        // 4. Create symbolic links/junctions to the shared runtime files
-        this.createRuntimeSymlinks(workingDirectory, serverRoot);
-
-        // 5. Write session-specific configuration files into the working directory
+        // 4. Write session-specific configuration files into the working directory
         this.writeEula(workingDirectory);
-        this.writeSessionConfig(workingDirectory, session, group);
+        SessionRegistry.clearStopRequested(session.getSessionId());
+        SessionRegistry.clearReturnComplete(session.getSessionId());
+        SessionRegistry.clearSeedChangeRequested(session.getSessionId());
+        this.writeSessionConfig(workingDirectory, session, group, BackendLaunchMode.RESTORE_SESSION);
         SessionOperatorSnapshot snapshot = operatorSnapshot == null ? SessionOperatorSnapshot.empty() : operatorSnapshot;
         snapshot.writeOpsJson(workingDirectory);
         this.writeServerProperties(workingDirectory, session, group, port);
@@ -181,7 +188,7 @@ public final class ServerLauncher {
         group.markLaunching(workingDirectory, port);
         progress.accept(new LaunchProgress("Starting server", "Launching backend process", 55));
 
-        // 6. Build the launch command to run from the isolated directory
+        // 5. Build the launch command to run from the retained directory
         String javaExecutable = this.resolveJavaExecutable();
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
@@ -208,7 +215,7 @@ public final class ServerLauncher {
         Process process = builder.start();
         progress.accept(new LaunchProgress("Waiting for boot", "Backend is starting", 70));
 
-        // 7. Wait for the server to boot and mark it as running
+        // 6. Wait for the server to boot and mark it as running
         boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
         if (!booted) {
             int exitCode = process.isAlive() ? -1 : process.exitValue();
@@ -232,9 +239,9 @@ public final class ServerLauncher {
     public void stop(SessionGroup group) {
         Process process = group.getProcess();
         if (process != null && process.isAlive()) {
-            process.destroy();
+            this.requestGracefulStop(process);
             try {
-                if (!process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                if (!process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
                     process.destroyForcibly();
                     process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
                 }
@@ -249,6 +256,17 @@ public final class ServerLauncher {
             }
         }
         group.markStopped();
+    }
+
+    private void requestGracefulStop(Process process) {
+        try {
+            Writer writer = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8);
+            writer.write("stop\n");
+            writer.flush();
+        } catch (IOException e) {
+            Miniverse.LOGGER.warn("Failed to send graceful stop to backend; terminating process instead: {}", e.getMessage());
+            process.destroy();
+        }
     }
 
     public InspectionLaunchResult launchInspection(String sessionId, Path sourceSessionRoot, ServerPlayerEntity viewer) throws IOException {
@@ -377,6 +395,22 @@ public final class ServerLauncher {
         Files.createDirectories(directory);
         Files.createDirectories(directory.resolve("logs"));
         return directory;
+    }
+
+    private void replaceRuntimeSymlinks(Path workingDirectory, Path serverRoot) throws IOException {
+        this.deleteRuntimeEntry(workingDirectory.resolve("fabric-server-launch.jar"));
+        this.deleteRuntimeEntry(workingDirectory.resolve("server.jar"));
+        this.deleteRuntimeEntry(workingDirectory.resolve("libraries"));
+        this.deleteRuntimeEntry(workingDirectory.resolve("mods"));
+        this.deleteRuntimeEntry(workingDirectory.resolve("config"));
+        this.deleteRuntimeEntry(workingDirectory.resolve("versions"));
+        this.createRuntimeSymlinks(workingDirectory, serverRoot);
+    }
+
+    private void deleteRuntimeEntry(Path path) throws IOException {
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            MiniverseFileUtils.deleteRecursively(path);
+        }
     }
 
     /**
@@ -665,7 +699,7 @@ public final class ServerLauncher {
         Files.writeString(eula, "eula=true\n", java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    private void writeSessionConfig(Path workingDirectory, GameSession session, SessionGroup group) throws IOException {
+    private void writeSessionConfig(Path workingDirectory, GameSession session, SessionGroup group, BackendLaunchMode launchMode) throws IOException {
         Properties properties = new Properties();
         properties.setProperty("game", session.getGameType().getCommandName());
         properties.setProperty("sessionId", session.getSessionId());
@@ -689,7 +723,7 @@ public final class ServerLauncher {
 
         SessionConfigJson.write(
                 workingDirectory.resolve("miniverse-session.json"),
-                SessionConfigJson.runtimeSession(session, group, groupsForConfig(session, group), settingsProperties, properties.getProperty("return.host"), this.parsePort(properties.getProperty("return.port"), 25565), MiniversePaths.sessionsRoot())
+                SessionConfigJson.runtimeSession(session, group, groupsForConfig(session, group), settingsProperties, properties.getProperty("return.host"), this.parsePort(properties.getProperty("return.port"), 25565), MiniversePaths.sessionsRoot(), launchMode)
         );
     }
 
@@ -716,10 +750,10 @@ public final class ServerLauncher {
         properties.setProperty("level-name", "world");
         properties.setProperty("level-seed", Long.toString(session.getSeedPlan().sharedSeed()));
         properties.setProperty("level-type", "minecraft:normal");
-        int maxPlayers = groupsForConfig(session, group).stream()
+        int assignedPlayers = groupsForConfig(session, group).stream()
                 .mapToInt(SessionGroup::getPlayerCount)
                 .sum();
-        properties.setProperty("max-players", Integer.toString(Math.max(1, maxPlayers)));
+        properties.setProperty("max-players", Integer.toString(this.resolveSessionMaxPlayers(assignedPlayers)));
         properties.setProperty("motd", session.getGameType().getDisplayName() + " " + session.getSessionId() + " / " + group.getGroupLabel());
         properties.setProperty("network-compression-threshold", "256");
         properties.setProperty("online-mode", Boolean.toString(serverConfig.onlineMode()));
@@ -797,6 +831,7 @@ public final class ServerLauncher {
     private void writeInspectionConfig(Path workingDirectory) throws IOException {
         // Create minimal JSON config for inspection server to know how to return
         JsonObject config = new JsonObject();
+        config.addProperty("launchMode", BackendLaunchMode.INSPECTION_SESSION.name());
         config.addProperty("return.host", this.resolveReturnHost());
         config.addProperty("return.port", this.resolveReturnPort());
         config.addProperty("registry.sessionsRoot", MiniversePaths.sessionsRoot().toString());
@@ -887,6 +922,13 @@ public final class ServerLauncher {
         }
     }
 
+    private int resolveSessionMaxPlayers(int assignedPlayers) throws IOException {
+        Properties properties = this.readMainServerProperties();
+        int lobbyMaxPlayers = this.parsePort(properties.getProperty("max-players", ""), DEFAULT_SESSION_MAX_PLAYERS);
+        int withHeadroom = assignedPlayers + MIN_LATE_JOIN_HEADROOM;
+        return Math.max(1, Math.max(lobbyMaxPlayers, withHeadroom));
+    }
+
     private Properties readMainServerProperties() throws IOException {
         Path serverProperties = MiniversePaths.mainServerProperties();
         Properties properties = new Properties();
@@ -909,18 +951,21 @@ public final class ServerLauncher {
     }
 
     private Optional<Path> findInspectableWorld(Path sourceSessionRoot) throws IOException {
+        return this.findInspectableGroupDirectory(sourceSessionRoot).map(path -> path.resolve("world"));
+    }
+
+    private Optional<Path> findInspectableGroupDirectory(Path sourceSessionRoot) throws IOException {
         if (sourceSessionRoot == null || !Files.isDirectory(sourceSessionRoot)) {
             return Optional.empty();
         }
         try (var stream = Files.list(sourceSessionRoot)) {
             return stream
                 .filter(path -> Files.isDirectory(path.resolve("world")))
-                .map(path -> path.resolve("world"))
                 .findFirst();
         }
     }
 
-    private Optional<Path> findRetainedWorld(Path sourceSessionRoot, String groupLabel) throws IOException {
+    private Optional<Path> findRetainedGroupDirectory(Path sourceSessionRoot, String groupLabel) throws IOException {
         if (sourceSessionRoot == null || !Files.isDirectory(sourceSessionRoot)) {
             return Optional.empty();
         }
@@ -936,17 +981,64 @@ public final class ServerLauncher {
                 if (!labelPrefix.isBlank() && !folderName.startsWith(labelPrefix)) {
                     continue;
                 }
-                long modified = Files.getLastModifiedTime(path).toMillis();
+                long modified = this.latestModifiedMillis(path);
                 if (modified >= bestTime) {
                     bestTime = modified;
-                    best = path.resolve("world");
+                    best = path;
                 }
             }
         }
         if (best != null) {
             return Optional.of(best);
         }
-        return this.findInspectableWorld(sourceSessionRoot);
+        return this.findInspectableGroupDirectory(sourceSessionRoot);
+    }
+
+    private long latestModifiedMillis(Path root) throws IOException {
+        BasicFileAttributes attrs = Files.readAttributes(root, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        long latest = attrs.lastModifiedTime().toMillis();
+        if (!attrs.isDirectory() || this.isDirectoryLink(root)) {
+            return latest;
+        }
+        try (var stream = Files.list(root)) {
+            for (Path path : stream.toList()) {
+                if (this.isRuntimeEntry(path)) {
+                    continue;
+                }
+                latest = Math.max(latest, this.latestModifiedMillis(path));
+            }
+        }
+        return latest;
+    }
+
+    private boolean isRuntimeEntry(Path path) {
+        String name = path.getFileName() == null ? "" : path.getFileName().toString();
+        return name.equals("fabric-server-launch.jar")
+            || name.equals("server.jar")
+            || name.equals("libraries")
+            || name.equals("mods")
+            || name.equals("config")
+            || name.equals("versions");
+    }
+
+    private boolean isDirectoryLink(Path path) {
+        if (Files.isSymbolicLink(path)) {
+            return true;
+        }
+        if (!this.isWindows() || !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            return false;
+        }
+        Path parent = path.getParent();
+        if (parent == null) {
+            return false;
+        }
+        try {
+            Path expectedRealPath = parent.toRealPath().resolve(path.getFileName());
+            Path actualRealPath = path.toRealPath();
+            return !expectedRealPath.toString().equalsIgnoreCase(actualRealPath.toString());
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 
     private void copyDirectory(Path source, Path target) throws IOException {

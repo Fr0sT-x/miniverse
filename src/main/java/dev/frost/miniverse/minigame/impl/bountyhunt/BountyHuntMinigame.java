@@ -1,11 +1,15 @@
 package dev.frost.miniverse.minigame.impl.bountyhunt;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
 import dev.frost.miniverse.minigame.core.ScoreboardController;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
@@ -56,6 +60,7 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +70,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.sound.SoundEvents;
 
-public class BountyHuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, PlayerJoinAware {
+public class BountyHuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, PlayerJoinAware, DynamicParticipantMinigame, PersistentMinigame {
     private static final String NAME = "Bounty Hunt";
     private static final String TRACKER_TYPE = ProtectedItemTypes.TRACKER_COMPASS;
     private static final String SCOREBOARD_OBJECTIVE = "bountyhunt_display";
@@ -297,6 +302,25 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
         this.sendInvincibilityStatesTo(player);
         this.sendGraceProtectionStatesTo(player);
+    }
+
+    @Override
+    public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
+        if (!this.isParticipant(player)) {
+            this.context().participants().add(player);
+        }
+        this.scores.putIfAbsent(player.getUuid(), 0);
+        if (this.state == GameState.IN_PROGRESS || this.state == GameState.STARTING) {
+            this.registerProtectedItems();
+            this.grantTracker(player);
+            this.assignInitialTargets();
+            this.syncTrackerTarget(player, true);
+            this.sendInvincibilityStatesTo(player);
+            this.sendGraceProtectionStatesTo(player);
+            player.sendMessage(Text.literal("Joined Bounty Hunt in progress.").formatted(Formatting.GREEN), false);
+        }
+        this.syncVanillaTeams();
+        this.updateScoreboard();
     }
 
     public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
@@ -975,5 +999,275 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         private BlockPos lastNether;
         private BlockPos lastEnd;
         private BlockPos endEntryOverworld;
+    }
+
+    @Override
+    public JsonObject saveRuntimeState() {
+        JsonObject root = new JsonObject();
+        root.addProperty("state", this.state.name());
+        root.addProperty("gameTicks", this.gameTicks);
+        root.addProperty("tickCounter", this.tickCounter);
+        root.addProperty("graceTicksRemaining", this.graceTicksRemaining);
+        root.addProperty("targetSwapTicksRemaining", this.targetSwapTicksRemaining);
+        root.add("settings", this.writeSettings());
+        root.add("participants", writeUuidArray(this.context == null ? Set.of() : this.context.participantIds()));
+        root.add("targetAssignments", writeUuidUuidMap(this.targetAssignments));
+        root.add("scores", writeUuidIntMap(this.scores));
+        root.add("invincibleUntilTicks", writeUuidLongMap(this.invincibleUntilTicks));
+        root.add("compassCooldownUntilTicks", writeUuidLongMap(this.compassCooldownUntilTicks));
+        root.add("trackingData", this.writeTrackingData());
+        return root;
+    }
+
+    @Override
+    public void loadRuntimeState(JsonObject root) {
+        if (root == null) {
+            return;
+        }
+        this.targetAssignments.clear();
+        this.scores.clear();
+        this.invincibleUntilTicks.clear();
+        this.compassCooldownUntilTicks.clear();
+        this.trackingData.clear();
+        this.announcedGraceThresholds.clear();
+
+        if (root.has("settings") && root.get("settings").isJsonObject()) {
+            this.settings = readSettings(root.getAsJsonObject("settings"), this.settings);
+        }
+        this.state = parseState(stringValue(root, "state", GameState.WAITING_FOR_PLAYERS.name()));
+        this.setRuntimeState(this.state);
+        this.gameTicks = longValue(root, "gameTicks", 0L);
+        this.tickCounter = intValue(root, "tickCounter", 0);
+        this.graceTicksRemaining = intValue(root, "graceTicksRemaining", 0);
+        this.targetSwapTicksRemaining = intValue(root, "targetSwapTicksRemaining", this.settings.targetSwapIntervalSeconds() * 20);
+        if (this.context != null) {
+            for (UUID playerId : readUuidArray(root, "participants")) {
+                this.context.participants().add(playerId);
+            }
+        }
+        this.targetAssignments.putAll(readUuidUuidMap(root, "targetAssignments"));
+        this.scores.putAll(readUuidIntMap(root, "scores"));
+        this.invincibleUntilTicks.putAll(readUuidLongMap(root, "invincibleUntilTicks"));
+        this.compassCooldownUntilTicks.putAll(readUuidLongMap(root, "compassCooldownUntilTicks"));
+        this.readTrackingData(root);
+        this.registerProtectedItems();
+        this.syncVanillaTeams();
+        this.updateScoreboard();
+    }
+
+    private JsonObject writeSettings() {
+        JsonObject settingsJson = new JsonObject();
+        settingsJson.addProperty("gracePeriodSeconds", this.settings.gracePeriodSeconds());
+        settingsJson.addProperty("respawnInvincibilitySeconds", this.settings.respawnInvincibilitySeconds());
+        settingsJson.addProperty("scoreToWin", this.settings.scoreToWin());
+        settingsJson.addProperty("targetSwapIntervalSeconds", this.settings.targetSwapIntervalSeconds());
+        settingsJson.addProperty("trackerEnabled", this.settings.trackerEnabled());
+        settingsJson.addProperty("netherTrackingEnabled", this.settings.netherTrackingEnabled());
+        settingsJson.addProperty("compassCooldownSeconds", this.settings.compassCooldownSeconds());
+        settingsJson.addProperty("trackerItemId", this.settings.trackerItemId());
+        settingsJson.addProperty("disconnectGraceSeconds", this.settings.disconnectGraceSeconds());
+        return settingsJson;
+    }
+
+    private static BountyHuntSettings readSettings(JsonObject root, BountyHuntSettings fallback) {
+        BountyHuntSettings base = fallback == null ? BountyHuntSettings.defaults() : fallback;
+        return new BountyHuntSettings(
+            intValue(root, "gracePeriodSeconds", base.gracePeriodSeconds()),
+            intValue(root, "respawnInvincibilitySeconds", base.respawnInvincibilitySeconds()),
+            intValue(root, "scoreToWin", base.scoreToWin()),
+            intValue(root, "targetSwapIntervalSeconds", base.targetSwapIntervalSeconds()),
+            booleanValue(root, "trackerEnabled", base.trackerEnabled()),
+            booleanValue(root, "netherTrackingEnabled", base.netherTrackingEnabled()),
+            intValue(root, "compassCooldownSeconds", base.compassCooldownSeconds()),
+            stringValue(root, "trackerItemId", base.trackerItemId()),
+            intValue(root, "disconnectGraceSeconds", base.disconnectGraceSeconds())
+        );
+    }
+
+    private JsonArray writeTrackingData() {
+        JsonArray array = new JsonArray();
+        for (Map.Entry<UUID, TrackingData> entry : this.trackingData.entrySet()) {
+            JsonObject object = new JsonObject();
+            object.addProperty("uuid", entry.getKey().toString());
+            putBlockPos(object, "lastOverworld", entry.getValue().lastOverworld);
+            putBlockPos(object, "lastNether", entry.getValue().lastNether);
+            putBlockPos(object, "lastEnd", entry.getValue().lastEnd);
+            putBlockPos(object, "endEntryOverworld", entry.getValue().endEntryOverworld);
+            array.add(object);
+        }
+        return array;
+    }
+
+    private void readTrackingData(JsonObject root) {
+        if (!root.has("trackingData") || !root.get("trackingData").isJsonArray()) {
+            return;
+        }
+        for (var element : root.getAsJsonArray("trackingData")) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject object = element.getAsJsonObject();
+            UUID uuid = uuidValue(object, "uuid");
+            if (uuid == null) {
+                continue;
+            }
+            TrackingData data = new TrackingData();
+            data.lastOverworld = readBlockPos(object, "lastOverworld");
+            data.lastNether = readBlockPos(object, "lastNether");
+            data.lastEnd = readBlockPos(object, "lastEnd");
+            data.endEntryOverworld = readBlockPos(object, "endEntryOverworld");
+            this.trackingData.put(uuid, data);
+        }
+    }
+
+    private static JsonArray writeUuidArray(Collection<UUID> uuids) {
+        JsonArray array = new JsonArray();
+        for (UUID uuid : uuids) {
+            array.add(uuid.toString());
+        }
+        return array;
+    }
+
+    private static List<UUID> readUuidArray(JsonObject root, String key) {
+        List<UUID> uuids = new ArrayList<>();
+        if (!root.has(key) || !root.get(key).isJsonArray()) {
+            return uuids;
+        }
+        for (var element : root.getAsJsonArray(key)) {
+            try {
+                uuids.add(UUID.fromString(element.getAsString()));
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return uuids;
+    }
+
+    private static JsonObject writeUuidUuidMap(Map<UUID, UUID> map) {
+        JsonObject object = new JsonObject();
+        map.forEach((key, value) -> object.addProperty(key.toString(), value.toString()));
+        return object;
+    }
+
+    private static Map<UUID, UUID> readUuidUuidMap(JsonObject root, String key) {
+        Map<UUID, UUID> map = new ConcurrentHashMap<>();
+        if (!root.has(key) || !root.get(key).isJsonObject()) {
+            return map;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+            try {
+                map.put(UUID.fromString(entry.getKey()), UUID.fromString(entry.getValue().getAsString()));
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return map;
+    }
+
+    private static JsonObject writeUuidIntMap(Map<UUID, Integer> map) {
+        JsonObject object = new JsonObject();
+        map.forEach((key, value) -> object.addProperty(key.toString(), value));
+        return object;
+    }
+
+    private static Map<UUID, Integer> readUuidIntMap(JsonObject root, String key) {
+        Map<UUID, Integer> map = new ConcurrentHashMap<>();
+        if (!root.has(key) || !root.get(key).isJsonObject()) {
+            return map;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+            try {
+                map.put(UUID.fromString(entry.getKey()), entry.getValue().getAsInt());
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return map;
+    }
+
+    private static JsonObject writeUuidLongMap(Map<UUID, Long> map) {
+        JsonObject object = new JsonObject();
+        map.forEach((key, value) -> object.addProperty(key.toString(), value));
+        return object;
+    }
+
+    private static Map<UUID, Long> readUuidLongMap(JsonObject root, String key) {
+        Map<UUID, Long> map = new ConcurrentHashMap<>();
+        if (!root.has(key) || !root.get(key).isJsonObject()) {
+            return map;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+            try {
+                map.put(UUID.fromString(entry.getKey()), entry.getValue().getAsLong());
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return map;
+    }
+
+    private static void putBlockPos(JsonObject object, String key, @Nullable BlockPos pos) {
+        if (pos == null) {
+            return;
+        }
+        JsonObject value = new JsonObject();
+        value.addProperty("x", pos.getX());
+        value.addProperty("y", pos.getY());
+        value.addProperty("z", pos.getZ());
+        object.add(key, value);
+    }
+
+    @Nullable
+    private static BlockPos readBlockPos(JsonObject object, String key) {
+        if (!object.has(key) || !object.get(key).isJsonObject()) {
+            return null;
+        }
+        JsonObject value = object.getAsJsonObject(key);
+        return new BlockPos(intValue(value, "x", 0), intValue(value, "y", 0), intValue(value, "z", 0));
+    }
+
+    private static GameState parseState(String value) {
+        try {
+            return GameState.valueOf(value);
+        } catch (IllegalArgumentException ignored) {
+            return GameState.WAITING_FOR_PLAYERS;
+        }
+    }
+
+    @Nullable
+    private static UUID uuidValue(JsonObject object, String key) {
+        String value = stringValue(object, key, "");
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private static String stringValue(JsonObject object, String key, String fallback) {
+        return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsString() : fallback;
+    }
+
+    private static boolean booleanValue(JsonObject object, String key, boolean fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsBoolean() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private static int intValue(JsonObject object, String key, int fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsInt() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private static long longValue(JsonObject object, String key, long fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsLong() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
     }
 }

@@ -120,8 +120,10 @@ public final class SessionBootstrapper {
                 return;
             }
 
+            Properties effectiveProperties = this.withRegistryAssignments(properties);
             boolean expectedPlayer = properties.containsKey("player." + player.getUuid());
-            if (!expectedPlayer && !this.acceptsLateJoin()) {
+            boolean assignedLatePlayer = !expectedPlayer && effectiveProperties.containsKey("player." + player.getUuid());
+            if (!expectedPlayer && !assignedLatePlayer && !this.acceptsLateJoin()) {
                 return;
             }
 
@@ -136,19 +138,42 @@ public final class SessionBootstrapper {
             }
             this.loadSavedStateIfPresent();
 
-            MinigameManager.getInstance().addParticipant(player);
-            if (expectedPlayer) {
+            boolean restoredActiveSession = SessionRestoreCoordinator.hasRestoredActiveOrPausedState();
+            boolean knownRuntimeParticipant = MinigameManager.getInstance().isParticipant(player.getUuid());
+            boolean admittedParticipant = expectedPlayer || assignedLatePlayer || knownRuntimeParticipant;
+            if (admittedParticipant) {
+                MinigameManager.getInstance().addParticipant(player);
+            }
+            boolean reconnectingActivePlayer = admittedParticipant && (this.isActiveOrPaused(minigame) || restoredActiveSession);
+            if (expectedPlayer && !reconnectingActivePlayer) {
                 this.markLoading(player);
-            } else {
+            } else if (!admittedParticipant) {
                 player.changeGameMode(GameMode.SPECTATOR);
                 player.sendMessage(Text.literal("Joined active match as unassigned spectator. Ask an admin for a team assignment."), false);
             }
-            MatchLifecycleController.getInstance().onParticipantJoin(player);
-            this.handler.onPlayerJoin(minigame, player, properties);
-            if (expectedPlayer) {
+            if (admittedParticipant) {
+                MatchLifecycleController.getInstance().onParticipantJoin(player);
+                this.handler.onPlayerJoin(minigame, player, effectiveProperties);
+                if (assignedLatePlayer && minigame instanceof DynamicParticipantMinigame dynamic) {
+                    String team = effectiveProperties.getProperty("player." + player.getUuid() + ".team", effectiveProperties.getProperty("groupLabel", ""));
+                    String role = effectiveProperties.getProperty(effectiveProperties.getProperty("game", this.handler.gameId()) + ".role." + player.getUuid(), "");
+                    dynamic.addParticipantMidGame(player, team, role);
+                }
+            }
+            if (reconnectingActivePlayer) {
+                MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+                if (SessionRestoreCoordinator.restorePlayerStateIfPresent(runtime, player)) {
+                    MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
+                }
+                MinigameManager.getInstance().applyPauseStateToParticipant(player);
+                this.releaseLoadedPlayer(player, effectiveProperties);
+            } else if (expectedPlayer) {
                 this.sendMatchIntro(player, minigame, properties);
                 this.broadcastReadyState(properties, "Waiting for players...");
                 this.maybeStart(minigame, properties);
+            } else {
+                MinigameManager.getInstance().applyPauseStateToParticipant(player);
+                this.releaseLoadedPlayer(player, effectiveProperties);
             }
         }
 
@@ -158,6 +183,11 @@ public final class SessionBootstrapper {
                 return false;
             }
             GameState state = runtime.state();
+            return state == GameState.PAUSED || state.isActive();
+        }
+
+        private boolean isActiveOrPaused(T minigame) {
+            GameState state = minigame.getState();
             return state == GameState.PAUSED || state.isActive();
         }
 
@@ -188,7 +218,9 @@ public final class SessionBootstrapper {
             }
 
             this.addOnlineExpectedPlayers(server, properties);
-            this.checkReadyTimeouts(server, properties);
+            if (minigame.getState() == GameState.WAITING_FOR_PLAYERS) {
+                this.checkReadyTimeouts(server, properties);
+            }
             this.maybeStart(minigame, properties);
         }
 
@@ -198,9 +230,11 @@ public final class SessionBootstrapper {
             }
             this.savedStateLoaded = true;
             MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
-            if (MinigameSessionStore.loadInto(runtime)) {
-                Miniverse.LOGGER.info("Loaded saved runtime state for {} from {}.", this.handler.gameId(), MinigameSessionStore.savePath());
-            }
+            SessionRestoreCoordinator.restoreRuntimeIfPresent(
+                runtime,
+                this.handler.lifecycleOptions(this.handler.runtimeType().cast(runtime.minigame()), this.getConfig()),
+                runtime.minigame()::startGame
+            );
         }
 
         private void addOnlineExpectedPlayers(MinecraftServer server, Properties properties) {
@@ -597,6 +631,22 @@ public final class SessionBootstrapper {
 
             this.config = SessionConfigJson.readRuntimeProperties(Path.of(configPath));
             return this.config;
+        }
+
+        private Properties withRegistryAssignments(Properties base) {
+            String sessionId = base.getProperty("sessionId", "");
+            if (sessionId.isBlank()) {
+                return base;
+            }
+            Properties merged = new Properties();
+            merged.putAll(base);
+            Properties registry = SessionRegistry.loadRuntimeProperties(sessionId);
+            for (String name : registry.stringPropertyNames()) {
+                if (name.startsWith("player.") || name.contains(".role.")) {
+                    merged.setProperty(name, registry.getProperty(name));
+                }
+            }
+            return merged;
         }
     }
 

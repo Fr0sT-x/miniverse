@@ -5,6 +5,8 @@ import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.MinigameSessionStore;
 import dev.frost.miniverse.session.SessionPermissions;
+import dev.frost.miniverse.session.SessionRegistry;
+import dev.frost.miniverse.session.SessionRuntimeConfig;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -43,6 +45,7 @@ public final class MatchLifecycleCommands {
                         context.getSource().sendFeedback(() -> Text.literal("No active match can be paused.").formatted(Formatting.YELLOW), false);
                         return 0;
                     }
+                    SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markPauseRequested);
                     context.getSource().sendFeedback(() -> Text.literal("Paused active match and saved runtime state.").formatted(Formatting.YELLOW), true);
                     return 1;
                 }))
@@ -57,6 +60,7 @@ public final class MatchLifecycleCommands {
                         context.getSource().sendFeedback(() -> Text.literal("No paused match can be resumed.").formatted(Formatting.YELLOW), false);
                         return 0;
                     }
+                    SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::clearPauseRequested);
                     context.getSource().sendFeedback(() -> Text.literal("Resumed active match.").formatted(Formatting.GREEN), true);
                     return 1;
                 }))

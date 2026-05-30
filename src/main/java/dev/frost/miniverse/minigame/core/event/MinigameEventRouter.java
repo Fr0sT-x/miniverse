@@ -3,6 +3,8 @@ package dev.frost.miniverse.minigame.core.event;
 import dev.frost.miniverse.chat.ChatRouter;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.MinigameSessionStore;
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
@@ -13,6 +15,7 @@ import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
@@ -51,12 +54,13 @@ public final class MinigameEventRouter {
         registered = true;
 
         UseItemCallback.EVENT.register(MinigameEventRouter::onUseItem);
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> ActionResult.PASS);
-        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> ActionResult.PASS);
-        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> ActionResult.PASS);
-        AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> ActionResult.PASS);
-        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> true);
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> !pausedFor(player));
         ServerTickEvents.END_SERVER_TICK.register(MinigameEventRouter::onServerTick);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> MinigameSessionStore.saveOnShutdown());
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(MinigameEventRouter::onAllowDamage);
         ServerLivingEntityEvents.AFTER_DEATH.register(MinigameEventRouter::onAfterDeath);
         ServerPlayConnectionEvents.JOIN.register(MinigameEventRouter::onPlayerJoin);
@@ -71,6 +75,7 @@ public final class MinigameEventRouter {
         MatchLifecycleController.getInstance().tick(server);
         SpectatorService.getInstance().tick(server);
         ProtectedItemService.getInstance().tick(server);
+        MinigameSessionStore.tick(server);
         if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
             return;
         }
@@ -85,7 +90,7 @@ public final class MinigameEventRouter {
             return TypedActionResult.pass(player.getStackInHand(hand));
         }
 
-        if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
+        if (pausedFor(serverPlayer)) {
             return TypedActionResult.fail(player.getStackInHand(hand));
         }
 
@@ -103,7 +108,7 @@ public final class MinigameEventRouter {
             return true;
         }
 
-        if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
+        if (pausedFor(player)) {
             return false;
         }
 
@@ -117,6 +122,9 @@ public final class MinigameEventRouter {
 
     private static void onAfterDeath(LivingEntity entity, DamageSource source) {
         SpectatorService.getInstance().onEntityDeath(entity);
+        if (entity instanceof ServerPlayerEntity player && pausedFor(player)) {
+            return;
+        }
         Minigame active = activeMinigame();
         if (active instanceof EntityDeathAware deathAware) {
             deathAware.onEntityDeath(entity, source);
@@ -130,10 +138,13 @@ public final class MinigameEventRouter {
             joinAware.onPlayerJoin(handler.player, server);
         }
         MatchLifecycleController.getInstance().onParticipantJoin(handler.player);
-        if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED
-            && MinigameManager.getInstance().isParticipant(handler.player)) {
-            FreezeService.getInstance().freeze(handler.player, FreezeReason.ADMIN_PAUSE);
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime != null && runtime.context().participants().contains(handler.player)) {
+            if (MinigameSessionStore.restorePlayerState(runtime, handler.player)) {
+                MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
+            }
         }
+        MinigameManager.getInstance().applyPauseStateToParticipant(handler.player);
         SpectatorService.getInstance().onPlayerJoin(handler.player);
         ChatRouter.notifyPlayerIfMatchActive(handler.player);
     }
@@ -141,6 +152,9 @@ public final class MinigameEventRouter {
     private static void onAfterRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
         SpectatorService.getInstance().onPlayerRespawn(oldPlayer, newPlayer, alive);
         ProtectedItemService.getInstance().onPlayerRespawn(oldPlayer, newPlayer, alive);
+        if (pausedFor(newPlayer)) {
+            return;
+        }
         Minigame active = activeMinigame();
         if (active instanceof PlayerRespawnAware respawnAware) {
             respawnAware.onPlayerRespawn(oldPlayer, newPlayer, alive);
@@ -148,8 +162,25 @@ public final class MinigameEventRouter {
     }
 
     private static void onPlayerLeave(ServerPlayerEntity player) {
-        MatchLifecycleController.getInstance().onParticipantLeave(player);
+        if (!pausedFor(player)) {
+            boolean reconnectGraceStarted = MatchLifecycleController.getInstance().beginDisconnectGrace(player);
+            MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+            if (runtime != null) {
+                MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.DISCONNECT);
+            }
+            if (reconnectGraceStarted) {
+                SpectatorService.getInstance().onPlayerLeave(player);
+                return;
+            }
+        }
         SpectatorService.getInstance().onPlayerLeave(player);
+        if (pausedFor(player)) {
+            MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+            if (runtime != null) {
+                MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.DISCONNECT);
+            }
+            return;
+        }
         Minigame active = activeMinigame();
         if (active instanceof PlayerLeaveAware leaveAware) {
             leaveAware.onPlayerLeave(player);
@@ -163,5 +194,11 @@ public final class MinigameEventRouter {
     @Nullable
     private static Minigame activeMinigame() {
         return MinigameManager.getInstance().getActiveMinigame();
+    }
+
+    private static boolean pausedFor(PlayerEntity player) {
+        return player instanceof ServerPlayerEntity serverPlayer
+            && MinigameManager.getInstance().getCurrentState() == GameState.PAUSED
+            && MinigameManager.getInstance().isParticipant(serverPlayer);
     }
 }

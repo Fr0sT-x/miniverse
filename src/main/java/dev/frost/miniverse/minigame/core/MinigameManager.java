@@ -9,9 +9,12 @@ import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.world.GameMode;
 
 /**
  * Singleton holder for the active backend runtime.
@@ -21,6 +24,7 @@ public class MinigameManager {
 
     @Nullable
     private MinigameRuntime runtime;
+    private final Map<UUID, GameMode> gameModesBeforePause = new ConcurrentHashMap<>();
 
     private MinigameManager() {
     }
@@ -98,9 +102,10 @@ public class MinigameManager {
             return false;
         }
         for (ServerPlayerEntity player : this.runtime.context().liveParticipants()) {
+            this.applyPauseGameMode(player);
             FreezeService.getInstance().freeze(player, FreezeReason.ADMIN_PAUSE);
         }
-        MinigameSessionStore.save(this.runtime);
+        MinigameSessionStore.save(this.runtime, MinigameSessionStore.SaveReason.PAUSE);
         return true;
     }
 
@@ -109,10 +114,20 @@ public class MinigameManager {
             return false;
         }
         for (ServerPlayerEntity player : this.runtime.context().liveParticipants()) {
+            this.restorePausedGameMode(player);
             FreezeService.getInstance().unfreeze(player, FreezeReason.ADMIN_PAUSE);
         }
-        MinigameSessionStore.save(this.runtime);
+        this.gameModesBeforePause.clear();
+        MinigameSessionStore.save(this.runtime, MinigameSessionStore.SaveReason.RESUME);
         return true;
+    }
+
+    public void applyPauseStateToParticipant(ServerPlayerEntity player) {
+        if (this.runtime == null || this.runtime.state() != GameState.PAUSED || !this.isParticipant(player)) {
+            return;
+        }
+        this.applyPauseGameMode(player);
+        FreezeService.getInstance().freeze(player, FreezeReason.ADMIN_PAUSE);
     }
 
     /**
@@ -249,7 +264,23 @@ public class MinigameManager {
         MatchLifecycleController.getInstance().reset();
         FreezeService.getInstance().clearAll();
         SpectatorService.getInstance().clearAll();
+        this.gameModesBeforePause.clear();
         this.runtime = null;
+    }
+
+    private void applyPauseGameMode(ServerPlayerEntity player) {
+        GameMode currentMode = player.interactionManager.getGameMode();
+        this.gameModesBeforePause.putIfAbsent(player.getUuid(), currentMode);
+        if (currentMode != GameMode.SPECTATOR) {
+            player.changeGameMode(GameMode.ADVENTURE);
+        }
+    }
+
+    private void restorePausedGameMode(ServerPlayerEntity player) {
+        GameMode previousMode = this.gameModesBeforePause.remove(player.getUuid());
+        if (previousMode != null) {
+            player.changeGameMode(previousMode);
+        }
     }
 
     private void bindPlayerServer(ServerPlayerEntity player) {

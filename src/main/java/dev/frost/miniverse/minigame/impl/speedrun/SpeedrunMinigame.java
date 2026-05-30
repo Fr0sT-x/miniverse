@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.speedrun;
 
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.Minigame;
@@ -44,7 +45,7 @@ import java.util.UUID;
  * This is a lightweight server-side MVP: one runner, a live timer,
  * and end conditions for runner death or Ender Dragon defeat.
  */
-public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware {
+public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, DynamicParticipantMinigame {
     private static final String NAME = "Speedrun";
     private static final String SCOREBOARD_OBJECTIVE = "speedrun_display";
     private static final int TICKS_PER_SECOND = 20;
@@ -143,10 +144,6 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
             return;
         }
 
-        if (!this.isRunner(player)) {
-            return;
-        }
-
         this.endGameWithFailure(Text.literal(player.getName().getString() + " died.").formatted(Formatting.RED));
     }
 
@@ -169,6 +166,9 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
             this.tickCounter++;
 
             if (this.runnerUuid != null && !this.isRunnerConnected()) {
+                if (MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(this.runnerUuid)) {
+                    return;
+                }
                 this.endGameWithFailure(Text.literal("Runner disconnected.").formatted(Formatting.RED));
                 return;
             }
@@ -216,6 +216,30 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
         this.syncVanillaTeams();
 
         this.updateScoreboard();
+    }
+
+    public void syncLateParticipant(ServerPlayerEntity player) {
+        this.addParticipant(player);
+        if (this.state == GameState.IN_PROGRESS) {
+            this.syncParticipantModes();
+            player.setHealth(player.getMaxHealth());
+            player.getHungerManager().setFoodLevel(20);
+            player.getHungerManager().setSaturationLevel(20.0F);
+        }
+        this.syncVanillaTeams();
+        this.updateScoreboard();
+    }
+
+    @Override
+    public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
+        if (this.getRunner() == null) {
+            this.setRunner(player);
+            return;
+        }
+        this.syncLateParticipant(player);
+        if (this.state == GameState.IN_PROGRESS) {
+            player.sendMessage(Text.literal("Joined Speedrun in progress.").formatted(Formatting.GREEN), false);
+        }
     }
 
     @Nullable
@@ -269,10 +293,9 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
     }
 
     public void handlePlayerLeave(ServerPlayerEntity player) {
-        boolean wasRunner = this.isRunner(player);
         this.removeParticipant(player);
 
-        if (wasRunner && this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.IN_PROGRESS) {
             this.endGameWithFailure(Text.literal(player.getName().getString() + " left the run.").formatted(Formatting.RED));
             return;
         }
@@ -285,37 +308,19 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
     }
 
     private void prepareParticipantsForRun() {
-        ServerPlayerEntity runner = this.getRunner();
-        if (runner == null) {
-            return;
-        }
-
         List<ServerPlayerEntity> participants = this.getParticipants();
         for (ServerPlayerEntity participant : participants) {
-            if (participant.getUuid().equals(runner.getUuid())) {
-                participant.getInventory().clear();
-                participant.changeGameMode(GameMode.SURVIVAL);
-                participant.getHungerManager().setFoodLevel(20);
-                participant.getHungerManager().setSaturationLevel(20.0F);
-                participant.addStatusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 40, 0, true, false, false));
-            } else {
-                participant.changeGameMode(GameMode.SPECTATOR);
-            }
+            participant.getInventory().clear();
+            participant.changeGameMode(GameMode.SURVIVAL);
+            participant.getHungerManager().setFoodLevel(20);
+            participant.getHungerManager().setSaturationLevel(20.0F);
+            participant.addStatusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 40, 0, true, false, false));
         }
     }
 
     private void syncParticipantModes() {
-        ServerPlayerEntity runner = this.getRunner();
-        if (runner == null) {
-            return;
-        }
-
         for (ServerPlayerEntity participant : this.getParticipants()) {
-            if (participant.getUuid().equals(runner.getUuid())) {
-                participant.changeGameMode(GameMode.SURVIVAL);
-            } else {
-                participant.changeGameMode(GameMode.SPECTATOR);
-            }
+            participant.changeGameMode(GameMode.SURVIVAL);
         }
     }
 
@@ -439,11 +444,8 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
             return;
         }
 
-        ServerPlayerEntity runner = this.getRunner();
-        List<ServerPlayerEntity> runners = runner == null ? List.of() : List.of(runner);
-        List<ServerPlayerEntity> spectators = this.getParticipants().stream()
-            .filter(player -> runner == null || !runner.getUuid().equals(player.getUuid()))
-            .toList();
+        List<ServerPlayerEntity> runners = this.getParticipants();
+        List<ServerPlayerEntity> spectators = List.of();
 
         VanillaTeamOptions runnerOptions = VanillaTeamOptions.defaults()
             .withColor(Formatting.GREEN)

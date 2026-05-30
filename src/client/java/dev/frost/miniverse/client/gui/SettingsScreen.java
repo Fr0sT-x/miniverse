@@ -4,6 +4,7 @@ import dev.frost.miniverse.common.NetworkConstants;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.ConfirmScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -187,16 +188,22 @@ public class SettingsScreen extends Screen {
             if (entry.retained) {
                 continue;
             }
-            int buttonX = layout.contentX + layout.contentWidth - 200;
+            int buttonX = layout.contentX + layout.contentWidth - 260;
             int buttonY = y + 8;
 
-            ButtonWidget stopButton = ButtonWidget.builder(Text.literal("⏹ Stop & Return"), button -> this.stopSession(entry.id))
+            ButtonWidget stopButton = ButtonWidget.builder(Text.literal("Save and return"), button -> this.confirmStopSession(entry.id))
                 .dimensions(buttonX, buttonY, 95, BUTTON_HEIGHT)
                 .build();
             this.addDrawableChild(stopButton);
 
+            ButtonWidget pauseButton = ButtonWidget.builder(Text.literal(entry.paused() ? "Resume" : "Pause"), button -> this.setPaused(entry.id, !entry.paused()))
+                .dimensions(buttonX + 95 + BUTTON_GAP, buttonY, 62, BUTTON_HEIGHT)
+                .build();
+            pauseButton.setTooltip(Tooltip.of(Text.literal(entry.paused() ? "Resume gameplay progression." : "Pause gameplay progression and freeze participants.")));
+            this.addDrawableChild(pauseButton);
+
             ButtonWidget changeSeedButton = ButtonWidget.builder(Text.literal("Change seed"), button -> this.changeSeed(entry.id))
-                .dimensions(buttonX + 95 + BUTTON_GAP, buttonY, 85, BUTTON_HEIGHT)
+                .dimensions(buttonX + 95 + BUTTON_GAP + 62 + BUTTON_GAP, buttonY, 85, BUTTON_HEIGHT)
                 .build();
             changeSeedButton.setTooltip(Tooltip.of(Text.literal("Restart this session with a new world seed.")));
             this.addDrawableChild(changeSeedButton);
@@ -237,21 +244,32 @@ public class SettingsScreen extends Screen {
         int rowY = this.historyListStartY(layout);
         List<SessionEntry> retainedSessions = this.getSortedRetainedSessions();
         for (SessionEntry entry : retainedSessions) {
-            int buttonX = layout.contentX + layout.contentWidth - 220;
-            ButtonWidget relaunchButton = ButtonWidget.builder(Text.literal("🔄 Relaunch"), button -> this.relaunchSession(entry.id))
-                .dimensions(buttonX, rowY + 8, 105, BUTTON_HEIGHT)
+            int relaunchWidth = 105;
+            int inspectWidth = 100;
+            int deleteWidth = 70;
+            int totalWidth = relaunchWidth + inspectWidth + deleteWidth + (BUTTON_GAP * 2);
+            int buttonX = layout.contentX + layout.contentWidth - totalWidth;
+            ButtonWidget relaunchButton = ButtonWidget.builder(Text.literal("Relaunch"), button -> this.relaunchSession(entry.id))
+                .dimensions(buttonX, rowY + 8, relaunchWidth, BUTTON_HEIGHT)
                 .build();
             relaunchButton.setTooltip(Tooltip.of(Text.literal("Relaunch this retained session.")));
             this.addDrawableChild(relaunchButton);
 
-            int inspectButtonX = buttonX + 105 + BUTTON_GAP;
+            int inspectButtonX = buttonX + relaunchWidth + BUTTON_GAP;
             ButtonWidget inspectButton = ButtonWidget.builder(Text.literal("Inspect Copy"), button -> this.inspectSession(entry.id))
-                .dimensions(inspectButtonX, rowY + 8, 100, BUTTON_HEIGHT)
+                .dimensions(inspectButtonX, rowY + 8, inspectWidth, BUTTON_HEIGHT)
                 .build();
             inspectButton.setTooltip(Tooltip.of(Text.literal("Launches a copied spectator world; the retained session folder is not modified.")));
             this.addDrawableChild(inspectButton);
 
-            this.historyRows.add(new HistoryRow(entry, relaunchButton, inspectButton));
+            int deleteButtonX = inspectButtonX + inspectWidth + BUTTON_GAP;
+            ButtonWidget deleteButton = ButtonWidget.builder(Text.literal("Delete"), button -> this.confirmDeleteSession(entry.id))
+                .dimensions(deleteButtonX, rowY + 8, deleteWidth, BUTTON_HEIGHT)
+                .build();
+            deleteButton.setTooltip(Tooltip.of(Text.literal("Delete this retained session.")));
+            this.addDrawableChild(deleteButton);
+
+            this.historyRows.add(new HistoryRow(entry, relaunchButton, inspectButton, deleteButton));
             rowY += SESSION_ROW_HEIGHT + ROW_GAP;
         }
 
@@ -867,6 +885,9 @@ public class SettingsScreen extends Screen {
             row.inspectButton.setY(buttonY);
             row.inspectButton.visible = visible;
             row.inspectButton.active = visible && row.entry.retained && row.entry.inspectable;
+            row.deleteButton.setY(buttonY);
+            row.deleteButton.visible = visible;
+            row.deleteButton.active = visible && row.entry.retained;
             rowY += SESSION_ROW_HEIGHT + ROW_GAP;
         }
     }
@@ -900,6 +921,21 @@ public class SettingsScreen extends Screen {
         context.fill(x + width - 1, y, x + width, y + height, 0x66FFFFFF);
     }
 
+    private void confirmStopSession(String sessionId) {
+        this.client.setScreen(new ConfirmScreen(
+            confirmed -> {
+                this.client.setScreen(this);
+                if (confirmed) {
+                    this.stopSession(sessionId);
+                }
+            },
+            Text.literal("Save and return players?"),
+            Text.literal("This will save session " + sessionId + " and return players to the main server."),
+            Text.literal("Yes"),
+            Text.literal("No")
+        ));
+    }
+
     private void stopSession(String sessionId) {
         if (this.client.player == null) {
             this.statusMessage = "Not connected to server.";
@@ -911,7 +947,17 @@ public class SettingsScreen extends Screen {
 
         // Send stop session payload
         ClientPlayNetworking.send(new NetworkConstants.StopSessionPayload(sessionId));
-        this.statusMessage = "Stopping session " + sessionId + " and returning to main server...";
+        this.statusMessage = "Saving session " + sessionId + " and returning to main server...";
+    }
+
+    private void setPaused(String sessionId, boolean paused) {
+        if (this.client.player == null) {
+            this.statusMessage = "Not connected to server.";
+            return;
+        }
+
+        ClientPlayNetworking.send(new NetworkConstants.PauseSessionPayload(sessionId, paused));
+        this.statusMessage = (paused ? "Pausing session " : "Resuming session ") + sessionId + "...";
     }
 
     private void changeSeed(String sessionId) {
@@ -940,6 +986,30 @@ public class SettingsScreen extends Screen {
         }
         ClientPlayNetworking.send(new NetworkConstants.RelaunchSessionPayload(sessionId));
         this.statusMessage = "Relaunching session " + sessionId + "...";
+    }
+
+    private void confirmDeleteSession(String sessionId) {
+        this.client.setScreen(new ConfirmScreen(
+            confirmed -> {
+                this.client.setScreen(this);
+                if (confirmed) {
+                    this.deleteSession(sessionId);
+                }
+            },
+            Text.literal("Delete retained session?"),
+            Text.literal("This permanently deletes session " + sessionId + "."),
+            Text.literal("Yes"),
+            Text.literal("No")
+        ));
+    }
+
+    private void deleteSession(String sessionId) {
+        if (this.client.player == null) {
+            this.statusMessage = "Not connected to server.";
+            return;
+        }
+        ClientPlayNetworking.send(new NetworkConstants.DeleteSessionPayload(sessionId));
+        this.statusMessage = "Deleting session " + sessionId + "...";
     }
 
     @Override
@@ -998,9 +1068,13 @@ public class SettingsScreen extends Screen {
                 summary.retained()
             );
         }
+
+        private boolean paused() {
+            return "PAUSED".equalsIgnoreCase(this.state);
+        }
     }
 
-    private record HistoryRow(SessionEntry entry, ButtonWidget relaunchButton, ButtonWidget inspectButton) {
+    private record HistoryRow(SessionEntry entry, ButtonWidget relaunchButton, ButtonWidget inspectButton, ButtonWidget deleteButton) {
     }
 
     private enum SettingsTab {

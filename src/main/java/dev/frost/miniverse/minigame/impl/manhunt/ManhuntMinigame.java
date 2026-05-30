@@ -3,6 +3,7 @@ package dev.frost.miniverse.minigame.impl.manhunt;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.Minigame;
@@ -25,11 +26,13 @@ import dev.frost.miniverse.minigame.core.item.TrackingItemNameFormatter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.persistence.SessionData;
 import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
 import dev.frost.miniverse.minigame.core.freeze.FreezeService;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import dev.frost.miniverse.session.SessionRuntimeConfig;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamMembership;
@@ -63,6 +66,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -72,7 +76,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * In this game, Speedrunners try to reach the End while Hunters try to stop them.
  * If a Speedrunner dies, the Hunters win. Hunters can respawn upon death.
  */
-public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider, PauseAwareMinigame, PersistentMinigame {
+public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider, PauseAwareMinigame, PersistentMinigame, DynamicParticipantMinigame {
     private static final String NAME = "Manhunt";
 
     private GameState state;
@@ -547,7 +551,7 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
             return;
         }
 
-        if (this.getActiveHunters().isEmpty()) {
+        if (this.getActiveHunters().isEmpty() && !this.hasHunterInReconnectGrace()) {
             this.endGameWithRunnerVictory(Text.literal("All hunters have left the game."));
             return;
         }
@@ -838,6 +842,58 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         this.syncVanillaTeams();
     }
 
+    @Override
+    public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
+        if (!this.isParticipant(player)) {
+            this.context().participants().add(player);
+        }
+
+        ManhuntRole resolvedRole = parseLateJoinRole(role, teamId);
+        if (resolvedRole == null) {
+            player.changeGameMode(net.minecraft.world.GameMode.SPECTATOR);
+            player.sendMessage(Text.literal("Joined Manhunt as an unassigned spectator. Ask an admin to assign Runner or Hunter.").formatted(Formatting.YELLOW), false);
+            return;
+        }
+
+        this.registerProtectedItems();
+        this.setPlayerRole(player, resolvedRole);
+        this.speedrunnerDeaths.putIfAbsent(player.getUuid(), 0);
+        this.hunterDeaths.putIfAbsent(player.getUuid(), 0);
+        this.pendingHunterRespawns.remove(player.getUuid());
+        this.eliminatedHunters.remove(player.getUuid());
+        this.compassCooldownUntilTicks.remove(player.getUuid());
+
+        if (this.state == GameState.RUNNING) {
+            player.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+            player.setHealth(player.getMaxHealth());
+            player.getHungerManager().setFoodLevel(20);
+            player.getHungerManager().setSaturationLevel(20.0F);
+
+            if (resolvedRole == ManhuntRole.SPEEDRUNNER) {
+                if (!this.aliveSpeedrunners.contains(player.getUuid())) {
+                    this.aliveSpeedrunners.add(player.getUuid());
+                }
+                this.deadSpeedrunners.remove(player.getUuid());
+                this.speedrunnerRespawns.removePlayer(player);
+                this.updateRunnerTracking();
+                for (ServerPlayerEntity hunter : this.getActiveHunters()) {
+                    this.syncHunterTracking(hunter, true);
+                }
+            } else {
+                this.hunterTrackingIndexes.put(player.getUuid(), 0);
+                if (this.settings.huntersCompassEnabled()) {
+                    this.grantHunterCompass(player, true);
+                }
+                if (!this.huntStarted && this.leadTicksRemaining > 0) {
+                    this.applyLeadEffects(player);
+                }
+            }
+        }
+
+        this.syncVanillaTeams();
+        player.sendMessage(Text.literal("Joined Manhunt in progress as " + resolvedRole.getDisplayName() + ".").formatted(Formatting.GREEN), false);
+    }
+
     /**
      * Gets the role of a player.
      *
@@ -857,6 +913,19 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         return switch (this.teams.role(playerUuid)) {
             case RUNNER -> ManhuntRole.SPEEDRUNNER;
             case HUNTER -> ManhuntRole.HUNTER;
+            default -> null;
+        };
+    }
+
+    @Nullable
+    private static ManhuntRole parseLateJoinRole(String role, String teamId) {
+        String value = role == null || role.isBlank() ? teamId : role;
+        if (value == null) {
+            return null;
+        }
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "speedrunner", "runner", "speedrunners", "runners" -> ManhuntRole.SPEEDRUNNER;
+            case "hunter", "hunters" -> ManhuntRole.HUNTER;
             default -> null;
         };
     }
@@ -1085,11 +1154,24 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         int count = 0;
         for (UUID speedrunnerUuid : this.aliveSpeedrunners) {
             ServerPlayerEntity player = this.getPlayerByUuid(speedrunnerUuid);
+            if ((player == null || player.isDisconnected()) && MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(speedrunnerUuid)) {
+                count++;
+                continue;
+            }
             if (player != null && !player.isDisconnected()) {
                 count++;
             }
         }
         return count;
+    }
+
+    private boolean hasHunterInReconnectGrace() {
+        for (UUID hunterUuid : this.teams.playerUuidsWithRole(TeamRole.HUNTER)) {
+            if (!this.eliminatedHunters.contains(hunterUuid) && MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(hunterUuid)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void setSpeedrunnerRespawnDelaySeconds(int seconds) {
@@ -1150,6 +1232,19 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
     }
 
     @Override
+    public SessionData saveSessionData(MinigameRuntime runtime) {
+        return new ManhuntSessionData(
+            SessionRuntimeConfig.getSessionId().orElseGet(() -> UUID.randomUUID().toString()),
+            runtime.state(),
+            this.gameTicks,
+            runtime.context().participantIds(),
+            Instant.now(),
+            this.settings,
+            this.saveRuntimeState()
+        );
+    }
+
+    @Override
     public void loadRuntimeState(JsonObject root) {
         if (root == null) {
             return;
@@ -1188,8 +1283,54 @@ public class ManhuntMinigame implements Minigame, RuntimeContextAware, ServerTic
         if (root.has("speedrunnerRespawns") && root.get("speedrunnerRespawns").isJsonObject()) {
             this.speedrunnerRespawns.loadRuntimeState(root.getAsJsonObject("speedrunnerRespawns"));
         }
+        this.repairActiveRunnerRoster();
         this.registerProtectedItems();
         this.syncVanillaTeams();
+    }
+
+    @Override
+    public void loadSessionData(SessionData data) {
+        if (data instanceof ManhuntSessionData manhuntData) {
+            this.applySettings(manhuntData.settings());
+            this.loadRuntimeState(this.runtimeForRestore(manhuntData));
+            for (UUID participantId : manhuntData.participantIds()) {
+                this.context().participants().add(participantId);
+            }
+            return;
+        }
+        PersistentMinigame.super.loadSessionData(data);
+    }
+
+    private JsonObject runtimeForRestore(ManhuntSessionData data) {
+        JsonObject runtime = data.runtime().deepCopy();
+        GameState runtimeState = parseState(stringValue(runtime, "state", data.gameState().name()));
+        boolean hasRuntimeProgress = data.gameTicks() > 0L
+            || booleanValue(runtime, "huntStarted", false)
+            || hasElements(runtime, "aliveSpeedrunners")
+            || hasElements(runtime, "deadSpeedrunners")
+            || hasElements(runtime, "speedrunnerDeaths")
+            || hasElements(runtime, "hunterDeaths");
+
+        if (hasRuntimeProgress && !runtimeState.isActive() && runtimeState != GameState.PAUSED && !runtimeState.isTerminal()) {
+            runtime.addProperty("state", GameState.RUNNING.name());
+        } else if ((data.gameState().isActive() || data.gameState() == GameState.PAUSED) && !runtimeState.isActive() && runtimeState != GameState.PAUSED) {
+            runtime.addProperty("state", data.gameState().name());
+        }
+        return runtime;
+    }
+
+    private static boolean hasElements(JsonObject root, String key) {
+        return root.has(key) && root.get(key).isJsonArray() && !root.getAsJsonArray(key).isEmpty();
+    }
+
+    private void repairActiveRunnerRoster() {
+        if (!this.state.isActive()) {
+            return;
+        }
+        if (!this.aliveSpeedrunners.isEmpty() || !this.deadSpeedrunners.isEmpty()) {
+            return;
+        }
+        this.aliveSpeedrunners.addAll(this.getSpeedrunnerUuids());
     }
 
     ServerPlayerEntity getPlayerByUuid(UUID uuid) {

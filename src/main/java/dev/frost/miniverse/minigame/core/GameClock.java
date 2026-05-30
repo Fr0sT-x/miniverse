@@ -11,6 +11,10 @@ public final class GameClock {
         return ++this.ticks;
     }
 
+    public void setTicks(long ticks) {
+        this.ticks = Math.max(0L, ticks);
+    }
+
     public long ticks() {
         return this.ticks;
     }

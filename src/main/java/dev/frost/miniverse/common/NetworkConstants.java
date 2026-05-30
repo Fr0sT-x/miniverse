@@ -18,8 +18,11 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<CreateSessionPayload> CREATE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_create"));
     public static final CustomPayload.Id<LaunchSessionPayload> LAUNCH_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_launch"));
     public static final CustomPayload.Id<StopSessionPayload> STOP_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_stop"));
+    public static final CustomPayload.Id<PauseSessionPayload> PAUSE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_pause"));
+    public static final CustomPayload.Id<AssignMidGamePlayerPayload> ASSIGN_MID_GAME_PLAYER_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_assign_mid_game"));
     public static final CustomPayload.Id<InspectSessionPayload> INSPECT_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_inspect"));
     public static final CustomPayload.Id<RelaunchSessionPayload> RELAUNCH_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_relaunch"));
+    public static final CustomPayload.Id<DeleteSessionPayload> DELETE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_delete"));
     public static final CustomPayload.Id<ChangeSeedPayload> CHANGE_SEED_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "change_seed"));
     public static final CustomPayload.Id<CleanupPlayerPayload> CLEANUP_PLAYER_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "cleanup_player"));
     public static final CustomPayload.Id<LauncherSettingsPayload> LAUNCHER_SETTINGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "launcher_settings"));
@@ -50,8 +53,11 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(CREATE_SESSION_ID, CreateSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(LAUNCH_SESSION_ID, LaunchSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(STOP_SESSION_ID, StopSessionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(PAUSE_SESSION_ID, PauseSessionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(ASSIGN_MID_GAME_PLAYER_ID, AssignMidGamePlayerPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(INSPECT_SESSION_ID, InspectSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RELAUNCH_SESSION_ID, RelaunchSessionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DELETE_SESSION_ID, DeleteSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CHANGE_SEED_ID, ChangeSeedPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CLEANUP_PLAYER_ID, CleanupPlayerPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(LAUNCHER_SETTINGS_ID, LauncherSettingsPayload.CODEC);
@@ -169,6 +175,40 @@ public final class NetworkConstants {
         }
     }
 
+    public record PauseSessionPayload(String sessionId, boolean paused) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, PauseSessionPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            PauseSessionPayload::sessionId,
+            PacketCodecs.BOOL,
+            PauseSessionPayload::paused,
+            PauseSessionPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return PAUSE_SESSION_ID;
+        }
+    }
+
+    public record AssignMidGamePlayerPayload(String sessionId, String playerUuid, String teamLabel, String role) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, AssignMidGamePlayerPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            AssignMidGamePlayerPayload::sessionId,
+            PacketCodecs.STRING,
+            AssignMidGamePlayerPayload::playerUuid,
+            PacketCodecs.STRING,
+            AssignMidGamePlayerPayload::teamLabel,
+            PacketCodecs.STRING,
+            AssignMidGamePlayerPayload::role,
+            AssignMidGamePlayerPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ASSIGN_MID_GAME_PLAYER_ID;
+        }
+    }
+
     public record InspectSessionPayload(String sessionId) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, InspectSessionPayload> CODEC = PacketCodec.tuple(
             PacketCodecs.STRING,
@@ -192,6 +232,19 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return RELAUNCH_SESSION_ID;
+        }
+    }
+
+    public record DeleteSessionPayload(String sessionId) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DeleteSessionPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            DeleteSessionPayload::sessionId,
+            DeleteSessionPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DELETE_SESSION_ID;
         }
     }
 

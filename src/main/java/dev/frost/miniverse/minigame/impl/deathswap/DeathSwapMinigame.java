@@ -1,11 +1,15 @@
 package dev.frost.miniverse.minigame.impl.deathswap;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
 import dev.frost.miniverse.minigame.core.ScoreboardController;
 import dev.frost.miniverse.minigame.core.countdown.CountdownService;
@@ -55,7 +59,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider {
+public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider, DynamicParticipantMinigame, PersistentMinigame {
     private static final String NAME = "Death Swap";
     private static final String SCOREBOARD_OBJECTIVE = "deathswap_display";
     private static final int DEATH_ATTRIBUTION_SECONDS = 90;
@@ -251,6 +255,24 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         return this.context().participants().size() >= 2;
     }
 
+    @Override
+    public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
+        if (!this.isParticipant(player)) {
+            this.context().participants().add(player);
+        }
+        if (this.state == GameState.RUNNING) {
+            this.aliveParticipants.add(player.getUuid());
+            this.points.putIfAbsent(player.getUuid(), 0);
+            player.changeGameMode(GameMode.SURVIVAL);
+            player.setHealth(player.getMaxHealth());
+            player.getHungerManager().setFoodLevel(20);
+            player.getHungerManager().setSaturationLevel(20.0F);
+            this.rebuildSoloTeams(this.getParticipants());
+            this.updateScoreboard();
+            player.sendMessage(Text.literal("Joined Death Swap in progress. You will be included in the next swap cycle.").formatted(Formatting.GREEN), false);
+        }
+    }
+
     public int getAliveCount() {
         return this.aliveParticipants.size();
     }
@@ -279,6 +301,9 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     private void tickSwapTimer() {
         this.refreshAliveParticipants();
         if (this.settings.respawnMode() == RespawnMode.ELIMINATION && this.aliveParticipants.size() <= 1) {
+            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+                return;
+            }
             this.endMatch(this.aliveParticipants);
             return;
         }
@@ -311,6 +336,10 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     private void executeSwap() {
         this.refreshAliveParticipants();
         if (this.aliveParticipants.size() < 2) {
+            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+                this.resetSwapTimer();
+                return;
+            }
             this.checkEliminationEnd();
             this.resetSwapTimer();
             return;
@@ -392,6 +421,9 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         }
         this.refreshAliveParticipants();
         if (this.aliveParticipants.size() <= 1) {
+            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+                return;
+            }
             this.endMatch(this.aliveParticipants);
         }
     }
@@ -508,6 +540,9 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     private void refreshAliveParticipants() {
         this.aliveParticipants.removeIf(playerId -> {
             ServerPlayerEntity player = this.getPlayerByUuid(playerId);
+            if ((player == null || player.isDisconnected()) && MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(playerId)) {
+                return false;
+            }
             return player == null || player.isDisconnected() || (this.settings.respawnMode() == RespawnMode.ELIMINATION && player.isSpectator());
         });
     }
@@ -571,5 +606,270 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     }
 
     private record SwapAttribution(UUID scorerId, long expiresAtTick, int swapId) {
+    }
+
+    @Override
+    public JsonObject saveRuntimeState() {
+        JsonObject root = new JsonObject();
+        root.addProperty("state", this.state.name());
+        root.addProperty("gameTicks", this.gameTicks);
+        root.addProperty("secondAccumulator", this.secondAccumulator);
+        root.addProperty("swapTicksRemaining", this.swapTicksRemaining);
+        root.addProperty("swapCount", this.swapCount);
+        root.addProperty("warnedCurrentSwap", this.warnedCurrentSwap);
+        root.add("settings", this.writeSettings());
+        root.add("participants", writeUuidArray(this.context == null ? Set.of() : this.context.participantIds()));
+        root.add("aliveParticipants", writeUuidArray(this.aliveParticipants));
+        root.add("points", writeUuidIntMap(this.points));
+        root.add("recentTargets", this.writeRecentTargets());
+        root.add("deathAttributions", this.writeDeathAttributions());
+        root.add("pendingAssignment", writeUuidUuidMap(this.pendingAssignment));
+        return root;
+    }
+
+    @Override
+    public void loadRuntimeState(JsonObject root) {
+        if (root == null) {
+            return;
+        }
+        this.visibleCountdowns.reset();
+        this.teams.clear();
+        this.aliveParticipants.clear();
+        this.points.clear();
+        this.recentTargets.clear();
+        this.deathAttributions.clear();
+        this.pendingAssignment = Map.of();
+
+        if (root.has("settings") && root.get("settings").isJsonObject()) {
+            this.settings = readSettings(root.getAsJsonObject("settings"), this.settings);
+            this.respawns = new RespawnPolicyController(this.settings.respawnMode(), this.spectators);
+        }
+        this.state = parseState(stringValue(root, "state", GameState.WAITING_FOR_PLAYERS.name()));
+        this.context().setState(this.state);
+        this.gameTicks = longValue(root, "gameTicks", 0L);
+        this.secondAccumulator = intValue(root, "secondAccumulator", 0);
+        this.swapTicksRemaining = intValue(root, "swapTicksRemaining", Math.max(1, this.settings.swapIntervalSeconds()) * 20);
+        this.swapCount = intValue(root, "swapCount", 0);
+        this.warnedCurrentSwap = booleanValue(root, "warnedCurrentSwap", false);
+        for (UUID playerId : readUuidArray(root, "participants")) {
+            this.context().participants().add(playerId);
+        }
+        this.aliveParticipants.addAll(readUuidArray(root, "aliveParticipants"));
+        this.points.putAll(readUuidIntMap(root, "points"));
+        this.readRecentTargets(root);
+        this.readDeathAttributions(root);
+        this.pendingAssignment = readUuidUuidMap(root, "pendingAssignment");
+        this.updateScoreboard();
+    }
+
+    private JsonObject writeSettings() {
+        JsonObject object = new JsonObject();
+        object.addProperty("swapIntervalSeconds", this.settings.swapIntervalSeconds());
+        object.addProperty("initialGracePeriodSeconds", this.settings.initialGracePeriodSeconds());
+        object.addProperty("borderSize", this.settings.borderSize());
+        object.addProperty("seedMode", this.settings.seedMode().name());
+        object.addProperty("seed", this.settings.seed());
+        object.addProperty("keepInventory", this.settings.keepInventory());
+        object.addProperty("pvpEnabled", this.settings.pvpEnabled());
+        object.addProperty("respawnMode", this.settings.respawnMode().name());
+        object.addProperty("pointsToWin", this.settings.pointsToWin());
+        object.addProperty("preserveVelocity", this.settings.preserveVelocity());
+        return object;
+    }
+
+    private static DeathSwapSettings readSettings(JsonObject root, DeathSwapSettings fallback) {
+        DeathSwapSettings base = fallback == null ? DeathSwapSettings.defaults() : fallback;
+        DeathSwapSettings.SeedMode seedMode;
+        try {
+            seedMode = DeathSwapSettings.SeedMode.valueOf(stringValue(root, "seedMode", base.seedMode().name()));
+        } catch (IllegalArgumentException ignored) {
+            seedMode = base.seedMode();
+        }
+        RespawnMode respawnMode = RespawnMode.parse(stringValue(root, "respawnMode", base.respawnMode().configValue()), base.respawnMode());
+        return new DeathSwapSettings(
+            intValue(root, "swapIntervalSeconds", base.swapIntervalSeconds()),
+            intValue(root, "initialGracePeriodSeconds", base.initialGracePeriodSeconds()),
+            intValue(root, "borderSize", base.borderSize()),
+            seedMode,
+            longValue(root, "seed", base.seed()),
+            booleanValue(root, "keepInventory", base.keepInventory()),
+            booleanValue(root, "pvpEnabled", base.pvpEnabled()),
+            respawnMode,
+            intValue(root, "pointsToWin", base.pointsToWin()),
+            booleanValue(root, "preserveVelocity", base.preserveVelocity()),
+            base.teams()
+        );
+    }
+
+    private JsonArray writeRecentTargets() {
+        JsonArray array = new JsonArray();
+        for (Map.Entry<UUID, ArrayDeque<UUID>> entry : this.recentTargets.entrySet()) {
+            JsonObject object = new JsonObject();
+            object.addProperty("uuid", entry.getKey().toString());
+            object.add("targets", writeUuidArray(entry.getValue()));
+            array.add(object);
+        }
+        return array;
+    }
+
+    private void readRecentTargets(JsonObject root) {
+        if (!root.has("recentTargets") || !root.get("recentTargets").isJsonArray()) {
+            return;
+        }
+        for (var element : root.getAsJsonArray("recentTargets")) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject object = element.getAsJsonObject();
+            UUID uuid = uuidValue(object, "uuid");
+            if (uuid != null) {
+                this.recentTargets.put(uuid, new ArrayDeque<>(readUuidArray(object, "targets")));
+            }
+        }
+    }
+
+    private JsonArray writeDeathAttributions() {
+        JsonArray array = new JsonArray();
+        for (Map.Entry<UUID, SwapAttribution> entry : this.deathAttributions.entrySet()) {
+            JsonObject object = new JsonObject();
+            object.addProperty("uuid", entry.getKey().toString());
+            object.addProperty("scorerId", entry.getValue().scorerId().toString());
+            object.addProperty("expiresAtTick", entry.getValue().expiresAtTick());
+            object.addProperty("swapId", entry.getValue().swapId());
+            array.add(object);
+        }
+        return array;
+    }
+
+    private void readDeathAttributions(JsonObject root) {
+        if (!root.has("deathAttributions") || !root.get("deathAttributions").isJsonArray()) {
+            return;
+        }
+        for (var element : root.getAsJsonArray("deathAttributions")) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject object = element.getAsJsonObject();
+            UUID uuid = uuidValue(object, "uuid");
+            UUID scorerId = uuidValue(object, "scorerId");
+            if (uuid != null && scorerId != null) {
+                this.deathAttributions.put(uuid, new SwapAttribution(
+                    scorerId,
+                    longValue(object, "expiresAtTick", 0L),
+                    intValue(object, "swapId", 0)
+                ));
+            }
+        }
+    }
+
+    private static JsonArray writeUuidArray(Collection<UUID> uuids) {
+        JsonArray array = new JsonArray();
+        for (UUID uuid : uuids) {
+            array.add(uuid.toString());
+        }
+        return array;
+    }
+
+    private static List<UUID> readUuidArray(JsonObject root, String key) {
+        List<UUID> uuids = new ArrayList<>();
+        if (!root.has(key) || !root.get(key).isJsonArray()) {
+            return uuids;
+        }
+        for (var element : root.getAsJsonArray(key)) {
+            try {
+                uuids.add(UUID.fromString(element.getAsString()));
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return uuids;
+    }
+
+    private static JsonObject writeUuidUuidMap(Map<UUID, UUID> map) {
+        JsonObject object = new JsonObject();
+        map.forEach((key, value) -> object.addProperty(key.toString(), value.toString()));
+        return object;
+    }
+
+    private static Map<UUID, UUID> readUuidUuidMap(JsonObject root, String key) {
+        Map<UUID, UUID> map = new LinkedHashMap<>();
+        if (!root.has(key) || !root.get(key).isJsonObject()) {
+            return map;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+            try {
+                map.put(UUID.fromString(entry.getKey()), UUID.fromString(entry.getValue().getAsString()));
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return map;
+    }
+
+    private static JsonObject writeUuidIntMap(Map<UUID, Integer> map) {
+        JsonObject object = new JsonObject();
+        map.forEach((key, value) -> object.addProperty(key.toString(), value));
+        return object;
+    }
+
+    private static Map<UUID, Integer> readUuidIntMap(JsonObject root, String key) {
+        Map<UUID, Integer> map = new ConcurrentHashMap<>();
+        if (!root.has(key) || !root.get(key).isJsonObject()) {
+            return map;
+        }
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+            try {
+                map.put(UUID.fromString(entry.getKey()), entry.getValue().getAsInt());
+            } catch (RuntimeException ignored) {
+            }
+        }
+        return map;
+    }
+
+    private static GameState parseState(String value) {
+        try {
+            return GameState.valueOf(value);
+        } catch (IllegalArgumentException ignored) {
+            return GameState.WAITING_FOR_PLAYERS;
+        }
+    }
+
+    @Nullable
+    private static UUID uuidValue(JsonObject object, String key) {
+        String value = stringValue(object, key, "");
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private static String stringValue(JsonObject object, String key, String fallback) {
+        return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsString() : fallback;
+    }
+
+    private static boolean booleanValue(JsonObject object, String key, boolean fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsBoolean() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private static int intValue(JsonObject object, String key, int fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsInt() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
+    }
+
+    private static long longValue(JsonObject object, String key, long fallback) {
+        try {
+            return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsLong() : fallback;
+        } catch (RuntimeException ignored) {
+            return fallback;
+        }
     }
 }

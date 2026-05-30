@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.ConfirmScreen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
@@ -26,9 +27,10 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 public final class AdminWorkspaceView implements WorkspaceView {
-    private static final int ROW_HEIGHT = 80;
+    private static final int ROW_HEIGHT = 148;
     private static final int ROW_GAP = 10;
     private static final int BUTTON_HEIGHT = 22;
+    private static final int BUTTON_GAP = 8;
     private static final int SETTINGS_ROW_HEIGHT = 28;
     private static final int SETTINGS_SECTION_TITLE_HEIGHT = 18;
     private static final int SETTINGS_SECTION_GAP = 8;
@@ -44,6 +46,7 @@ public final class AdminWorkspaceView implements WorkspaceView {
     private UiLayout.Rect panel = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect listArea = new UiLayout.Rect(0, 0, 0, 0);
     private String statusMessage = "";
+    private String assignmentSessionId = "";
     private int scrollOffset;
     private int maxScroll;
     private HistorySortOrder historySortOrder = HistorySortOrder.LATEST_PLAYED;
@@ -319,6 +322,26 @@ public final class AdminWorkspaceView implements WorkspaceView {
             } else {
                 context.drawText(textRenderer, Text.literal("Seed: " + entry.seed()), textX, y + 38, UiTheme.TEXT_DIM, false);
                 context.drawText(textRenderer, Text.literal("Started: " + formatTime(entry.launchedAtMillis())), textX, y + 52, UiTheme.TEXT_DIM, false);
+                SessionSnapshotData.PendingJoiner pendingJoiner = this.firstPendingJoiner();
+                if (pendingJoiner != null) {
+                    int maxWidth = Math.max(60, this.listArea.width() - 320);
+                    String assignmentHint = this.assignmentSessionId.equals(entry.id()) ? "select a target team below" : "click Assign to select a team";
+                    context.drawText(
+                        textRenderer,
+                        Text.literal(textRenderer.trimToWidth("Pending: " + pendingJoiner.name() + " - " + assignmentHint, maxWidth)),
+                        textX,
+                        y + 66,
+                        UiTheme.WARNING,
+                        false
+                    );
+                    if (this.assignmentSessionId.equals(entry.id())) {
+                        int assignY = y + 84;
+                        context.drawText(textRenderer, Text.literal("Target team"), textX, assignY, UiTheme.TEXT_MUTED, false);
+                        if (entry.groups().isEmpty()) {
+                            context.drawText(textRenderer, Text.literal("No teams available"), textX + 82, assignY, UiTheme.WARNING, false);
+                        }
+                    }
+                }
                 int rowY = y;
                 SessionLaunchStatus.latestFor(entry.id()).ifPresent(status -> this.renderLaunchProgress(context, textRenderer, rowY, status));
             }
@@ -427,21 +450,68 @@ public final class AdminWorkspaceView implements WorkspaceView {
         if (this.mode == Mode.HISTORY) {
             for (SessionEntry entry : this.retainedSessions()) {
                 int capturedY = rowY;
-                int buttonX = this.listArea.x() + this.listArea.width() - 218;
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 10, 96, BUTTON_HEIGHT), () -> "Relaunch", () -> this.relaunchSession(entry.id()), UiTheme.ACCENT_GREEN, () -> this.rowVisible(capturedY), true));
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 104, capturedY + 10, 108, BUTTON_HEIGHT), () -> "Inspect Copy", () -> this.inspectSession(entry.id()), UiTheme.ACCENT_BLUE, () -> this.rowVisible(capturedY) && entry.inspectable(), true));
+                int relaunchWidth = 86;
+                int inspectWidth = 108;
+                int deleteWidth = 64;
+                int totalWidth = relaunchWidth + inspectWidth + deleteWidth + (BUTTON_GAP * 2);
+                int buttonX = this.listArea.x() + this.listArea.width() - totalWidth;
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 10, relaunchWidth, BUTTON_HEIGHT), () -> "Relaunch", () -> this.relaunchSession(entry.id()), UiTheme.ACCENT_GREEN, () -> this.rowVisible(capturedY), true));
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + relaunchWidth + BUTTON_GAP, capturedY + 10, inspectWidth, BUTTON_HEIGHT), () -> "Inspect Copy", () -> this.inspectSession(entry.id()), UiTheme.ACCENT_BLUE, () -> this.rowVisible(capturedY) && entry.inspectable(), true));
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + relaunchWidth + BUTTON_GAP + inspectWidth + BUTTON_GAP, capturedY + 10, deleteWidth, BUTTON_HEIGHT), () -> "Delete", () -> this.confirmDeleteSession(entry.id()), UiTheme.ACCENT_RED, () -> this.rowVisible(capturedY), true));
                 rowY += ROW_HEIGHT + ROW_GAP;
             }
             this.updateScrollBounds(this.retainedSessions().size());
         } else {
             for (SessionEntry entry : this.activeSessions()) {
                 int capturedY = rowY;
-                int buttonX = this.listArea.x() + this.listArea.width() - 210;
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 10, 100, BUTTON_HEIGHT), () -> "Stop & Return", () -> this.stopSession(entry.id()), UiTheme.ACCENT_RED, () -> this.rowVisible(capturedY), true));
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 108, capturedY + 10, 96, BUTTON_HEIGHT), () -> "Change Seed", () -> this.changeSeed(entry.id()), UiTheme.ACCENT_BLUE, () -> this.rowVisible(capturedY), true));
+                int buttonX = this.listArea.x() + this.listArea.width() - 270;
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 10, 98, BUTTON_HEIGHT), () -> "Save and return", () -> this.confirmStopSession(entry.id()), UiTheme.ACCENT_RED, () -> this.rowVisible(capturedY), true));
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 106, capturedY + 10, 72, BUTTON_HEIGHT), () -> entry.paused() ? "Resume" : "Pause", () -> this.setPaused(entry.id(), !entry.paused()), entry.paused() ? UiTheme.ACCENT_GREEN : UiTheme.WARNING, () -> this.rowVisible(capturedY), true));
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 186, capturedY + 10, 78, BUTTON_HEIGHT), () -> "Seed", () -> this.changeSeed(entry.id()), UiTheme.ACCENT_BLUE, () -> this.rowVisible(capturedY), true));
+                SessionSnapshotData.PendingJoiner pendingJoiner = this.firstPendingJoiner();
+                if (pendingJoiner != null) {
+                    this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 42, 86, BUTTON_HEIGHT), () -> this.assignmentSessionId.equals(entry.id()) ? "Close" : "Assign", () -> this.toggleAssignment(entry.id()), UiTheme.ACCENT_GREEN, () -> this.rowVisible(capturedY), true));
+                    if (this.assignmentSessionId.equals(entry.id())) {
+                        this.addAssignmentButtons(entry, pendingJoiner, capturedY);
+                    }
+                }
                 rowY += ROW_HEIGHT + ROW_GAP;
             }
             this.updateScrollBounds(this.activeSessions().size());
+        }
+    }
+
+    private void addAssignmentButtons(SessionEntry entry, SessionSnapshotData.PendingJoiner pendingJoiner, int rowY) {
+        int x = this.listArea.x() + 96;
+        int y = rowY + 80;
+        int width = 104;
+        int gap = 8;
+        int index = 0;
+        if (entry.supportsRoles()) {
+            this.buttons.add(new ActionButton(new UiLayout.Rect(x, y, width, BUTTON_HEIGHT), () -> "Speedrunner", () -> this.assignPending(entry, pendingJoiner, "speedrunner"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY), true));
+            this.buttons.add(new ActionButton(new UiLayout.Rect(x + width + gap, y, width, BUTTON_HEIGHT), () -> "Hunter", () -> this.assignPending(entry, pendingJoiner, "hunter"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY), true));
+            return;
+        }
+        if (entry.isSpeedrun()) {
+            this.buttons.add(new ActionButton(new UiLayout.Rect(x, y, width, BUTTON_HEIGHT), () -> "New Solo", () -> this.assignPending(entry, pendingJoiner, pendingJoiner.name(), "runner"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY), true));
+            index++;
+        }
+        for (SessionSnapshotData.GroupSummary group : entry.groups()) {
+            if (index >= 4) {
+                break;
+            }
+            String label = group.displayName().isBlank() ? group.label() : group.displayName();
+            String role = entry.roleForGroup(group);
+            int buttonX = x + index * (width + gap);
+            this.buttons.add(new ActionButton(
+                new UiLayout.Rect(buttonX, y, width, BUTTON_HEIGHT),
+                () -> label.length() > 12 ? label.substring(0, 12) : label,
+                () -> this.assignPending(entry, pendingJoiner, group.label(), role),
+                UiTheme.ACCENT_BLUE,
+                () -> this.rowVisible(rowY),
+                true
+            ));
+            index++;
         }
     }
 
@@ -489,6 +559,11 @@ public final class AdminWorkspaceView implements WorkspaceView {
         return entry.createdAtMillis();
     }
 
+    private SessionSnapshotData.PendingJoiner firstPendingJoiner() {
+        List<SessionSnapshotData.PendingJoiner> pending = SessionSnapshotData.pendingJoiners();
+        return pending.isEmpty() ? null : pending.getFirst();
+    }
+
     private void loadSettingsState() {
         SessionSnapshotData.ServerSettings server = SessionSnapshotData.serverSettings();
         SessionSnapshotData.MemorySettings memory = SessionSnapshotData.memorySettings();
@@ -499,13 +574,36 @@ public final class AdminWorkspaceView implements WorkspaceView {
         this.memoryEnabled = memory.enabled();
     }
 
+    private void confirmStopSession(String sessionId) {
+        this.client.setScreen(new ConfirmScreen(
+            confirmed -> {
+                this.client.setScreen(this.screen);
+                if (confirmed) {
+                    this.stopSession(sessionId);
+                }
+            },
+            Text.literal("Save and return players?"),
+            Text.literal("This will save session " + sessionId + " and return players to the main server."),
+            Text.literal("Yes"),
+            Text.literal("No")
+        ));
+    }
+
     private void stopSession(String sessionId) {
         if (!this.connected()) {
             return;
         }
         ClientPlayNetworking.send(new NetworkConstants.CleanupPlayerPayload(sessionId));
         ClientPlayNetworking.send(new NetworkConstants.StopSessionPayload(sessionId));
-        this.statusMessage = "Stopping " + sessionId + " and returning players.";
+        this.statusMessage = "Saving " + sessionId + " and returning players.";
+    }
+
+    private void setPaused(String sessionId, boolean paused) {
+        if (!this.connected()) {
+            return;
+        }
+        ClientPlayNetworking.send(new NetworkConstants.PauseSessionPayload(sessionId, paused));
+        this.statusMessage = (paused ? "Pausing " : "Resuming ") + sessionId + ".";
     }
 
     private void changeSeed(String sessionId) {
@@ -530,6 +628,48 @@ public final class AdminWorkspaceView implements WorkspaceView {
         }
         ClientPlayNetworking.send(new NetworkConstants.RelaunchSessionPayload(sessionId));
         this.statusMessage = "Relaunching " + sessionId + ".";
+    }
+
+    private void confirmDeleteSession(String sessionId) {
+        this.client.setScreen(new ConfirmScreen(
+            confirmed -> {
+                this.client.setScreen(this.screen);
+                if (confirmed) {
+                    this.deleteSession(sessionId);
+                }
+            },
+            Text.literal("Delete retained session?"),
+            Text.literal("This permanently deletes session " + sessionId + "."),
+            Text.literal("Yes"),
+            Text.literal("No")
+        ));
+    }
+
+    private void deleteSession(String sessionId) {
+        if (!this.connected()) {
+            return;
+        }
+        ClientPlayNetworking.send(new NetworkConstants.DeleteSessionPayload(sessionId));
+        this.statusMessage = "Deleting " + sessionId + ".";
+    }
+
+    private void toggleAssignment(String sessionId) {
+        this.assignmentSessionId = this.assignmentSessionId.equals(sessionId) ? "" : sessionId;
+        this.rebuildScrollableButtons();
+    }
+
+    private void assignPending(SessionEntry entry, SessionSnapshotData.PendingJoiner pendingJoiner, String role) {
+        this.assignPending(entry, pendingJoiner, entry.teamLabelForRole(role), role);
+    }
+
+    private void assignPending(SessionEntry entry, SessionSnapshotData.PendingJoiner pendingJoiner, String teamLabel, String role) {
+        if (!this.connected()) {
+            return;
+        }
+        ClientPlayNetworking.send(new NetworkConstants.AssignMidGamePlayerPayload(entry.id(), pendingJoiner.uuid(), teamLabel, role));
+        this.statusMessage = "Assigning " + pendingJoiner.name() + " to " + entry.id() + ".";
+        this.assignmentSessionId = "";
+        this.rebuildScrollableButtons();
     }
 
     private boolean connected() {
@@ -747,9 +887,52 @@ public final class AdminWorkspaceView implements WorkspaceView {
         OLDEST_PLAYED
     }
 
-    private record SessionEntry(String id, String game, String state, long seed, int playerCount, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable) {
+    private record SessionEntry(String id, String game, String state, long seed, int playerCount, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, List<SessionSnapshotData.GroupSummary> groups) {
         private static SessionEntry from(SessionSnapshotData.SessionSummary summary) {
-            return new SessionEntry(summary.id(), summary.game(), summary.state(), summary.seed(), summary.players(), summary.createdAtMillis(), summary.launchedAtMillis(), summary.updatedAtMillis(), summary.playedMillis(), summary.inspectable());
+            return new SessionEntry(summary.id(), summary.game(), summary.state(), summary.seed(), summary.players(), summary.createdAtMillis(), summary.launchedAtMillis(), summary.updatedAtMillis(), summary.playedMillis(), summary.inspectable(), summary.groups());
+        }
+
+        private boolean paused() {
+            return "PAUSED".equalsIgnoreCase(this.state);
+        }
+
+        private boolean supportsRoles() {
+            return this.game.toLowerCase().contains("manhunt");
+        }
+
+        private boolean isSpeedrun() {
+            return this.game.toLowerCase().contains("speedrun");
+        }
+
+        private String teamLabelForRole(String role) {
+            if (this.isSpeedrun()) {
+                return "";
+            }
+            if (!this.supportsRoles()) {
+                return this.game;
+            }
+            return switch (role.toLowerCase()) {
+                case "speedrunner" -> "Speedrunners";
+                case "hunter" -> "Hunters";
+                default -> this.game;
+            };
+        }
+
+        private String roleForGroup(SessionSnapshotData.GroupSummary group) {
+            if (this.isSpeedrun()) {
+                return "runner";
+            }
+            if (!this.supportsRoles()) {
+                return "";
+            }
+            String value = (group.label() + " " + group.displayName()).toLowerCase();
+            if (value.contains("hunter")) {
+                return "hunter";
+            }
+            if (value.contains("runner") || value.contains("speedrunner")) {
+                return "speedrunner";
+            }
+            return "";
         }
     }
 

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -164,6 +165,129 @@ public final class SessionManager {
         return group;
     }
 
+    public synchronized SessionGroup assignPlayerMidGame(String sessionId, ServerPlayerEntity player, String teamLabel, String role) {
+        return this.assignPlayerMidGameInternal(sessionId, player, teamLabel, role);
+    }
+
+    public CompletableFuture<SessionGroup> assignPlayerMidGameAsync(String sessionId, ServerPlayerEntity player, String teamLabel, String role, MinecraftServer server) {
+        SessionGroup group;
+        boolean launchNewBackend;
+        synchronized (this) {
+            group = this.assignPlayerMidGameInternal(sessionId, player, teamLabel, role);
+            GameSession session = this.sessions.get(sessionId);
+            launchNewBackend = session != null
+                && session.getGameType().getTopology() == SessionTopology.ISOLATED_WORLD
+                && group.getState() != SessionState.RUNNING;
+            if (!launchNewBackend) {
+                return CompletableFuture.completedFuture(group);
+            }
+        }
+
+        GameSession session;
+        synchronized (this) {
+            session = this.sessions.get(sessionId);
+        }
+        if (session == null) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown session: " + sessionId));
+        }
+
+        SessionOperatorSnapshot operatorSnapshot = SessionOperatorSnapshot.capture(server, List.of(group));
+        return this.launchGroupAsync(session, group, operatorSnapshot, server)
+            .thenApply(launchedGroup -> {
+                synchronized (this) {
+                    this.persistRegistry();
+                }
+                return launchedGroup;
+            });
+    }
+
+    private SessionGroup assignPlayerMidGameInternal(String sessionId, ServerPlayerEntity player, String teamLabel, String role) {
+        GameSession session = this.sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("Unknown session: " + sessionId);
+        }
+        if (session.getState() != SessionState.RUNNING) {
+            throw new IllegalStateException("Session is not running: " + sessionId);
+        }
+
+        String resolvedRole = this.resolveLateJoinRole(session, role);
+        String resolvedTeam = this.resolveLateJoinTeam(session, teamLabel, resolvedRole);
+        boolean existingGroup = session.snapshotGroups().stream()
+            .anyMatch(group -> group.getGroupLabel().equalsIgnoreCase(resolvedTeam));
+
+        SessionMembership membership = new SessionMembership(player.getUuid(), player.getName().getString(), resolvedRole);
+        String previousSessionId = this.playerSessions.get(player.getUuid());
+        if (previousSessionId != null && !previousSessionId.equals(sessionId)) {
+            GameSession previousSession = this.sessions.get(previousSessionId);
+            if (previousSession != null) {
+                previousSession.removePlayer(player.getUuid());
+            }
+        }
+        SessionGroup group = session.addMemberToGroup(resolvedTeam, membership);
+        if (group.getState() != SessionState.RUNNING || group.getPort() == null) {
+            if (session.getGameType().getTopology() != SessionTopology.ISOLATED_WORLD || existingGroup) {
+                SessionGroup primary = session.snapshotGroups().stream()
+                    .filter(candidate -> candidate != group)
+                    .filter(candidate -> candidate.getState() == SessionState.RUNNING && candidate.getPort() != null)
+                    .findFirst()
+                    .orElse(null);
+                if (primary == null) {
+                    throw new IllegalStateException("No running backend is available for late player assignment.");
+                }
+                group.attachBackend(primary.getBackendInstance());
+            }
+        }
+
+        this.playerSessions.put(player.getUuid(), sessionId);
+        this.persistRegistry();
+        Miniverse.LOGGER.info(
+            "Assigned late-joining player {} to {} session {} as {} in {}.",
+            player.getName().getString(),
+            session.getGameType().getDisplayName(),
+            sessionId,
+            resolvedRole.isBlank() ? "member" : resolvedRole,
+            resolvedTeam
+        );
+        return group;
+    }
+
+    private String resolveLateJoinRole(GameSession session, String role) {
+        String resolvedRole = role == null ? "" : role.trim();
+        if (!isManhunt(session)) {
+            return resolvedRole;
+        }
+        return switch (resolvedRole.toLowerCase(Locale.ROOT)) {
+            case "speedrunner", "runner" -> "speedrunner";
+            case "hunter" -> "hunter";
+            default -> throw new IllegalArgumentException("Manhunt late joins require an explicit role: Speedrunner or Hunter.");
+        };
+    }
+
+    private String resolveLateJoinTeam(GameSession session, String teamLabel, String role) {
+        if (isManhunt(session)) {
+            return switch (role.toLowerCase(Locale.ROOT)) {
+                case "speedrunner" -> "Speedrunners";
+                case "hunter" -> "Hunters";
+                default -> throw new IllegalArgumentException("Manhunt late joins require an explicit role: Speedrunner or Hunter.");
+            };
+        }
+        if (teamLabel != null && !teamLabel.isBlank()) {
+            return teamLabel.trim();
+        }
+        if (session.getGameType().getTopology() == SessionTopology.ISOLATED_WORLD) {
+            return session.snapshotGroups().stream()
+                .filter(group -> group.getState() == SessionState.RUNNING && group.getPort() != null)
+                .map(SessionGroup::getGroupLabel)
+                .findFirst()
+                .orElse(session.getGameType().getDisplayName());
+        }
+        return session.getGameType().getDisplayName();
+    }
+
+    private static boolean isManhunt(GameSession session) {
+        return session != null && "manhunt".equalsIgnoreCase(session.getGameType().getCommandName());
+    }
+
     public synchronized @Nullable SessionGroup unassignPlayer(UUID playerUuid) {
         String sessionId = this.playerSessions.remove(playerUuid);
         if (sessionId == null) {
@@ -299,6 +423,9 @@ public final class SessionManager {
             SessionRegistry.clearSeedChangeRequested(sessionId);
             session.setState(SessionState.LAUNCHING);
             this.persistRegistry();
+            SessionRegistry.clearStopRequested(sessionId);
+            SessionRegistry.clearReturnComplete(sessionId);
+            SessionRegistry.clearSeedChangeRequested(sessionId);
         }
 
         for (PlannedTeam team : retained.teams()) {

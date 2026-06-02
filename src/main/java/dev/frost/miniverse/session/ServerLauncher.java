@@ -3,6 +3,7 @@ package dev.frost.miniverse.session;
 import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.common.MiniverseFileUtils;
 import dev.frost.miniverse.common.MiniversePaths;
+import dev.frost.miniverse.map.MapStore;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.nbt.NbtCompound;
@@ -45,6 +46,9 @@ public final class ServerLauncher {
     public record InspectionLaunchResult(Process process, int port, Path workingDirectory) {
     }
 
+    public record MapEditorLaunchResult(Process process, int port, Path workingDirectory, String mapId) {
+    }
+
     public record LaunchProgress(String stage, String detail, int progress) {
     }
 
@@ -85,6 +89,7 @@ public final class ServerLauncher {
 
         // 3. Create symbolic links/junctions to the shared runtime files
         this.createRuntimeSymlinks(workingDirectory, serverRoot);
+        this.copySelectedMapTemplate(session, workingDirectory);
 
         // 4. Write session-specific configuration files into the working directory
         this.writeEula(workingDirectory);
@@ -315,6 +320,64 @@ public final class ServerLauncher {
         return new InspectionLaunchResult(process, port, workingDirectory);
     }
 
+    public MapEditorLaunchResult launchMapEditor(String mapName, ServerPlayerEntity editor) throws IOException {
+        dev.frost.miniverse.map.MapDescriptor map = MapStore.createEmptyMap(mapName);
+        return this.launchMapEditor(map, editor, false);
+    }
+
+    public MapEditorLaunchResult launchMapEditorForExistingMap(String mapId, ServerPlayerEntity editor) throws IOException {
+        dev.frost.miniverse.map.MapDescriptor map = MapStore.find(mapId)
+            .orElseThrow(() -> new IOException("Unknown map '" + mapId + "'."));
+        return this.launchMapEditor(map, editor, true);
+    }
+
+    private MapEditorLaunchResult launchMapEditor(dev.frost.miniverse.map.MapDescriptor map, ServerPlayerEntity editor, boolean copyTemplateWorld) throws IOException {
+        Path serverRoot = detectServerRoot();
+        validateSharedRuntime(serverRoot);
+
+        if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+            this.buildLatestModJar();
+            this.syncLatestModJar(serverRoot);
+        }
+
+        Path workingDirectory = this.prepareMapEditorDirectory(map.metadata().id());
+        int port = this.reservePort();
+        this.createRuntimeSymlinks(workingDirectory, serverRoot);
+        if (copyTemplateWorld && Files.isDirectory(map.worldFolder())) {
+            MapStore.copyTemplateWorldToRuntime(map.metadata().id(), workingDirectory.resolve("world"));
+        }
+        this.writeEula(workingDirectory);
+        this.writeMapEditorServerProperties(workingDirectory, map.metadata().id(), port);
+        this.writeMapEditorConfig(workingDirectory, map);
+        this.writeInspectionOps(workingDirectory, editor);
+
+        String javaExecutable = this.resolveJavaExecutable();
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutable);
+        this.addMemoryArguments(command);
+        command.add("-Dminiverse.mapEditor=true");
+        command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
+        command.add("-jar");
+        command.add("fabric-server-launch.jar");
+        command.add("nogui");
+
+        Miniverse.LOGGER.info("Map editor launch command: {}", String.join(" ", command));
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(workingDirectory.toFile());
+        builder.redirectOutput(workingDirectory.resolve("stdout.log").toFile());
+        builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
+
+        Process process = builder.start();
+        if (!waitForServerBoot(workingDirectory.resolve("stdout.log"), process)) {
+            int exitCode = process.isAlive() ? -1 : process.exitValue();
+            throw new IOException("Map editor server failed to boot. Exit code: " + exitCode);
+        }
+
+        Miniverse.LOGGER.info("Launched map editor for {} on local port {}", map.metadata().id(), port);
+        return new MapEditorLaunchResult(process, port, workingDirectory, map.metadata().id());
+    }
+
     private void addMemoryArguments(List<String> command) {
         SessionMemoryConfig memoryConfig = SessionMemoryConfig.getInstance();
         if (!memoryConfig.isEnabled()) {
@@ -393,6 +456,13 @@ public final class ServerLauncher {
         Files.createDirectories(inspectionsRoot);
         Path directory = inspectionsRoot.resolve(this.sanitize(sessionId) + "_" + System.currentTimeMillis());
         Files.createDirectories(directory);
+        Files.createDirectories(directory.resolve("logs"));
+        return directory;
+    }
+
+    private Path prepareMapEditorDirectory(String mapId) throws IOException {
+        Path root = MiniversePaths.runRoot().resolve("map-editing");
+        Path directory = root.resolve(this.sanitize(mapId) + "_" + System.currentTimeMillis());
         Files.createDirectories(directory.resolve("logs"));
         return directory;
     }
@@ -711,6 +781,9 @@ public final class ServerLauncher {
         NbtCompound settings = session.getSettings();
         Properties settingsProperties = new Properties();
         this.definitionFor(session).ifPresent(definition -> definition.writeSessionProperties(settings, settingsProperties));
+        if (settings.contains("mapId", net.minecraft.nbt.NbtElement.STRING_TYPE)) {
+            settingsProperties.setProperty("map.id", settings.getString("mapId"));
+        }
         properties.putAll(settingsProperties);
 
         for (SessionGroup sessionGroup : groupsForConfig(session, group)) {
@@ -786,6 +859,19 @@ public final class ServerLauncher {
         Files.writeString(workingDirectory.resolve("server.properties"), content.toString(), java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    private void copySelectedMapTemplate(GameSession session, Path workingDirectory) throws IOException {
+        NbtCompound settings = session.getSettings();
+        if (!settings.contains("mapId", net.minecraft.nbt.NbtElement.STRING_TYPE)) {
+            return;
+        }
+        String mapId = settings.getString("mapId").trim();
+        if (mapId.isBlank()) {
+            return;
+        }
+        MapStore.copyTemplateWorldToRuntime(mapId, workingDirectory.resolve("world"));
+        Miniverse.LOGGER.info("Copied map template '{}' into runtime world for session {}", mapId, session.getSessionId());
+    }
+
     private void writeInspectionServerProperties(Path workingDirectory, String sessionId, int port) throws IOException {
         Properties properties = new Properties();
         SessionServerConfig serverConfig = SessionServerConfig.getInstance();
@@ -828,6 +914,53 @@ public final class ServerLauncher {
         Files.writeString(workingDirectory.resolve("server.properties"), content.toString(), StandardCharsets.UTF_8);
     }
 
+    private void writeMapEditorServerProperties(Path workingDirectory, String mapId, int port) throws IOException {
+        Properties properties = new Properties();
+        SessionServerConfig serverConfig = SessionServerConfig.getInstance();
+        properties.setProperty("accepts-transfers", Boolean.toString(serverConfig.acceptsTransfers()));
+        properties.setProperty("allow-flight", "true");
+        properties.setProperty("allow-nether", "true");
+        properties.setProperty("broadcast-console-to-ops", "true");
+        properties.setProperty("difficulty", "peaceful");
+        properties.setProperty("enable-command-block", "true");
+        properties.setProperty("enable-rcon", "false");
+        properties.setProperty("enable-status", "true");
+        properties.setProperty("enforce-secure-profile", "false");
+        properties.setProperty("force-gamemode", "true");
+        properties.setProperty("gamemode", "creative");
+        properties.setProperty("generate-structures", "false");
+        properties.setProperty("generator-settings", "{\"layers\":[],\"biome\":\"minecraft:the_void\"}");
+        properties.setProperty("hardcore", "false");
+        properties.setProperty("level-name", "world");
+        properties.setProperty("level-seed", "0");
+        properties.setProperty("level-type", "minecraft:flat");
+        properties.setProperty("max-players", "4");
+        properties.setProperty("motd", "Miniverse map editor for " + mapId);
+        properties.setProperty("network-compression-threshold", "256");
+        properties.setProperty("online-mode", Boolean.toString(serverConfig.onlineMode()));
+        properties.setProperty("op-permission-level", "4");
+        properties.setProperty("player-idle-timeout", "0");
+        properties.setProperty("prevent-proxy-connections", "false");
+        properties.setProperty("pvp", "false");
+        properties.setProperty("query.port", Integer.toString(port));
+        properties.setProperty("rate-limit", "0");
+        properties.setProperty("server-ip", "");
+        properties.setProperty("server-port", Integer.toString(port));
+        properties.setProperty("simulation-distance", Integer.toString(serverConfig.simulationDistance()));
+        properties.setProperty("spawn-monsters", "false");
+        properties.setProperty("spawn-protection", "0");
+        properties.setProperty("sync-chunk-writes", "true");
+        properties.setProperty("use-native-transport", "true");
+        properties.setProperty("view-distance", Integer.toString(serverConfig.viewDistance()));
+        properties.setProperty("white-list", "false");
+
+        StringBuilder content = new StringBuilder();
+        for (String key : properties.stringPropertyNames().stream().sorted().toList()) {
+            content.append(key).append('=').append(properties.getProperty(key)).append('\n');
+        }
+        Files.writeString(workingDirectory.resolve("server.properties"), content.toString(), StandardCharsets.UTF_8);
+    }
+
     private void writeInspectionConfig(Path workingDirectory) throws IOException {
         // Create minimal JSON config for inspection server to know how to return
         JsonObject config = new JsonObject();
@@ -837,6 +970,27 @@ public final class ServerLauncher {
         config.addProperty("registry.sessionsRoot", MiniversePaths.sessionsRoot().toString());
 
         // Write as JSON
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        Files.writeString(
+            workingDirectory.resolve("miniverse-session.json"),
+            gson.toJson(config),
+            StandardCharsets.UTF_8
+        );
+    }
+
+    private void writeMapEditorConfig(Path workingDirectory, dev.frost.miniverse.map.MapDescriptor map) throws IOException {
+        JsonObject config = new JsonObject();
+        config.addProperty("launchMode", BackendLaunchMode.MAP_EDITOR.name());
+        config.addProperty("return.host", this.resolveReturnHost());
+        config.addProperty("return.port", this.resolveReturnPort());
+        config.add("returnServer", SessionConfigJson.returnServer(this.resolveReturnHost(), this.resolveReturnPort()));
+        JsonObject editor = new JsonObject();
+        editor.addProperty("mapId", map.metadata().id());
+        editor.addProperty("mapName", map.metadata().name());
+        editor.addProperty("mapFolder", map.folder().toAbsolutePath().normalize().toString());
+        editor.addProperty("worldFolder", map.worldFolder().toAbsolutePath().normalize().toString());
+        config.add("mapEditor", editor);
+
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         Files.writeString(
             workingDirectory.resolve("miniverse-session.json"),

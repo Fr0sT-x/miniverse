@@ -15,6 +15,7 @@ After changing any framework / implementing new frameworks, make sure to update 
 - `minigame/core` is the framework layer: minigame contracts, registry, runtime context, event routing, session bootstrapping, lifecycle sequencing, scoreboard helpers, and vanilla team mirroring.
 - `minigame/core/lifecycle` is the reusable match lifecycle layer for pre-start freeze, countdowns, end titles, return countdowns, admin return cancellation, and return transfer.
 - `minigame/impl/<game>` contains each gamemode's definition, runtime, settings, bootstrapper, and event registration.
+- `map` is the reusable map-management framework: template map discovery, metadata parsing, gamemode config loading, validation registry, compatible-map filtering, and runtime template-world copying.
 - `session` manages main-server sessions, backend process launch, transfer routing, persistent session JSON, seed plans, and launch topology.
 - `session/plan` parses GUI-created NBT plans into validated session/team/role plans.
 - `team` is the gameplay team authority used by minigame runtimes.
@@ -30,6 +31,9 @@ After changing any framework / implementing new frameworks, make sure to update 
 - `MatchLifecycleController`: global backend lifecycle coordinator for validated start/end sequences, frozen interaction suppression, countdowns, end titles, return teleport scheduling, admin cancellation, and transfer back to the configured lobby server.
 - `MatchLifecycleOptions`: per-minigame customization for freeze duration, return duration, title text, sounds, countdown behavior, freezing, and return teleport enablement.
 - `MatchEndResult`: generic winner payload used by gamemodes when invoking the standard end sequence.
+- `MapStore`: scans `.minecraft/miniverse/maps`, reads `map.json`, lists supported gamemode config files, validates gamemode-specific config, and copies selected template worlds into backend runtime worlds.
+- `MapGamemodeRegistry`: registry where gamemodes publish map config validators without hardcoding mode rules in the map framework.
+- `MapDescriptor`: server/client snapshot of one reusable map template, including metadata, supported gamemodes, and validation results.
 - `ParticipantSet`: stores player identity by UUID and resolves `ServerPlayerEntity` only when needed.
 - `SessionPlan`: client/server creation plan containing game id, session name, settings, teams, roles, seed mode, and auto-launch flag.
 - `GameSession`: main-server session record. Owns settings, seed plan, launch groups, lifecycle state, and session id.
@@ -43,6 +47,7 @@ After changing any framework / implementing new frameworks, make sure to update 
 - `command`: legacy/manual gamemode commands and pending command integration.
 - `common`: shared constants and payload codecs used by both client and server.
 - `chat`: server-side chat routing and channel policies for matches.
+- `map`: reusable map metadata/config/validation/runtime-copy framework. Maps are generic templates and gamemode-specific data lives under each map's `gamemodes/<game>.json`.
 - `minigame/MiniverseGames`: central list of registered definitions.
 - `minigame/core/event`: Fabric event router plus small opt-in interfaces (`ServerTickAware`, `PlayerRespawnAware`, etc.).
 - `minigame/core/lifecycle`: generic match start/end sequencing, countdowns, player freeze enforcement, admin return cancellation, and backend return transfer.
@@ -87,6 +92,21 @@ Backend server flow:
 8. Backend session GUI requests are answered from the local `miniverse-session.json`; child servers should not rely on the main server's session registry being present in their working directory.
 9. Backend lifecycle stop/return flags must be written to the main server's session registry root recorded in `miniverse-session.json`. This lets the main server's join routing see `stopRequested`/`returnComplete` and prevents returned players from being bounced back into the finished session.
 | 10. Retained session worlds may be inspected from the settings history tab. Inspection launches must copy the retained `world/` into `run/session-inspections/` and launch that copy in spectator-safe mode; never boot or mutate the retained session folder directly. The inspection copy receives a minimal `miniverse-session.json` with only `return.host`, `return.port`, and `registry.sessionsRoot` so players can return to the main server. Inspection backends are launched with `-Dminiverse.inspection=true` and run in spectator gamemode, preventing mutations to the world.
+
+## Map Framework
+
+Map templates live under `MiniversePaths.mapsRoot()` (`run/miniverse/maps` in development). Each map folder uses:
+
+- `world/`: immutable template world copied into a backend `world/` before gameplay.
+- `map.json`: generic map metadata only (`id`, `name`, `description`, `editorSpawn`, `tags`).
+- `thumbnail.png`: optional client-facing thumbnail path for future richer UI.
+- `gamemodes/<game>.json`: gamemode-specific config. Do not put gamemode data in `map.json`.
+
+Maps must not be played directly. `ServerLauncher` detects `settings.mapId`, validates session creation through `MapStore.validate(...)`, then copies the selected template `world/` into the session backend working directory. Runtime-world deletion/reset remains handled by normal session cleanup/retention; no block rollback system is needed.
+
+Gamemodes that use maps should register a `MapGamemodeType` during their event registration. The validator owns gamemode-specific rules and returns `MapValidationResult`; generic session/UI code only reads these results.
+
+Map editing also avoids direct template mutation. The Maps workspace can create a temporary creative void-world editor backend through `ServerLauncher.launchMapEditor(...)`, or right-click an existing map card and choose Edit Map to copy that template `world/` into a temporary editor backend. The editor receives `BackendLaunchMode.MAP_EDITOR`, transfers the creator into creative mode, and only replaces the template `world/` when an operator runs `/miniverse_map_save` inside the editor backend. Existing template worlds are moved into `backups/world_<timestamp>` before replacement. `/miniverse_map_return` transfers the editor back to the lobby. If a map has no custom editor spawn, the editor backend uses the template world's normal spawn.
 
 ## Match Lifecycle Framework
 
@@ -251,6 +271,15 @@ Event rules:
 5. Create `<Name>GameEvents.java` and call the bootstrapper there.
 6. Add the definition to `MiniverseGames.registerAll()`.
 7. Add a custom setup screen or expose generic metadata fields.
+
+Map-aware gamemodes should additionally:
+
+1. Register a `MapGamemodeType` validator in `registerEvents()`.
+2. Store selected map id in session settings as `mapId`.
+3. Write map-specific runtime properties from `writeSessionProperties()`.
+4. Load the gamemode config from `MapStore.readGamemodeConfig(mapId, gameId)` rather than adding framework branches.
+
+`infection` is the reference implementation for this pattern. It requires `maps/<map>/gamemodes/infection.json` with at least two `spawnPoints`, selects only valid Infection maps in the client setup UI, and uses runtime template-world copying instead of restoration.
 
 ### Add a Setting or Config
 

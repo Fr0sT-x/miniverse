@@ -71,6 +71,10 @@ public final class MiniversePaths {
         return runRoot().resolve("sessions");
     }
 
+    public static Path mapsRoot() {
+        return runRoot().resolve("miniverse").resolve("maps");
+    }
+
     public static Path mainServerProperties() {
         return runRoot().resolve("server.properties");
     }

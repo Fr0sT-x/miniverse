@@ -21,6 +21,8 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<PauseSessionPayload> PAUSE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_pause"));
     public static final CustomPayload.Id<AssignMidGamePlayerPayload> ASSIGN_MID_GAME_PLAYER_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_assign_mid_game"));
     public static final CustomPayload.Id<InspectSessionPayload> INSPECT_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_inspect"));
+    public static final CustomPayload.Id<CreateVoidMapPayload> CREATE_VOID_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_create_void"));
+    public static final CustomPayload.Id<EditMapPayload> EDIT_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_edit"));
     public static final CustomPayload.Id<RelaunchSessionPayload> RELAUNCH_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_relaunch"));
     public static final CustomPayload.Id<DeleteSessionPayload> DELETE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_delete"));
     public static final CustomPayload.Id<ChangeSeedPayload> CHANGE_SEED_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "change_seed"));
@@ -56,6 +58,8 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(PAUSE_SESSION_ID, PauseSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ASSIGN_MID_GAME_PLAYER_ID, AssignMidGamePlayerPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(INSPECT_SESSION_ID, InspectSessionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(CREATE_VOID_MAP_ID, CreateVoidMapPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(EDIT_MAP_ID, EditMapPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RELAUNCH_SESSION_ID, RelaunchSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DELETE_SESSION_ID, DeleteSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CHANGE_SEED_ID, ChangeSeedPayload.CODEC);
@@ -219,6 +223,32 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return INSPECT_SESSION_ID;
+        }
+    }
+
+    public record CreateVoidMapPayload(String mapName) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, CreateVoidMapPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            CreateVoidMapPayload::mapName,
+            CreateVoidMapPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return CREATE_VOID_MAP_ID;
+        }
+    }
+
+    public record EditMapPayload(String mapId) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, EditMapPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            EditMapPayload::mapId,
+            EditMapPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return EDIT_MAP_ID;
         }
     }
 

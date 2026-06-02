@@ -42,8 +42,8 @@ import java.util.UUID;
 /**
  * MCSR-style speedrun session implementation.
  *
- * This is a lightweight server-side MVP: one runner, a live timer,
- * and end conditions for runner death or Ender Dragon defeat.
+ * This is a lightweight server-side MVP: runners, a live timer,
+ * and Ender Dragon defeat as the completion condition.
  */
 public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, DynamicParticipantMinigame {
     private static final String NAME = "Speedrun";
@@ -140,11 +140,7 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
 
     @Override
     public void onPlayerDeath(ServerPlayerEntity player) {
-        if (this.state != GameState.IN_PROGRESS || !this.isParticipant(player)) {
-            return;
-        }
-
-        this.endGameWithFailure(Text.literal(player.getName().getString() + " died.").formatted(Formatting.RED));
+        // Speedrun finishes only when a team defeats the Ender Dragon.
     }
 
     public void handleDragonDeath() {
@@ -164,14 +160,6 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
         if (this.state == GameState.IN_PROGRESS) {
             this.elapsedTicks++;
             this.tickCounter++;
-
-            if (this.runnerUuid != null && !this.isRunnerConnected()) {
-                if (MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(this.runnerUuid)) {
-                    return;
-                }
-                this.endGameWithFailure(Text.literal("Runner disconnected.").formatted(Formatting.RED));
-                return;
-            }
 
             if (this.tickCounter >= TICKS_PER_SECOND) {
                 this.tickCounter = 0;
@@ -211,7 +199,7 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
         this.runnerUuid = player.getUuid();
 
         if (this.state == GameState.IN_PROGRESS) {
-            this.syncParticipantModes();
+            this.prepareRunnerForRun(player);
         }
         this.syncVanillaTeams();
 
@@ -221,10 +209,7 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
     public void syncLateParticipant(ServerPlayerEntity player) {
         this.addParticipant(player);
         if (this.state == GameState.IN_PROGRESS) {
-            this.syncParticipantModes();
-            player.setHealth(player.getMaxHealth());
-            player.getHungerManager().setFoodLevel(20);
-            player.getHungerManager().setSaturationLevel(20.0F);
+            this.prepareRunnerForRun(player);
         }
         this.syncVanillaTeams();
         this.updateScoreboard();
@@ -232,13 +217,21 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
 
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
+        String normalizedRole = role == null ? "" : role.trim().toLowerCase();
         if (this.getRunner() == null) {
             this.setRunner(player);
             return;
         }
+        if (normalizedRole.equals("runner") || normalizedRole.equals("speedrunner")) {
+            this.addRunnerParticipant(player);
+            if (this.state == GameState.IN_PROGRESS) {
+                player.sendMessage(Text.literal("Joined Speedrun in progress as a runner.").formatted(Formatting.GREEN), false);
+            }
+            return;
+        }
         this.syncLateParticipant(player);
         if (this.state == GameState.IN_PROGRESS) {
-            player.sendMessage(Text.literal("Joined Speedrun in progress.").formatted(Formatting.GREEN), false);
+            player.sendMessage(Text.literal("Joined Speedrun in progress as a runner.").formatted(Formatting.GREEN), false);
         }
     }
 
@@ -295,11 +288,6 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
     public void handlePlayerLeave(ServerPlayerEntity player) {
         this.removeParticipant(player);
 
-        if (this.state == GameState.IN_PROGRESS) {
-            this.endGameWithFailure(Text.literal(player.getName().getString() + " left the run.").formatted(Formatting.RED));
-            return;
-        }
-
         if (this.getRunner() == null && !this.getParticipants().isEmpty()) {
             this.runnerUuid = this.getParticipants().get(0).getUuid();
             this.updateScoreboard();
@@ -310,11 +298,7 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
     private void prepareParticipantsForRun() {
         List<ServerPlayerEntity> participants = this.getParticipants();
         for (ServerPlayerEntity participant : participants) {
-            participant.getInventory().clear();
-            participant.changeGameMode(GameMode.SURVIVAL);
-            participant.getHungerManager().setFoodLevel(20);
-            participant.getHungerManager().setSaturationLevel(20.0F);
-            participant.addStatusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 40, 0, true, false, false));
+            this.prepareRunnerForRun(participant);
         }
     }
 
@@ -338,6 +322,24 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
         return this.getRunner() != null;
     }
 
+    private void addRunnerParticipant(ServerPlayerEntity player) {
+        this.addParticipant(player);
+        if (this.state == GameState.IN_PROGRESS) {
+            this.prepareRunnerForRun(player);
+        }
+        this.syncVanillaTeams();
+        this.updateScoreboard();
+    }
+
+    private void prepareRunnerForRun(ServerPlayerEntity player) {
+        player.getInventory().clear();
+        player.changeGameMode(GameMode.SURVIVAL);
+        player.setHealth(player.getMaxHealth());
+        player.getHungerManager().setFoodLevel(20);
+        player.getHungerManager().setSaturationLevel(20.0F);
+        player.addStatusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 40, 0, true, false, false));
+    }
+
     private void endGameWithVictory(Text reason) {
         this.state = GameState.ENDING;
         this.setRuntimeState(GameState.ENDING);
@@ -352,20 +354,6 @@ public class SpeedrunMinigame implements Minigame, RuntimeContextAware, ServerTi
         this.startStandardEndSequence(runner == null
             ? new MatchEndResult(Set.of(), Text.literal("No winner"))
             : MatchEndResult.winner(runner));
-        this.clearScoreboard();
-    }
-
-    private void endGameWithFailure(Text reason) {
-        this.state = GameState.ENDING;
-        this.setRuntimeState(GameState.ENDING);
-
-        this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
-        this.broadcastMessage(Text.literal("🏁 SPEEDRUN FAILED 🏁").formatted(Formatting.RED));
-        this.broadcastMessage(reason.copy().formatted(Formatting.RED));
-        this.broadcastMessage(Text.literal("Time: " + this.getFormattedTime()).formatted(Formatting.YELLOW));
-        this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
-
-        this.startStandardEndSequence(new MatchEndResult(Set.of(), Text.literal("No winner")));
         this.clearScoreboard();
     }
 

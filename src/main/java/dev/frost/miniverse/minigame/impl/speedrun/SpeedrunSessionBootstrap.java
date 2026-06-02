@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.speedrun;
 
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
+import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -34,9 +35,12 @@ final class SpeedrunSessionBootstrap {
 
             @Override
             public void onPlayerJoin(SpeedrunMinigame minigame, ServerPlayerEntity player, Properties properties) {
-                String role = properties.getProperty("speedrun.role." + player.getUuid(), "");
-                if (minigame.getRunner() == null || role.equalsIgnoreCase("runner")) {
+                if (minigame.getRunner() == null) {
                     minigame.setRunner(player);
+                    return;
+                }
+                if (minigame.getState() == GameState.WAITING_FOR_PLAYERS) {
+                    minigame.addParticipantMidGame(player, "", "runner");
                     return;
                 }
                 minigame.syncLateParticipant(player);

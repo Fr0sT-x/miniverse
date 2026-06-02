@@ -2,6 +2,8 @@ package dev.frost.miniverse.session;
 
 import dev.frost.miniverse.session.plan.SessionPlan;
 import dev.frost.miniverse.session.plan.TeamPlan;
+import dev.frost.miniverse.map.MapStore;
+import dev.frost.miniverse.map.MapValidationResult;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import net.minecraft.server.MinecraftServer;
@@ -40,6 +42,11 @@ public final class SessionCreationService {
             return CreateResult.failure("Session plan game '" + plan.plannedGame() + "' does not match requested game '" + gameType.getCommandName() + "'.");
         }
 
+        Optional<String> mapValidationError = this.validateMapSelection(gameType, plan);
+        if (mapValidationError.isPresent()) {
+            return CreateResult.failure(mapValidationError.get());
+        }
+
         SeedPlan seedPlan = plan.seedPlan().orElse(null);
         if (seedPlan == null) {
             return CreateResult.failure("No valid seed plan was provided.");
@@ -53,6 +60,22 @@ public final class SessionCreationService {
         }
 
         return CreateResult.success(session, gameType, plan.autoLaunch());
+    }
+
+    private Optional<String> validateMapSelection(SessionGameDescriptor gameType, SessionPlan plan) {
+        NbtCompound settings = plan.settings();
+        if (!settings.contains("mapId", NbtElement.STRING_TYPE)) {
+            return Optional.empty();
+        }
+        String mapId = settings.getString("mapId").trim();
+        if (mapId.isBlank()) {
+            return Optional.of("Select a map before creating this session.");
+        }
+        MapValidationResult result = MapStore.validate(mapId, gameType.getCommandName());
+        if (result.valid()) {
+            return Optional.empty();
+        }
+        return Optional.of("Map '" + mapId + "' is not valid for " + gameType.getDisplayName() + ": " + String.join(", ", result.errors()));
     }
 
     private void applyPlan(MinecraftServer server, GameSession session, SessionGameDescriptor gameType, SessionPlan plan) {

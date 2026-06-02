@@ -1,6 +1,7 @@
 package dev.frost.miniverse.network;
 
 import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.map.MapStore;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
@@ -54,6 +55,8 @@ public final class SessionNetwork {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.PAUSE_SESSION_ID, (payload, context) -> handlePause(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.ASSIGN_MID_GAME_PLAYER_ID, (payload, context) -> handleAssignMidGame(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.INSPECT_SESSION_ID, (payload, context) -> handleInspect(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_VOID_MAP_ID, (payload, context) -> handleCreateVoidMap(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.EDIT_MAP_ID, (payload, context) -> handleEditMap(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RELAUNCH_SESSION_ID, (payload, context) -> handleRelaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_SESSION_ID, (payload, context) -> handleDeleteRetained(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CHANGE_SEED_ID, (payload, context) -> handleChangeSeed(context.server(), context.player(), payload));
@@ -323,6 +326,90 @@ public final class SessionNetwork {
         }));
     }
 
+    private static void handleCreateVoidMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CreateVoidMapPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "create maps")) {
+            return;
+        }
+        String mapName = payload.mapName() == null ? "" : payload.mapName().trim();
+        if (mapName.isBlank()) {
+            player.sendMessage(Text.literal("Enter a map name first.").formatted(Formatting.RED), false);
+            return;
+        }
+        player.sendMessage(Text.literal("Creating void map editor for " + mapName + "..."), false);
+        SessionManager.getInstance().launchMapEditorAsync(mapName, player).whenComplete((result, error) -> server.execute(() -> {
+            if (error != null) {
+                player.sendMessage(Text.literal("Failed to launch map editor: " + error.getMessage()).formatted(Formatting.RED), false);
+                sendSessionList(server, player);
+                return;
+            }
+
+            String context = "Editing map " + result.mapId();
+            if (VelocityProxyBridge.isEnabled()) {
+                TransitionTransferCoordinator.transferToVelocityBackend(
+                    player,
+                    VelocityProxyBridge.serverName(result.mapId(), "map-editor-" + result.port()),
+                    result.port(),
+                    context,
+                    () -> {
+                    }
+                );
+            } else {
+                TransitionTransferCoordinator.transfer(
+                    player,
+                    SessionServerConfig.getInstance().advertisedHost(),
+                    SessionLauncherConfig.getInstance().publicPortForLocalPort(result.port()),
+                    context
+                );
+            }
+            player.sendMessage(Text.literal("Map editor launched for " + result.mapId() + ". Use /miniverse_map_save in the editor server to save the template."), false);
+            sendSessionList(server, player);
+        }));
+    }
+
+    private static void handleEditMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.EditMapPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "edit maps")) {
+            return;
+        }
+        String mapId = payload.mapId() == null ? "" : payload.mapId().trim();
+        if (mapId.isBlank()) {
+            player.sendMessage(Text.literal("Invalid map id.").formatted(Formatting.RED), false);
+            return;
+        }
+        player.sendMessage(Text.literal("Launching map editor for " + mapId + "..."), false);
+        SessionManager.getInstance().launchExistingMapEditorAsync(mapId, player).whenComplete((result, error) -> server.execute(() -> {
+            if (error != null) {
+                player.sendMessage(Text.literal("Failed to launch map editor: " + error.getMessage()).formatted(Formatting.RED), false);
+                sendSessionList(server, player);
+                return;
+            }
+
+            transferToMapEditor(server, player, result);
+            player.sendMessage(Text.literal("Map editor launched for " + result.mapId() + ". Use /miniverse_map_save in the editor server to save changes."), false);
+            sendSessionList(server, player);
+        }));
+    }
+
+    private static void transferToMapEditor(MinecraftServer server, ServerPlayerEntity player, dev.frost.miniverse.session.ServerLauncher.MapEditorLaunchResult result) {
+        String context = "Editing map " + result.mapId();
+        if (VelocityProxyBridge.isEnabled()) {
+            TransitionTransferCoordinator.transferToVelocityBackend(
+                player,
+                VelocityProxyBridge.serverName(result.mapId(), "map-editor-" + result.port()),
+                result.port(),
+                context,
+                () -> {
+                }
+            );
+        } else {
+            TransitionTransferCoordinator.transfer(
+                player,
+                SessionServerConfig.getInstance().advertisedHost(),
+                SessionLauncherConfig.getInstance().publicPortForLocalPort(result.port()),
+                context
+            );
+        }
+    }
+
     private static void handleRelaunch(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.RelaunchSessionPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "relaunch sessions")) {
             return;
@@ -561,6 +648,7 @@ public final class SessionNetwork {
             games.add(definition.metadata().toNbt());
         }
         root.put("games", games);
+        root.put("maps", MapStore.mapsToNbt());
 
         NbtList roster = new NbtList();
         for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {

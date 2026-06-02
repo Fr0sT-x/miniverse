@@ -1,6 +1,7 @@
 package dev.frost.miniverse;
 
 import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.map.MapEditorCommands;
 import dev.frost.miniverse.minigame.MiniverseGames;
 import dev.frost.miniverse.minigame.core.event.MinigameEventRouter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleCommands;
@@ -40,6 +41,7 @@ public class Miniverse implements ModInitializer {
 				MinigameRegistry.registerCommands(dispatcher);
 				SessionCommands.register(dispatcher);
 				MatchLifecycleCommands.register(dispatcher);
+				MapEditorCommands.register(dispatcher);
 			}
 		);
 		MinigameEventRouter.register();

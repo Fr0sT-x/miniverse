@@ -280,7 +280,7 @@ public final class AdminWorkspaceView implements WorkspaceView {
 
     private void renderSessions(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
         List<SessionEntry> entries = this.activeSessions();
-        this.updateScrollBounds(entries.size());
+        this.updateScrollBounds(entries, false);
         if (entries.isEmpty()) {
             SessionLaunchStatus.latest().ifPresentOrElse(
                 status -> SessionLaunchStatus.renderPanel(context, textRenderer, this.listArea.x(), this.listArea.y(), Math.min(320, this.listArea.width()), status),
@@ -295,7 +295,7 @@ public final class AdminWorkspaceView implements WorkspaceView {
         context.drawText(textRenderer, Text.literal("Retain latest"), this.listArea.x(), this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
         context.drawText(textRenderer, Text.literal("Delete older than days"), this.listArea.x() + 208, this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
         List<SessionEntry> entries = this.retainedSessions();
-        this.updateScrollBounds(entries.size());
+        this.updateScrollBounds(entries, true);
         if (entries.isEmpty()) {
             this.renderEmpty(context, textRenderer, "No retained sessions.");
             return;
@@ -309,7 +309,8 @@ public final class AdminWorkspaceView implements WorkspaceView {
         context.enableScissor(this.listArea.x(), top, this.listArea.x() + this.listArea.width(), top + height);
         int y = top - this.scrollOffset;
         for (SessionEntry entry : entries) {
-            UiRenderer.card(context, this.listArea.x(), y, this.listArea.width(), ROW_HEIGHT, 0.0F, history ? UiTheme.ACCENT_BLUE : UiTheme.ACCENT_GREEN);
+            int rowHeight = history ? ROW_HEIGHT : this.rowHeight(entry);
+            UiRenderer.card(context, this.listArea.x(), y, this.listArea.width(), rowHeight, 0.0F, history ? UiTheme.ACCENT_BLUE : UiTheme.ACCENT_GREEN);
             int textX = this.listArea.x() + 14;
             context.drawText(textRenderer, Text.literal(entry.id() + " - " + entry.game()), textX, y + 10, UiTheme.TEXT, false);
             context.drawText(textRenderer, Text.literal("State: " + entry.state() + "  Players: " + entry.playerCount()), textX, y + 24, UiTheme.TEXT_MUTED, false);
@@ -345,7 +346,7 @@ public final class AdminWorkspaceView implements WorkspaceView {
                 int rowY = y;
                 SessionLaunchStatus.latestFor(entry.id()).ifPresent(status -> this.renderLaunchProgress(context, textRenderer, rowY, status));
             }
-            y += ROW_HEIGHT + ROW_GAP;
+            y += rowHeight + ROW_GAP;
         }
         context.disableScissor();
     }
@@ -460,65 +461,89 @@ public final class AdminWorkspaceView implements WorkspaceView {
                 this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + relaunchWidth + BUTTON_GAP + inspectWidth + BUTTON_GAP, capturedY + 10, deleteWidth, BUTTON_HEIGHT), () -> "Delete", () -> this.confirmDeleteSession(entry.id()), UiTheme.ACCENT_RED, () -> this.rowVisible(capturedY), true));
                 rowY += ROW_HEIGHT + ROW_GAP;
             }
-            this.updateScrollBounds(this.retainedSessions().size());
+            this.updateScrollBounds(this.retainedSessions(), true);
         } else {
             for (SessionEntry entry : this.activeSessions()) {
                 int capturedY = rowY;
+                int capturedRowHeight = this.rowHeight(entry);
                 int buttonX = this.listArea.x() + this.listArea.width() - 270;
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 10, 98, BUTTON_HEIGHT), () -> "Save and return", () -> this.confirmStopSession(entry.id()), UiTheme.ACCENT_RED, () -> this.rowVisible(capturedY), true));
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 106, capturedY + 10, 72, BUTTON_HEIGHT), () -> entry.paused() ? "Resume" : "Pause", () -> this.setPaused(entry.id(), !entry.paused()), entry.paused() ? UiTheme.ACCENT_GREEN : UiTheme.WARNING, () -> this.rowVisible(capturedY), true));
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 186, capturedY + 10, 78, BUTTON_HEIGHT), () -> "Seed", () -> this.changeSeed(entry.id()), UiTheme.ACCENT_BLUE, () -> this.rowVisible(capturedY), true));
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 10, 98, BUTTON_HEIGHT), () -> "Save and return", () -> this.confirmStopSession(entry.id()), UiTheme.ACCENT_RED, () -> this.rowVisible(capturedY, capturedRowHeight), true));
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 106, capturedY + 10, 72, BUTTON_HEIGHT), () -> entry.paused() ? "Resume" : "Pause", () -> this.setPaused(entry.id(), !entry.paused()), entry.paused() ? UiTheme.ACCENT_GREEN : UiTheme.WARNING, () -> this.rowVisible(capturedY, capturedRowHeight), true));
+                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + 186, capturedY + 10, 78, BUTTON_HEIGHT), () -> "Seed", () -> this.changeSeed(entry.id()), UiTheme.ACCENT_BLUE, () -> this.rowVisible(capturedY, capturedRowHeight), true));
                 SessionSnapshotData.PendingJoiner pendingJoiner = this.firstPendingJoiner();
                 if (pendingJoiner != null) {
-                    this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 42, 86, BUTTON_HEIGHT), () -> this.assignmentSessionId.equals(entry.id()) ? "Close" : "Assign", () -> this.toggleAssignment(entry.id()), UiTheme.ACCENT_GREEN, () -> this.rowVisible(capturedY), true));
+                    this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 42, 86, BUTTON_HEIGHT), () -> this.assignmentSessionId.equals(entry.id()) ? "Close" : "Assign", () -> this.toggleAssignment(entry.id()), UiTheme.ACCENT_GREEN, () -> this.rowVisible(capturedY, capturedRowHeight), true));
                     if (this.assignmentSessionId.equals(entry.id())) {
-                        this.addAssignmentButtons(entry, pendingJoiner, capturedY);
+                        this.addAssignmentButtons(entry, pendingJoiner, capturedY, capturedRowHeight);
                     }
                 }
-                rowY += ROW_HEIGHT + ROW_GAP;
+                rowY += capturedRowHeight + ROW_GAP;
             }
-            this.updateScrollBounds(this.activeSessions().size());
+            this.updateScrollBounds(this.activeSessions(), false);
         }
     }
 
-    private void addAssignmentButtons(SessionEntry entry, SessionSnapshotData.PendingJoiner pendingJoiner, int rowY) {
+    private void addAssignmentButtons(SessionEntry entry, SessionSnapshotData.PendingJoiner pendingJoiner, int rowY, int rowHeight) {
         int x = this.listArea.x() + 96;
         int y = rowY + 80;
         int width = 104;
         int gap = 8;
+        int columns = this.assignmentButtonColumns(x, width, gap);
         int index = 0;
         if (entry.supportsRoles()) {
-            this.buttons.add(new ActionButton(new UiLayout.Rect(x, y, width, BUTTON_HEIGHT), () -> "Speedrunner", () -> this.assignPending(entry, pendingJoiner, "speedrunner"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY), true));
-            this.buttons.add(new ActionButton(new UiLayout.Rect(x + width + gap, y, width, BUTTON_HEIGHT), () -> "Hunter", () -> this.assignPending(entry, pendingJoiner, "hunter"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY), true));
+            this.buttons.add(new ActionButton(new UiLayout.Rect(x, y, width, BUTTON_HEIGHT), () -> "Speedrunner", () -> this.assignPending(entry, pendingJoiner, "speedrunner"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY, rowHeight), true));
+            this.buttons.add(new ActionButton(new UiLayout.Rect(x + width + gap, y, width, BUTTON_HEIGHT), () -> "Hunter", () -> this.assignPending(entry, pendingJoiner, "hunter"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY, rowHeight), true));
             return;
         }
         if (entry.isSpeedrun()) {
-            this.buttons.add(new ActionButton(new UiLayout.Rect(x, y, width, BUTTON_HEIGHT), () -> "New Solo", () -> this.assignPending(entry, pendingJoiner, pendingJoiner.name(), "runner"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY), true));
-            index++;
+            if (entry.groups().isEmpty()) {
+                this.buttons.add(new ActionButton(new UiLayout.Rect(x, y, width, BUTTON_HEIGHT), () -> "Join", () -> this.assignPending(entry, pendingJoiner, "", "runner"), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY, rowHeight), true));
+                return;
+            }
+            for (SessionSnapshotData.GroupSummary group : entry.groups()) {
+                String label = group.displayName().isBlank() ? group.label() : group.displayName();
+                int buttonX = x + (index % columns) * (width + gap);
+                int buttonY = y + (index / columns) * (BUTTON_HEIGHT + gap);
+                this.buttons.add(new ActionButton(
+                    new UiLayout.Rect(buttonX, buttonY, width, BUTTON_HEIGHT),
+                    () -> label.length() > 12 ? label.substring(0, 12) : label,
+                    () -> this.assignPending(entry, pendingJoiner, group.label(), "runner"),
+                    UiTheme.ACCENT_BLUE,
+                    () -> this.rowVisible(rowY, rowHeight),
+                    true
+                ));
+                index++;
+            }
+            return;
         }
         for (SessionSnapshotData.GroupSummary group : entry.groups()) {
-            if (index >= 4) {
-                break;
-            }
             String label = group.displayName().isBlank() ? group.label() : group.displayName();
             String role = entry.roleForGroup(group);
-            int buttonX = x + index * (width + gap);
+            int buttonX = x + (index % columns) * (width + gap);
+            int buttonY = y + (index / columns) * (BUTTON_HEIGHT + gap);
             this.buttons.add(new ActionButton(
-                new UiLayout.Rect(buttonX, y, width, BUTTON_HEIGHT),
+                new UiLayout.Rect(buttonX, buttonY, width, BUTTON_HEIGHT),
                 () -> label.length() > 12 ? label.substring(0, 12) : label,
                 () -> this.assignPending(entry, pendingJoiner, group.label(), role),
                 UiTheme.ACCENT_BLUE,
-                () -> this.rowVisible(rowY),
+                () -> this.rowVisible(rowY, rowHeight),
                 true
             ));
             index++;
         }
+        if (index == 0) {
+            this.buttons.add(new ActionButton(new UiLayout.Rect(x, y, width, BUTTON_HEIGHT), () -> "Join", () -> this.assignPending(entry, pendingJoiner, entry.game(), ""), UiTheme.ACCENT_BLUE, () -> this.rowVisible(rowY, rowHeight), true));
+        }
     }
 
     private boolean rowVisible(int rowY) {
+        return this.rowVisible(rowY, ROW_HEIGHT);
+    }
+
+    private boolean rowVisible(int rowY, int rowHeight) {
         int top = this.mode == Mode.HISTORY ? this.listArea.y() + 36 : this.listArea.y();
         int bottom = this.listArea.y() + this.listArea.height();
-        return rowY + ROW_HEIGHT > top && rowY < bottom;
+        return rowY + rowHeight > top && rowY < bottom;
     }
 
     private boolean inScrollableButtonViewport(double mouseX, double mouseY) {
@@ -530,11 +555,46 @@ public final class AdminWorkspaceView implements WorkspaceView {
             && mouseY <= bottom;
     }
 
-    private void updateScrollBounds(int rowCount) {
+    private void updateScrollBounds(List<SessionEntry> entries, boolean history) {
         int visibleHeight = this.mode == Mode.HISTORY ? this.listArea.height() - 36 : this.listArea.height();
-        int totalHeight = rowCount <= 0 ? 0 : rowCount * (ROW_HEIGHT + ROW_GAP) - ROW_GAP;
+        int totalHeight = this.totalRowsHeight(entries, history);
         this.maxScroll = Math.max(0, totalHeight - visibleHeight);
         this.scrollOffset = Math.clamp(this.scrollOffset, 0, this.maxScroll);
+    }
+
+    private int totalRowsHeight(List<SessionEntry> entries, boolean history) {
+        if (entries.isEmpty()) {
+            return 0;
+        }
+        int totalHeight = 0;
+        for (SessionEntry entry : entries) {
+            totalHeight += history ? ROW_HEIGHT : this.rowHeight(entry);
+        }
+        return totalHeight + (entries.size() - 1) * ROW_GAP;
+    }
+
+    private int rowHeight(SessionEntry entry) {
+        if (!this.assignmentSessionId.equals(entry.id())) {
+            return ROW_HEIGHT;
+        }
+        int rows = this.assignmentButtonRows(entry);
+        return ROW_HEIGHT + Math.max(0, rows - 2) * (BUTTON_HEIGHT + BUTTON_GAP);
+    }
+
+    private int assignmentButtonRows(SessionEntry entry) {
+        int count;
+        if (entry.supportsRoles()) {
+            count = 2;
+        } else {
+            count = Math.max(1, entry.groups().size());
+        }
+        int columns = this.assignmentButtonColumns(this.listArea.x() + 96, 104, 8);
+        return Math.max(1, (count + columns - 1) / columns);
+    }
+
+    private int assignmentButtonColumns(int x, int width, int gap) {
+        int availableWidth = Math.max(width, this.listArea.x() + this.listArea.width() - x - 14);
+        return Math.max(1, (availableWidth + gap) / (width + gap));
     }
 
     private List<SessionEntry> activeSessions() {

@@ -40,6 +40,7 @@ public final class SessionManager {
     private final Map<String, AtomicInteger> sessionCounters = new ConcurrentHashMap<>();
     private final Map<String, List<PendingBackendStop>> pendingSeedChangeStops = new ConcurrentHashMap<>();
     private final Map<String, Process> inspectionProcesses = new ConcurrentHashMap<>();
+    private final Map<String, Process> mapEditorProcesses = new ConcurrentHashMap<>();
     private final ThreadPoolExecutor launcherExecutor = this.createLauncherExecutor();
     private final ServerLauncher serverLauncher = new ServerLauncher();
 
@@ -67,6 +68,11 @@ public final class SessionManager {
                     stopProcess(entry.getValue());
                 }
                 this.inspectionProcesses.clear();
+                for (Map.Entry<String, Process> entry : this.mapEditorProcesses.entrySet()) {
+                    Miniverse.LOGGER.info("Terminating map editor backend {}", entry.getKey());
+                    stopProcess(entry.getValue());
+                }
+                this.mapEditorProcesses.clear();
             }
             this.launcherExecutor.shutdownNow();
             Miniverse.LOGGER.info("Backend session server cleanup complete.");
@@ -563,6 +569,32 @@ public final class SessionManager {
             }, this.launcherExecutor);
         } catch (RejectedExecutionException e) {
             return CompletableFuture.failedFuture(new IllegalStateException("Cannot queue inspection launch: launcher capacity is full", e));
+        }
+    }
+
+    public CompletableFuture<ServerLauncher.MapEditorLaunchResult> launchMapEditorAsync(String mapName, ServerPlayerEntity editor) {
+        return this.launchMapEditorAsync(mapName, editor, false);
+    }
+
+    public CompletableFuture<ServerLauncher.MapEditorLaunchResult> launchExistingMapEditorAsync(String mapId, ServerPlayerEntity editor) {
+        return this.launchMapEditorAsync(mapId, editor, true);
+    }
+
+    private CompletableFuture<ServerLauncher.MapEditorLaunchResult> launchMapEditorAsync(String mapRef, ServerPlayerEntity editor, boolean existingMap) {
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    ServerLauncher.MapEditorLaunchResult result = existingMap
+                        ? this.serverLauncher.launchMapEditorForExistingMap(mapRef, editor)
+                        : this.serverLauncher.launchMapEditor(mapRef, editor);
+                    this.mapEditorProcesses.put(result.mapId() + ":" + result.port(), result.process());
+                    return result;
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }, this.launcherExecutor);
+        } catch (RejectedExecutionException e) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Cannot queue map editor launch: launcher capacity is full", e));
         }
     }
 

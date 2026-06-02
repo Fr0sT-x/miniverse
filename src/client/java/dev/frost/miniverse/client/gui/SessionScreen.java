@@ -13,6 +13,8 @@ import dev.frost.miniverse.client.gui.workspace.ManhuntWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.ResourceSprintWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.SpeedrunWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.WorkspaceView;
+import dev.frost.miniverse.client.gui.map.MapManagementWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.InfectionWorkspaceView;
 import dev.frost.miniverse.common.NetworkConstants;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
@@ -58,7 +60,8 @@ public class SessionScreen extends Screen {
         "speedrun", SessionScreen::openSpeedrun,
         "bountyhunt", SessionScreen::openBountyHunt,
         "resource_sprint", SessionScreen::openResourceSprint,
-        "deathswap", SessionScreen::openDeathSwap
+        "deathswap", SessionScreen::openDeathSwap,
+        "infection", SessionScreen::openInfection
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -134,6 +137,41 @@ public class SessionScreen extends Screen {
             ));
         }
 
+        List<SessionSnapshotData.MapSummary> maps = new ArrayList<>();
+        NbtList mapList = root.getList("maps", NbtElement.COMPOUND_TYPE);
+        for (int i = 0; i < mapList.size(); i++) {
+            NbtCompound entry = mapList.getCompound(i);
+            List<String> gamemodes = new ArrayList<>();
+            NbtList gamesForMap = entry.getList("gamemodes", NbtElement.STRING_TYPE);
+            for (int gameIndex = 0; gameIndex < gamesForMap.size(); gameIndex++) {
+                gamemodes.add(gamesForMap.getString(gameIndex));
+            }
+            List<SessionSnapshotData.MapValidation> validations = new ArrayList<>();
+            NbtList validationList = entry.getList("validations", NbtElement.COMPOUND_TYPE);
+            for (int validationIndex = 0; validationIndex < validationList.size(); validationIndex++) {
+                NbtCompound validation = validationList.getCompound(validationIndex);
+                List<String> errors = new ArrayList<>();
+                NbtList errorList = validation.getList("errors", NbtElement.STRING_TYPE);
+                for (int errorIndex = 0; errorIndex < errorList.size(); errorIndex++) {
+                    errors.add(errorList.getString(errorIndex));
+                }
+                validations.add(new SessionSnapshotData.MapValidation(
+                    getStringOrDefault(validation, "game", ""),
+                    getBooleanOrDefault(validation, "valid", false),
+                    errors
+                ));
+            }
+            maps.add(new SessionSnapshotData.MapSummary(
+                getStringOrDefault(entry, "id", ""),
+                getStringOrDefault(entry, "name", ""),
+                getStringOrDefault(entry, "description", ""),
+                getStringOrDefault(entry, "folder", ""),
+                getLongOrDefault(entry, "lastModified", 0L),
+                gamemodes,
+                validations
+            ));
+        }
+
         List<SessionSnapshotData.GameMetadata> games = new ArrayList<>();
         NbtList gameList = root.getList("games", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < gameList.size(); i++) {
@@ -174,6 +212,7 @@ public class SessionScreen extends Screen {
             sessions,
             roster,
             pendingJoiners,
+            maps,
             games,
             getIntOrDefault(launcher, "maxConcurrentLaunches", SessionSnapshotData.maxConcurrentLaunches()),
             getIntOrDefault(launcher, "queueCapacity", SessionSnapshotData.launcherQueueCapacity()),
@@ -296,6 +335,9 @@ public class SessionScreen extends Screen {
         }
         if (this.workspaceView instanceof AppearanceWorkspaceView) {
             return SidebarSection.APPEARANCE;
+        }
+        if (this.workspaceView instanceof MapManagementWorkspaceView) {
+            return SidebarSection.MAPS;
         }
         return SidebarSection.GAMEMODES;
     }
@@ -752,6 +794,7 @@ public class SessionScreen extends Screen {
                 rows.add(SidebarRow.item(new SidebarChild(":", "History", this::openHistoryWorkspace, () -> this.isAdminMode(AdminWorkspaceView.Mode.HISTORY), 8, UiTheme.ACCENT)));
             }
             case SERVER -> rows.add(SidebarRow.item(new SidebarChild("!", "Session server properties", this::openServerWorkspace, () -> this.isAdminMode(AdminWorkspaceView.Mode.SERVER), 8, UiTheme.ACCENT_RED)));
+            case MAPS -> rows.add(SidebarRow.item(new SidebarChild("M", "Maps", this::openMapsWorkspace, () -> this.workspaceView instanceof MapManagementWorkspaceView, 8, UiTheme.ACCENT_GREEN)));
             case APPEARANCE -> rows.add(SidebarRow.item(new SidebarChild("~", "Workspace", this::openAppearance, () -> this.workspaceView instanceof AppearanceWorkspaceView, 8, UiTheme.ACCENT_BLUE)));
         }
         if (query.isEmpty()) {
@@ -1000,6 +1043,9 @@ public class SessionScreen extends Screen {
         if ("speedrun".equals(id)) {
             return UiTheme.ACCENT_GREEN;
         }
+        if ("infection".equals(id)) {
+            return UiTheme.ACCENT_RED;
+        }
         if ("bountyhunt".equals(id)) {
             return UiTheme.ACCENT;
         }
@@ -1056,7 +1102,7 @@ public class SessionScreen extends Screen {
     private static String displayTopology(String id) {
         return switch (id.toLowerCase(Locale.ROOT)) {
             case "speedrun" -> "Isolated worlds";
-            case "manhunt", "bountyhunt", "resource_sprint", "deathswap" -> "Shared arena";
+            case "manhunt", "bountyhunt", "resource_sprint", "deathswap", "infection" -> "Shared arena";
             default -> "Session ready";
         };
     }
@@ -1081,6 +1127,10 @@ public class SessionScreen extends Screen {
         this.openWorkspaceView(new AdminWorkspaceView(AdminWorkspaceView.Mode.SERVER));
     }
 
+    private void openMapsWorkspace() {
+        this.openWorkspaceView(new MapManagementWorkspaceView(this::requestSnapshot));
+    }
+
     private boolean isAdminMode(AdminWorkspaceView.Mode mode) {
         return this.workspaceView instanceof AdminWorkspaceView adminWorkspaceView && adminWorkspaceView.mode() == mode;
     }
@@ -1099,6 +1149,10 @@ public class SessionScreen extends Screen {
 
     private void openDeathSwap() {
         this.openWorkspaceView(new DeathSwapWorkspaceView());
+    }
+
+    private void openInfection() {
+        this.openWorkspaceView(new InfectionWorkspaceView());
     }
 
     public void openGenericSetup(MinigameEntry entry) {
@@ -1126,6 +1180,7 @@ public class SessionScreen extends Screen {
         GAMEMODES("Gamemodes"),
         SESSION("Sessions"),
         SERVER("Server"),
+        MAPS("Maps"),
         APPEARANCE("Appearance");
 
         private final String label;

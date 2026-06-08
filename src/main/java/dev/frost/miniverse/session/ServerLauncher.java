@@ -109,6 +109,7 @@ public final class ServerLauncher {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
         this.addMemoryArguments(command);
+        command.add("-Dminiverse.runRoot=" + MiniversePaths.runRoot().toAbsolutePath());
         command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
         command.add("-Dminiverse.session.game=" + session.getGameType().getCommandName());
         if (FabricLoader.getInstance().isDevelopmentEnvironment() && SessionPermissions.isDevBypassEnabled()) {
@@ -198,6 +199,7 @@ public final class ServerLauncher {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
         this.addMemoryArguments(command);
+        command.add("-Dminiverse.runRoot=" + MiniversePaths.runRoot().toAbsolutePath());
         command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
         command.add("-Dminiverse.session.game=" + session.getGameType().getCommandName());
         if (FabricLoader.getInstance().isDevelopmentEnvironment() && SessionPermissions.isDevBypassEnabled()) {
@@ -298,6 +300,7 @@ public final class ServerLauncher {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
         this.addMemoryArguments(command);
+        command.add("-Dminiverse.runRoot=" + MiniversePaths.runRoot().toAbsolutePath());
         command.add("-Dminiverse.inspection=true");
         command.add("-jar");
         command.add("fabric-server-launch.jar");
@@ -355,6 +358,7 @@ public final class ServerLauncher {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable);
         this.addMemoryArguments(command);
+        command.add("-Dminiverse.runRoot=" + MiniversePaths.runRoot().toAbsolutePath());
         command.add("-Dminiverse.mapEditor=true");
         command.add("-Dminiverse.session.config=" + workingDirectory.resolve("miniverse-session.json").toAbsolutePath());
         command.add("-jar");
@@ -452,7 +456,7 @@ public final class ServerLauncher {
     }
 
     private Path prepareInspectionDirectory(String sessionId) throws IOException {
-        Path inspectionsRoot = MiniversePaths.runRoot().resolve("session-inspections");
+        Path inspectionsRoot = MiniversePaths.runRoot().resolve("miniverse").resolve("session-inspections");
         Files.createDirectories(inspectionsRoot);
         Path directory = inspectionsRoot.resolve(this.sanitize(sessionId) + "_" + System.currentTimeMillis());
         Files.createDirectories(directory);
@@ -461,7 +465,7 @@ public final class ServerLauncher {
     }
 
     private Path prepareMapEditorDirectory(String mapId) throws IOException {
-        Path root = MiniversePaths.runRoot().resolve("map-editing");
+        Path root = MiniversePaths.runRoot().resolve("miniverse").resolve("map-editing");
         Path directory = root.resolve(this.sanitize(mapId) + "_" + System.currentTimeMillis());
         Files.createDirectories(directory.resolve("logs"));
         return directory;

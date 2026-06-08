@@ -47,4 +47,12 @@ public record VanillaTeamOptions(
     public VanillaTeamOptions withCollisionRule(AbstractTeam.CollisionRule collisionRule) {
         return new VanillaTeamOptions(this.color, this.prefix, this.suffix, this.friendlyFireAllowed, collisionRule, this.nameTagVisibility, this.deathMessageVisibility, this.showFriendlyInvisibles);
     }
+
+    public VanillaTeamOptions withNameTagVisibility(AbstractTeam.VisibilityRule nameTagVisibility) {
+        return new VanillaTeamOptions(this.color, this.prefix, this.suffix, this.friendlyFireAllowed, this.collisionRule, nameTagVisibility, this.deathMessageVisibility, this.showFriendlyInvisibles);
+    }
+
+    public VanillaTeamOptions withShowFriendlyInvisibles(boolean showFriendlyInvisibles) {
+        return new VanillaTeamOptions(this.color, this.prefix, this.suffix, this.friendlyFireAllowed, this.collisionRule, this.nameTagVisibility, this.deathMessageVisibility, showFriendlyInvisibles);
+    }
 }

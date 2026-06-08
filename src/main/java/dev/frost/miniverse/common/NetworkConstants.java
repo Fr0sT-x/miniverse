@@ -23,6 +23,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<InspectSessionPayload> INSPECT_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_inspect"));
     public static final CustomPayload.Id<CreateVoidMapPayload> CREATE_VOID_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_create_void"));
     public static final CustomPayload.Id<EditMapPayload> EDIT_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_edit"));
+    public static final CustomPayload.Id<MapEditorActionPayload> MAP_EDITOR_ACTION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_editor_action"));
     public static final CustomPayload.Id<RelaunchSessionPayload> RELAUNCH_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_relaunch"));
     public static final CustomPayload.Id<DeleteSessionPayload> DELETE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_delete"));
     public static final CustomPayload.Id<ChangeSeedPayload> CHANGE_SEED_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "change_seed"));
@@ -40,6 +41,19 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<VelocityProxyPayload> VELOCITY_PROXY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "velocity"));
     public static final CustomPayload.Id<ProtectionOverlayPayload> PROTECTION_OVERLAY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "protection_overlay"));
     public static final CustomPayload.Id<BountyHuntInvincibilityPayload> BOUNTYHUNT_INVINCIBILITY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "bountyhunt_invincibility"));
+    public static final CustomPayload.Id<CaptureThumbnailPayload> CAPTURE_THUMBNAIL_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "capture_thumbnail"));
+    public static final CustomPayload.Id<DeleteMapPayload> DELETE_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "delete_map"));
+    public static final CustomPayload.Id<RenameMapPayload> RENAME_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "rename_map"));
+
+    public static final CustomPayload.Id<CreateKitPayload> CREATE_KIT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_kit"));
+    public static final CustomPayload.Id<LoadKitIntoInventoryPayload> LOAD_KIT_INTO_INVENTORY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "load_kit"));
+    public static final CustomPayload.Id<SyncKitsPayload> SYNC_KITS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_kits"));
+
+    public static final CustomPayload.Id<SyncBuilderSelectionPayload> SYNC_BUILDER_SELECTION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_builder_selection"));
+
+    public static final CustomPayload.Id<SaveLayoutPayload> SAVE_LAYOUT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "save_layout"));
+    public static final CustomPayload.Id<ResetLayoutPayload> RESET_LAYOUT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "reset_layout"));
+    public static final CustomPayload.Id<LayoutSupportPayload> LAYOUT_SUPPORT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "layout_support"));
 
     private static boolean payloadTypesRegistered;
 
@@ -55,11 +69,14 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(CREATE_SESSION_ID, CreateSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(LAUNCH_SESSION_ID, LaunchSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(STOP_SESSION_ID, StopSessionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DELETE_MAP_ID, DeleteMapPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(RENAME_MAP_ID, RenameMapPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(PAUSE_SESSION_ID, PauseSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ASSIGN_MID_GAME_PLAYER_ID, AssignMidGamePlayerPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(INSPECT_SESSION_ID, InspectSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CREATE_VOID_MAP_ID, CreateVoidMapPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(EDIT_MAP_ID, EditMapPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(MAP_EDITOR_ACTION_ID, MapEditorActionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RELAUNCH_SESSION_ID, RelaunchSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DELETE_SESSION_ID, DeleteSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CHANGE_SEED_ID, ChangeSeedPayload.CODEC);
@@ -69,6 +86,8 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(CLIENT_CONNECTION_HOST_ID, ClientConnectionHostPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(TRANSITION_READY_ID, TransitionReadyPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CLIENT_MATCH_READY_ID, ClientMatchReadyPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(SAVE_LAYOUT_ID, SaveLayoutPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(RESET_LAYOUT_ID, ResetLayoutPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SESSION_LIST_ID, SessionListPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(LAUNCH_PROGRESS_ID, LaunchProgressPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(FREEZE_STATE_ID, FreezeStatePayload.CODEC);
@@ -79,6 +98,12 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(VELOCITY_PROXY_ID, VelocityProxyPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(PROTECTION_OVERLAY_ID, ProtectionOverlayPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BOUNTYHUNT_INVINCIBILITY_ID, BountyHuntInvincibilityPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(CAPTURE_THUMBNAIL_ID, CaptureThumbnailPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(LAYOUT_SUPPORT_ID, LayoutSupportPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SYNC_BUILDER_SELECTION_ID, SyncBuilderSelectionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(CREATE_KIT_ID, CreateKitPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(LOAD_KIT_INTO_INVENTORY_ID, LoadKitIntoInventoryPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SYNC_KITS_ID, SyncKitsPayload.CODEC);
 
         payloadTypesRegistered = true;
     }
@@ -249,6 +274,19 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return EDIT_MAP_ID;
+        }
+    }
+
+    public record MapEditorActionPayload(NbtCompound action) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, MapEditorActionPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.NBT_COMPOUND,
+            MapEditorActionPayload::action,
+            MapEditorActionPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return MAP_EDITOR_ACTION_ID;
         }
     }
 
@@ -553,6 +591,144 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return BOUNTYHUNT_INVINCIBILITY_ID;
+        }
+    }
+
+    public record CaptureThumbnailPayload(String path) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, CaptureThumbnailPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            CaptureThumbnailPayload::path,
+            CaptureThumbnailPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return CAPTURE_THUMBNAIL_ID;
+        }
+    }
+
+    public record DeleteMapPayload(String mapId) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DeleteMapPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            DeleteMapPayload::mapId,
+            DeleteMapPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DELETE_MAP_ID;
+        }
+    }
+
+    public record RenameMapPayload(String mapId, String newName) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, RenameMapPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            RenameMapPayload::mapId,
+            PacketCodecs.STRING,
+            RenameMapPayload::newName,
+            RenameMapPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return RENAME_MAP_ID;
+        }
+    }
+
+    public record SaveLayoutPayload(String gamemode) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, SaveLayoutPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            SaveLayoutPayload::gamemode,
+            SaveLayoutPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SAVE_LAYOUT_ID;
+        }
+    }
+
+    public record ResetLayoutPayload(String gamemode) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, ResetLayoutPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            ResetLayoutPayload::gamemode,
+            ResetLayoutPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return RESET_LAYOUT_ID;
+        }
+    }
+
+    public record LayoutSupportPayload(String gamemode, String layoutProfile) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, LayoutSupportPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            LayoutSupportPayload::gamemode,
+            PacketCodecs.STRING,
+            LayoutSupportPayload::layoutProfile,
+            LayoutSupportPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return LAYOUT_SUPPORT_ID;
+        }
+    }
+
+    public record SyncBuilderSelectionPayload(NbtCompound selection) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, SyncBuilderSelectionPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.NBT_COMPOUND,
+            SyncBuilderSelectionPayload::selection,
+            SyncBuilderSelectionPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SYNC_BUILDER_SELECTION_ID;
+        }
+    }
+
+    public record CreateKitPayload(String id, String displayName, String categories) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, CreateKitPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            CreateKitPayload::id,
+            PacketCodecs.STRING,
+            CreateKitPayload::displayName,
+            PacketCodecs.STRING,
+            CreateKitPayload::categories,
+            CreateKitPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return CREATE_KIT_ID;
+        }
+    }
+
+    public record LoadKitIntoInventoryPayload(String id) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, LoadKitIntoInventoryPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            LoadKitIntoInventoryPayload::id,
+            LoadKitIntoInventoryPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return LOAD_KIT_INTO_INVENTORY_ID;
+        }
+    }
+
+    public record SyncKitsPayload(String jsonArrayString) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, SyncKitsPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            SyncKitsPayload::jsonArrayString,
+            SyncKitsPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SYNC_KITS_ID;
         }
     }
 }

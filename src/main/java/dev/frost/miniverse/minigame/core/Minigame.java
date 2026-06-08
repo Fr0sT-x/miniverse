@@ -53,5 +53,19 @@ public interface Minigame {
      * @param state the new GameState
      */
     void setState(GameState state);
+
+    /**
+     * Determines whether players are allowed to build (place blocks) during this minigame.
+     */
+    default boolean canBuild() {
+        return true;
+    }
+
+    /**
+     * Determines whether players are allowed to break blocks (that they have placed) during this minigame.
+     */
+    default boolean canBreakBlocks() {
+        return true;
+    }
 }
 

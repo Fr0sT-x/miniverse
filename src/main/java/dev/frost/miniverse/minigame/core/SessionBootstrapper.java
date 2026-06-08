@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -87,6 +88,10 @@ public final class SessionBootstrapper {
         default MatchLifecycleOptions lifecycleOptions(T minigame, Properties properties) {
             return MatchLifecycleOptions.defaults(minigame.getName())
                 .withStartTitle(Text.literal(minigame.getName()), Text.literal("Get ready."));
+        }
+
+        default Optional<Text> startFailureMessage(T minigame) {
+            return Optional.empty();
         }
 
         boolean canStart(T minigame);
@@ -288,6 +293,14 @@ public final class SessionBootstrapper {
                 return;
             }
             if (!canStart) {
+                Optional<Text> failureMessage = this.handler.startFailureMessage(minigame);
+                if (failureMessage.isPresent()) {
+                    MinecraftServer server = MinigameManager.getInstance().getContext() == null ? null : MinigameManager.getInstance().getContext().nullableServer();
+                    if (server != null) {
+                        this.abortStartup(server, properties, failureMessage.get());
+                    }
+                    return;
+                }
                 if (!this.loggedWaitingRoles) {
                     Miniverse.LOGGER.info("Session {} waiting for role assignments/ready state.", this.handler.gameId());
                     this.loggedWaitingRoles = true;
@@ -377,12 +390,12 @@ public final class SessionBootstrapper {
 
                 Miniverse.LOGGER.warn("Disconnecting {} from session {} after client ready timeout.", player.getName().getString(), properties.getProperty("sessionId", ""));
                 player.networkHandler.disconnect(Text.literal("Timed out while loading match resources. Please rejoin the session."));
-                this.abortStartup(server, properties, player.getName().getString());
+                this.abortStartup(server, properties, Text.literal("Match cancelled because " + player.getName().getString() + " did not finish loading in time."));
                 return;
             }
         }
 
-        private void abortStartup(MinecraftServer server, Properties properties, String failedPlayerName) {
+        private void abortStartup(MinecraftServer server, Properties properties, Text message) {
             this.startupAborted = true;
             this.clientReadyStates.clear();
             this.loadingStartTicks.clear();
@@ -394,7 +407,7 @@ public final class SessionBootstrapper {
 
             String host = SessionRuntimeConfig.getReturnHost();
             int port = SessionRuntimeConfig.getReturnPort();
-            Text message = Text.literal("Match cancelled because " + failedPlayerName + " did not finish loading in time.");
+            Miniverse.LOGGER.warn("Aborting {} session startup: {}", this.handler.gameId(), message.getString());
             for (UUID uuid : this.expectedPlayerIds(properties)) {
                 ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
                 if (player == null || player.isDisconnected()) {

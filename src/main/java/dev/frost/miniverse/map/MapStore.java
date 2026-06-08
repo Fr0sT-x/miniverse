@@ -74,7 +74,34 @@ public final class MapStore {
         if (!Files.exists(metadataPath)) {
             writeJson(metadataPath, MapMetadata.defaults(finalId, displayName).toJson());
         }
-        return readDescriptor(folder).orElseThrow(() -> new IOException("Failed to create map descriptor for " + finalId));
+        return readDescriptor(folder).orElseThrow(() -> new IOException("Failed to create map structure for " + name));
+    }
+
+    public static boolean delete(String mapId) {
+        Optional<MapDescriptor> map = find(mapId);
+        if (map.isEmpty()) return false;
+        try {
+            org.apache.commons.io.FileUtils.deleteDirectory(map.get().folder().toFile());
+            return true;
+        } catch (IOException e) {
+            Miniverse.LOGGER.error("Failed to delete map " + mapId, e);
+            return false;
+        }
+    }
+
+    public static boolean rename(String mapId, String newName) {
+        Optional<MapDescriptor> map = find(mapId);
+        if (map.isEmpty() || newName == null || newName.isBlank()) return false;
+        try {
+            MapMetadata metadata = map.get().metadata();
+            JsonObject json = metadata.toJson();
+            json.addProperty("name", newName.trim());
+            Files.writeString(map.get().folder().resolve("map.json"), json.toString());
+            return true;
+        } catch (IOException e) {
+            Miniverse.LOGGER.error("Failed to rename map " + mapId, e);
+            return false;
+        }
     }
 
     public static Optional<JsonObject> readGamemodeConfig(String mapId, String gameId) {
@@ -116,6 +143,8 @@ public final class MapStore {
         }
         return MapGamemodeRegistry.get(gameId)
             .map(type -> type.validator().validate(map.get(), config.get()))
+            .or(() -> dev.frost.miniverse.map.editor.MapEditorExtensionRegistry.get(gameId)
+                .map(extension -> dev.frost.miniverse.map.editor.MapEditorMarkerStore.validate(map.get(), config.get(), extension)))
             .orElse(MapValidationResult.ok());
     }
 
@@ -239,6 +268,9 @@ public final class MapStore {
             for (Path sourcePath : stream.toList()) {
                 Path relative = source.relativize(sourcePath);
                 Path targetPath = target.resolve(relative);
+                if (sourcePath.getFileName().toString().equals("session.lock")) {
+                    continue;
+                }
                 BasicFileAttributes attrs = Files.readAttributes(sourcePath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
                 if (attrs.isDirectory()) {
                     Files.createDirectories(targetPath);

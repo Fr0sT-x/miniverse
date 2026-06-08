@@ -130,7 +130,7 @@ public final class InfectionWorkspaceView implements WorkspaceView, GamemodeWork
         UiRenderer.panel(context, this.mapList.x(), this.mapList.y(), this.mapList.width(), this.mapList.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
         context.drawText(textRenderer, Text.literal("Valid Infection Maps (" + maps.size() + ")"), this.mapList.x() + 10, this.mapList.y() + 10, UiTheme.TEXT, false);
         if (maps.isEmpty()) {
-            context.drawText(textRenderer, Text.literal("Add gamemodes/infection.json with at least two spawnPoints to a map."), this.mapList.x() + 10, this.mapList.y() + 30, UiTheme.TEXT_DIM, false);
+            context.drawText(textRenderer, Text.literal("Open a map editor and add at least two Infection spawn points."), this.mapList.x() + 10, this.mapList.y() + 30, UiTheme.TEXT_DIM, false);
             return;
         }
         int y = this.mapList.y() + 32;

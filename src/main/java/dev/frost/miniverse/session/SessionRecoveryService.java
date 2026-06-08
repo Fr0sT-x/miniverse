@@ -68,15 +68,15 @@ public final class SessionRecoveryService {
                 continue;
             }
             if (!isUnfinished(snapshot.get())) {
-                Miniverse.LOGGER.info("Session recovery: session {} is not unfinished (state {}).", candidate.sessionId(), snapshot.get().state());
+                Miniverse.LOGGER.debug("Session recovery: session {} is not unfinished (state {}).", candidate.sessionId(), snapshot.get().state());
                 continue;
             }
             if (SessionRegistry.isStopRequested(candidate.sessionId()) || SessionRegistry.isReturnComplete(candidate.sessionId())) {
-                Miniverse.LOGGER.info("Session recovery: session {} is stopping or already returned; skipping auto relaunch.", candidate.sessionId());
+                Miniverse.LOGGER.debug("Session recovery: session {} is stopping or already returned; skipping auto relaunch.", candidate.sessionId());
                 continue;
             }
             if (!AUTO_RELAUNCH) {
-                Miniverse.LOGGER.info("Session recovery: session {} is recoverable. Auto relaunch is disabled; use the retained session history to relaunch it manually.", candidate.sessionId());
+                Miniverse.LOGGER.debug("Session recovery: session {} is recoverable. Auto relaunch is disabled; use the retained session history to relaunch it manually.", candidate.sessionId());
                 continue;
             }
 

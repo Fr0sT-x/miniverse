@@ -40,7 +40,7 @@ public final class SessionManager {
     private final Map<String, AtomicInteger> sessionCounters = new ConcurrentHashMap<>();
     private final Map<String, List<PendingBackendStop>> pendingSeedChangeStops = new ConcurrentHashMap<>();
     private final Map<String, Process> inspectionProcesses = new ConcurrentHashMap<>();
-    private final Map<String, Process> mapEditorProcesses = new ConcurrentHashMap<>();
+    private final Map<String, ServerLauncher.MapEditorLaunchResult> mapEditorProcesses = new ConcurrentHashMap<>();
     private final ThreadPoolExecutor launcherExecutor = this.createLauncherExecutor();
     private final ServerLauncher serverLauncher = new ServerLauncher();
 
@@ -68,9 +68,9 @@ public final class SessionManager {
                     stopProcess(entry.getValue());
                 }
                 this.inspectionProcesses.clear();
-                for (Map.Entry<String, Process> entry : this.mapEditorProcesses.entrySet()) {
+                for (Map.Entry<String, ServerLauncher.MapEditorLaunchResult> entry : this.mapEditorProcesses.entrySet()) {
                     Miniverse.LOGGER.info("Terminating map editor backend {}", entry.getKey());
-                    stopProcess(entry.getValue());
+                    stopProcess(entry.getValue().process());
                 }
                 this.mapEditorProcesses.clear();
             }
@@ -549,6 +549,20 @@ public final class SessionManager {
         if (changed) {
             this.persistRegistry();
         }
+
+        var editorIter = this.mapEditorProcesses.entrySet().iterator();
+        while (editorIter.hasNext()) {
+            Map.Entry<String, ServerLauncher.MapEditorLaunchResult> entry = editorIter.next();
+            if (!entry.getValue().process().isAlive()) {
+                editorIter.remove();
+                try {
+                    dev.frost.miniverse.common.MiniverseFileUtils.deleteRecursively(entry.getValue().workingDirectory());
+                    Miniverse.LOGGER.info("Cleaned up dead map editor instance for {}", entry.getKey());
+                } catch (java.io.IOException e) {
+                    Miniverse.LOGGER.warn("Failed to clean up map editor directory for {}", entry.getKey(), e);
+                }
+            }
+        }
     }
 
     public CompletableFuture<ServerLauncher.InspectionLaunchResult> launchInspectionAsync(String sessionId, ServerPlayerEntity viewer) {
@@ -587,7 +601,7 @@ public final class SessionManager {
                     ServerLauncher.MapEditorLaunchResult result = existingMap
                         ? this.serverLauncher.launchMapEditorForExistingMap(mapRef, editor)
                         : this.serverLauncher.launchMapEditor(mapRef, editor);
-                    this.mapEditorProcesses.put(result.mapId() + ":" + result.port(), result.process());
+                    this.mapEditorProcesses.put(result.mapId() + ":" + result.port(), result);
                     return result;
                 } catch (IOException e) {
                     throw new RuntimeException(e);

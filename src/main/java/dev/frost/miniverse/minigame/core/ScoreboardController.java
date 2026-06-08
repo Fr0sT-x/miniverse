@@ -50,6 +50,17 @@ public final class ScoreboardController {
         score.setScore(value);
     }
 
+    public void resetScore(MinecraftServer server, String label) {
+        Scoreboard scoreboard = server.getScoreboard();
+        ScoreboardObjective objective = this.getOrCreate(server);
+        if (objective == null) {
+            return;
+        }
+
+        ScoreHolder holder = ScoreHolder.fromName(label);
+        scoreboard.removeScore(holder, objective);
+    }
+
     public void clear(MinecraftServer server) {
         Scoreboard scoreboard = server.getScoreboard();
         ScoreboardObjective objective = scoreboard.getObjectives().stream()

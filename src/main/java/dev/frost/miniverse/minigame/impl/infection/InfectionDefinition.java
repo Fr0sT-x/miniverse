@@ -3,6 +3,10 @@ package dev.frost.miniverse.minigame.impl.infection;
 import com.mojang.brigadier.CommandDispatcher;
 import dev.frost.miniverse.map.MapGamemodeRegistry;
 import dev.frost.miniverse.map.MapGamemodeType;
+import dev.frost.miniverse.map.editor.MapEditorExtension;
+import dev.frost.miniverse.map.editor.MapEditorExtensionRegistry;
+import dev.frost.miniverse.map.editor.MarkerDefinition;
+import dev.frost.miniverse.map.editor.MarkerType;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameMetadata;
 import dev.frost.miniverse.session.SessionTopology;
@@ -67,6 +71,12 @@ public final class InfectionDefinition implements MinigameDefinition {
     @Override
     public void registerEvents() {
         MapGamemodeRegistry.register(new MapGamemodeType(ID, DISPLAY_NAME, (map, config) -> InfectionMapConfig.fromJson(config).validate()));
+        MapEditorExtensionRegistry.register(new MapEditorExtension(
+            ID,
+            DISPLAY_NAME,
+            java.util.List.of(new MarkerDefinition("spawn_point", "Spawn Point", MarkerType.POINT, "spawnPoints", 2, Integer.MAX_VALUE, null, "All players will spawn at these locations randomly.")),
+            java.util.List.of()
+        ));
         InfectionGameEvents.register();
     }
 }

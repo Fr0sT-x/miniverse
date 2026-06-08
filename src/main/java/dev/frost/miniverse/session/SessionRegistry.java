@@ -482,7 +482,7 @@ public final class SessionRegistry {
             try {
                 if (Files.isDirectory(entry)) {
                     if (retained.contains(entry)) {
-                        Miniverse.LOGGER.info("Session startup cleanup: retained {}", entry.getFileName());
+                        Miniverse.LOGGER.debug("Session startup cleanup: retained {}", entry.getFileName());
                         continue;
                     }
                     deleteRecursively(entry);
@@ -490,7 +490,7 @@ public final class SessionRegistry {
                     Files.deleteIfExists(entry);
                 }
                 removed++;
-                Miniverse.LOGGER.info("Session startup cleanup: removed {}", entry.getFileName());
+                Miniverse.LOGGER.debug("Session startup cleanup: removed {}", entry.getFileName());
             } catch (IOException e) {
                 Miniverse.LOGGER.warn("Session startup cleanup: failed to remove {}", entry, e);
             }

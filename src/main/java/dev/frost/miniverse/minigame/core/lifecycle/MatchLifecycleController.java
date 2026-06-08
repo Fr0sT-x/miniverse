@@ -512,7 +512,7 @@ public final class MatchLifecycleController {
                 player.sendMessage(Text.literal("Winner: ").formatted(Formatting.GOLD).append(result.winnerLabel()), true);
             }
             if (this.options.endSound() != null) {
-                player.playSound(this.options.endSound(), 1.0F, winner ? 1.2F : 0.8F);
+                player.playSound(this.options.endSound(), 0.8F, winner ? 1.2F : 0.8F);
             }
         }
     }

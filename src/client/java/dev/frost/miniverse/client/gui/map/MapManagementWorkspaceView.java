@@ -15,6 +15,10 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
+import dev.frost.miniverse.client.gui.ui.UiComponent;
+import dev.frost.miniverse.client.gui.ui.UiPrimitives.UiButton;
+
+import java.util.ArrayList;
 import java.util.List;
 
 public final class MapManagementWorkspaceView implements WorkspaceView {
@@ -24,9 +28,7 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
     private final Runnable refreshAction;
     private UiLayout.Rect listArea = new UiLayout.Rect(0, 0, 0, 0);
     private TextFieldWidget mapNameField;
-    private String contextMapId = "";
-    private int contextMenuX;
-    private int contextMenuY;
+    private final List<UiComponent> components = new ArrayList<>();
     private String status = "";
 
     public MapManagementWorkspaceView(Runnable refreshAction) {
@@ -34,23 +36,29 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
         } : refreshAction;
     }
 
+    private SessionScreen screen;
+
     @Override
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
+        this.screen = screen;
         UiLayout.Rect panel = workspace.inset(4);
         this.listArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 88, panel.width() - 24, panel.height() - 100);
         this.mapNameField = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, panel.x() + 12, panel.y() + 18, 156, 22, Text.literal("Map name"));
         this.mapNameField.setMaxLength(48);
         this.mapNameField.setText("new-map-" + System.currentTimeMillis());
         screen.addWorkspaceChild(this.mapNameField);
-        screen.addWorkspaceChild(ButtonWidget.builder(Text.literal("Create Void Map"), ignored -> this.createVoidMap())
-            .dimensions(panel.x() + 176, panel.y() + 18, 116, 22)
-            .build());
-        screen.addWorkspaceChild(ButtonWidget.builder(Text.literal("Open Map Folder"), ignored -> this.status = "Map folder: " + this.mapRootHint())
-            .dimensions(panel.x() + 300, panel.y() + 18, 124, 22)
-            .build());
-        screen.addWorkspaceChild(ButtonWidget.builder(Text.literal("Refresh"), ignored -> this.refreshAction.run())
-            .dimensions(panel.x() + 432, panel.y() + 18, 76, 22)
-            .build());
+        
+        UiButton createVoid = new UiButton("Create Void Map", this::createVoidMap);
+        createVoid.setBounds(new UiLayout.Rect(panel.x() + 176, panel.y() + 18, 116, 22));
+        this.components.add(createVoid);
+        
+        UiButton openFolder = new UiButton("Open Map Folder", () -> this.status = "Map folder: " + this.mapRootHint());
+        openFolder.setBounds(new UiLayout.Rect(panel.x() + 300, panel.y() + 18, 124, 22));
+        this.components.add(openFolder);
+        
+        UiButton refresh = new UiButton("Refresh", this.refreshAction);
+        refresh.setBounds(new UiLayout.Rect(panel.x() + 432, panel.y() + 18, 76, 22));
+        this.components.add(refresh);
     }
 
     @Override
@@ -63,7 +71,11 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
         }
         context.drawText(textRenderer, Text.literal("Create a temporary creative void world, then run /miniverse_map_save in that server."), panel.x() + 12, panel.y() + 54, UiTheme.TEXT_DIM, false);
         this.renderCards(context, textRenderer, mouseX, mouseY);
-        this.renderContextMenu(context, textRenderer, mouseX, mouseY);
+        
+        for (UiComponent component : this.components) {
+            component.render(context, textRenderer, mouseX, mouseY, delta);
+        }
+        
         if (!this.status.isBlank()) {
             context.drawText(textRenderer, Text.literal(this.status), panel.x() + 12, panel.y() + panel.height() - 18, UiTheme.TEXT_DIM, false);
         }
@@ -71,27 +83,24 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        for (UiComponent component : this.components) {
+            if (component.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
+        }
         if (button == 1) {
             SessionSnapshotData.MapSummary map = this.mapAt(mouseX, mouseY);
             if (map != null) {
-                this.contextMapId = map.id();
-                this.contextMenuX = (int) mouseX;
-                this.contextMenuY = (int) mouseY;
-                this.status = "Right-click menu for " + map.name() + ".";
+                this.openDetails(map.id());
                 return true;
             }
-            this.contextMapId = "";
-            return false;
         }
-
-        if (button == 0 && !this.contextMapId.isBlank()) {
-            UiLayout.Rect edit = this.contextEditBounds();
-            if (edit.contains(mouseX, mouseY)) {
-                this.editMap(this.contextMapId);
-                this.contextMapId = "";
+        if (button == 0) {
+            SessionSnapshotData.MapSummary map = this.mapAt(mouseX, mouseY);
+            if (map != null) {
+                this.openDetails(map.id());
                 return true;
             }
-            this.contextMapId = "";
         }
         return false;
     }
@@ -130,22 +139,6 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
         }
     }
 
-    private void renderContextMenu(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
-        if (this.contextMapId.isBlank()) {
-            return;
-        }
-        UiLayout.Rect menu = new UiLayout.Rect(this.contextMenuX, this.contextMenuY, 112, 28);
-        UiLayout.Rect edit = this.contextEditBounds();
-        boolean hovered = edit.contains(mouseX, mouseY);
-        UiRenderer.panel(context, menu.x(), menu.y(), menu.width(), menu.height(), UiTheme.PANEL_RAISED, UiTheme.BORDER_STRONG);
-        context.fill(edit.x(), edit.y(), edit.x() + edit.width(), edit.y() + edit.height(), hovered ? 0x663B5B45 : 0x22222222);
-        context.drawText(textRenderer, Text.literal("Edit Map"), edit.x() + 8, edit.y() + 7, UiTheme.TEXT, false);
-    }
-
-    private UiLayout.Rect contextEditBounds() {
-        return new UiLayout.Rect(this.contextMenuX + 3, this.contextMenuY + 3, 106, 22);
-    }
-
     private SessionSnapshotData.MapSummary mapAt(double mouseX, double mouseY) {
         List<SessionSnapshotData.MapSummary> maps = SessionSnapshotData.maps();
         if (maps.isEmpty() || !this.listArea.contains(mouseX, mouseY)) {
@@ -174,12 +167,14 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
         this.status = "Requested map editor launch.";
     }
 
-    private void editMap(String mapId) {
+    private void openDetails(String mapId) {
         if (mapId == null || mapId.isBlank()) {
             this.status = "Invalid map selection.";
             return;
         }
-        ClientPlayNetworking.send(new NetworkConstants.EditMapPayload(mapId));
-        this.status = "Requested editor launch for " + mapId + ".";
+        if (this.screen != null) {
+            this.screen.openMapDetails(mapId);
+            this.status = "Opened details for " + mapId + ".";
+        }
     }
 }

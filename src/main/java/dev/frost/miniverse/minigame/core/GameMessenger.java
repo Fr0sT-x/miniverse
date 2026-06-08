@@ -18,17 +18,17 @@ public final class GameMessenger {
     }
 
     public static void showGameTitle(Collection<ServerPlayerEntity> players, Text title, Text subtitle) {
-        // Send a title packet (uses existing single-Text constructor) and send the subtitle as a chat message
         for (ServerPlayerEntity player : players) {
-            player.networkHandler.sendPacket(new TitleS2CPacket(title.copy().formatted(Formatting.GOLD)));
+            player.networkHandler.sendPacket(new TitleS2CPacket(title));
+            if (subtitle != null && !subtitle.getString().isEmpty()) {
+                player.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.SubtitleS2CPacket(subtitle));
+            }
         }
-        // send subtitle as a broadcast chat line immediately after
-        GameMessenger.broadcast(players, subtitle);
     }
 
     public static void showGameOverTitle(Collection<ServerPlayerEntity> players, Text title) {
         for (ServerPlayerEntity player : players) {
-            player.networkHandler.sendPacket(new TitleS2CPacket(title.copy().formatted(Formatting.GOLD)));
+            player.networkHandler.sendPacket(new TitleS2CPacket(title));
         }
     }
 }

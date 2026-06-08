@@ -11,6 +11,8 @@ import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
 import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
 import dev.frost.miniverse.minigame.core.freeze.FreezeService;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.minigame.core.protection.MapProtectionManager;
+import dev.frost.miniverse.minigame.core.region.RegionTriggerService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
@@ -54,11 +56,48 @@ public final class MinigameEventRouter {
         registered = true;
 
         UseItemCallback.EVENT.register(MinigameEventRouter::onUseItem);
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            if (pausedFor(player)) return ActionResult.FAIL;
+            if (player instanceof ServerPlayerEntity serverPlayer) {
+                Minigame active = activeMinigame();
+                if (active != null && !active.canBuild() && player.getStackInHand(hand).getItem() instanceof net.minecraft.item.BlockItem) {
+                    serverPlayer.sendMessage(net.minecraft.text.Text.literal("Building is disabled in this match.").formatted(net.minecraft.util.Formatting.RED), true);
+                    return ActionResult.FAIL;
+                }
+                if (player.getStackInHand(hand).getItem() instanceof net.minecraft.item.BlockItem) {
+                    net.minecraft.util.math.BlockPos targetPos = hitResult.getBlockPos().offset(hitResult.getSide());
+                    net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(targetPos);
+                    if (dev.frost.miniverse.minigame.core.region.RegionRestrictionService.getInstance().hasRestriction(box, dev.frost.miniverse.minigame.core.region.RegionRestriction.BUILD_DENIED)) {
+                        serverPlayer.sendMessage(net.minecraft.text.Text.literal("You cannot build there").formatted(net.minecraft.util.Formatting.RED), false);
+                        return ActionResult.FAIL;
+                    }
+                }
+            }
+            return ActionResult.PASS;
+        });
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
-        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> !pausedFor(player));
+        PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
+            if (pausedFor(player)) return false;
+            if (player instanceof ServerPlayerEntity serverPlayer) {
+                Minigame active = activeMinigame();
+                if (active != null && !active.canBreakBlocks()) {
+                    serverPlayer.sendMessage(net.minecraft.text.Text.literal("Block breaking is disabled in this match.").formatted(net.minecraft.util.Formatting.RED), true);
+                    return false;
+                }
+                net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(pos);
+                if (dev.frost.miniverse.minigame.core.region.RegionRestrictionService.getInstance().hasRestriction(box, dev.frost.miniverse.minigame.core.region.RegionRestriction.BREAK_DENIED)) {
+                    serverPlayer.sendMessage(net.minecraft.text.Text.literal("You cannot break blocks here.").formatted(net.minecraft.util.Formatting.RED), true);
+                    return false;
+                }
+                return MapProtectionManager.canBreak(serverPlayer, pos, true);
+            }
+            return true;
+        });
+        PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
+            MapProtectionManager.onBlockBroken(pos);
+        });
         ServerTickEvents.END_SERVER_TICK.register(MinigameEventRouter::onServerTick);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> MinigameSessionStore.saveOnShutdown());
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(MinigameEventRouter::onAllowDamage);
@@ -76,6 +115,7 @@ public final class MinigameEventRouter {
         SpectatorService.getInstance().tick(server);
         ProtectedItemService.getInstance().tick(server);
         MinigameSessionStore.tick(server);
+        RegionTriggerService.getInstance().tick(server);
         if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
             return;
         }

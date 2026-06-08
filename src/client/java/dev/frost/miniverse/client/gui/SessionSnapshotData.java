@@ -28,6 +28,44 @@ public final class SessionSnapshotData {
     public record MapValidation(String game, boolean valid, List<String> errors) {
     }
 
+    public record EditorExtension(String gameId, String displayName, List<EditorMarkerDefinition> markers) {
+    }
+
+    public record EditorMarkerDefinition(String key, String displayName, String type, String configKey, int minCount, int maxCount, String description) {
+        public boolean single() {
+            return this.maxCount == 1;
+        }
+    }
+
+    public record EditorMarker(String id, String definitionKey, String name, String type, List<EditorPoint> points, List<EditorRegionPart> regions, com.google.gson.JsonObject properties) {
+    }
+
+    public record EditorRegionPart(EditorPoint min, EditorPoint max) {
+    }
+
+    public record EditorPoint(double x, double y, double z, float yaw, float pitch) {
+    }
+
+    public record EditorMarkerGroup(String definitionKey, List<EditorMarker> markers) {
+    }
+
+    public record EditorValidation(boolean valid, List<String> errors, List<String> warnings) {
+    }
+
+    public record EditorGameState(String gameId, List<EditorMarkerGroup> markerGroups, EditorValidation validation) {
+    }
+
+    public record EditorState(String mapId, List<EditorGameState> games) {
+        public List<EditorMarker> markers(String gameId, String definitionKey) {
+            return this.games.stream()
+                .filter(game -> game.gameId().equalsIgnoreCase(gameId))
+                .findFirst()
+                .flatMap(game -> game.markerGroups().stream().filter(group -> group.definitionKey().equalsIgnoreCase(definitionKey)).findFirst())
+                .map(EditorMarkerGroup::markers)
+                .orElse(List.of());
+        }
+    }
+
     public record GameMetadata(
         String id,
         String displayName,
@@ -74,6 +112,9 @@ public final class SessionSnapshotData {
     private static volatile List<RosterEntry> roster = List.of();
     private static volatile List<PendingJoiner> pendingJoiners = List.of();
     private static volatile List<MapSummary> maps = List.of();
+    private static volatile boolean mapEditor = false;
+    private static volatile List<EditorExtension> editorExtensions = List.of();
+    private static volatile EditorState editorState = new EditorState("", List.of());
     private static volatile List<GameMetadata> games = List.of();
     private static volatile int maxConcurrentLaunches = 2;
     private static volatile int launcherQueueCapacity = 64;
@@ -99,6 +140,18 @@ public final class SessionSnapshotData {
 
     public static List<MapSummary> maps() {
         return maps;
+    }
+
+    public static boolean mapEditor() {
+        return mapEditor;
+    }
+
+    public static List<EditorExtension> editorExtensions() {
+        return editorExtensions;
+    }
+
+    public static EditorState editorState() {
+        return editorState;
     }
 
     public static List<GameMetadata> games() {
@@ -149,6 +202,16 @@ public final class SessionSnapshotData {
         serverSettings = newServerSettings;
         retentionSettings = newRetentionSettings;
         sessionServer = newSessionServer;
+    }
+
+    public static void updateEditor(boolean newMapEditor, List<EditorExtension> newEditorExtensions, EditorState newEditorState) {
+        mapEditor = newMapEditor;
+        editorExtensions = List.copyOf(newEditorExtensions == null ? List.of() : newEditorExtensions);
+        editorState = newEditorState == null ? new EditorState("", List.of()) : newEditorState;
+        dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.editorActive = newMapEditor;
+        if (!dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.editorActive) {
+            dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.disabledOverlays.clear();
+        }
     }
 
     public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity) {

@@ -57,6 +57,8 @@ public final class SessionNetwork {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.INSPECT_SESSION_ID, (payload, context) -> handleInspect(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_VOID_MAP_ID, (payload, context) -> handleCreateVoidMap(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.EDIT_MAP_ID, (payload, context) -> handleEditMap(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RENAME_MAP_ID, (payload, context) -> handleRenameMap(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_MAP_ID, (payload, context) -> handleDeleteMap(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RELAUNCH_SESSION_ID, (payload, context) -> handleRelaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_SESSION_ID, (payload, context) -> handleDeleteRetained(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CHANGE_SEED_ID, (payload, context) -> handleChangeSeed(context.server(), context.player(), payload));
@@ -364,6 +366,35 @@ public final class SessionNetwork {
             player.sendMessage(Text.literal("Map editor launched for " + result.mapId() + ". Use /miniverse_map_save in the editor server to save the template."), false);
             sendSessionList(server, player);
         }));
+    }
+
+    
+    private static void handleRenameMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.RenameMapPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "rename maps")) {
+            return;
+        }
+        if (dev.frost.miniverse.map.MapStore.rename(payload.mapId(), payload.newName())) {
+            player.sendMessage(Text.literal("Renamed map.").formatted(Formatting.GREEN), false);
+            for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                if (SessionPermissions.canManageSessions(online)) sendSessionList(server, online);
+            }
+        } else {
+            player.sendMessage(Text.literal("Failed to rename map.").formatted(Formatting.RED), false);
+        }
+    }
+
+    private static void handleDeleteMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.DeleteMapPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "delete maps")) {
+            return;
+        }
+        if (dev.frost.miniverse.map.MapStore.delete(payload.mapId())) {
+            player.sendMessage(Text.literal("Deleted map.").formatted(Formatting.GREEN), false);
+            for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                if (SessionPermissions.canManageSessions(online)) sendSessionList(server, online);
+            }
+        } else {
+            player.sendMessage(Text.literal("Failed to delete map.").formatted(Formatting.RED), false);
+        }
     }
 
     private static void handleEditMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.EditMapPayload payload) {

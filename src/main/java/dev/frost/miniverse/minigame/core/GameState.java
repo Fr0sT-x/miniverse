@@ -7,6 +7,8 @@ package dev.frost.miniverse.minigame.core;
 public enum GameState {
     WAITING,
 
+    COUNTDOWN,
+
     /**
      * The game is waiting for enough players to join before starting.
      */
@@ -24,6 +26,8 @@ public enum GameState {
      */
     RUNNING,
 
+    PLAYING,
+
     IN_PROGRESS,
 
     /**
@@ -38,20 +42,24 @@ public enum GameState {
 
     RETURNING,
 
+    ROUND_RESET,
+
+    MATCH_OVER,
+
     FINISHED;
 
     /**
      * Checks if the game is currently active (in progress).
      */
     public boolean isActive() {
-        return this == RUNNING || this == IN_PROGRESS;
+        return this == RUNNING || this == IN_PROGRESS || this == PLAYING;
     }
 
     /**
      * Checks if the game is in a terminal state.
      */
     public boolean isTerminal() {
-        return this == ENDING || this == RETURNING || this == FINISHED;
+        return this == ENDING || this == RETURNING || this == FINISHED || this == MATCH_OVER;
     }
 }
 

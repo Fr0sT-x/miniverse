@@ -2,6 +2,9 @@ package dev.frost.miniverse;
 
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.map.MapEditorCommands;
+import dev.frost.miniverse.map.MapEditorEvents;
+import dev.frost.miniverse.map.editor.MapEditorNetwork;
+import dev.frost.miniverse.map.editor.MapEditorPlacementController;
 import dev.frost.miniverse.minigame.MiniverseGames;
 import dev.frost.miniverse.minigame.core.event.MinigameEventRouter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleCommands;
@@ -33,6 +36,7 @@ public class Miniverse implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
+		dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjectiveRegistry.register();
 		MiniverseGames.registerAll();
 		SessionRegistry.cleanupSessionsOnStartup();
 
@@ -47,12 +51,18 @@ public class Miniverse implements ModInitializer {
 		MinigameEventRouter.register();
 		MinigameRegistry.registerEvents();
 		SessionRoutingEvents.register();
-		ServerLifecycleEvents.SERVER_STARTED.register(SessionRecoveryService::recoverUnfinishedSessions);
+		MapEditorEvents.register();
+		MapEditorPlacementController.register();
+		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			SessionRecoveryService.recoverUnfinishedSessions(server);
+			dev.frost.miniverse.minigame.core.kit.KitRegistry.loadCustomKits(server);
+		});
 
 		// Register shared session GUI payloads and server-side receivers.
 		NetworkConstants.registerPayloadTypes();
 		ClientConnectionHosts.register();
 		SessionNetwork.register();
+		MapEditorNetwork.register();
 		TransitionTransferCoordinator.register();
 
 		LOGGER.info("Miniverse initialized. {} minigame(s) registered.", MinigameRegistry.getDefinitions().size());

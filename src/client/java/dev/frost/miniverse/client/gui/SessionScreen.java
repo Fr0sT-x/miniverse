@@ -7,14 +7,21 @@ import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.AdminWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.AppearanceWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.BountyHuntWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.BridgeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.DeathSwapWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.GamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.ManhuntWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.ResourceSprintWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.BlockShuffleWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.DeathShuffleWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.SpeedrunWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.WorkspaceView;
 import dev.frost.miniverse.client.gui.map.MapManagementWorkspaceView;
+import dev.frost.miniverse.client.gui.map.MapDetailsWorkspaceView;
+import dev.frost.miniverse.client.gui.map.MapEditorState;
+import dev.frost.miniverse.client.gui.map.MapEditorWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.InfectionWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.DuelsWorkspaceView;
 import dev.frost.miniverse.common.NetworkConstants;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
@@ -55,19 +62,25 @@ public class SessionScreen extends Screen {
     private static final int ARROW_TEXTURE_SIZE = 16;
     private static final int ARROW_RENDER_SIZE = 11;
     private static final Identifier DROPDOWN_ARROW_TEXTURE = Identifier.of("miniverse", "textures/gui/icons/dropdown_arrow.png");
-    private static final Map<String, Consumer<SessionScreen>> CUSTOM_SETUP_SCREENS = Map.of(
-        "manhunt", SessionScreen::openManhunt,
-        "speedrun", SessionScreen::openSpeedrun,
-        "bountyhunt", SessionScreen::openBountyHunt,
-        "resource_sprint", SessionScreen::openResourceSprint,
-        "deathswap", SessionScreen::openDeathSwap,
-        "infection", SessionScreen::openInfection
+    private static final Map<String, Consumer<SessionScreen>> CUSTOM_SETUP_SCREENS = Map.ofEntries(
+        Map.entry("manhunt", SessionScreen::openManhunt),
+        Map.entry("speedrun", SessionScreen::openSpeedrun),
+        Map.entry("bountyhunt", SessionScreen::openBountyHunt),
+        Map.entry("bridge", SessionScreen::openBridge),
+        Map.entry("resource_sprint", SessionScreen::openResourceSprint),
+        Map.entry("deathswap", SessionScreen::openDeathSwap),
+        Map.entry("infection", SessionScreen::openInfection),
+        Map.entry("block_shuffle", SessionScreen::openBlockShuffle),
+        Map.entry("death_shuffle", SessionScreen::openDeathShuffle),
+        Map.entry("murdermystery", SessionScreen::openMurderMystery),
+        Map.entry("duels", SessionScreen::openDuels)
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final List<MinigameEntry> minigameEntries = new ArrayList<>();
     private final Map<String, UiAnimation.Value> cardHover = new HashMap<>();
     private final Map<SidebarSection, UiAnimation.Value> sidebarAnimations = new EnumMap<>(SidebarSection.class);
+    private final MapEditorState mapEditorState = MapEditorState.INSTANCE;
     private final Set<SidebarSection> expandedSections = EnumSet.of(SidebarSection.GAMEMODES);
     private final Set<String> collapsedModuleGroups = new java.util.HashSet<>();
     private final Map<String, UiAnimation.Value> moduleGroupAnimations = new HashMap<>();
@@ -79,6 +92,8 @@ public class SessionScreen extends Screen {
     private boolean defaultWorkspaceApplied;
     private double sidebarScroll;
     private double sidebarMaxScroll;
+    private final List<WorkspaceView> history = new ArrayList<>();
+    private int historyIndex = -1;
 
     public SessionScreen() {
         super(Text.literal("Miniverse"));
@@ -208,6 +223,9 @@ public class SessionScreen extends Screen {
         NbtCompound serverSettings = getCompoundOrEmpty(root, "server");
         NbtCompound retention = getCompoundOrEmpty(root, "retention");
         boolean sessionServer = getBooleanOrDefault(root, "sessionServer", false);
+        boolean mapEditor = getBooleanOrDefault(root, "mapEditor", false);
+        List<SessionSnapshotData.EditorExtension> editorExtensions = readEditorExtensions(root.getList("mapEditorExtensions", NbtElement.COMPOUND_TYPE));
+        SessionSnapshotData.EditorState editorState = readEditorState(getCompoundOrEmpty(root, "mapEditorState"));
         SessionSnapshotData.update(
             sessions,
             roster,
@@ -237,6 +255,7 @@ public class SessionScreen extends Screen {
             ),
             sessionServer
         );
+        SessionSnapshotData.updateEditor(mapEditor, editorExtensions, editorState);
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof SessionScreen sessionScreen) {
             sessionScreen.rebuildEntries();
@@ -270,6 +289,110 @@ public class SessionScreen extends Screen {
         return nbt != null && nbt.contains(key, NbtElement.COMPOUND_TYPE) ? nbt.getCompound(key) : new NbtCompound();
     }
 
+    private static List<SessionSnapshotData.EditorExtension> readEditorExtensions(NbtList list) {
+        List<SessionSnapshotData.EditorExtension> extensions = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            NbtCompound entry = list.getCompound(i);
+            List<SessionSnapshotData.EditorMarkerDefinition> markers = new ArrayList<>();
+            NbtList markerList = entry.getList("markers", NbtElement.COMPOUND_TYPE);
+            for (int markerIndex = 0; markerIndex < markerList.size(); markerIndex++) {
+                NbtCompound marker = markerList.getCompound(markerIndex);
+                markers.add(new SessionSnapshotData.EditorMarkerDefinition(
+                    getStringOrDefault(marker, "key", ""),
+                    getStringOrDefault(marker, "displayName", ""),
+                    getStringOrDefault(marker, "type", "POINT"),
+                    getStringOrDefault(marker, "configKey", ""),
+                    getIntOrDefault(marker, "minCount", 0),
+                    getIntOrDefault(marker, "maxCount", -1),
+                    getStringOrDefault(marker, "description", "")
+                ));
+            }
+            extensions.add(new SessionSnapshotData.EditorExtension(
+                getStringOrDefault(entry, "gameId", ""),
+                getStringOrDefault(entry, "displayName", ""),
+                markers
+            ));
+        }
+        return extensions;
+    }
+
+    private static SessionSnapshotData.EditorState readEditorState(NbtCompound root) {
+        List<SessionSnapshotData.EditorGameState> games = new ArrayList<>();
+        NbtList gameList = root.getList("games", NbtElement.COMPOUND_TYPE);
+        for (int i = 0; i < gameList.size(); i++) {
+            NbtCompound game = gameList.getCompound(i);
+            List<SessionSnapshotData.EditorMarkerGroup> groups = new ArrayList<>();
+            NbtList groupList = game.getList("markerGroups", NbtElement.COMPOUND_TYPE);
+            for (int groupIndex = 0; groupIndex < groupList.size(); groupIndex++) {
+                NbtCompound group = groupList.getCompound(groupIndex);
+                List<SessionSnapshotData.EditorMarker> markers = new ArrayList<>();
+                NbtList markerList = group.getList("markers", NbtElement.COMPOUND_TYPE);
+                for (int markerIndex = 0; markerIndex < markerList.size(); markerIndex++) {
+                    NbtCompound marker = markerList.getCompound(markerIndex);
+                    List<SessionSnapshotData.EditorPoint> points = new ArrayList<>();
+                    NbtList pointList = marker.getList("points", NbtElement.COMPOUND_TYPE);
+                    for (int pointIndex = 0; pointIndex < pointList.size(); pointIndex++) {
+                        NbtCompound point = pointList.getCompound(pointIndex);
+                        points.add(new SessionSnapshotData.EditorPoint(
+                            point.getDouble("x"),
+                            point.getDouble("y"),
+                            point.getDouble("z"),
+                            point.getFloat("yaw"),
+                            point.getFloat("pitch")
+                        ));
+                    }
+                    List<SessionSnapshotData.EditorRegionPart> regions = new ArrayList<>();
+                    if (marker.contains("regions", NbtElement.LIST_TYPE)) {
+                        NbtList regionList = marker.getList("regions", NbtElement.COMPOUND_TYPE);
+                        for (int regionIndex = 0; regionIndex < regionList.size(); regionIndex++) {
+                            NbtCompound region = regionList.getCompound(regionIndex);
+                            NbtCompound minNbt = region.getCompound("min");
+                            NbtCompound maxNbt = region.getCompound("max");
+                            SessionSnapshotData.EditorPoint min = new SessionSnapshotData.EditorPoint(
+                                minNbt.getDouble("x"), minNbt.getDouble("y"), minNbt.getDouble("z"), minNbt.getFloat("yaw"), minNbt.getFloat("pitch")
+                            );
+                            SessionSnapshotData.EditorPoint max = new SessionSnapshotData.EditorPoint(
+                                maxNbt.getDouble("x"), maxNbt.getDouble("y"), maxNbt.getDouble("z"), maxNbt.getFloat("yaw"), maxNbt.getFloat("pitch")
+                            );
+                            regions.add(new SessionSnapshotData.EditorRegionPart(min, max));
+                        }
+                    }
+                    String propertiesStr = getStringOrDefault(marker, "properties", "{}");
+                    com.google.gson.JsonObject properties = new com.google.gson.JsonObject();
+                    try {
+                        properties = com.google.gson.JsonParser.parseString(propertiesStr).getAsJsonObject();
+                    } catch (Exception e) {}
+                    markers.add(new SessionSnapshotData.EditorMarker(
+                        getStringOrDefault(marker, "id", ""),
+                        getStringOrDefault(marker, "definitionKey", ""),
+                        getStringOrDefault(marker, "name", ""),
+                        getStringOrDefault(marker, "type", "POINT"),
+                        points,
+                        regions,
+                        properties
+                    ));
+                }
+                groups.add(new SessionSnapshotData.EditorMarkerGroup(getStringOrDefault(group, "definitionKey", ""), markers));
+            }
+            NbtCompound validationNbt = getCompoundOrEmpty(game, "validation");
+            boolean valid = getBooleanOrDefault(validationNbt, "valid", false);
+            List<String> errors = new ArrayList<>();
+            NbtList errorsNbt = validationNbt.getList("errors", NbtElement.STRING_TYPE);
+            for (int e = 0; e < errorsNbt.size(); e++) {
+                errors.add(errorsNbt.getString(e));
+            }
+            List<String> warnings = new ArrayList<>();
+            NbtList warningsNbt = validationNbt.getList("warnings", NbtElement.STRING_TYPE);
+            for (int w = 0; w < warningsNbt.size(); w++) {
+                warnings.add(warningsNbt.getString(w));
+            }
+            SessionSnapshotData.EditorValidation validation = new SessionSnapshotData.EditorValidation(valid, errors, warnings);
+
+            games.add(new SessionSnapshotData.EditorGameState(getStringOrDefault(game, "gameId", ""), groups, validation));
+        }
+        return new SessionSnapshotData.EditorState(getStringOrDefault(root, "mapId", ""), games);
+    }
+
     @Override
     protected void init() {
         super.init();
@@ -291,13 +414,50 @@ public class SessionScreen extends Screen {
     }
 
     public void openSelectorWorkspace() {
+        if (this.historyIndex < this.history.size() - 1) {
+            this.history.subList(this.historyIndex + 1, this.history.size()).clear();
+        }
+        this.history.add(null);
+        this.historyIndex++;
+        
         this.workspaceView = null;
         this.statusMessage = "";
         this.syncExpandedSectionsForWorkspace();
         this.rebuildWorkspaceChildren();
     }
 
-    private void openWorkspaceView(WorkspaceView view) {
+    public void openWorkspaceView(WorkspaceView view) {
+        if (this.historyIndex < this.history.size() - 1) {
+            this.history.subList(this.historyIndex + 1, this.history.size()).clear();
+        }
+        this.history.add(view);
+        this.historyIndex++;
+        
+        this.workspaceView = view;
+        this.statusMessage = "";
+        this.defaultWorkspaceApplied = true;
+        if (view instanceof GamemodeWorkspaceView) {
+            this.collapsedModuleGroups.clear();
+        }
+        this.syncExpandedSectionsForWorkspace();
+        this.rebuildWorkspaceChildren();
+    }
+    
+    public void goBack() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.restoreWorkspaceFromHistory(this.history.get(this.historyIndex));
+        }
+    }
+    
+    public void goForward() {
+        if (this.historyIndex < this.history.size() - 1) {
+            this.historyIndex++;
+            this.restoreWorkspaceFromHistory(this.history.get(this.historyIndex));
+        }
+    }
+    
+    private void restoreWorkspaceFromHistory(WorkspaceView view) {
         this.workspaceView = view;
         this.statusMessage = "";
         this.defaultWorkspaceApplied = true;
@@ -309,11 +469,26 @@ public class SessionScreen extends Screen {
     }
 
     private void applyDefaultWorkspace() {
+        if (SessionSnapshotData.mapEditor()) {
+            if (!this.defaultWorkspaceApplied && this.workspaceView == null) {
+                this.openMapEditorWorkspace();
+                this.defaultWorkspaceApplied = true;
+            }
+            return;
+        }
         if (this.defaultWorkspaceApplied || !SessionSnapshotData.sessionServer() || this.workspaceView != null) {
             return;
         }
         this.openSessionsWorkspace();
         this.defaultWorkspaceApplied = true;
+    }
+
+    public void openMapDetails(String mapId) {
+        this.openWorkspaceView(new MapDetailsWorkspaceView(mapId, this::openMapsWorkspace));
+    }
+
+    public void openMapEditorGamemode(String gameId) {
+        this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, gameId));
     }
 
     private void syncExpandedSectionsForWorkspace() {
@@ -337,6 +512,9 @@ public class SessionScreen extends Screen {
             return SidebarSection.APPEARANCE;
         }
         if (this.workspaceView instanceof MapManagementWorkspaceView) {
+            return SidebarSection.MAPS;
+        }
+        if (this.workspaceView instanceof MapEditorWorkspaceView) {
             return SidebarSection.MAPS;
         }
         return SidebarSection.GAMEMODES;
@@ -602,6 +780,14 @@ public class SessionScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 3) {
+            this.goBack();
+            return true;
+        }
+        if (button == 4) {
+            this.goForward();
+            return true;
+        }
         Layout layout = this.createLayout();
         if (button == 0 && this.handleWorkspaceNavigationClick(layout.sidebar(), layout.sidebarSearch(), mouseX, mouseY)) {
             return true;
@@ -749,6 +935,25 @@ public class SessionScreen extends Screen {
         String query = this.sidebarQuery();
         switch (section) {
             case GAMEMODES -> {
+                if (SessionSnapshotData.mapEditor()) {
+                    for (SessionSnapshotData.EditorExtension extension : SessionSnapshotData.editorExtensions()) {
+                        if (!query.isEmpty()) {
+                            String name = extension.displayName().toLowerCase(Locale.ROOT);
+                            String id = extension.gameId().toLowerCase(Locale.ROOT);
+                            if (!name.contains(query) && !id.contains(query)) {
+                                continue;
+                            }
+                        }
+                        int accent = this.accentFor(extension.gameId(), rows.size());
+                        rows.add(SidebarRow.item(new SidebarChild(">", extension.displayName(), () -> this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, extension.gameId())), () -> this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId()), 8, accent)));
+                        if (this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId())) {
+                            for (SessionSnapshotData.EditorMarkerDefinition marker : extension.markers()) {
+                                rows.add(SidebarRow.item(new SidebarChild("+", marker.displayName(), () -> this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, extension.gameId(), marker.key())), () -> editor.markerSelected(extension.gameId(), marker.key()), MODULE_ITEM_INDENT, accent)));
+                            }
+                        }
+                    }
+                    break;
+                }
                 rows.add(SidebarRow.item(new SidebarChild("*", "All gamemodes", this::openSelectorWorkspace, () -> this.workspaceView == null, 8, UiTheme.ACCENT)));
                 for (MinigameEntry entry : this.minigameEntries) {
                     if (!query.isEmpty()) {
@@ -794,7 +999,14 @@ public class SessionScreen extends Screen {
                 rows.add(SidebarRow.item(new SidebarChild(":", "History", this::openHistoryWorkspace, () -> this.isAdminMode(AdminWorkspaceView.Mode.HISTORY), 8, UiTheme.ACCENT)));
             }
             case SERVER -> rows.add(SidebarRow.item(new SidebarChild("!", "Session server properties", this::openServerWorkspace, () -> this.isAdminMode(AdminWorkspaceView.Mode.SERVER), 8, UiTheme.ACCENT_RED)));
-            case MAPS -> rows.add(SidebarRow.item(new SidebarChild("M", "Maps", this::openMapsWorkspace, () -> this.workspaceView instanceof MapManagementWorkspaceView, 8, UiTheme.ACCENT_GREEN)));
+            case MAPS -> {
+                if (SessionSnapshotData.mapEditor()) {
+                    rows.add(SidebarRow.item(new SidebarChild("E", "Map Editor", this::openMapEditorWorkspace, () -> this.workspaceView instanceof MapEditorWorkspaceView editor && editor.isOverviewSelected(), 8, UiTheme.ACCENT_GREEN)));
+                    rows.add(SidebarRow.item(new SidebarChild("G", "General", () -> this.openWorkspaceView(MapEditorWorkspaceView.forGeneral(this.mapEditorState, this::requestSnapshot)), () -> this.workspaceView instanceof MapEditorWorkspaceView editor && editor.generalSelected(), MODULE_ITEM_INDENT, UiTheme.ACCENT_BLUE)));
+                } else {
+                    rows.add(SidebarRow.item(new SidebarChild("M", "Maps", this::openMapsWorkspace, () -> this.workspaceView instanceof MapManagementWorkspaceView, 8, UiTheme.ACCENT_GREEN)));
+                }
+            }
             case APPEARANCE -> rows.add(SidebarRow.item(new SidebarChild("~", "Workspace", this::openAppearance, () -> this.workspaceView instanceof AppearanceWorkspaceView, 8, UiTheme.ACCENT_BLUE)));
         }
         if (query.isEmpty()) {
@@ -1131,6 +1343,17 @@ public class SessionScreen extends Screen {
         this.openWorkspaceView(new MapManagementWorkspaceView(this::requestSnapshot));
     }
 
+    private void openMapEditorWorkspace() {
+        // Restore the last-viewed screen if user had one selected
+        if (!this.mapEditorState.selectedGameId.isBlank() && !this.mapEditorState.selectedDefinitionKey.isBlank()) {
+            this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId, this.mapEditorState.selectedDefinitionKey));
+        } else if (!this.mapEditorState.selectedGameId.isBlank()) {
+            this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId));
+        } else {
+            this.openWorkspaceView(new MapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
+        }
+    }
+
     private boolean isAdminMode(AdminWorkspaceView.Mode mode) {
         return this.workspaceView instanceof AdminWorkspaceView adminWorkspaceView && adminWorkspaceView.mode() == mode;
     }
@@ -1153,6 +1376,26 @@ public class SessionScreen extends Screen {
 
     private void openInfection() {
         this.openWorkspaceView(new InfectionWorkspaceView());
+    }
+
+    private void openBridge() {
+        this.openWorkspaceView(new BridgeWorkspaceView());
+    }
+
+    private void openBlockShuffle() {
+        this.openWorkspaceView(new BlockShuffleWorkspaceView());
+    }
+
+    private void openDeathShuffle() {
+        this.openWorkspaceView(new DeathShuffleWorkspaceView());
+    }
+
+    private void openMurderMystery() {
+        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.MurderMysteryWorkspaceView());
+    }
+
+    private void openDuels() {
+        this.openWorkspaceView(new DuelsWorkspaceView());
     }
 
     public void openGenericSetup(MinigameEntry entry) {

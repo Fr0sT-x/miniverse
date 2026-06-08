@@ -5,7 +5,14 @@
 	"mixins": [
 		"ExampleMixin",
 		"ProtectedItemScreenHandlerMixin",
-		"ProtectedItemPlayerDropMixin"
+		"ProtectedItemPlayerDropMixin",
+		"protection.BlockItemMixin",
+		"protection.ExplosionMixin",
+		"protection.PistonHandlerMixin",
+		"protection.FireBlockMixin",
+		"protection.FlowableFluidMixin",
+		"protection.FallingBlockMixin",
+		"WorldArenaTrackerMixin"
 	],
 	"client": [
 		"ProtectedItemClientHandledScreenMixin",

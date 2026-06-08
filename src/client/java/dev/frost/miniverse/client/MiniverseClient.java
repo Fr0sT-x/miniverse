@@ -4,6 +4,7 @@ import dev.frost.miniverse.client.freeze.ClientFreezeHandler;
 import dev.frost.miniverse.client.freeze.ClientFreezeState;
 import dev.frost.miniverse.client.gui.SessionLaunchStatus;
 import dev.frost.miniverse.client.gui.SessionScreen;
+import dev.frost.miniverse.client.minigame.layout.InventoryLayoutClient;
 import dev.frost.miniverse.client.protection.ProtectionOverlayClient;
 import dev.frost.miniverse.client.transition.TransitionOverlay;
 import dev.frost.miniverse.common.NetworkConstants;
@@ -11,6 +12,12 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import dev.frost.miniverse.client.gui.selector.RegistrySelectorContext;
+import dev.frost.miniverse.client.gui.selector.RegistrySelectorState;
+import dev.frost.miniverse.client.gui.selector.RegistrySelectorScreen;
+import dev.frost.miniverse.client.gui.selector.providers.BlockRegistryProvider;
+import net.minecraft.block.Block;
+import java.util.Set;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -26,12 +33,15 @@ public class MiniverseClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		dev.frost.miniverse.client.gui.ui.UiPreferences.load();
 		NetworkConstants.registerPayloadTypes();
 		NightVisionToggle.register();
 		ClientFreezeHandler.register();
 		TransitionOverlay.register();
 		ProtectionOverlayClient.register();
 		SessionLaunchStatus.register();
+		InventoryLayoutClient.register();
+		dev.frost.miniverse.client.gui.map.MapEditorOverlayClient.register();
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.miniverse.open_gui",
@@ -46,18 +56,106 @@ public class MiniverseClient implements ClientModInitializer {
 			}
 		});
 
-		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-			ClientCommandManager.literal("mg")
-				.executes(context -> {
-					openGui();
-					return 1;
-				})
-		));
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+			dispatcher.register(
+				ClientCommandManager.literal("mg")
+					.executes(context -> {
+						openGui();
+						return 1;
+					})
+			);
+			
+			dispatcher.register(
+				ClientCommandManager.literal("miniverse-dev").then(ClientCommandManager.literal("selector")
+					.executes(context -> {
+						MinecraftClient client = MinecraftClient.getInstance();
+						client.send(() -> {
+							RegistrySelectorContext<Block> selectorContext = new RegistrySelectorContext<>(
+								"minecraft:block",
+								"Select Blocks",
+								RegistrySelectorContext.SelectionMode.MULTI,
+								new RegistrySelectorState(),
+								result -> {},
+								"global",
+								Set.of()
+							);
+							client.setScreen(new RegistrySelectorScreen<>(selectorContext, new BlockRegistryProvider()));
+						});
+						return 1;
+					}))
+			);
+		});
 
 		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.SESSION_LIST_ID, (payload, context) ->
 			context.client().execute(() -> {
 				SessionScreen.onServerSnapshot(payload.sessions());
 				maybeOpenGui(context.client());
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.SYNC_KITS_ID, (payload, context) ->
+			context.client().execute(() -> {
+				try {
+					com.google.gson.JsonArray array = com.google.gson.JsonParser.parseString(payload.jsonArrayString()).getAsJsonArray();
+					dev.frost.miniverse.minigame.core.kit.KitRegistry.clear();
+					array.forEach(element -> {
+						try {
+							dev.frost.miniverse.minigame.core.kit.Kit kit = dev.frost.miniverse.minigame.core.kit.Kit.fromJson(
+								element.getAsJsonObject(), context.client().world.getRegistryManager()
+							);
+							dev.frost.miniverse.minigame.core.kit.KitRegistry.register(kit);
+						} catch (Exception e) { e.printStackTrace(); }
+					});
+
+					if (context.client().currentScreen instanceof dev.frost.miniverse.client.gui.selector.RegistrySelectorScreen<?> rs) {
+					    rs.refreshEntries();
+					}
+				} catch (Exception e) { e.printStackTrace(); }
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.CAPTURE_THUMBNAIL_ID, (payload, context) ->
+			context.client().execute(() -> {
+				MinecraftClient client = context.client();
+				if (client.currentScreen != null) {
+					client.setScreen(null);
+				}
+				client.options.hudHidden = true;
+				java.nio.file.Path targetPath = java.nio.file.Paths.get(payload.path());
+				java.io.File dir = targetPath.getParent().toFile();
+				String name = targetPath.getFileName().toString();
+				
+				// Run on next frame
+				client.execute(() -> {
+					net.minecraft.client.util.ScreenshotRecorder.saveScreenshot(
+						dir,
+						name,
+						client.getFramebuffer(),
+						message -> client.inGameHud.getChatHud().addMessage(message)
+					);
+					client.options.hudHidden = false;
+				});
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.SYNC_BUILDER_SELECTION_ID, (payload, context) ->
+			context.client().execute(() -> {
+				dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.currentBuilderSelection.clear();
+				net.minecraft.nbt.NbtList list = payload.selection().getList("regions", net.minecraft.nbt.NbtElement.COMPOUND_TYPE);
+				for (int i = 0; i < list.size(); i++) {
+					net.minecraft.nbt.NbtCompound region = list.getCompound(i);
+					net.minecraft.nbt.NbtCompound minNbt = region.getCompound("min");
+					net.minecraft.nbt.NbtCompound maxNbt = region.getCompound("max");
+					dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint min = new dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint(
+						minNbt.getDouble("x"), minNbt.getDouble("y"), minNbt.getDouble("z"), minNbt.getFloat("yaw"), minNbt.getFloat("pitch")
+					);
+					dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint max = new dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint(
+						maxNbt.getDouble("x"), maxNbt.getDouble("y"), maxNbt.getDouble("z"), maxNbt.getFloat("yaw"), maxNbt.getFloat("pitch")
+					);
+					dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.currentBuilderSelection.add(
+						new dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart(min, max)
+					);
+				}
 			})
 		);
 
@@ -68,6 +166,7 @@ public class MiniverseClient implements ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientFreezeState.setFrozen(false);
 			SessionLaunchStatus.clear();
+			InventoryLayoutClient.clear();
 			ProtectionOverlayClient.clearAll();
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> sendConnectionHost(client));

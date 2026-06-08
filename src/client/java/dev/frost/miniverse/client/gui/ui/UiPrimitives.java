@@ -83,6 +83,10 @@ public final class UiPrimitives {
             } : action;
         }
 
+        public void setLabel(String label) {
+            this.label = label;
+        }
+
         public UiButton accent(int accent) {
             this.accent = accent;
             return this;

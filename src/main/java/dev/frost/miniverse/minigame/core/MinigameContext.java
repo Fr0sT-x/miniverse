@@ -3,6 +3,7 @@ package dev.frost.miniverse.minigame.core;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.jetbrains.annotations.Nullable;
+import dev.frost.miniverse.minigame.core.protection.MapProtectionTracker;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +14,7 @@ import java.util.function.Consumer;
 public final class MinigameContext {
     private final ParticipantSet participants = new ParticipantSet();
     private final GameClock clock = new GameClock();
+    private final MapProtectionTracker protectionTracker = new MapProtectionTracker();
 
     @Nullable
     private MinecraftServer server;
@@ -38,6 +40,10 @@ public final class MinigameContext {
 
     public GameClock clock() {
         return this.clock;
+    }
+
+    public MapProtectionTracker protectionTracker() {
+        return this.protectionTracker;
     }
 
     void attachStateUpdater(Consumer<GameState> stateUpdater) {

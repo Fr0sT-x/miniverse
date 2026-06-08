@@ -9,7 +9,8 @@
 		"LivingEntityNightVisionMixin",
 		"MiniverseScreenBackgroundMixin",
 		"ProgressScreenTransitionOverlayMixin",
-		"ScreenTransitionOverlayMixin"
+		"ScreenTransitionOverlayMixin",
+		"InventoryScreenMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

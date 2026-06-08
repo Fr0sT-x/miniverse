@@ -20,6 +20,9 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 
+import dev.frost.miniverse.client.gui.selector.RegistrySelectorContext;
+import java.util.stream.Collectors;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -62,7 +65,6 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
     private UiLayout.Rect startButton = new UiLayout.Rect(0, 0, 0, 0);
 
     private TextFieldWidget timeLimitField;
-    private TextFieldWidget objectivesField;
     private ButtonWidget modeButton;
     private ButtonWidget distributionButton;
     private ButtonWidget tieBreakButton;
@@ -73,7 +75,7 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
     private ResourceSprintSettings.ObjectiveDistributionMode distributionMode = ResourceSprintSettings.ObjectiveDistributionMode.SHARED;
     private ResourceSprintSettings.TieBreakRule tieBreakRule = ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
     private int timeLimitSeconds = 3600;
-    private String objectivesText = "";
+    private java.util.Set<String> objectivesPool = new LinkedHashSet<>();
 
     private int selectedTeamIndex = -1;
     private int rosterScrollOffset;
@@ -101,21 +103,35 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
                 this.modeButton.setMessage(Text.literal("Mode: " + titleCase(this.mode.nbtValue())));
             });
             this.timeLimitField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 128, Integer.toString(this.timeLimitSeconds), 160, "Time limit seconds");
-            this.distributionButton = this.addButton(screen, "Distribution: " + shortDistribution(this.distributionMode), mainPanel.x() + 180, mainPanel.y() + 160, 220, () -> {
+            this.tieBreakButton = this.addButton(screen, "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), mainPanel.x() + 180, mainPanel.y() + 160, 190, () -> {
+                this.tieBreakRule = this.tieBreakRule == ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH ? ResourceSprintSettings.TieBreakRule.FASTEST_TOTAL_TIME : ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
+                this.tieBreakButton.setMessage(Text.literal("Tie-Break: " + titleCase(this.tieBreakRule.nbtValue())));
+            });
+            this.distributionButton = this.addButton(screen, "Distribution: " + shortDistribution(this.distributionMode), mainPanel.x() + 180, mainPanel.y() + 192, 190, () -> {
                 this.distributionMode = this.distributionMode.next();
                 this.distributionButton.setMessage(Text.literal("Distribution: " + shortDistribution(this.distributionMode)));
             });
-            this.tieBreakButton = this.addButton(screen, "Tie Break: " + titleCase(this.tieBreakRule.nbtValue()), mainPanel.x() + 180, mainPanel.y() + 192, 200, () -> {
-                this.tieBreakRule = this.tieBreakRule == ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH
-                    ? ResourceSprintSettings.TieBreakRule.FASTEST_TOTAL_TIME
-                    : ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
-                this.tieBreakButton.setMessage(Text.literal("Tie Break: " + titleCase(this.tieBreakRule.nbtValue())));
-            });
-        } else if (this.activeModule == Module.OBJECTIVES) {
-            this.objectivesField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 96, this.objectivesText, 280, "Objective item ids");
-            this.objectivesResetButton = this.addButton(screen, "Use Defaults", mainPanel.x() + 180, mainPanel.y() + 128, 140, () -> {
-                this.objectivesText = "";
-                this.objectivesField.setText("");
+            this.addButton(screen, "Configure Objectives", mainPanel.x() + 180, mainPanel.y() + 224, 190, () -> {
+                this.syncStateFromWidgets();
+                RegistrySelectorContext<net.minecraft.item.Item> selectorContext = new RegistrySelectorContext<>(
+                    "minecraft:item",
+                    "Select Objectives",
+                    RegistrySelectorContext.SelectionMode.MULTI,
+                    new dev.frost.miniverse.client.gui.selector.RegistrySelectorState(),
+                    result -> {
+                        this.objectivesPool = result.selectedEntries().stream()
+                            .map(net.minecraft.registry.Registries.ITEM::getId)
+                            .map(net.minecraft.util.Identifier::toString)
+                            .collect(Collectors.toSet());
+                        client.setScreen(screen);
+                    },
+                    "resourcesprint",
+                    this.objectivesPool.stream()
+                        .map(net.minecraft.util.Identifier::of)
+                        .map(net.minecraft.registry.Registries.ITEM::get)
+                        .collect(Collectors.toSet())
+                );
+                client.setScreen(new dev.frost.miniverse.client.gui.selector.RegistrySelectorScreen<>(selectorContext, new dev.frost.miniverse.client.gui.selector.providers.ItemRegistryProvider()));
             });
         }
 
@@ -138,8 +154,6 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
             this.renderTeams(context, textRenderer, this.teamsArea, mouseX, mouseY);
         } else if (this.activeModule == Module.SUMMARY) {
             this.renderSummary(context, textRenderer, mainPanel);
-        } else if (this.activeModule == Module.OBJECTIVES) {
-            this.renderObjectives(context, textRenderer, mainPanel);
         } else {
             this.renderSettingsModule(context, textRenderer, mainPanel);
         }
@@ -160,8 +174,7 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
             context.drawText(textRenderer, Text.literal("Time Limit"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Distribution"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Tie Break"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-        } else if (this.activeModule == Module.OBJECTIVES) {
-            context.drawText(textRenderer, Text.literal("Objectives"), labelX, labelY, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Objectives"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -306,22 +319,6 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
         context.drawText(textRenderer, Text.literal(this.activeModule.label), moduleX + 12, moduleY + 12, this.activeModule.accent, false);
     }
 
-    private void renderObjectives(DrawContext context, TextRenderer textRenderer, UiLayout.Rect mainPanel) {
-        int moduleX = mainPanel.x() + 14;
-        int moduleY = mainPanel.y() + 72;
-        int moduleWidth = Math.min(520, mainPanel.width() - 28);
-        int moduleHeight = Math.min(210, mainPanel.height() - 104);
-        UiRenderer.panel(context, moduleX, moduleY, moduleWidth, moduleHeight, UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.fill(moduleX, moduleY, moduleX + 3, moduleY + moduleHeight, UiTheme.ACCENT_BLUE);
-        context.drawText(textRenderer, Text.literal("Objective Items"), moduleX + 12, moduleY + 12, UiTheme.ACCENT_BLUE, false);
-        List<String> preview = this.objectiveIds();
-        int y = moduleY + 46;
-        if (preview.isEmpty()) {
-            context.drawText(textRenderer, Text.literal("Using default objectives."), moduleX + 12, y, UiTheme.TEXT_DIM, false);
-        } else {
-            context.drawText(textRenderer, Text.literal("Preview: " + String.join(", ", preview)), moduleX + 12, y, UiTheme.TEXT_DIM, false);
-        }
-    }
 
     private void renderSummary(DrawContext context, TextRenderer textRenderer, UiLayout.Rect mainPanel) {
         this.syncStateFromWidgets();
@@ -567,9 +564,6 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
         if (this.timeLimitField != null) {
             this.timeLimitSeconds = readInt(this.timeLimitField, this.timeLimitSeconds, 60, 7200);
         }
-        if (this.objectivesField != null) {
-            this.objectivesText = this.objectivesField.getText().trim();
-        }
     }
 
     private int readInt(TextFieldWidget field, int fallback, int min, int max) {
@@ -613,12 +607,11 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
     }
 
     private List<ResourceSprintSettings.ObjectiveEntry> parseObjectives() {
-        if (this.objectivesText == null || this.objectivesText.isBlank()) {
+        if (this.objectivesPool == null || this.objectivesPool.isEmpty()) {
             return new ArrayList<>(ResourceSprintSettings.defaults().objectives());
         }
         List<ResourceSprintSettings.ObjectiveEntry> entries = new ArrayList<>();
-        for (String part : this.objectivesText.split("[\\n,]")) {
-            String id = part.trim().toLowerCase(Locale.ROOT);
+        for (String id : this.objectivesPool) {
             if (!id.isBlank()) {
                 entries.add(new ResourceSprintSettings.ObjectiveEntry(id, ResourceSprintSettings.ObjectiveDifficulty.EASY, 1.0));
             }
@@ -899,7 +892,6 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
     private enum Module {
         TEAMS("teams", "T", "Teams", "Draft and assign teams.", UiTheme.ACCENT),
         MATCH_RULES("rules", "R", "Match Rules", "Configure scoring and win rules.", UiTheme.ACCENT_BLUE),
-        OBJECTIVES("objectives", "O", "Objectives", "Pick the resource sprint objectives.", UiTheme.ACCENT_GREEN),
         SUMMARY("summary", "U", "Summary", "Review and launch the match.", UiTheme.ACCENT_BLUE);
 
         private final String id;

@@ -4,5 +4,6 @@ public enum FreezeReason {
     MATCH_START,
     MATCH_LOADING,
     MANHUNT_LEAD,
-    ADMIN_PAUSE
+    ADMIN_PAUSE,
+    ROUND_RESET
 }

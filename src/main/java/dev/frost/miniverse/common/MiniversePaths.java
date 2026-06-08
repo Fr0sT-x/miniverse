@@ -39,6 +39,10 @@ public final class MiniversePaths {
     }
 
     public static Path runRoot() {
+        String override = System.getProperty("miniverse.runRoot", System.getenv("MINIVERSE_RUN_ROOT"));
+        if (override != null && !override.isBlank()) {
+            return Paths.get(override).toAbsolutePath().normalize();
+        }
         if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
             return projectRoot();
         }
@@ -68,11 +72,23 @@ public final class MiniversePaths {
     }
 
     public static Path sessionsRoot() {
-        return runRoot().resolve("sessions");
+        return runRoot().resolve("miniverse").resolve("sessions");
     }
 
     public static Path mapsRoot() {
+        Path mainSessionsRoot = dev.frost.miniverse.session.SessionRuntimeConfig.getMainSessionsRoot().orElse(null);
+        if (mainSessionsRoot != null && mainSessionsRoot.getParent() != null) {
+            return mainSessionsRoot.getParent().resolve("miniverse").resolve("maps").toAbsolutePath().normalize();
+        }
         return runRoot().resolve("miniverse").resolve("maps");
+    }
+
+    public static Path profilesRoot() {
+        Path mainSessionsRoot = dev.frost.miniverse.session.SessionRuntimeConfig.getMainSessionsRoot().orElse(null);
+        if (mainSessionsRoot != null && mainSessionsRoot.getParent() != null) {
+            return mainSessionsRoot.getParent().resolve("miniverse").resolve("profiles").toAbsolutePath().normalize();
+        }
+        return runRoot().resolve("miniverse").resolve("profiles");
     }
 
     public static Path mainServerProperties() {

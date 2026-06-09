@@ -243,14 +243,13 @@ public class DuelsMinigame implements Minigame, ServerTickAware, EntityDeathAwar
         this.state = state;
     }
 
-    // Minigame-level build/break (we override these to false, using our custom interceptors instead)
     @Override
     public boolean canBuild() {
-        return false;
+        return this.duelType != null && this.duelType.allowBuilding();
     }
 
     @Override
     public boolean canBreakBlocks() {
-        return false;
+        return this.duelType != null && this.duelType.allowBreaking();
     }
 }

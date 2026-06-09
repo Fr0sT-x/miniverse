@@ -93,10 +93,26 @@ public final class MapStore {
         Optional<MapDescriptor> map = find(mapId);
         if (map.isEmpty() || newName == null || newName.isBlank()) return false;
         try {
+            String newId = MapMetadata.sanitizeId(newName.trim());
+            Path newFolder = mapsRoot().resolve(newId);
+            int suffix = 2;
+            while (Files.exists(newFolder)) {
+                if (newFolder.equals(map.get().folder())) break;
+                newFolder = mapsRoot().resolve(newId + "_" + suffix);
+                suffix++;
+            }
+            
+            Path currentFolder = map.get().folder();
+            if (!newFolder.equals(currentFolder)) {
+                Files.move(currentFolder, newFolder, StandardCopyOption.ATOMIC_MOVE);
+            }
+            
             MapMetadata metadata = map.get().metadata();
             JsonObject json = metadata.toJson();
             json.addProperty("name", newName.trim());
-            Files.writeString(map.get().folder().resolve("map.json"), json.toString());
+            json.addProperty("id", newFolder.getFileName().toString());
+            Files.writeString(newFolder.resolve("map.json"), json.toString());
+
             return true;
         } catch (IOException e) {
             Miniverse.LOGGER.error("Failed to rename map " + mapId, e);

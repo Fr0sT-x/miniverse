@@ -123,7 +123,6 @@ public final class ResourceSprintWorkspaceView implements WorkspaceView, Gamemod
                             .map(net.minecraft.registry.Registries.ITEM::getId)
                             .map(net.minecraft.util.Identifier::toString)
                             .collect(Collectors.toSet());
-                        client.setScreen(screen);
                     },
                     "resourcesprint",
                     this.objectivesPool.stream()

@@ -24,6 +24,10 @@ public class DuelTypeRegistry {
         REGISTRY.put(type.id(), type);
     }
 
+    public static void remove(String id) {
+        REGISTRY.remove(id);
+    }
+
     public static Optional<DuelType> get(String id) {
         return Optional.ofNullable(REGISTRY.get(id));
     }

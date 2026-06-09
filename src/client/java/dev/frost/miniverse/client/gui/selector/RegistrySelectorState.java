@@ -12,6 +12,17 @@ public class RegistrySelectorState {
     private boolean sidebarExpanded = true;
     private boolean selectedFilterActive = false;
     private final Set<Identifier> favorites = new HashSet<>();
+    private final Set<String> collapsedCategories = new HashSet<>();
+
+    public Set<String> getCollapsedCategories() {
+        return this.collapsedCategories;
+    }
+
+    public void toggleCollapsedCategory(String category) {
+        if (!this.collapsedCategories.remove(category)) {
+            this.collapsedCategories.add(category);
+        }
+    }
 
     public String getSearchQuery() {
         return this.searchQuery;

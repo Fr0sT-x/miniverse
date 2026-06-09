@@ -120,6 +120,41 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         refresh.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 80, 20));
         this.components.add(refresh);
 
+        rightX -= 110;
+        UiButton thumbnailBtn = new UiButton("Take Thumbnail", () -> {
+            this.sendCommand("miniverse_map_thumbnail");
+            this.status = "Requested thumbnail capture. Look around to capture the best view.";
+        }).accent(UiTheme.ACCENT_BLUE);
+        thumbnailBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 106, 20));
+        this.components.add(thumbnailBtn);
+
+        boolean overlaysVisible = this.state.disabledOverlays.isEmpty();
+        String globalOverlayLabel = overlaysVisible ? "Hide Overlays" : "Show Overlays";
+        rightX -= 100;
+        UiButton toggleOverlays = new UiButton(globalOverlayLabel, () -> {
+            if (overlaysVisible) {
+                for (SessionSnapshotData.EditorExtension ext : SessionSnapshotData.editorExtensions()) {
+                    for (SessionSnapshotData.EditorMarkerDefinition def : ext.markers()) {
+                        this.state.disableOverlay(ext.gameId(), def.key());
+                    }
+                }
+            } else {
+                this.state.disabledOverlays.clear();
+            }
+            if (this.screen != null) {
+                // Keep the current view but refresh the UI
+                if (this.viewDefinitionKey != null && !this.viewDefinitionKey.isEmpty()) {
+                    this.screen.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.state, this.refreshAction, this.viewGameId, this.viewDefinitionKey));
+                } else if (this.viewGameId != null && !this.viewGameId.isEmpty()) {
+                    this.screen.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.state, this.refreshAction, this.viewGameId));
+                } else {
+                    this.screen.openWorkspaceView(MapEditorWorkspaceView.forGeneral(this.state, this.refreshAction));
+                }
+            }
+        });
+        toggleOverlays.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 96, 20));
+        this.components.add(toggleOverlays);
+
         Selected selected = this.selected();
         if (selected.extension != null && selected.definition == null) {
             rightX -= 114;

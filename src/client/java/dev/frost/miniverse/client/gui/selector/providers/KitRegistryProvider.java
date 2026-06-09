@@ -71,7 +71,7 @@ public class KitRegistryProvider implements RegistryContentProvider<Kit> {
     @Override
     public Set<RegistryCategory> getCategories(Kit entry) {
         return entry.getCategories().stream()
-            .map(c -> new RegistryCategory(c, Text.literal(c), "textures/gui/icons/category_" + c + ".png"))
+            .map(c -> new RegistryCategory(c, Text.literal(c), "miniverse:textures/gui/icons/category_" + c.replace(":", "_").toLowerCase(java.util.Locale.ROOT) + ".png"))
             .collect(Collectors.toSet());
     }
 
@@ -80,12 +80,17 @@ public class KitRegistryProvider implements RegistryContentProvider<Kit> {
         return KitRegistry.getAll().stream()
             .flatMap(k -> k.getCategories().stream())
             .distinct()
-            .map(c -> new RegistryCategory(c, Text.literal(c), "textures/gui/icons/category_" + c + ".png"))
+            .map(c -> new RegistryCategory(c, Text.literal(c), "miniverse:textures/gui/icons/category_" + c.replace(":", "_").toLowerCase(java.util.Locale.ROOT) + ".png"))
             .toList();
     }
 
     @Override
     public boolean supportsCreation() {
+        return true;
+    }
+
+    @Override
+    public boolean hasCollapsibleCategories() {
         return true;
     }
 
@@ -100,7 +105,13 @@ public class KitRegistryProvider implements RegistryContentProvider<Kit> {
     }
 
     @Override
-    public boolean renderCustomEntry(DrawContext context, Kit entry, int x, int y, int width, int height, boolean isHovered, boolean isSelected, double mouseX, double mouseY) {
+    public String getPrimaryCategory(Kit entry) {
+        if (entry.getCategories().isEmpty()) return "";
+        return entry.getCategories().iterator().next();
+    }
+
+    @Override
+    public boolean renderCustomEntry(DrawContext context, Kit entry, int index, int x, int y, int width, int height, boolean isHovered, boolean isSelected, double mouseX, double mouseY) {
         lastRenderBounds.put(entry.getId(), new EntryBounds(x, y, width, height));
 
         // Draw background
@@ -109,21 +120,31 @@ public class KitRegistryProvider implements RegistryContentProvider<Kit> {
         int startX = x + 10;
         int hotbarY = y + (height - 22) / 2;
         
-        // Draw 9 hotbar slots
+        // Text Labels
+        String currentCat = getPrimaryCategory(entry);
+        String numberLabel = (index + 1) + ". ";
+        context.drawText(net.minecraft.client.MinecraftClient.getInstance().textRenderer, Text.literal(numberLabel).append(entry.getDisplayName()), startX, y + 6, 0xFFFFFF, false);
+        
+        String catLabel = currentCat.isEmpty() ? "Uncategorised" : "Type: " + currentCat;
+        context.drawText(net.minecraft.client.MinecraftClient.getInstance().textRenderer, Text.literal(catLabel), startX, y + 18, 0xAAAAAA, false);
+        
+        // Draw 9 hotbar slots with improved visuals
+        int hotbarX = startX + 160;
         for (int i = 0; i < 9; i++) {
-            context.fill(startX + i * 20, hotbarY, startX + i * 20 + 18, hotbarY + 18, 0x80000000);
+            int slotX = hotbarX + i * 22;
+            int slotY = hotbarY;
+            
+            context.fill(slotX, slotY, slotX + 20, slotY + 20, 0xAA101010);
+            context.drawBorder(slotX, slotY, 20, 20, 0x55FFFFFF);
+            
             if (entry.getInventory() != null && i < entry.getInventory().length) {
                 ItemStack stack = entry.getInventory()[i];
                 if (stack != null && !stack.isEmpty()) {
-                    context.drawItem(stack, startX + i * 20 + 1, hotbarY + 1);
-                    context.drawItemInSlot(net.minecraft.client.MinecraftClient.getInstance().textRenderer, stack, startX + i * 20 + 1, hotbarY + 1);
+                    context.drawItem(stack, slotX + 2, slotY + 2);
+                    context.drawItemInSlot(net.minecraft.client.MinecraftClient.getInstance().textRenderer, stack, slotX + 2, slotY + 2);
                 }
             }
         }
-        
-        // Kit Name
-        int textX = startX + 9 * 20 + 10;
-        context.drawText(net.minecraft.client.MinecraftClient.getInstance().textRenderer, entry.getDisplayName(), textX, y + (height - 8) / 2, 0xFFFFFF, false);
         
         // Actions
         int actionX = x + width - ACTION_AREA_WIDTH - 8;

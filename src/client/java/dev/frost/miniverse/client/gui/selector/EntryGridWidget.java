@@ -29,15 +29,17 @@ public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridW
     public void updateEntries(List<T> entries) {
         this.clearEntries();
         List<T> currentRow = new ArrayList<>(this.columns);
+        int index = 0;
         for (T entry : entries) {
             currentRow.add(entry);
             if (currentRow.size() == this.columns) {
-                this.addEntry(new RowEntry<>(this, new ArrayList<>(currentRow)));
+                this.addEntry(new RowEntry<>(this, new ArrayList<>(currentRow), index));
+                index++;
                 currentRow.clear();
             }
         }
         if (!currentRow.isEmpty()) {
-            this.addEntry(new RowEntry<>(this, currentRow));
+            this.addEntry(new RowEntry<>(this, currentRow, index));
         }
         this.setScrollAmount(this.screen.getState().getScrollPosition());
     }
@@ -52,10 +54,12 @@ public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridW
     public static class RowEntry<T> extends AlwaysSelectedEntryListWidget.Entry<RowEntry<T>> {
         private final EntryGridWidget<T> grid;
         private final List<T> items;
+        private final int rowIndex;
 
-        public RowEntry(EntryGridWidget<T> grid, List<T> items) {
+        public RowEntry(EntryGridWidget<T> grid, List<T> items, int rowIndex) {
             this.grid = grid;
             this.items = items;
+            this.rowIndex = rowIndex;
         }
 
         @Override
@@ -68,7 +72,7 @@ public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridW
                 T item = this.items.get(0);
                 boolean isSelected = selected.contains(item);
                 boolean isHovered = mouseX >= x && mouseX < x + entryWidth && mouseY >= y && mouseY < y + entryHeight;
-                if (!this.grid.provider.renderCustomEntry(context, item, x, y, entryWidth, entryHeight, isHovered, isSelected, mouseX, mouseY)) {
+                if (!this.grid.provider.renderCustomEntry(context, item, this.rowIndex, x, y, entryWidth, entryHeight, isHovered, isSelected, mouseX, mouseY)) {
                     // Fallback if provider returns false
                     context.fill(x, y, x + entryWidth, y + entryHeight, isSelected ? 0x8033AA33 : (isHovered ? 0x60FFFFFF : 0x40000000));
                     context.drawText(this.grid.client.textRenderer, this.grid.provider.getDisplayName(item), x + 4, y + 4, 0xFFFFFF, false);

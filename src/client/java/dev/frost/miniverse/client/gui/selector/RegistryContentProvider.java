@@ -1,6 +1,7 @@
 package dev.frost.miniverse.client.gui.selector;
 
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.registry.Registry;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -30,11 +31,15 @@ public interface RegistryContentProvider<T> {
     
     default boolean supportsCreation() { return false; }
     
-    default void openCreator(net.minecraft.client.gui.screen.Screen parent, T editingEntry) {}
+    default boolean hasCollapsibleCategories() { return false; }
+    
+    default void openCreator(Screen parent, T editingEntry) {}
 
     default boolean isListView() { return false; }
 
-    default boolean renderCustomEntry(DrawContext context, T entry, int x, int y, int width, int height, boolean isHovered, boolean isSelected, double mouseX, double mouseY) { return false; }
+    default String getPrimaryCategory(T entry) { return ""; }
+
+    default boolean renderCustomEntry(DrawContext context, T entry, int index, int x, int y, int width, int height, boolean isHovered, boolean isSelected, double mouseX, double mouseY) { return false; }
 
     default boolean handleCustomClick(T entry, double mouseX, double mouseY, int button, int x, int y, int width, int height) { return false; }
 }

@@ -23,14 +23,17 @@ public class RegistrySelectorScreen<T> extends Screen {
     
     private TextFieldWidget searchField;
     private EntryGridWidget<T> gridWidget;
+    private CollapsibleListWidget<T> collapsibleWidget;
     private UiPrimitives.UiSidebar sidebar;
     private List<Text> currentTooltip = List.of();
     
     private List<T> allEntries;
     private List<T> visibleEntries;
+    private final Screen parentScreen;
 
     public RegistrySelectorScreen(RegistrySelectorContext<T> context, RegistryContentProvider<T> provider) {
         super(Text.literal(context.title()));
+        this.parentScreen = net.minecraft.client.MinecraftClient.getInstance().currentScreen;
         this.context = context;
         this.provider = provider;
         this.selectedEntries = new HashSet<>(context.initialSelection() != null ? context.initialSelection() : Set.of());
@@ -51,7 +54,7 @@ public class RegistrySelectorScreen<T> extends Screen {
                 this.allEntries.add(0, sel);
             }
         }
-        if (this.gridWidget != null) {
+        if (this.gridWidget != null || this.collapsibleWidget != null) {
             this.filterEntries();
         }
     }
@@ -112,9 +115,14 @@ public class RegistrySelectorScreen<T> extends Screen {
         int itemSize = 28;
         int columns = Math.max(1, (gridWidth - 20) / itemSize);
         
-        this.gridWidget = new EntryGridWidget<>(this, this.client, gridWidth, gridHeight, gridY, gridY + gridHeight, itemSize, columns, this.provider);
-        this.gridWidget.setPosition(gridX, gridY);
-        this.addDrawableChild(this.gridWidget);
+        if (this.provider.hasCollapsibleCategories()) {
+            this.collapsibleWidget = new CollapsibleListWidget<>(this, gridX, gridY, gridWidth, gridHeight, this.provider);
+            this.addDrawableChild(this.collapsibleWidget);
+        } else {
+            this.gridWidget = new EntryGridWidget<>(this, this.client, gridWidth, gridHeight, gridY, gridY + gridHeight, itemSize, columns, this.provider);
+            this.gridWidget.setPosition(gridX, gridY);
+            this.addDrawableChild(this.gridWidget);
+        }
 
         buildSidebar();
         filterEntries();
@@ -205,7 +213,21 @@ public class RegistrySelectorScreen<T> extends Screen {
             return true;
         }).collect(Collectors.toList());
 
-        this.gridWidget.updateEntries(this.visibleEntries);
+        this.visibleEntries.sort((a, b) -> {
+            String catA = this.provider.getPrimaryCategory(a);
+            String catB = this.provider.getPrimaryCategory(b);
+            if (catA == null) catA = "";
+            if (catB == null) catB = "";
+            int catCompare = catA.compareToIgnoreCase(catB);
+            if (catCompare != 0) return catCompare;
+            return this.provider.getDisplayName(a).getString().compareToIgnoreCase(this.provider.getDisplayName(b).getString());
+        });
+
+        if (this.collapsibleWidget != null) {
+            this.collapsibleWidget.updateEntries(this.visibleEntries);
+        } else if (this.gridWidget != null) {
+            this.gridWidget.updateEntries(this.visibleEntries);
+        }
     }
 
     public void toggleSelection(T entry) {
@@ -341,10 +363,21 @@ public class RegistrySelectorScreen<T> extends Screen {
     }
 
     private void confirmSelection() {
-        this.context.state().setScrollPosition(this.gridWidget.getScrollAmount());
-        this.client.setScreen(null);
+        if (this.gridWidget != null) {
+            this.context.state().setScrollPosition(this.gridWidget.getScrollAmount());
+        }
         if (this.context.callback() != null) {
             this.context.callback().accept(new RegistrySelectionResult<>(this.selectedEntries, false));
+        }
+        if (this.client != null && this.client.currentScreen == this) {
+            this.close();
+        }
+    }
+
+    @Override
+    public void close() {
+        if (this.client != null) {
+            this.client.setScreen(this.parentScreen);
         }
     }
 

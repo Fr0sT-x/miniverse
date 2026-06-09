@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MapDetailsWorkspaceView implements WorkspaceView {
-    private final String mapId;
+    private String mapId;
     private final Runnable backAction;
     private final List<UiComponent> components = new ArrayList<>();
     private TextFieldWidget renameField;
@@ -94,6 +94,7 @@ public class MapDetailsWorkspaceView implements WorkspaceView {
             String newName = this.renameField.getText();
             if (!newName.isBlank() && !newName.equals(map.name())) {
                 ClientPlayNetworking.send(new NetworkConstants.RenameMapPayload(this.mapId, newName));
+                this.mapId = newName.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9_\\-]+", "_").replaceAll("_+", "_");
             }
         });
         rename.setBounds(new UiLayout.Rect(actionsX, actionsY, 156, 20));

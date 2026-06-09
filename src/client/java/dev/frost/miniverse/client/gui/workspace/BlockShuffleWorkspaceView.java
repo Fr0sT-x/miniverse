@@ -128,7 +128,6 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
                             .map(Registries.BLOCK::getId)
                             .collect(Collectors.toSet());
                         lastBlockPool = new java.util.HashSet<>(this.blockPool);
-                        client.setScreen(this.parentScreen);
                     },
                     "blockshuffle",
                     initialSelection

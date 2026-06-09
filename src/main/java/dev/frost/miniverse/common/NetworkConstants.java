@@ -47,6 +47,8 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<UpdateMapTagsPayload> UPDATE_MAP_TAGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "update_map_tags"));
 
     public static final CustomPayload.Id<CreateDuelTypePayload> CREATE_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_duel_type"));
+    public static final CustomPayload.Id<EditDuelTypePayload> EDIT_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "edit_duel_type"));
+    public static final CustomPayload.Id<DeleteDuelTypePayload> DELETE_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "delete_duel_type"));
 
     public static final CustomPayload.Id<CreateKitPayload> CREATE_KIT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_kit"));
     public static final CustomPayload.Id<RenameKitPayload> RENAME_KIT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "rename_kit"));
@@ -107,6 +109,8 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(CAPTURE_THUMBNAIL_ID, CaptureThumbnailPayload.CODEC);
 
         PayloadTypeRegistry.playC2S().register(CREATE_DUEL_TYPE_ID, CreateDuelTypePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(EDIT_DUEL_TYPE_ID, EditDuelTypePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DELETE_DUEL_TYPE_ID, DeleteDuelTypePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CREATE_KIT_ID, CreateKitPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RENAME_KIT_ID, RenameKitPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DELETE_KIT_ID, DeleteKitPayload.CODEC);
@@ -781,6 +785,55 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return CREATE_DUEL_TYPE_ID;
+        }
+    }
+
+    public record EditDuelTypePayload(
+        String id,
+        String name,
+        boolean knockbackOnly,
+        boolean allowBuilding,
+        boolean allowBreaking,
+        boolean allowHunger,
+        boolean naturalRegen
+    ) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, EditDuelTypePayload> CODEC = PacketCodec.of(
+            (payload, buffer) -> {
+                buffer.writeString(payload.id());
+                buffer.writeString(payload.name());
+                buffer.writeBoolean(payload.knockbackOnly());
+                buffer.writeBoolean(payload.allowBuilding());
+                buffer.writeBoolean(payload.allowBreaking());
+                buffer.writeBoolean(payload.allowHunger());
+                buffer.writeBoolean(payload.naturalRegen());
+            },
+            buffer -> new EditDuelTypePayload(
+                buffer.readString(),
+                buffer.readString(),
+                buffer.readBoolean(),
+                buffer.readBoolean(),
+                buffer.readBoolean(),
+                buffer.readBoolean(),
+                buffer.readBoolean()
+            )
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return EDIT_DUEL_TYPE_ID;
+        }
+    }
+
+    public record DeleteDuelTypePayload(String id) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DeleteDuelTypePayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            DeleteDuelTypePayload::id,
+            DeleteDuelTypePayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DELETE_DUEL_TYPE_ID;
         }
     }
 

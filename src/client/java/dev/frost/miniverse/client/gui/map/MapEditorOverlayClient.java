@@ -31,7 +31,7 @@ public final class MapEditorOverlayClient {
             MapEditorState state = MapEditorState.INSTANCE;
 
             // Only render when map editor is active (on a map editor server)
-            if (!state.editorActive) {
+            if (!state.editorActive || dev.frost.miniverse.client.MiniverseClient.isScreenshotPending()) {
                 return;
             }
 

@@ -140,7 +140,12 @@ public final class UiPrimitives {
                 if (i == this.selected) {
                     context.fill(this.bounds.x() + 7, y, this.bounds.x() + 10, y + 24, UiTheme.ACCENT);
                 }
-                context.drawText(textRenderer, Text.literal(item.icon), this.bounds.x() + 16, y + 8, UiTheme.ACCENT, false);
+                if (item.icon.endsWith(".png")) {
+                    net.minecraft.util.Identifier textureId = net.minecraft.util.Identifier.of(item.icon.contains(":") ? item.icon : "minecraft:" + item.icon);
+                    context.drawTexture(textureId, this.bounds.x() + 14, y + 4, 0, 0, 16, 16, 16, 16);
+                } else {
+                    context.drawText(textRenderer, Text.literal(item.icon), this.bounds.x() + 16, y + 8, UiTheme.ACCENT, false);
+                }
                 context.drawText(textRenderer, Text.literal(item.label), this.bounds.x() + 34, y + 8, UiTheme.TEXT_MUTED, false);
                 y += 28;
             }

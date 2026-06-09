@@ -133,7 +133,6 @@ public final class DeathShuffleWorkspaceView implements WorkspaceView, GamemodeW
                             .filter(java.util.Objects::nonNull)
                             .collect(Collectors.toSet());
                         lastBlockPool = new java.util.HashSet<>(this.blockPool);
-                        client.setScreen(this.parentScreen);
                     },
                     "deathshuffle",
                     initialSelection

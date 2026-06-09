@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class MapManagementWorkspaceView implements WorkspaceView {
-    private static final int CARD_HEIGHT = 76;
     private static final int CARD_GAP = 10;
 
     private final Runnable refreshAction;
@@ -56,7 +55,10 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
         openFolder.setBounds(new UiLayout.Rect(panel.x() + 300, panel.y() + 18, 124, 22));
         this.components.add(openFolder);
         
-        UiButton refresh = new UiButton("Refresh", this.refreshAction);
+        UiButton refresh = new UiButton("Refresh", () -> {
+            ThumbnailManager.invalidateAll();
+            this.refreshAction.run();
+        });
         refresh.setBounds(new UiLayout.Rect(panel.x() + 432, panel.y() + 18, 76, 22));
         this.components.add(refresh);
     }
@@ -124,29 +126,45 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
             return;
         }
         int columns = this.listArea.width() >= 720 ? 3 : this.listArea.width() >= 460 ? 2 : 1;
+        int cardWidth = (this.listArea.width() - CARD_GAP * (columns - 1)) / columns;
+        int imgHeight = (int)(cardWidth * 9.0 / 16.0);
+        int cardHeight = imgHeight + 42;
+
         for (int i = 0; i < maps.size(); i++) {
             SessionSnapshotData.MapSummary map = maps.get(i);
-            UiLayout.Rect card = UiLayout.grid(this.listArea, i, columns, CARD_HEIGHT, CARD_GAP);
+            UiLayout.Rect card = UiLayout.grid(this.listArea, i, columns, cardHeight, CARD_GAP);
             boolean hovered = card.contains(mouseX, mouseY);
+            
+            // Draw card background
             UiRenderer.card(context, card.x(), card.y(), card.width(), card.height(), hovered ? 1.0F : 0.0F, UiTheme.ACCENT_GREEN);
-            context.fill(card.x() + 10, card.y() + 10, card.x() + 58, card.y() + 58, 0xFF223026);
-            context.drawText(textRenderer, Text.literal("MAP"), card.x() + 22, card.y() + 29, UiTheme.ACCENT_GREEN, false);
-            int textX = card.x() + 70;
-            context.drawText(textRenderer, Text.literal(map.name()), textX, card.y() + 12, UiTheme.TEXT, false);
-            context.drawText(textRenderer, Text.literal(map.gamemodes().size() + " Supported Modes"), textX, card.y() + 28, UiTheme.TEXT_MUTED, false);
-            String folder = textRenderer.trimToWidth(map.folder(), Math.max(40, card.width() - 82));
-            context.drawText(textRenderer, Text.literal(folder), textX, card.y() + 46, UiTheme.TEXT_DIM, false);
+            
+            // Draw thumbnail
+            net.minecraft.util.Identifier thumb = dev.frost.miniverse.client.gui.map.ThumbnailManager.getThumbnail(map);
+            context.drawTexture(thumb, card.x() + 3, card.y() + 2, 0, 0, card.width() - 5, imgHeight, card.width() - 5, imgHeight);
+            
+            // Draw text
+            int textY = card.y() + imgHeight + 8;
+            context.drawText(textRenderer, Text.literal(map.name()), card.x() + 10, textY, UiTheme.TEXT, false);
+            context.drawText(textRenderer, Text.literal(map.gamemodes().size() + " Supported Modes"), card.x() + 10, textY + 14, UiTheme.TEXT_MUTED, false);
+            
+            if (hovered) {
+                // Let the outer border serve as the sole highlight
+            }
         }
     }
 
     private SessionSnapshotData.MapSummary mapAt(double mouseX, double mouseY) {
         List<SessionSnapshotData.MapSummary> maps = SessionSnapshotData.maps();
-        if (maps.isEmpty() || !this.listArea.contains(mouseX, mouseY)) {
+        if (maps.isEmpty() || !this.listArea.contains((int) mouseX, (int) mouseY)) {
             return null;
         }
         int columns = this.listArea.width() >= 720 ? 3 : this.listArea.width() >= 460 ? 2 : 1;
+        int cardWidth = (this.listArea.width() - CARD_GAP * (columns - 1)) / columns;
+        int imgHeight = (int)(cardWidth * 9.0 / 16.0);
+        int cardHeight = imgHeight + 42;
+
         for (int i = 0; i < maps.size(); i++) {
-            UiLayout.Rect card = UiLayout.grid(this.listArea, i, columns, CARD_HEIGHT, CARD_GAP);
+            UiLayout.Rect card = UiLayout.grid(this.listArea, i, columns, cardHeight, CARD_GAP);
             if (card.contains(mouseX, mouseY)) {
                 return maps.get(i);
             }

@@ -30,6 +30,14 @@ import org.lwjgl.glfw.GLFW;
 public class MiniverseClient implements ClientModInitializer {
 	public static KeyBinding OPEN_GUI_KEY;
 	private static boolean pendingSessionOpen;
+	private static int pendingScreenshotTicks = 0;
+	private static java.io.File pendingScreenshotDir = null;
+	private static String pendingScreenshotName = null;
+	private static net.minecraft.client.gui.screen.Screen suspendedScreen = null;
+	
+	public static boolean isScreenshotPending() {
+		return pendingScreenshotTicks > 0;
+	}
 
 	@Override
 	public void onInitializeClient() {
@@ -53,6 +61,35 @@ public class MiniverseClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (OPEN_GUI_KEY.wasPressed()) {
 				openGui();
+			}
+			if (pendingScreenshotTicks > 0) {
+				pendingScreenshotTicks--;
+				if (pendingScreenshotTicks == 0) {
+					java.io.File targetFile = new java.io.File(pendingScreenshotDir, pendingScreenshotName);
+					if (targetFile.exists()) {
+						targetFile.delete();
+					}
+					
+					net.minecraft.client.texture.NativeImage image = net.minecraft.client.util.ScreenshotRecorder.takeScreenshot(client.getFramebuffer());
+					java.util.concurrent.CompletableFuture.runAsync(() -> {
+						try {
+							image.writeTo(targetFile);
+							client.execute(() -> {
+								dev.frost.miniverse.client.gui.map.ThumbnailManager.invalidateAll();
+								client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Saved thumbnail."));
+								client.options.hudHidden = false;
+								if (suspendedScreen != null) {
+									client.setScreen(suspendedScreen);
+									suspendedScreen = null;
+								}
+							});
+						} catch (Exception e) {
+							e.printStackTrace();
+						} finally {
+							image.close();
+						}
+					});
+				}
 			}
 		});
 
@@ -118,23 +155,14 @@ public class MiniverseClient implements ClientModInitializer {
 			context.client().execute(() -> {
 				MinecraftClient client = context.client();
 				if (client.currentScreen != null) {
+					suspendedScreen = client.currentScreen;
 					client.setScreen(null);
 				}
 				client.options.hudHidden = true;
 				java.nio.file.Path targetPath = java.nio.file.Paths.get(payload.path());
-				java.io.File dir = targetPath.getParent().toFile();
-				String name = targetPath.getFileName().toString();
-				
-				// Run on next frame
-				client.execute(() -> {
-					net.minecraft.client.util.ScreenshotRecorder.saveScreenshot(
-						dir,
-						name,
-						client.getFramebuffer(),
-						message -> client.inGameHud.getChatHud().addMessage(message)
-					);
-					client.options.hudHidden = false;
-				});
+				pendingScreenshotDir = targetPath.getParent().toFile();
+				pendingScreenshotName = targetPath.getFileName().toString();
+				pendingScreenshotTicks = 20; // Wait 20 ticks (1 second) to ensure frame is redrawn without UI
 			})
 		);
 
@@ -168,6 +196,8 @@ public class MiniverseClient implements ClientModInitializer {
 			SessionLaunchStatus.clear();
 			InventoryLayoutClient.clear();
 			ProtectionOverlayClient.clearAll();
+			dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.clear();
+			dev.frost.miniverse.client.gui.SessionSnapshotData.updateEditor(false, java.util.List.of(), null);
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> sendConnectionHost(client));
 	}

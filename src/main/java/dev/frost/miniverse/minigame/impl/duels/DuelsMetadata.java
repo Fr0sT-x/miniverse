@@ -12,14 +12,14 @@ import java.util.List;
 import java.util.Map;
 
 public record DuelsMetadata(
-    List<String> supportedKits,
+    List<String> supportedDuelTypes,
     List<ArenaRegion> arenas
 ) {
     public static DuelsMetadata fromJson(JsonObject config) {
-        List<String> kits = new ArrayList<>();
-        if (config.has("supported_kits")) {
-            for (JsonElement el : config.getAsJsonArray("supported_kits")) {
-                kits.add(el.getAsString());
+        List<String> duelTypes = new ArrayList<>();
+        if (config.has("supported_duel_types")) {
+            for (JsonElement el : config.getAsJsonArray("supported_duel_types")) {
+                duelTypes.add(el.getAsString());
             }
         }
 
@@ -56,19 +56,18 @@ public record DuelsMetadata(
             }
         }
 
-        DuelsMetadata metadata = new DuelsMetadata(kits, arenas);
+        DuelsMetadata metadata = new DuelsMetadata(duelTypes, arenas);
         metadata.validate();
         return metadata;
     }
 
     public void validate() {
-        if (supportedKits.isEmpty()) {
-            throw new IllegalStateException("Duels map must have at least one supported kit.");
+        if (supportedDuelTypes.isEmpty()) {
+            throw new IllegalStateException("Duels map must have at least one supported duel type.");
         }
-        for (String kitId : supportedKits) {
-            net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(kitId);
-            if (id == null || dev.frost.miniverse.minigame.core.kit.KitRegistry.get(id).isEmpty()) {
-                throw new IllegalStateException("Configured kit does not exist in registry: " + kitId);
+        for (String typeId : supportedDuelTypes) {
+            if (dev.frost.miniverse.minigame.impl.duels.DuelTypeRegistry.get(typeId).isEmpty()) {
+                throw new IllegalStateException("Configured duel type does not exist: " + typeId);
             }
         }
         if (arenas.isEmpty()) {

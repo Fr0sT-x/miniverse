@@ -72,6 +72,33 @@ public final class SessionNetwork {
             SessionBootstrapper.markClientReady(context.player(), payload.sessionId())
         );
 
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_DUEL_TYPE_ID, (payload, context) -> {
+            if (!SessionPermissions.checkCanManageSessions(context.player(), "create duel types")) return;
+            String id = payload.id() == null ? "" : payload.id().trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_\\-]+", "_").replaceAll("_+", "_");
+            String name = payload.name() == null ? "" : payload.name().trim();
+            if (id.isBlank() || name.isBlank()) {
+                context.player().sendMessage(Text.literal("Duel type name/id cannot be blank.").formatted(Formatting.RED), false);
+                return;
+            }
+            dev.frost.miniverse.minigame.impl.duels.DuelType newType = new dev.frost.miniverse.minigame.impl.duels.DuelType(
+                id,
+                name,
+                payload.knockbackOnly(),
+                payload.allowBuilding(),
+                payload.allowBreaking(),
+                payload.allowHunger(),
+                payload.naturalRegen()
+            );
+            dev.frost.miniverse.minigame.impl.duels.DuelTypeRegistry.register(newType);
+            dev.frost.miniverse.minigame.impl.duels.DuelTypeRegistry.save();
+            sendSessionList(context.server(), context.player());
+        });
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_KIT_ID, (payload, context) -> handleCreateKit(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RENAME_KIT_ID, (payload, context) -> handleRenameKit(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_KIT_ID, (payload, context) -> handleDeleteKit(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.GIVE_KIT_ID, (payload, context) -> handleGiveKit(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LOAD_KIT_INTO_INVENTORY_ID, (payload, context) -> handleLoadKit(context.server(), context.player(), payload));
+
         registered = true;
     }
 
@@ -80,6 +107,7 @@ public final class SessionNetwork {
             return;
         }
         sendSessionList(server, player);
+        syncKitsToPlayer(server, player);
     }
 
     private static void handleCreate(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CreateSessionPayload payload) {
@@ -383,6 +411,7 @@ public final class SessionNetwork {
         }
     }
 
+
     private static void handleDeleteMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.DeleteMapPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "delete maps")) {
             return;
@@ -418,6 +447,123 @@ public final class SessionNetwork {
             player.sendMessage(Text.literal("Map editor launched for " + result.mapId() + ". Use /miniverse_map_save in the editor server to save changes."), false);
             sendSessionList(server, player);
         }));
+    }
+
+    private static void handleCreateKit(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CreateKitPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "manage kits")) return;
+        try {
+            java.util.Set<String> categories = new java.util.HashSet<>();
+            for (String c : payload.categories().split(",")) {
+                if (!c.trim().isEmpty()) categories.add(c.trim());
+            }
+            String rawId = payload.id() == null ? "" : payload.id().trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+            net.minecraft.util.Identifier kitId = net.minecraft.util.Identifier.tryParse(rawId.contains(":") ? rawId : "miniverse:" + rawId);
+            if (kitId == null || kitId.getPath().isBlank()) {
+                player.sendMessage(Text.literal("Invalid kit id.").formatted(Formatting.RED), false);
+                return;
+            }
+            net.minecraft.item.ItemStack[] armor = new net.minecraft.item.ItemStack[4];
+            net.minecraft.item.ItemStack[] inventory = new net.minecraft.item.ItemStack[36];
+            net.minecraft.item.ItemStack[] offhand = new net.minecraft.item.ItemStack[1];
+            for (int i = 0; i < armor.length && i < player.getInventory().armor.size(); i++) {
+                armor[i] = player.getInventory().armor.get(i).copy();
+            }
+            for (int i = 0; i < inventory.length && i < player.getInventory().main.size(); i++) {
+                inventory[i] = player.getInventory().main.get(i).copy();
+            }
+            if (!player.getInventory().offHand.isEmpty()) {
+                offhand[0] = player.getInventory().offHand.get(0).copy();
+            }
+            dev.frost.miniverse.minigame.core.kit.Kit kit = new dev.frost.miniverse.minigame.core.kit.Kit(
+                kitId,
+                Text.literal(payload.displayName()),
+                categories,
+                armor,
+                inventory,
+                offhand,
+                java.util.List.of()
+            );
+            dev.frost.miniverse.minigame.core.kit.KitRegistry.register(kit);
+            dev.frost.miniverse.minigame.core.kit.KitRegistry.saveCustomKit(kit, server);
+            player.sendMessage(Text.literal("Created kit: " + kit.getDisplayName().getString()).formatted(Formatting.GREEN), false);
+            syncKitsToAll(server);
+        } catch (Exception e) {
+            player.sendMessage(Text.literal("Failed to create kit: " + e.getMessage()).formatted(Formatting.RED), false);
+        }
+    }
+
+    private static void handleRenameKit(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.RenameKitPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "manage kits")) return;
+        net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(payload.kitId());
+        if (id == null) return;
+        dev.frost.miniverse.minigame.core.kit.KitRegistry.get(id).ifPresent(kit -> {
+            dev.frost.miniverse.minigame.core.kit.Kit newKit = new dev.frost.miniverse.minigame.core.kit.Kit(
+                id,
+                Text.literal(payload.newName()),
+                kit.getCategories(),
+                kit.getArmor(),
+                kit.getInventory(),
+                kit.getOffhand(),
+                kit.getEffects()
+            );
+            dev.frost.miniverse.minigame.core.kit.KitRegistry.register(newKit);
+            dev.frost.miniverse.minigame.core.kit.KitRegistry.saveCustomKit(newKit, server);
+            player.sendMessage(Text.literal("Renamed kit to " + payload.newName()).formatted(Formatting.GREEN), false);
+            syncKitsToAll(server);
+        });
+    }
+
+    private static void handleDeleteKit(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.DeleteKitPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "manage kits")) return;
+        net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(payload.kitId());
+        if (id == null) return;
+        dev.frost.miniverse.minigame.core.kit.KitRegistry.delete(id);
+        dev.frost.miniverse.minigame.core.kit.KitRegistry.deleteCustomKit(id);
+        player.sendMessage(Text.literal("Deleted kit.").formatted(Formatting.GREEN), false);
+        syncKitsToAll(server);
+    }
+
+    private static void handleGiveKit(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.GiveKitPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "manage kits")) return;
+        net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(payload.kitId());
+        if (id == null) return;
+        dev.frost.miniverse.minigame.core.kit.KitRegistry.get(id).ifPresent(kit -> {
+            kit.apply(player);
+            player.sendMessage(Text.literal("Received kit items.").formatted(Formatting.GREEN), false);
+        });
+    }
+
+    private static void handleLoadKit(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.LoadKitIntoInventoryPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "manage kits")) return;
+        net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(payload.id());
+        if (id == null) return;
+        dev.frost.miniverse.minigame.core.kit.KitRegistry.get(id).ifPresent(kit -> {
+            kit.apply(player);
+            player.sendMessage(Text.literal("Loaded kit into your inventory. Edit items, then save overwrite.").formatted(Formatting.GREEN), false);
+        });
+    }
+
+    private static void syncKitsToAll(MinecraftServer server) {
+        NetworkConstants.SyncKitsPayload payload = kitsSyncPayload(server);
+        for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+            if (SessionPermissions.canManageSessions(online)) {
+                ServerPlayNetworking.send(online, payload);
+            }
+        }
+    }
+
+    private static void syncKitsToPlayer(MinecraftServer server, ServerPlayerEntity player) {
+        if (SessionPermissions.canManageSessions(player)) {
+            ServerPlayNetworking.send(player, kitsSyncPayload(server));
+        }
+    }
+
+    private static NetworkConstants.SyncKitsPayload kitsSyncPayload(MinecraftServer server) {
+        com.google.gson.JsonArray kitsArray = new com.google.gson.JsonArray();
+        for (dev.frost.miniverse.minigame.core.kit.Kit k : dev.frost.miniverse.minigame.core.kit.KitRegistry.getAll()) {
+            kitsArray.add(k.toJson(server.getRegistryManager()));
+        }
+        return new NetworkConstants.SyncKitsPayload(kitsArray.toString());
     }
 
     private static void transferToMapEditor(MinecraftServer server, ServerPlayerEntity player, dev.frost.miniverse.session.ServerLauncher.MapEditorLaunchResult result) {
@@ -681,6 +827,20 @@ public final class SessionNetwork {
         root.put("games", games);
         root.put("maps", MapStore.mapsToNbt());
 
+        NbtList duelTypes = new NbtList();
+        for (dev.frost.miniverse.minigame.impl.duels.DuelType dt : dev.frost.miniverse.minigame.impl.duels.DuelTypeRegistry.getAll()) {
+            NbtCompound dtNbt = new NbtCompound();
+            dtNbt.putString("id", dt.id());
+            dtNbt.putString("name", dt.name());
+            dtNbt.putBoolean("knockbackOnly", dt.knockbackOnly());
+            dtNbt.putBoolean("allowBuilding", dt.allowBuilding());
+            dtNbt.putBoolean("allowBreaking", dt.allowBreaking());
+            dtNbt.putBoolean("allowHunger", dt.allowHunger());
+            dtNbt.putBoolean("naturalRegen", dt.naturalRegen());
+            duelTypes.add(dtNbt);
+        }
+        root.put("duelTypes", duelTypes);
+
         NbtList roster = new NbtList();
         for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
             NbtCompound entry = new NbtCompound();
@@ -743,6 +903,17 @@ public final class SessionNetwork {
         root.put("retention", retention);
 
         root.putBoolean("sessionServer", SessionRuntimeConfig.isSessionServer());
+        root.putBoolean("mapEditor", Boolean.getBoolean("miniverse.mapEditor"));
+        root.put("mapEditorExtensions", dev.frost.miniverse.map.editor.MapEditorNbt.extensionsToNbt());
+        if (Boolean.getBoolean("miniverse.mapEditor")) {
+            SessionRuntimeConfig.getSessionJson().ifPresent(json -> {
+                String mapId = "";
+                if (json.has("mapEditor") && json.get("mapEditor").isJsonObject()) {
+                    mapId = dev.frost.miniverse.session.SessionConfigJson.string(json.getAsJsonObject("mapEditor"), "mapId", "");
+                }
+                root.put("mapEditorState", dev.frost.miniverse.map.editor.MapEditorNbt.editorStateToNbt(mapId));
+            });
+        }
 
         ServerPlayNetworking.send(player, new NetworkConstants.SessionListPayload(root));
     }

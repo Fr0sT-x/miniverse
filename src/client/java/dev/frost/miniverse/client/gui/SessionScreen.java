@@ -176,6 +176,14 @@ public class SessionScreen extends Screen {
                     errors
                 ));
             }
+            List<String> tags = new ArrayList<>();
+            if (entry.contains("tags", NbtElement.LIST_TYPE)) {
+                NbtList tagList = entry.getList("tags", NbtElement.STRING_TYPE);
+                for (int tagIndex = 0; tagIndex < tagList.size(); tagIndex++) {
+                    tags.add(tagList.getString(tagIndex));
+                }
+            }
+
             maps.add(new SessionSnapshotData.MapSummary(
                 getStringOrDefault(entry, "id", ""),
                 getStringOrDefault(entry, "name", ""),
@@ -183,7 +191,8 @@ public class SessionScreen extends Screen {
                 getStringOrDefault(entry, "folder", ""),
                 getLongOrDefault(entry, "lastModified", 0L),
                 gamemodes,
-                validations
+                validations,
+                tags
             ));
         }
 
@@ -226,11 +235,29 @@ public class SessionScreen extends Screen {
         boolean mapEditor = getBooleanOrDefault(root, "mapEditor", false);
         List<SessionSnapshotData.EditorExtension> editorExtensions = readEditorExtensions(root.getList("mapEditorExtensions", NbtElement.COMPOUND_TYPE));
         SessionSnapshotData.EditorState editorState = readEditorState(getCompoundOrEmpty(root, "mapEditorState"));
+        List<dev.frost.miniverse.minigame.impl.duels.DuelType> duelTypes = new ArrayList<>();
+        if (root.contains("duelTypes", NbtElement.LIST_TYPE)) {
+            NbtList dtList = root.getList("duelTypes", NbtElement.COMPOUND_TYPE);
+            for (int dtIndex = 0; dtIndex < dtList.size(); dtIndex++) {
+                NbtCompound dt = dtList.getCompound(dtIndex);
+                duelTypes.add(new dev.frost.miniverse.minigame.impl.duels.DuelType(
+                    getStringOrDefault(dt, "id", ""),
+                    getStringOrDefault(dt, "name", ""),
+                    getBooleanOrDefault(dt, "knockbackOnly", false),
+                    getBooleanOrDefault(dt, "allowBuilding", true),
+                    getBooleanOrDefault(dt, "allowBreaking", true),
+                    getBooleanOrDefault(dt, "allowHunger", true),
+                    getBooleanOrDefault(dt, "naturalRegen", true)
+                ));
+            }
+        }
+
         SessionSnapshotData.update(
             sessions,
             roster,
             pendingJoiners,
             maps,
+            duelTypes,
             games,
             getIntOrDefault(launcher, "maxConcurrentLaunches", SessionSnapshotData.maxConcurrentLaunches()),
             getIntOrDefault(launcher, "queueCapacity", SessionSnapshotData.launcherQueueCapacity()),
@@ -488,6 +515,10 @@ public class SessionScreen extends Screen {
     }
 
     public void openMapEditorGamemode(String gameId) {
+        if ("duels".equals(gameId)) {
+            this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
+            return;
+        }
         this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, gameId));
     }
 
@@ -945,7 +976,7 @@ public class SessionScreen extends Screen {
                             }
                         }
                         int accent = this.accentFor(extension.gameId(), rows.size());
-                        rows.add(SidebarRow.item(new SidebarChild(">", extension.displayName(), () -> this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, extension.gameId())), () -> this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId()), 8, accent)));
+                        rows.add(SidebarRow.item(new SidebarChild(">", extension.displayName(), () -> this.openMapEditorGamemode(extension.gameId()), () -> (this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId())) || (this.workspaceView instanceof dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView && extension.gameId().equals("duels")), 8, accent)));
                         if (this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId())) {
                             for (SessionSnapshotData.EditorMarkerDefinition marker : extension.markers()) {
                                 rows.add(SidebarRow.item(new SidebarChild("+", marker.displayName(), () -> this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, extension.gameId(), marker.key())), () -> editor.markerSelected(extension.gameId(), marker.key()), MODULE_ITEM_INDENT, accent)));
@@ -1345,10 +1376,16 @@ public class SessionScreen extends Screen {
 
     private void openMapEditorWorkspace() {
         // Restore the last-viewed screen if user had one selected
-        if (!this.mapEditorState.selectedGameId.isBlank() && !this.mapEditorState.selectedDefinitionKey.isBlank()) {
-            this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId, this.mapEditorState.selectedDefinitionKey));
-        } else if (!this.mapEditorState.selectedGameId.isBlank()) {
-            this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId));
+        if (!this.mapEditorState.selectedGameId.isBlank()) {
+            if ("duels".equals(this.mapEditorState.selectedGameId)) {
+                this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
+                return;
+            }
+            if (!this.mapEditorState.selectedDefinitionKey.isBlank()) {
+                this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId, this.mapEditorState.selectedDefinitionKey));
+            } else {
+                this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId));
+            }
         } else {
             this.openWorkspaceView(new MapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
         }

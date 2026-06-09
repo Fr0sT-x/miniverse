@@ -25,6 +25,7 @@ public class KitCreatorScreen extends Screen {
     private TextFieldWidget categoriesField;
     private ButtonWidget saveButton;
     private Text warningText = null;
+    private boolean initializingFields;
 
     public KitCreatorScreen(Screen parent, Kit editingKit) {
         super(Text.literal(editingKit == null ? "Create New Kit" : "Edit Kit"));
@@ -57,22 +58,6 @@ public class KitCreatorScreen extends Screen {
         this.categoriesField.setChangedListener(text -> this.categoriesField.setSuggestion(text.isEmpty() ? "e.g. nodebuff, small" : ""));
         this.addDrawableChild(this.categoriesField);
 
-        if (this.editingKit != null) {
-            this.idField.setText(this.editingKit.getId().getPath());
-            this.idField.setSuggestion("");
-            this.idField.setEditable(false);
-            this.nameField.setText(this.editingKit.getDisplayName().getString());
-            this.nameField.setSuggestion("");
-            this.categoriesField.setText(String.join(", ", this.editingKit.getCategories()));
-            this.categoriesField.setSuggestion("");
-
-            ButtonWidget loadButton = ButtonWidget.builder(Text.literal("Load Kit into Inventory"), b -> {
-                ClientPlayNetworking.send(new NetworkConstants.LoadKitIntoInventoryPayload(this.editingKit.getId().toString()));
-                this.client.setScreen(null); // Close to let them edit inventory
-            }).dimensions(centerX - 100, y + 105, 200, 20).build();
-            this.addDrawableChild(loadButton);
-        }
-
         this.saveButton = ButtonWidget.builder(Text.literal(this.editingKit == null ? "Create from Current Inventory" : "Save Overwrite"), b -> {
             ClientPlayNetworking.send(new NetworkConstants.CreateKitPayload(
                 this.idField.getText().trim().toLowerCase(Locale.ROOT),
@@ -83,6 +68,24 @@ public class KitCreatorScreen extends Screen {
         }).dimensions(centerX - 100, y + 140, 200, 20).build();
         this.addDrawableChild(this.saveButton);
 
+        if (this.editingKit != null) {
+            this.initializingFields = true;
+            this.idField.setText(this.editingKit.getId().getPath());
+            this.idField.setSuggestion("");
+            this.idField.setEditable(false);
+            this.nameField.setText(this.editingKit.getDisplayName().getString());
+            this.nameField.setSuggestion("");
+            this.categoriesField.setText(String.join(", ", this.editingKit.getCategories()));
+            this.categoriesField.setSuggestion("");
+            this.initializingFields = false;
+
+            ButtonWidget loadButton = ButtonWidget.builder(Text.literal("Load Kit into Inventory"), b -> {
+                ClientPlayNetworking.send(new NetworkConstants.LoadKitIntoInventoryPayload(this.editingKit.getId().toString()));
+                this.client.setScreen(null); // Close to let them edit inventory
+            }).dimensions(centerX - 100, y + 105, 200, 20).build();
+            this.addDrawableChild(loadButton);
+        }
+
         ButtonWidget cancelButton = ButtonWidget.builder(Text.literal("Cancel"), b -> this.client.setScreen(this.parent))
             .dimensions(centerX - 100, y + 165, 200, 20)
             .build();
@@ -92,6 +95,9 @@ public class KitCreatorScreen extends Screen {
     }
 
     private void validateId(String text) {
+        if (this.initializingFields || this.saveButton == null) {
+            return;
+        }
         if (this.editingKit != null) {
             this.saveButton.active = true;
             this.warningText = null;

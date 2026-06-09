@@ -11,6 +11,8 @@ import dev.frost.miniverse.map.editor.MapEditorMarkerStore;
 import dev.frost.miniverse.map.editor.MapMarker;
 import dev.frost.miniverse.map.editor.MarkerDefinition;
 import dev.frost.miniverse.map.editor.RegionPart;
+import dev.frost.miniverse.minigame.arena.ArenaRegion;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -102,5 +104,55 @@ public record DuelsMapConfig() {
         if (!spectatorSpawns.isEmpty()) builder.error(spectatorSpawns.size() + " Spectator Spawn(s) placed outside of any arena");
 
         return builder.build();
+    }
+
+    public static DuelsMetadata metadataFromEditorConfig(JsonObject config) {
+        MarkerDefinition arenaDef = DuelsDefinition.EXTENSION.marker(DuelsDefinition.ARENA).orElseThrow();
+        MarkerDefinition p1Def = DuelsDefinition.EXTENSION.marker(DuelsDefinition.PLAYER_1_SPAWN).orElseThrow();
+        MarkerDefinition p2Def = DuelsDefinition.EXTENSION.marker(DuelsDefinition.PLAYER_2_SPAWN).orElseThrow();
+        MarkerDefinition specDef = DuelsDefinition.EXTENSION.marker(DuelsDefinition.SPECTATOR_SPAWN).orElseThrow();
+
+        List<MapMarker> arenas = MapEditorMarkerStore.load(config, arenaDef);
+        List<MapMarker> player1Spawns = MapEditorMarkerStore.load(config, p1Def);
+        List<MapMarker> player2Spawns = MapEditorMarkerStore.load(config, p2Def);
+        List<MapMarker> spectatorSpawns = MapEditorMarkerStore.load(config, specDef);
+
+        List<String> supportedDuelTypes = new ArrayList<>();
+        List<ArenaRegion> regions = new ArrayList<>();
+        for (MapMarker arena : arenas) {
+            if (arena.regions().isEmpty()) {
+                continue;
+            }
+            RegionPart bounds = arena.regions().getFirst();
+            List<String> tags = new ArrayList<>();
+            JsonObject properties = arena.properties();
+            if (properties != null && properties.has("supported_duel_types") && properties.get("supported_duel_types").isJsonArray()) {
+                for (JsonElement element : properties.getAsJsonArray("supported_duel_types")) {
+                    String type = element.getAsString();
+                    if (!supportedDuelTypes.contains(type)) {
+                        supportedDuelTypes.add(type);
+                    }
+                    tags.add("duel_type:" + type);
+                }
+            }
+
+            java.util.Map<String, Vec3d> spawns = new java.util.HashMap<>();
+            firstPointInside(player1Spawns, bounds).ifPresent(pos -> spawns.put("player1", pos.vec3d()));
+            firstPointInside(player2Spawns, bounds).ifPresent(pos -> spawns.put("player2", pos.vec3d()));
+            firstPointInside(spectatorSpawns, bounds).ifPresent(pos -> spawns.put("spectator", pos.vec3d()));
+
+            String id = properties != null && properties.has("id") ? properties.get("id").getAsString() : arena.id();
+            regions.add(new ArenaRegion(id, bounds.min().vec3d(), bounds.max().vec3d(), spawns, tags));
+        }
+        return new DuelsMetadata(supportedDuelTypes, regions);
+    }
+
+    private static java.util.Optional<MapPosition> firstPointInside(List<MapMarker> markers, RegionPart bounds) {
+        for (MapMarker marker : markers) {
+            if (!marker.points().isEmpty() && bounds.contains(marker.points().getFirst())) {
+                return java.util.Optional.of(marker.points().getFirst());
+            }
+        }
+        return java.util.Optional.empty();
     }
 }

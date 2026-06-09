@@ -23,15 +23,15 @@ public class DuelMatchManager {
         this.arenaManager = arenaManager;
     }
 
-    public MatchCreationResult createMatch(Kit kit, MatchRules rules, List<ServerPlayerEntity> players) {
+    public MatchCreationResult createMatch(Kit kit, MatchRules rules, List<ServerPlayerEntity> team1, List<ServerPlayerEntity> team2) {
         if (kit == null) {
             String msg = "Kit missing from registry or not provided.";
             LOGGER.error("DuelMatch creation failed: " + msg);
             return MatchCreationResult.failure("Selected kit is unavailable.", msg);
         }
 
-        if (players.size() < 2) {
-            String msg = "Not enough players connected to start match. Expected 2, got " + players.size();
+        if (team1.isEmpty() || team2.isEmpty()) {
+            String msg = "Not enough players to start match. Expected at least 1 per team.";
             LOGGER.error("DuelMatch creation failed: " + msg);
             return MatchCreationResult.failure("Player disconnected before match start.", msg);
         }
@@ -56,7 +56,7 @@ public class DuelMatchManager {
         }
 
         UUID matchId = UUID.randomUUID();
-        DuelMatchContext context = new DuelMatchContext(matchId, compatibleArena.get(), kit, rules, players);
+        DuelMatchContext context = new DuelMatchContext(matchId, compatibleArena.get(), kit, rules, team1, team2);
         DuelMatch match = new DuelMatch(context);
         
         activeMatches.add(match);
@@ -82,12 +82,8 @@ public class DuelMatchManager {
     public void handleDisconnect(ServerPlayerEntity player) {
         getMatchForPlayer(player).ifPresent(match -> {
             if (match.getState() != DuelMatchState.ENDING) {
-                // The disconnected player loses
-                ServerPlayerEntity winner = match.getContext().getPlayers().stream()
-                    .filter(p -> !p.equals(player))
-                    .findFirst()
-                    .orElse(null);
-                match.endMatch(winner, player);
+                match.getContext().getMetadata().putBoolean("dead_" + player.getUuidAsString(), true);
+                checkWinCondition(match);
             }
         });
     }
@@ -95,12 +91,34 @@ public class DuelMatchManager {
     public void handleDeath(ServerPlayerEntity victim) {
         getMatchForPlayer(victim).ifPresent(match -> {
             if (match.getState() != DuelMatchState.ENDING) {
-                ServerPlayerEntity winner = match.getContext().getPlayers().stream()
-                    .filter(p -> !p.equals(victim))
-                    .findFirst()
-                    .orElse(null);
-                match.endMatch(winner, victim);
+                match.getContext().getMetadata().putBoolean("dead_" + victim.getUuidAsString(), true);
+                checkWinCondition(match);
             }
         });
+    }
+
+    private void checkWinCondition(DuelMatch match) {
+        boolean t1Alive = false;
+        for (ServerPlayerEntity p : match.getContext().getTeam1()) {
+            if (!match.getContext().getMetadata().getBoolean("dead_" + p.getUuidAsString())) {
+                t1Alive = true;
+                break;
+            }
+        }
+        boolean t2Alive = false;
+        for (ServerPlayerEntity p : match.getContext().getTeam2()) {
+            if (!match.getContext().getMetadata().getBoolean("dead_" + p.getUuidAsString())) {
+                t2Alive = true;
+                break;
+            }
+        }
+
+        if (!t1Alive && !t2Alive) {
+            match.endMatchDraw();
+        } else if (!t1Alive) {
+            match.endMatch(2);
+        } else if (!t2Alive) {
+            match.endMatch(1);
+        }
     }
 }

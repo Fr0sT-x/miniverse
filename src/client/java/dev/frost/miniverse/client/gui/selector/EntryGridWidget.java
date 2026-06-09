@@ -19,9 +19,9 @@ public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridW
     private static final int SPACING = ITEM_SIZE + PADDING;
 
     public EntryGridWidget(RegistrySelectorScreen<T> screen, MinecraftClient client, int width, int height, int top, int bottom, int itemHeight, int columns, RegistryContentProvider<T> provider) {
-        super(client, width, height, top, itemHeight);
+        super(client, width, height, top, provider.isListView() ? 32 : itemHeight);
         this.screen = screen;
-        this.columns = columns;
+        this.columns = provider.isListView() ? 1 : columns;
         this.provider = provider;
         this.setRenderHeader(false, 0);
     }
@@ -46,7 +46,7 @@ public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridW
 
     @Override
     public int getRowWidth() {
-        return this.columns * SPACING;
+        return this.provider.isListView() ? this.width - 20 : this.columns * SPACING;
     }
 
     public static class RowEntry<T> extends AlwaysSelectedEntryListWidget.Entry<RowEntry<T>> {
@@ -60,10 +60,23 @@ public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridW
 
         @Override
         public void render(DrawContext context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
-            int currentX = x + (entryWidth - this.grid.getRowWidth()) / 2;
             RegistrySelectorState state = this.grid.screen.getState();
             Set<T> selected = this.grid.screen.getSelectedEntries();
-            
+
+            if (this.grid.provider.isListView()) {
+                if (this.items.isEmpty()) return;
+                T item = this.items.get(0);
+                boolean isSelected = selected.contains(item);
+                boolean isHovered = mouseX >= x && mouseX < x + entryWidth && mouseY >= y && mouseY < y + entryHeight;
+                if (!this.grid.provider.renderCustomEntry(context, item, x, y, entryWidth, entryHeight, isHovered, isSelected, mouseX, mouseY)) {
+                    // Fallback if provider returns false
+                    context.fill(x, y, x + entryWidth, y + entryHeight, isSelected ? 0x8033AA33 : (isHovered ? 0x60FFFFFF : 0x40000000));
+                    context.drawText(this.grid.client.textRenderer, this.grid.provider.getDisplayName(item), x + 4, y + 4, 0xFFFFFF, false);
+                }
+                return;
+            }
+
+            int currentX = x + (entryWidth - this.grid.getRowWidth()) / 2;
             for (T item : this.items) {
                 boolean isHovered = mouseX >= currentX && mouseX < currentX + ITEM_SIZE && mouseY >= y && mouseY < y + ITEM_SIZE;
                 boolean isSelected = selected.contains(item);
@@ -90,6 +103,24 @@ public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridW
 
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (this.grid.provider.isListView()) {
+                if (this.items.isEmpty()) return false;
+                T item = this.items.get(0);
+                
+                // Need to compute y and height which are missing from mouseClicked signature. 
+                // We'll estimate or just let provider handle the exact click if it tracks Y bounds, but Entry doesn't store its own Y.
+                // We'll just pass 0s to x, y and let provider use mouseX/mouseY directly if it can.
+                // Wait, if it's ListView, the whole row is clickable:
+                if (this.grid.provider.handleCustomClick(item, mouseX, mouseY, button, 0, 0, 0, 0)) {
+                    return true;
+                }
+                if (button == 0) {
+                    this.grid.screen.toggleSelection(item);
+                    return true;
+                }
+                return false;
+            }
+
             if (button == 0) {
                 int index = getHoveredIndex(mouseX);
                 if (index != -1) {

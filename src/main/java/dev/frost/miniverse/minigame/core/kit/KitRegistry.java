@@ -19,6 +19,10 @@ public class KitRegistry {
         return Optional.ofNullable(REGISTRY.get(id));
     }
 
+    public static void delete(Identifier id) {
+        REGISTRY.remove(id);
+    }
+
     public static Collection<Kit> getAll() {
         return Collections.unmodifiableCollection(REGISTRY.values());
     }
@@ -43,6 +47,32 @@ public class KitRegistry {
                         }
                     });
                 }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void saveCustomKit(Kit kit, net.minecraft.server.MinecraftServer server) {
+        try {
+            java.nio.file.Path configDir = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("miniverse/custom_kits");
+            if (!java.nio.file.Files.exists(configDir)) {
+                java.nio.file.Files.createDirectories(configDir);
+            }
+            java.nio.file.Path file = configDir.resolve(kit.getId().getPath() + ".json");
+            String jsonStr = new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(kit.toJson(server.getRegistryManager()));
+            java.nio.file.Files.writeString(file, jsonStr);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void deleteCustomKit(Identifier id) {
+        try {
+            java.nio.file.Path configDir = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("miniverse/custom_kits");
+            java.nio.file.Path file = configDir.resolve(id.getPath() + ".json");
+            if (java.nio.file.Files.exists(file)) {
+                java.nio.file.Files.delete(file);
             }
         } catch (Exception e) {
             e.printStackTrace();

@@ -15,13 +15,17 @@ public final class SessionSnapshotData {
     public record PendingJoiner(String uuid, String name, long joinedAtMillis) {
     }
 
-    public record MapSummary(String id, String name, String description, String folder, long lastModifiedMillis, List<String> gamemodes, List<MapValidation> validations) {
+    public record MapSummary(String id, String name, String description, String folder, long lastModifiedMillis, List<String> gamemodes, List<MapValidation> validations, List<String> tags) {
         public boolean supports(String gameId) {
             return this.gamemodes.stream().anyMatch(id -> id.equalsIgnoreCase(gameId));
         }
 
         public boolean validFor(String gameId) {
             return this.validations.stream().anyMatch(validation -> validation.game().equalsIgnoreCase(gameId) && validation.valid());
+        }
+
+        public boolean hasTag(String tag) {
+            return this.tags.stream().anyMatch(t -> t.equalsIgnoreCase(tag));
         }
     }
 
@@ -112,6 +116,7 @@ public final class SessionSnapshotData {
     private static volatile List<RosterEntry> roster = List.of();
     private static volatile List<PendingJoiner> pendingJoiners = List.of();
     private static volatile List<MapSummary> maps = List.of();
+    private static volatile List<dev.frost.miniverse.minigame.impl.duels.DuelType> duelTypes = List.of();
     private static volatile boolean mapEditor = false;
     private static volatile List<EditorExtension> editorExtensions = List.of();
     private static volatile EditorState editorState = new EditorState("", List.of());
@@ -140,6 +145,10 @@ public final class SessionSnapshotData {
 
     public static List<MapSummary> maps() {
         return maps;
+    }
+
+    public static List<dev.frost.miniverse.minigame.impl.duels.DuelType> duelTypes() {
+        return duelTypes;
     }
 
     public static boolean mapEditor() {
@@ -191,10 +200,15 @@ public final class SessionSnapshotData {
     }
 
     public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<PendingJoiner> newPendingJoiners, List<MapSummary> newMaps, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity, MemorySettings newMemorySettings, ServerSettings newServerSettings, RetentionSettings newRetentionSettings, boolean newSessionServer) {
+        update(newSessions, newRoster, newPendingJoiners, newMaps, List.of(), newGames, newMaxConcurrentLaunches, newLauncherQueueCapacity, newMemorySettings, newServerSettings, newRetentionSettings, newSessionServer);
+    }
+
+    public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<PendingJoiner> newPendingJoiners, List<MapSummary> newMaps, List<dev.frost.miniverse.minigame.impl.duels.DuelType> newDuelTypes, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity, MemorySettings newMemorySettings, ServerSettings newServerSettings, RetentionSettings newRetentionSettings, boolean newSessionServer) {
         sessions = List.copyOf(newSessions);
         roster = List.copyOf(newRoster);
         pendingJoiners = List.copyOf(newPendingJoiners);
         maps = List.copyOf(newMaps);
+        duelTypes = List.copyOf(newDuelTypes);
         games = List.copyOf(newGames);
         maxConcurrentLaunches = Math.clamp(newMaxConcurrentLaunches, 1, 64);
         launcherQueueCapacity = Math.max(1, newLauncherQueueCapacity);

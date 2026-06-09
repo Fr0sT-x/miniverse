@@ -56,6 +56,7 @@ public class Miniverse implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SessionRecoveryService.recoverUnfinishedSessions(server);
 			dev.frost.miniverse.minigame.core.kit.KitRegistry.loadCustomKits(server);
+			dev.frost.miniverse.minigame.impl.duels.DuelTypeRegistry.load();
 		});
 
 		// Register shared session GUI payloads and server-side receivers.

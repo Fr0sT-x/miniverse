@@ -173,6 +173,33 @@ public final class MapStore {
                 validations.add(entry);
             }
             nbt.put("validations", validations);
+
+            NbtList tags = new NbtList();
+            if (descriptor.supportedGamemodes().stream().anyMatch(g -> g.equalsIgnoreCase("duels"))) {
+                Optional<JsonObject> config = readGamemodeConfig(descriptor.metadata().id(), "duels");
+                if (config.isPresent()) {
+                    JsonObject cfg = config.get();
+                    if (cfg.has("arenas") && cfg.get("arenas").isJsonArray()) {
+                        com.google.gson.JsonArray arenas = cfg.getAsJsonArray("arenas");
+                        java.util.Set<String> supportedDuelTypes = new java.util.HashSet<>();
+                        for (com.google.gson.JsonElement el : arenas) {
+                            if (el.isJsonObject() && el.getAsJsonObject().has("properties")) {
+                                JsonObject props = el.getAsJsonObject().getAsJsonObject("properties");
+                                if (props.has("supported_duel_types") && props.get("supported_duel_types").isJsonArray()) {
+                                    for (com.google.gson.JsonElement typeEl : props.getAsJsonArray("supported_duel_types")) {
+                                        supportedDuelTypes.add("duel_type:" + typeEl.getAsString());
+                                    }
+                                }
+                            }
+                        }
+                        for (String tag : supportedDuelTypes) {
+                            tags.add(net.minecraft.nbt.NbtString.of(tag));
+                        }
+                    }
+                }
+            }
+            nbt.put("tags", tags);
+
             maps.add(nbt);
         }
         return maps;

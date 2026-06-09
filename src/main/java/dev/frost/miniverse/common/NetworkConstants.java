@@ -44,8 +44,14 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<CaptureThumbnailPayload> CAPTURE_THUMBNAIL_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "capture_thumbnail"));
     public static final CustomPayload.Id<DeleteMapPayload> DELETE_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "delete_map"));
     public static final CustomPayload.Id<RenameMapPayload> RENAME_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "rename_map"));
+    public static final CustomPayload.Id<UpdateMapTagsPayload> UPDATE_MAP_TAGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "update_map_tags"));
+
+    public static final CustomPayload.Id<CreateDuelTypePayload> CREATE_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_duel_type"));
 
     public static final CustomPayload.Id<CreateKitPayload> CREATE_KIT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_kit"));
+    public static final CustomPayload.Id<RenameKitPayload> RENAME_KIT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "rename_kit"));
+    public static final CustomPayload.Id<DeleteKitPayload> DELETE_KIT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "delete_kit"));
+    public static final CustomPayload.Id<GiveKitPayload> GIVE_KIT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "give_kit"));
     public static final CustomPayload.Id<LoadKitIntoInventoryPayload> LOAD_KIT_INTO_INVENTORY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "load_kit"));
     public static final CustomPayload.Id<SyncKitsPayload> SYNC_KITS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_kits"));
 
@@ -99,11 +105,16 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(PROTECTION_OVERLAY_ID, ProtectionOverlayPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(BOUNTYHUNT_INVINCIBILITY_ID, BountyHuntInvincibilityPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(CAPTURE_THUMBNAIL_ID, CaptureThumbnailPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(LAYOUT_SUPPORT_ID, LayoutSupportPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(SYNC_BUILDER_SELECTION_ID, SyncBuilderSelectionPayload.CODEC);
+
+        PayloadTypeRegistry.playC2S().register(CREATE_DUEL_TYPE_ID, CreateDuelTypePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CREATE_KIT_ID, CreateKitPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(RENAME_KIT_ID, RenameKitPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DELETE_KIT_ID, DeleteKitPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(GIVE_KIT_ID, GiveKitPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(LOAD_KIT_INTO_INVENTORY_ID, LoadKitIntoInventoryPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SYNC_KITS_ID, SyncKitsPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SYNC_BUILDER_SELECTION_ID, SyncBuilderSelectionPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(LAYOUT_SUPPORT_ID, LayoutSupportPayload.CODEC);
 
         payloadTypesRegistered = true;
     }
@@ -622,16 +633,64 @@ public final class NetworkConstants {
 
     public record RenameMapPayload(String mapId, String newName) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, RenameMapPayload> CODEC = PacketCodec.tuple(
-            PacketCodecs.STRING,
-            RenameMapPayload::mapId,
-            PacketCodecs.STRING,
-            RenameMapPayload::newName,
+            PacketCodecs.STRING, RenameMapPayload::mapId,
+            PacketCodecs.STRING, RenameMapPayload::newName,
             RenameMapPayload::new
         );
 
         @Override
         public Id<? extends CustomPayload> getId() {
             return RENAME_MAP_ID;
+        }
+    }
+
+    public record UpdateMapTagsPayload(String mapId, java.util.List<String> tags) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, UpdateMapTagsPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING, UpdateMapTagsPayload::mapId,
+            PacketCodecs.STRING.collect(PacketCodecs.toList()), UpdateMapTagsPayload::tags,
+            UpdateMapTagsPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return UPDATE_MAP_TAGS_ID;
+        }
+    }
+
+    public record RenameKitPayload(String kitId, String newName) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, RenameKitPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING, RenameKitPayload::kitId,
+            PacketCodecs.STRING, RenameKitPayload::newName,
+            RenameKitPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return RENAME_KIT_ID;
+        }
+    }
+
+    public record DeleteKitPayload(String kitId) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DeleteKitPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING, DeleteKitPayload::kitId,
+            DeleteKitPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DELETE_KIT_ID;
+        }
+    }
+
+    public record GiveKitPayload(String kitId) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, GiveKitPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING, GiveKitPayload::kitId,
+            GiveKitPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return GIVE_KIT_ID;
         }
     }
 
@@ -686,6 +745,42 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return SYNC_BUILDER_SELECTION_ID;
+        }
+    }
+
+    public record CreateDuelTypePayload(
+        String id,
+        String name,
+        boolean knockbackOnly,
+        boolean allowBuilding,
+        boolean allowBreaking,
+        boolean allowHunger,
+        boolean naturalRegen
+    ) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, CreateDuelTypePayload> CODEC = PacketCodec.of(
+            (payload, buffer) -> {
+                buffer.writeString(payload.id());
+                buffer.writeString(payload.name());
+                buffer.writeBoolean(payload.knockbackOnly());
+                buffer.writeBoolean(payload.allowBuilding());
+                buffer.writeBoolean(payload.allowBreaking());
+                buffer.writeBoolean(payload.allowHunger());
+                buffer.writeBoolean(payload.naturalRegen());
+            },
+            buffer -> new CreateDuelTypePayload(
+                buffer.readString(),
+                buffer.readString(),
+                buffer.readBoolean(),
+                buffer.readBoolean(),
+                buffer.readBoolean(),
+                buffer.readBoolean(),
+                buffer.readBoolean()
+            )
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return CREATE_DUEL_TYPE_ID;
         }
     }
 

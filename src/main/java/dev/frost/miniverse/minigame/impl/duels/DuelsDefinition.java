@@ -30,7 +30,7 @@ public final class DuelsDefinition implements MinigameDefinition {
         ID,
         DISPLAY_NAME,
         List.of(
-            new MarkerDefinition(ARENA, "Duel Arena", MarkerType.REGION, "arenas", 1, Integer.MAX_VALUE, null, "A region defining a single 1v1 arena. Set properties 'id' for unique ID, and 'tags' as a JSON array (e.g. [\"bridge\", \"boxing\"])."),
+            new MarkerDefinition(ARENA, "Duel Arena", MarkerType.REGION, "arenas", 1, Integer.MAX_VALUE, null, "A region defining a single 1v1 arena. Use properties menu to configure supported duel types and restrictions."),
             new MarkerDefinition(PLAYER_1_SPAWN, "Player 1 Spawn", MarkerType.POINT, "player1Spawns", 1, Integer.MAX_VALUE, null, "Spawn point for Player 1. Place exactly one inside each Duel Arena."),
             new MarkerDefinition(PLAYER_2_SPAWN, "Player 2 Spawn", MarkerType.POINT, "player2Spawns", 1, Integer.MAX_VALUE, null, "Spawn point for Player 2. Place exactly one inside each Duel Arena."),
             new MarkerDefinition(SPECTATOR_SPAWN, "Spectator Spawn", MarkerType.POINT, "spectatorSpawns", 1, Integer.MAX_VALUE, null, "Spawn point for Spectators. Place exactly one inside each Duel Arena.")
@@ -66,12 +66,33 @@ public final class DuelsDefinition implements MinigameDefinition {
 
     @Override
     public void writeSessionProperties(NbtCompound settingsNbt, Properties properties) {
-        // Will implement config parsing here in the future
+        String mapId = settingsNbt.contains("mapId") ? settingsNbt.getString("mapId").trim() : "";
+        String duelType = settingsNbt.contains("duelType") ? settingsNbt.getString("duelType").trim() : "";
+        String kitId = settingsNbt.contains("kitId") ? settingsNbt.getString("kitId").trim() : "";
+        if (!mapId.isBlank()) {
+            properties.setProperty("duels.mapId", mapId);
+            dev.frost.miniverse.map.MapStore.readGamemodeConfig(mapId, ID)
+                .ifPresent(config -> properties.setProperty("duels.mapConfig", config.toString()));
+        }
+        if (!duelType.isBlank()) {
+            properties.setProperty("duels.duelType", duelType);
+        }
+        if (!kitId.isBlank()) {
+            properties.setProperty("duels.kitId", kitId);
+        }
     }
 
     @Override
     public void writeLaunchProperties(NbtCompound settingsNbt, Map<String, String> properties) {
-        // Will implement config mapping here in the future
+        if (settingsNbt.contains("mapId")) {
+            properties.put("miniverse.duels.mapId", settingsNbt.getString("mapId"));
+        }
+        if (settingsNbt.contains("duelType")) {
+            properties.put("miniverse.duels.duelType", settingsNbt.getString("duelType"));
+        }
+        if (settingsNbt.contains("kitId")) {
+            properties.put("miniverse.duels.kitId", settingsNbt.getString("kitId"));
+        }
     }
 
     @Override
@@ -83,5 +104,6 @@ public final class DuelsDefinition implements MinigameDefinition {
     public void registerEvents() {
         MapGamemodeRegistry.register(new MapGamemodeType(ID, DISPLAY_NAME, DuelsMapConfig::validateEditor));
         MapEditorExtensionRegistry.register(EXTENSION);
+        DuelsSessionBootstrap.register();
     }
 }

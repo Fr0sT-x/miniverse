@@ -68,19 +68,36 @@ public class KitRegistryProvider implements RegistryContentProvider<Kit> {
         return Collections.emptySet();
     }
 
+    private String getCategoryDisplayName(String category) {
+        if (category == null || category.isEmpty()) return category;
+        if (category.startsWith("duel_type:")) {
+            String typeId = category.substring("duel_type:".length());
+            return dev.frost.miniverse.client.gui.SessionSnapshotData.duelTypes().stream()
+                .filter(t -> t.id().equals(typeId))
+                .map(dev.frost.miniverse.minigame.impl.duels.DuelType::name)
+                .findFirst()
+                .orElse(typeId);
+        }
+        return category;
+    }
+
     @Override
     public Set<RegistryCategory> getCategories(Kit entry) {
         return entry.getCategories().stream()
-            .map(c -> new RegistryCategory(c, Text.literal(c), "miniverse:textures/gui/icons/category_" + c.replace(":", "_").toLowerCase(java.util.Locale.ROOT) + ".png"))
+            .filter(c -> !c.equals("duels"))
+            .map(c -> new RegistryCategory(c, Text.literal(getCategoryDisplayName(c)), ""))
             .collect(Collectors.toSet());
     }
 
     @Override
     public List<RegistryCategory> getAllCategories() {
+        java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger(1);
         return KitRegistry.getAll().stream()
             .flatMap(k -> k.getCategories().stream())
+            .filter(c -> !c.equals("duels"))
             .distinct()
-            .map(c -> new RegistryCategory(c, Text.literal(c), "miniverse:textures/gui/icons/category_" + c.replace(":", "_").toLowerCase(java.util.Locale.ROOT) + ".png"))
+            .sorted()
+            .map(c -> new RegistryCategory(c, Text.literal(getCategoryDisplayName(c)), counter.getAndIncrement() + "."))
             .toList();
     }
 
@@ -107,7 +124,7 @@ public class KitRegistryProvider implements RegistryContentProvider<Kit> {
     @Override
     public String getPrimaryCategory(Kit entry) {
         if (entry.getCategories().isEmpty()) return "";
-        return entry.getCategories().iterator().next();
+        return getCategoryDisplayName(entry.getCategories().stream().filter(c -> !c.equals("duels")).findFirst().orElse(""));
     }
 
     @Override

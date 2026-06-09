@@ -61,7 +61,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
     private boolean isEditingType;
     
     private int duelTypeScrollOffset = 0;
-    private int duelMapScrollOffset = 0;
+    private dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid mapGrid;
     private int duelKitScrollOffset = 0;
 
     private boolean contextMenuOpen = false;
@@ -122,6 +122,14 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
         this.columns.add(new ColumnState(ColumnKind.AVAILABLE, "Available", 0x7C8088));
         this.columns.add(new ColumnState(ColumnKind.TEAM_1, "Team 1", 0xDD3333));
         this.columns.add(new ColumnState(ColumnKind.TEAM_2, "Team 2", 0x3344DD));
+        
+        this.mapGrid = new dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid("Supported Maps", mapId -> {
+            SessionSnapshotData.maps().stream().filter(m -> m.id().equals(mapId)).findFirst().ifPresent(m -> {
+                this.selectedMap = m;
+                this.mapGrid.setSelectedMapId(m.id());
+            });
+        });
+        this.mapGrid.setAccentColor(0xFF00AA66);
     }
 
     @Override
@@ -452,46 +460,16 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
 
             // Col 2: Maps
             UiLayout.Rect rect2 = new UiLayout.Rect(this.teamsArea.x() + columnWidth + COLUMN_GAP, this.teamsArea.y(), columnWidth, this.teamsArea.height());
+            this.mapGrid.setBounds(rect2);
             if (this.selectedType != null) {
                 List<SessionSnapshotData.MapSummary> maps = SessionSnapshotData.maps().stream()
                     .filter(m -> m.supports(DuelsDefinition.ID) && m.validFor(DuelsDefinition.ID) && m.hasTag("duel_type:" + this.selectedType.id()))
                     .toList();
-                    
-                int cardWidth = rect2.width() - 8;
-                int imgHeight = (int)(cardWidth * 9.0 / 16.0);
-                int mapRowHeight = imgHeight + 36;
-                
-                this.renderCustomColumn(context, textRenderer, rect2, "Supported Maps (" + maps.size() + ")", 0xFF00AA66, maps.size(), this.duelMapScrollOffset, mapRowHeight, mouseX, mouseY, row -> {
-                    int index = this.duelMapScrollOffset + row;
-                    if (index < maps.size()) {
-                        SessionSnapshotData.MapSummary m = maps.get(index);
-                        boolean isSelected = this.selectedMap == m;
-                        int rowY = rect2.y() + COLUMN_HEADER_HEIGHT + 4 + row * mapRowHeight;
-                        
-                        // Draw Background
-                        int bg = isSelected ? 0x663E79B8 : 0x26222A34;
-                        boolean hovered = !isSelected && mouseX >= rect2.x() && mouseX <= rect2.x() + rect2.width() && mouseY >= rowY && mouseY < rowY + mapRowHeight;
-                        if (hovered) {
-                            bg = 0x44304052;
-                        }
-                        context.fill(rect2.x() + 1, rowY, rect2.x() + rect2.width() - 1, rowY + mapRowHeight - 2, bg);
-                        
-                        // Draw Thumbnail
-                        net.minecraft.util.Identifier thumb = dev.frost.miniverse.client.gui.map.ThumbnailManager.getThumbnail(m);
-                        context.drawTexture(thumb, rect2.x() + 3, rowY + 2, 0, 0, cardWidth - 1, imgHeight, cardWidth - 1, imgHeight);
-                        
-                        // Draw Text
-                        context.drawText(textRenderer, Text.literal(m.name()), rect2.x() + 8, rowY + imgHeight + 8, isSelected ? UiTheme.TEXT : UiTheme.TEXT_MUTED, false);
-                        
-                        if (isSelected) {
-                            context.drawBorder(rect2.x() + 3, rowY + 2, cardWidth - 1, imgHeight, UiTheme.ACCENT_BLUE);
-                        }
-                    }
-                });
+                this.mapGrid.setMaps(maps);
             } else {
-                this.renderGenericColumn(context, textRenderer, rect2, "Supported Maps", 0xFF00AA66, 0, 0, mouseX, mouseY, row -> {});
-                context.drawText(textRenderer, Text.literal("Select a type first"), rect2.x() + 12, rect2.y() + COLUMN_HEADER_HEIGHT + 10, UiTheme.TEXT_MUTED, false);
+                this.mapGrid.setMaps(List.of());
             }
+            this.mapGrid.render(context, textRenderer, mouseX, mouseY, delta);
 
             // Col 3: Kits
             UiLayout.Rect rect3 = new UiLayout.Rect(this.teamsArea.x() + (columnWidth + COLUMN_GAP) * 2, this.teamsArea.y(), columnWidth, this.teamsArea.height());
@@ -750,17 +728,18 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
             for (int i = 0; i < this.columns.size(); i++) {
                 ColumnState column = this.columns.get(i);
                 UiLayout.Rect rect = this.columnRect(i);
-                if (!rect.contains(mouseX, mouseY)) continue;
-                int row = column.rowAt(mouseY, rect);
-                List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
-                int index = column.scrollOffset + row;
-                if (row >= 0 && index >= 0 && index < entries.size()) {
-                    this.selectedPlayerUuid = entries.get(index).uuid();
-                    this.draggedEntry = entries.get(index);
-                    this.draggedFrom = column.kind;
-                    this.dragX = mouseX;
-                    this.dragY = mouseY;
-                    return true;
+                if (rect.contains(mouseX, mouseY)) {
+                    int row = column.rowAt(mouseY, rect);
+                    List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
+                    int index = column.scrollOffset + row;
+                    if (row >= 0 && index >= 0 && index < entries.size()) {
+                        this.selectedPlayerUuid = entries.get(index).uuid();
+                        this.draggedEntry = entries.get(index);
+                        this.draggedFrom = column.kind;
+                        this.dragX = mouseX;
+                        this.dragY = mouseY;
+                        return true;
+                    }
                 }
             }
         }
@@ -799,21 +778,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
 
             if (button == 0 && this.selectedType != null) {
                 if (rect2.contains(mouseX, mouseY)) {
-                    int rowStartY = rect2.y() + COLUMN_HEADER_HEIGHT + 4;
-                    if (mouseY >= rowStartY) {
-                        int cardWidth = rect2.width() - 8;
-                        int imgHeight = (int)(cardWidth * 9.0 / 16.0);
-                        int mapRowHeight = imgHeight + 36;
-                        int row = (int) ((mouseY - rowStartY) / mapRowHeight);
-                        int index = this.duelMapScrollOffset + row;
-                        List<SessionSnapshotData.MapSummary> maps = SessionSnapshotData.maps().stream()
-                            .filter(m -> m.supports(DuelsDefinition.ID) && m.validFor(DuelsDefinition.ID) && m.hasTag("duel_type:" + this.selectedType.id()))
-                            .toList();
-                        if (index >= 0 && index < maps.size()) {
-                            this.selectedMap = maps.get(index);
-                            return true;
-                        }
-                    }
+                    return this.mapGrid.mouseClicked(mouseX, mouseY, button);
                 }
 
                 if (rect3.contains(mouseX, mouseY)) {
@@ -927,16 +892,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
                 this.duelTypeScrollOffset = Math.clamp(this.duelTypeScrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
                 return maxScroll > 0;
             } else if (rect2.contains(mouseX, mouseY) && this.selectedType != null) {
-                int total = (int) SessionSnapshotData.maps().stream()
-                    .filter(m -> m.supports(DuelsDefinition.ID) && m.validFor(DuelsDefinition.ID) && m.hasTag("duel_type:" + this.selectedType.id()))
-                    .count();
-                int cardWidth = rect2.width() - 8;
-                int imgHeight = (int)(cardWidth * 9.0 / 16.0);
-                int mapRowHeight = imgHeight + 36;
-                int mapVisibleRows = Math.max(0, (this.teamsArea.height() - COLUMN_HEADER_HEIGHT - 8) / mapRowHeight);
-                int maxScroll = Math.max(0, total - mapVisibleRows);
-                this.duelMapScrollOffset = Math.clamp(this.duelMapScrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
-                return maxScroll > 0;
+                return this.mapGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
             } else if (rect3.contains(mouseX, mouseY) && this.selectedType != null) {
                 int total = (int) KitRegistry.getAll().stream()
                     .filter(k -> k.getCategories().contains("duel_type:" + this.selectedType.id()))

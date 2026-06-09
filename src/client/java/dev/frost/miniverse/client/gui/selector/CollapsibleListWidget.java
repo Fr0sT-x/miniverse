@@ -110,7 +110,6 @@ public class CollapsibleListWidget<T> implements Drawable, Element, Selectable {
                         index++;
                     }
                     context.disableScissor(); // disable inner scissor
-                    context.enableScissor(this.x, this.y, this.x + this.width, this.y + this.height); // re-enable outer scissor
                 }
             }
             currentY += visibleHeight;

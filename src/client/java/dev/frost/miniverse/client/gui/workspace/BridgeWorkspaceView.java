@@ -63,6 +63,12 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
     private String sessionName = "bridge-" + System.currentTimeMillis();
     private String selectedMapId = "";
     
+    private dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid mapGrid = new dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid("Valid Bridge Maps", mapId -> {
+        this.selectedMapId = mapId;
+        this.status = "Selected map.";
+        this.mapGrid.setSelectedMapId(mapId);
+    });
+    
     // Config values
     private boolean allowBuilding = true;
     private boolean allowBlockBreaking = true;
@@ -81,7 +87,10 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
     @Override
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
         UiLayout.Rect panel = workspace.inset(4);
-        this.mapList = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, Math.min(560, panel.width() - 28), panel.height() - 116);
+        this.mapList = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, panel.width() - 28, panel.height() - 116);
+        this.mapGrid.setBounds(this.mapList);
+        this.mapGrid.setMaps(compatibleMaps());
+        this.mapGrid.setAccentColor(0xFF223366); // Dark blue accent for bridge map list
         this.startButton = new UiLayout.Rect(panel.x() + panel.width() - 126, panel.y() + 12, 112, 22);
         this.teamsArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 84, panel.width() - 24, panel.height() - 106);
         this.autoAssignButton = new UiLayout.Rect(panel.x() + 14, panel.y() + 50, 102, BUTTON_HEIGHT);
@@ -123,7 +132,7 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
             this.renderTeamActions(context, textRenderer, mouseX, mouseY);
             this.renderTeams(context, textRenderer, this.teamsArea, mouseX, mouseY);
         } else if (this.activeModule == Module.MAP) {
-            this.renderMaps(context, textRenderer, mouseX, mouseY);
+            this.mapGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.RULES) {
             this.renderRules(context, textRenderer, panel);
         } else {
@@ -182,13 +191,7 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
             }
         }
         if (this.activeModule == Module.MAP) {
-            int index = mapIndexAt(mouseX, mouseY);
-            List<SessionSnapshotData.MapSummary> maps = compatibleMaps();
-            if (index >= 0 && index < maps.size()) {
-                this.selectedMapId = maps.get(index).id();
-                this.status = "Selected " + maps.get(index).name() + ".";
-                return true;
-            }
+            return this.mapGrid.mouseClicked(mouseX, mouseY, button);
         }
         return false;
     }
@@ -220,17 +223,18 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (this.activeModule != Module.TEAMS) {
-            return false;
-        }
-        for (int i = 0; i < this.columns.size(); i++) {
-            ColumnState column = this.columns.get(i);
-            UiLayout.Rect rect = this.columnRect(i);
-            if (rect.contains(mouseX, mouseY)) {
-                int maxScroll = Math.max(0, this.getEntries(column.kind).size() - column.visibleRows(rect.height()));
-                column.scrollOffset = Math.clamp(column.scrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
-                return maxScroll > 0;
+        if (this.activeModule == Module.TEAMS) {
+            for (int i = 0; i < this.columns.size(); i++) {
+                ColumnState column = this.columns.get(i);
+                UiLayout.Rect rect = this.columnRect(i);
+                if (rect.contains(mouseX, mouseY)) {
+                    int maxScroll = Math.max(0, this.getEntries(column.kind).size() - column.visibleRows(rect.height()));
+                    column.scrollOffset = Math.clamp(column.scrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
+                    return maxScroll > 0;
+                }
             }
+        } else if (this.activeModule == Module.MAP) {
+            return this.mapGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
         }
         return false;
     }
@@ -341,25 +345,6 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         int thumbY = trackY + (int) (((trackHeight - thumbHeight) * (double) scrollOffset) / maxScroll);
         context.fill(trackX, trackY, trackX + 3, trackY + trackHeight, 0x66101822);
         context.fill(trackX, thumbY, trackX + 3, thumbY + thumbHeight, UiTheme.BORDER_STRONG);
-    }
-
-    private void renderMaps(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
-        List<SessionSnapshotData.MapSummary> maps = compatibleMaps();
-        UiRenderer.panel(context, this.mapList.x(), this.mapList.y(), this.mapList.width(), this.mapList.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.drawText(textRenderer, Text.literal("Valid Bridge Maps (" + maps.size() + ")"), this.mapList.x() + 10, this.mapList.y() + 10, UiTheme.TEXT, false);
-        if (maps.isEmpty()) {
-            context.drawText(textRenderer, Text.literal("Open a map editor and configure a map for Bridge."), this.mapList.x() + 10, this.mapList.y() + 30, UiTheme.TEXT_DIM, false);
-            return;
-        }
-        int y = this.mapList.y() + 32;
-        for (SessionSnapshotData.MapSummary map : maps) {
-            boolean selected = map.id().equals(this.selectedMapId);
-            boolean hovered = mouseX >= this.mapList.x() + 8 && mouseX <= this.mapList.x() + this.mapList.width() - 8 && mouseY >= y && mouseY <= y + ROW_HEIGHT - 2;
-            context.fill(this.mapList.x() + 8, y, this.mapList.x() + this.mapList.width() - 8, y + ROW_HEIGHT - 2, selected ? 0xAA223366 : hovered ? 0x662A2A33 : 0x33222222);
-            context.drawText(textRenderer, Text.literal(map.name()), this.mapList.x() + 16, y + 6, selected ? UiTheme.ACCENT_BLUE : UiTheme.TEXT, false);
-            context.drawText(textRenderer, Text.literal(map.id()), this.mapList.x() + 210, y + 6, UiTheme.TEXT_DIM, false);
-            y += ROW_HEIGHT;
-        }
     }
 
     private void renderRules(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel) {
@@ -486,14 +471,6 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
 
     private List<SessionSnapshotData.MapSummary> compatibleMaps() {
         return SessionSnapshotData.maps().stream().filter(map -> map.validFor(BridgeDefinition.ID)).toList();
-    }
-
-    private int mapIndexAt(double mouseX, double mouseY) {
-        if (!this.mapList.contains(mouseX, mouseY)) {
-            return -1;
-        }
-        int row = (int) ((mouseY - (this.mapList.y() + 32)) / ROW_HEIGHT);
-        return row < 0 ? -1 : row;
     }
 
     private TextFieldWidget field(SessionScreen screen, int x, int y, String value, String narration) {

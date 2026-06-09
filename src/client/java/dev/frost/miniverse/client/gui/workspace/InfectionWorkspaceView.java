@@ -33,11 +33,20 @@ public final class InfectionWorkspaceView implements WorkspaceView, GamemodeWork
     private String selectedMapId = "";
     private boolean allowFriendlyFire;
     private String status = "";
+    
+    private dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid mapGrid = new dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid("Valid Infection Maps", mapId -> {
+        this.selectedMapId = mapId;
+        this.status = "Selected map.";
+        this.mapGrid.setSelectedMapId(mapId);
+    });
 
     @Override
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
         UiLayout.Rect panel = workspace.inset(4);
-        this.mapList = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, Math.min(560, panel.width() - 28), panel.height() - 116);
+        this.mapList = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, panel.width() - 28, panel.height() - 116);
+        this.mapGrid.setBounds(this.mapList);
+        this.mapGrid.setMaps(compatibleMaps());
+        this.mapGrid.setAccentColor(0xFF883333); // UiTheme.ACCENT_RED
         this.startButton = new UiLayout.Rect(panel.x() + panel.width() - 126, panel.y() + 12, 112, 22);
         if (this.activeModule == Module.RULES) {
             this.durationField = field(screen, panel.x() + 180, panel.y() + 88, "600", "Match duration seconds");
@@ -59,7 +68,7 @@ public final class InfectionWorkspaceView implements WorkspaceView, GamemodeWork
         context.drawText(textRenderer, Text.literal(this.activeModule.description), panel.x() + 14, panel.y() + 28, UiTheme.TEXT_DIM, false);
         this.renderButton(context, textRenderer, this.startButton, "Start Match", UiTheme.ACCENT_RED, this.startButton.contains(mouseX, mouseY));
         if (this.activeModule == Module.MAP) {
-            this.renderMaps(context, textRenderer, mouseX, mouseY);
+            this.mapGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.RULES) {
             this.renderRules(context, textRenderer, panel);
         } else {
@@ -80,13 +89,15 @@ public final class InfectionWorkspaceView implements WorkspaceView, GamemodeWork
             return true;
         }
         if (this.activeModule == Module.MAP) {
-            int index = mapIndexAt(mouseX, mouseY);
-            List<SessionSnapshotData.MapSummary> maps = compatibleMaps();
-            if (index >= 0 && index < maps.size()) {
-                this.selectedMapId = maps.get(index).id();
-                this.status = "Selected " + maps.get(index).name() + ".";
-                return true;
-            }
+            return this.mapGrid.mouseClicked(mouseX, mouseY, button);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (this.activeModule == Module.MAP) {
+            return this.mapGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
         }
         return false;
     }
@@ -123,25 +134,6 @@ public final class InfectionWorkspaceView implements WorkspaceView, GamemodeWork
     @Override
     public void setActiveModule(String moduleId) {
         this.activeModule = Module.fromId(moduleId);
-    }
-
-    private void renderMaps(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
-        List<SessionSnapshotData.MapSummary> maps = compatibleMaps();
-        UiRenderer.panel(context, this.mapList.x(), this.mapList.y(), this.mapList.width(), this.mapList.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.drawText(textRenderer, Text.literal("Valid Infection Maps (" + maps.size() + ")"), this.mapList.x() + 10, this.mapList.y() + 10, UiTheme.TEXT, false);
-        if (maps.isEmpty()) {
-            context.drawText(textRenderer, Text.literal("Open a map editor and add at least two Infection spawn points."), this.mapList.x() + 10, this.mapList.y() + 30, UiTheme.TEXT_DIM, false);
-            return;
-        }
-        int y = this.mapList.y() + 32;
-        for (SessionSnapshotData.MapSummary map : maps) {
-            boolean selected = map.id().equals(this.selectedMapId);
-            boolean hovered = mouseX >= this.mapList.x() + 8 && mouseX <= this.mapList.x() + this.mapList.width() - 8 && mouseY >= y && mouseY <= y + ROW_HEIGHT - 2;
-            context.fill(this.mapList.x() + 8, y, this.mapList.x() + this.mapList.width() - 8, y + ROW_HEIGHT - 2, selected ? 0xAA883333 : hovered ? 0x66332A2A : 0x33222222);
-            context.drawText(textRenderer, Text.literal(map.name()), this.mapList.x() + 16, y + 6, selected ? UiTheme.ACCENT_RED : UiTheme.TEXT, false);
-            context.drawText(textRenderer, Text.literal(map.id()), this.mapList.x() + 210, y + 6, UiTheme.TEXT_DIM, false);
-            y += ROW_HEIGHT;
-        }
     }
 
     private void renderRules(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel) {
@@ -190,14 +182,6 @@ public final class InfectionWorkspaceView implements WorkspaceView, GamemodeWork
 
     private List<SessionSnapshotData.MapSummary> compatibleMaps() {
         return SessionSnapshotData.maps().stream().filter(map -> map.validFor(InfectionDefinition.ID)).toList();
-    }
-
-    private int mapIndexAt(double mouseX, double mouseY) {
-        if (!this.mapList.contains(mouseX, mouseY)) {
-            return -1;
-        }
-        int row = (int) ((mouseY - (this.mapList.y() + 32)) / ROW_HEIGHT);
-        return row < 0 ? -1 : row;
     }
 
     private TextFieldWidget field(SessionScreen screen, int x, int y, String value, String narration) {

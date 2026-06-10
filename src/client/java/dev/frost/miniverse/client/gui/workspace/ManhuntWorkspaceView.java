@@ -6,6 +6,7 @@ import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntDefinition;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -24,29 +25,19 @@ import java.util.List;
 import java.util.Map;
 
 public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider, GamemodeWorkspaceView.RosterRefreshable {
-    private static final int ROW_HEIGHT = 20;
-    private static final int COLUMN_HEADER_HEIGHT = 22;
-    private static final int COLUMN_GAP = 12;
-    private static final int SETTINGS_FIELD_WIDTH = 150;
     private static final int BUTTON_HEIGHT = 22;
-    private static final int[] COLUMN_COLORS = {0x7C8088, 0x4D8DFF, 0xE85D75};
+    private static final int SETTINGS_FIELD_WIDTH = 170;
     private static final int RESPAWN_DELAY_DEFAULT_SECONDS = 300;
 
     private final MinecraftClient client = MinecraftClient.getInstance();
-    private final List<ColumnState> columns = new ArrayList<>();
-    private final Map<String, UiAnimation.Value> rowHovers = new HashMap<>();
+    private final StaticTeamSelectionGrid teamGrid = new StaticTeamSelectionGrid();
     private Module activeModule = Module.TEAMS;
     private UiLayout.Rect workspace = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect teamsArea = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect restHuntersButton = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect clearButton = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect startButton = new UiLayout.Rect(0, 0, 0, 0);
-    private String selectedPlayerUuid = "";
     private String statusMessage = "";
-    private SessionSnapshotData.RosterEntry draggedEntry;
-    private ColumnKind draggedFrom = ColumnKind.AVAILABLE;
-    private double dragX;
-    private double dragY;
 
     private TextFieldWidget gracePeriodField;
     private TextFieldWidget seedValueField;
@@ -74,9 +65,9 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
     private long seedValue = System.currentTimeMillis();
 
     public ManhuntWorkspaceView() {
-        this.columns.add(new ColumnState(ColumnKind.AVAILABLE, "Available", COLUMN_COLORS[0]));
-        this.columns.add(new ColumnState(ColumnKind.SPEEDRUNNER, "Speedrunners", COLUMN_COLORS[1]));
-        this.columns.add(new ColumnState(ColumnKind.HUNTER, "Hunters", COLUMN_COLORS[2]));
+        this.teamGrid.addColumn("available", "Available", 0x7C8088, true);
+        this.teamGrid.addColumn("speedrunner", "Speedrunners", 0x4D8DFF, false);
+        this.teamGrid.addColumn("hunter", "Hunters", 0xE85D75, false);
     }
 
     @Override
@@ -121,6 +112,8 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
             this.runnerGlowPulseField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 96, Integer.toString(this.runnerGlowPulseMinutes), "Runner glow pulse minutes");
             this.addStepper(screen, this.runnerGlowPulseField, mainPanel.x() + 338, mainPanel.y() + 96, 0, 120, 5);
         }
+        
+        this.teamGrid.setBounds(this.teamsArea);
     }
 
     @Override
@@ -133,7 +126,7 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
 
         if (this.activeModule == Module.TEAMS) {
             this.renderTeamActions(context, textRenderer, mouseX, mouseY);
-            this.renderTeams(context, textRenderer, this.teamsArea, mouseX, mouseY);
+            this.teamGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.SUMMARY) {
             this.renderSummary(context, textRenderer, mainPanel);
         } else {
@@ -150,13 +143,8 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         UiLayout.Rect mainPanel = workspace.inset(4);
         if (this.activeModule != Module.TEAMS && this.activeModule != Module.SUMMARY) {
             this.drawModuleLabels(context, textRenderer, mainPanel);
-        }
-        if (this.draggedEntry != null) {
-            int x = (int) this.dragX + 10;
-            int y = (int) this.dragY + 10;
-            int width = Math.max(104, textRenderer.getWidth(this.draggedEntry.name()) + 28);
-            UiRenderer.panel(context, x, y, width, 22, UiTheme.PANEL_RAISED, UiTheme.ACCENT);
-            context.drawText(textRenderer, Text.literal(this.draggedEntry.name()), x + 12, y + 7, UiTheme.TEXT, false);
+        } else if (this.activeModule == Module.TEAMS) {
+            this.teamGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
     }
 
@@ -177,54 +165,27 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
             return true;
         }
         if (this.clearButton.contains(mouseX, mouseY)) {
-            this.resetAssignments();
+            this.teamGrid.clear();
             return true;
         }
 
-        for (int i = 0; i < this.columns.size(); i++) {
-            ColumnState column = this.columns.get(i);
-            UiLayout.Rect rect = this.columnRect(i);
-            if (!rect.contains(mouseX, mouseY)) {
-                continue;
-            }
-            int row = column.rowAt(mouseY, rect);
-            List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
-            int index = column.scrollOffset + row;
-            if (row >= 0 && index >= 0 && index < entries.size()) {
-                this.selectedPlayerUuid = entries.get(index).uuid();
-                this.draggedEntry = entries.get(index);
-                this.draggedFrom = column.kind;
-                this.dragX = mouseX;
-                this.dragY = mouseY;
-                return true;
-            }
-        }
-        return false;
+        return this.teamGrid.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        if (button == 0 && this.draggedEntry != null) {
-            this.dragX = mouseX;
-            this.dragY = mouseY;
-            return true;
+        if (this.activeModule == Module.TEAMS) {
+            return this.teamGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
         }
         return false;
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button != 0 || this.draggedEntry == null) {
-            return false;
+        if (this.activeModule == Module.TEAMS) {
+            return this.teamGrid.mouseReleased(mouseX, mouseY, button);
         }
-        ColumnKind target = this.dragTarget(mouseX, mouseY);
-        if (target != ColumnKind.NONE) {
-            this.moveEntryTo(this.draggedEntry, target);
-            this.statusMessage = this.draggedEntry.name() + " moved to " + target.displayName + ".";
-        }
-        this.draggedEntry = null;
-        this.draggedFrom = ColumnKind.NONE;
-        return true;
+        return false;
     }
 
     @Override
@@ -232,21 +193,11 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         if (this.activeModule != Module.TEAMS) {
             return false;
         }
-        for (int i = 0; i < this.columns.size(); i++) {
-            ColumnState column = this.columns.get(i);
-            UiLayout.Rect rect = this.columnRect(i);
-            if (rect.contains(mouseX, mouseY)) {
-                int maxScroll = Math.max(0, this.getEntries(column.kind).size() - column.visibleRows(rect.height()));
-                column.scrollOffset = Math.clamp(column.scrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
-                return maxScroll > 0;
-            }
-        }
-        return false;
+        return this.teamGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
     }
 
     public void refreshRoster() {
-        this.getColumn(ColumnKind.SPEEDRUNNER).members.removeIf(entry -> !this.isOnline(entry.uuid()));
-        this.getColumn(ColumnKind.HUNTER).members.removeIf(entry -> !this.isOnline(entry.uuid()));
+        this.teamGrid.refreshRoster();
     }
 
     @Override
@@ -347,44 +298,7 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         this.addButton(screen, "+", x + 30, y, 24, () -> stepField(field, min, max, step));
     }
 
-    private void renderTeams(DrawContext context, TextRenderer textRenderer, UiLayout.Rect area, int mouseX, int mouseY) {
-        int columnWidth = (area.width() - COLUMN_GAP * 2) / 3;
-        for (int i = 0; i < this.columns.size(); i++) {
-            ColumnState column = this.columns.get(i);
-            UiLayout.Rect rect = new UiLayout.Rect(area.x() + i * (columnWidth + COLUMN_GAP), area.y(), columnWidth, area.height());
-            this.renderColumn(context, textRenderer, rect, column, mouseX, mouseY, this.draggedEntry != null && rect.contains(mouseX, mouseY));
-        }
-    }
 
-    private void renderColumn(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, ColumnState column, int mouseX, int mouseY, boolean dropTarget) {
-        List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
-        int accent = 0xFF000000 | column.accentColor;
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), dropTarget ? UiTheme.CARD_HOVER : UiTheme.CARD, dropTarget ? accent : UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + 3, accent);
-        context.drawText(textRenderer, Text.literal(column.title + " (" + entries.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = column.visibleRows(rect.height());
-        int rows = Math.min(entries.size() - column.scrollOffset, visibleRows);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            SessionSnapshotData.RosterEntry entry = entries.get(column.scrollOffset + row);
-            if (this.draggedEntry != null && this.draggedEntry.uuid().equals(entry.uuid())) {
-                continue;
-            }
-            int rowY = listTop + row * ROW_HEIGHT;
-            boolean selected = entry.uuid().equals(this.selectedPlayerUuid);
-            boolean hovered = mouseX >= rect.x() + 1 && mouseX <= rect.x() + rect.width() - 1 && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT - 2;
-            UiAnimation.Value hover = this.rowHovers.computeIfAbsent(column.kind.name() + ":" + entry.uuid(), ignored -> new UiAnimation.Value(0.0F));
-            hover.animateTo(hovered ? 1.0F : 0.0F, UiTheme.HOVER_MS);
-            float progress = hover.get();
-            int background = selected ? UiAnimation.lerpColor(0xAA2F5D94, 0xCC3E79B8, progress) : UiAnimation.lerpColor(0x26222A34, 0x66304052, progress);
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + ROW_HEIGHT - 2, background);
-            context.fill(rect.x() + 6, rowY + 4, rect.x() + 10, rowY + ROW_HEIGHT - 5, UiAnimation.lerpColor(accent, UiTheme.ACCENT, progress * 0.35F));
-            context.drawText(textRenderer, Text.literal(entry.name()), rect.x() + 16, rowY + 6, selected ? UiTheme.TEXT : UiAnimation.lerpColor(UiTheme.TEXT_MUTED, UiTheme.TEXT, progress), false);
-        }
-        this.drawScrollbar(context, rect, entries.size(), visibleRows, column.scrollOffset);
-    }
 
     private void renderTeamActions(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
         this.renderActionButton(context, textRenderer, this.restHuntersButton, "Rest Hunters", UiTheme.ACCENT_RED, this.restHuntersButton.contains(mouseX, mouseY));
@@ -409,7 +323,7 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         int line = y + 18;
         context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
         line += 20;
-        context.drawText(textRenderer, Text.literal(this.getColumn(ColumnKind.SPEEDRUNNER).members.size() + " speedrunner(s) vs " + this.getColumn(ColumnKind.HUNTER).members.size() + " hunter(s)"), x + 14, line, UiTheme.TEXT_MUTED, false);
+        context.drawText(textRenderer, Text.literal(this.teamGrid.getMembers("speedrunner").size() + " speedrunner(s) vs " + this.teamGrid.getMembers("hunter").size() + " hunter(s)"), x + 14, line, UiTheme.TEXT_MUTED, false);
         line += 18;
         context.drawText(textRenderer, Text.literal("Release delay: " + this.gracePeriodSeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
         line += 18;
@@ -426,24 +340,7 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         }
     }
 
-    private UiLayout.Rect columnRect(int index) {
-        int columnWidth = (this.teamsArea.width() - COLUMN_GAP * 2) / 3;
-        return new UiLayout.Rect(this.teamsArea.x() + index * (columnWidth + COLUMN_GAP), this.teamsArea.y(), columnWidth, this.teamsArea.height());
-    }
 
-    private void drawScrollbar(DrawContext context, UiLayout.Rect rect, int totalRows, int visibleRows, int scrollOffset) {
-        if (totalRows <= visibleRows || visibleRows <= 0) {
-            return;
-        }
-        int trackX = rect.x() + rect.width() - 7;
-        int trackY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int trackHeight = rect.height() - COLUMN_HEADER_HEIGHT - 8;
-        int thumbHeight = Math.max(14, (int) ((trackHeight * (double) visibleRows) / totalRows));
-        int maxScroll = Math.max(1, totalRows - visibleRows);
-        int thumbY = trackY + (int) (((trackHeight - thumbHeight) * (double) scrollOffset) / maxScroll);
-        context.fill(trackX, trackY, trackX + 3, trackY + trackHeight, 0x66101822);
-        context.fill(trackX, thumbY, trackX + 3, thumbY + thumbHeight, UiTheme.BORDER_STRONG);
-    }
 
     private void createSession() {
         this.syncStateFromWidgets();
@@ -465,11 +362,11 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         group.putString("name", "Manhunt");
         NbtList members = new NbtList();
         NbtList roles = new NbtList();
-        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.SPEEDRUNNER).members) {
+        for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("speedrunner")) {
             members.add(this.member(entry));
             roles.add(this.roleMember(entry, "speedrunner"));
         }
-        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.HUNTER).members) {
+        for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("hunter")) {
             members.add(this.member(entry));
             roles.add(this.roleMember(entry, "hunter"));
         }
@@ -498,10 +395,10 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
             settings.putLong("seed", this.seedValue);
         }
         NbtList roles = new NbtList();
-        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.SPEEDRUNNER).members) {
+        for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("speedrunner")) {
             roles.add(this.roleMember(entry, "speedrunner"));
         }
-        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.HUNTER).members) {
+        for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("hunter")) {
             roles.add(this.roleMember(entry, "hunter"));
         }
         settings.put("roles", roles);
@@ -552,79 +449,22 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         if (SessionSnapshotData.roster().isEmpty()) {
             return "No players online.";
         }
-        if (this.getColumn(ColumnKind.SPEEDRUNNER).members.isEmpty()) {
+        if (this.teamGrid.getMembers("speedrunner").isEmpty()) {
             return "Need at least one speedrunner.";
         }
-        if (this.getColumn(ColumnKind.HUNTER).members.isEmpty()) {
+        if (this.teamGrid.getMembers("hunter").isEmpty()) {
             return "Need at least one hunter.";
         }
         return "";
     }
 
-    private void resetAssignments() {
-        this.getColumn(ColumnKind.SPEEDRUNNER).members.clear();
-        this.getColumn(ColumnKind.HUNTER).members.clear();
-        this.selectedPlayerUuid = "";
-    }
-
     private void restHunters() {
-        this.getColumn(ColumnKind.HUNTER).members.clear();
         for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-            if (!this.getColumn(ColumnKind.SPEEDRUNNER).contains(entry.uuid())) {
-                this.getColumn(ColumnKind.HUNTER).members.add(entry);
+            if (this.teamGrid.getMembers("speedrunner").stream().noneMatch(e -> e.uuid().equals(entry.uuid())) && this.teamGrid.getMembers("hunter").stream().noneMatch(e -> e.uuid().equals(entry.uuid()))) {
+                this.teamGrid.addMember("hunter", entry);
             }
         }
-        this.statusMessage = "Moved all non-speedrunners to hunters.";
-    }
-
-    private void moveEntryTo(SessionSnapshotData.RosterEntry entry, ColumnKind target) {
-        this.getColumn(ColumnKind.SPEEDRUNNER).remove(entry.uuid());
-        this.getColumn(ColumnKind.HUNTER).remove(entry.uuid());
-        if (target != ColumnKind.AVAILABLE) {
-            this.getColumn(target).members.add(entry);
-        }
-        this.selectedPlayerUuid = entry.uuid();
-    }
-
-    private List<SessionSnapshotData.RosterEntry> getEntries(ColumnKind kind) {
-        if (kind == ColumnKind.AVAILABLE) {
-            List<SessionSnapshotData.RosterEntry> available = new ArrayList<>();
-            for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-                if (!this.isAssigned(entry.uuid())) {
-                    available.add(entry);
-                }
-            }
-            return available;
-        }
-        return this.getColumn(kind).members;
-    }
-
-    private boolean isAssigned(String uuid) {
-        return this.getColumn(ColumnKind.SPEEDRUNNER).members.stream().anyMatch(entry -> entry.uuid().equals(uuid))
-            || this.getColumn(ColumnKind.HUNTER).members.stream().anyMatch(entry -> entry.uuid().equals(uuid));
-    }
-
-    private boolean isOnline(String uuid) {
-        return SessionSnapshotData.roster().stream().anyMatch(entry -> entry.uuid().equals(uuid));
-    }
-
-    private ColumnKind dragTarget(double mouseX, double mouseY) {
-        for (int i = 0; i < this.columns.size(); i++) {
-            UiLayout.Rect rect = this.columnRect(i);
-            if (rect.contains(mouseX, mouseY)) {
-                return this.columns.get(i).kind;
-            }
-        }
-        return this.draggedFrom;
-    }
-
-    private ColumnState getColumn(ColumnKind kind) {
-        for (ColumnState column : this.columns) {
-            if (column.kind == kind) {
-                return column;
-            }
-        }
-        throw new IllegalStateException("Missing column: " + kind);
+        this.statusMessage = "Moved all available players to hunters.";
     }
 
     private NbtCompound member(SessionSnapshotData.RosterEntry entry) {
@@ -715,19 +555,6 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         }
     }
 
-    private enum ColumnKind {
-        NONE(""),
-        AVAILABLE("Available"),
-        SPEEDRUNNER("Speedrunners"),
-        HUNTER("Hunters");
-
-        private final String displayName;
-
-        ColumnKind(String displayName) {
-            this.displayName = displayName;
-        }
-    }
-
     private enum SeedMode {
         RANDOM("Random", "random"),
         FIXED("Fixed", "fixed");
@@ -738,40 +565,6 @@ public final class ManhuntWorkspaceView implements WorkspaceView, GamemodeWorksp
         SeedMode(String displayName, String nbtValue) {
             this.displayName = displayName;
             this.nbtValue = nbtValue;
-        }
-    }
-
-    private static final class ColumnState {
-        private final ColumnKind kind;
-        private final String title;
-        private final int accentColor;
-        private final List<SessionSnapshotData.RosterEntry> members = new ArrayList<>();
-        private int scrollOffset;
-
-        private ColumnState(ColumnKind kind, String title, int accentColor) {
-            this.kind = kind;
-            this.title = title;
-            this.accentColor = accentColor;
-        }
-
-        private int visibleRows(int height) {
-            return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / ROW_HEIGHT);
-        }
-
-        private int rowAt(double mouseY, UiLayout.Rect rect) {
-            int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-            if (mouseY < rowStartY || mouseY > rect.y() + rect.height()) {
-                return -1;
-            }
-            return (int) ((mouseY - rowStartY) / ROW_HEIGHT);
-        }
-
-        private void remove(String uuid) {
-            this.members.removeIf(entry -> entry.uuid().equals(uuid));
-        }
-
-        private boolean contains(String uuid) {
-            return this.members.stream().anyMatch(entry -> entry.uuid().equals(uuid));
         }
     }
 }

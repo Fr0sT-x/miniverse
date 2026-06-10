@@ -2,10 +2,10 @@ package dev.frost.miniverse.client.gui.workspace;
 
 import dev.frost.miniverse.client.gui.SessionScreen;
 import dev.frost.miniverse.client.gui.SessionSnapshotData;
-import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.impl.bridge.BridgeDefinition;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -41,13 +41,7 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
     private UiLayout.Rect autoAssignButton = new UiLayout.Rect(0, 0, 0, 0);
     
     // Team State
-    private final List<ColumnState> columns = new ArrayList<>();
-    private final Map<String, UiAnimation.Value> rowHovers = new HashMap<>();
-    private SessionSnapshotData.RosterEntry draggedEntry;
-    private ColumnKind draggedFrom = ColumnKind.AVAILABLE;
-    private double dragX;
-    private double dragY;
-    private String selectedPlayerUuid = "";
+    private final StaticTeamSelectionGrid teamGrid = new StaticTeamSelectionGrid();
 
     // Config fields
     private TextFieldWidget targetScoreField;
@@ -79,9 +73,9 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
     private String status = "";
 
     public BridgeWorkspaceView() {
-        this.columns.add(new ColumnState(ColumnKind.AVAILABLE, "Available", 0x7C8088));
-        this.columns.add(new ColumnState(ColumnKind.RED_TEAM, "Red Team", 0xDD3333));
-        this.columns.add(new ColumnState(ColumnKind.BLUE_TEAM, "Blue Team", 0x3344DD));
+        this.teamGrid.addColumn("available", "Available", 0x7C8088, true);
+        this.teamGrid.addColumn("team_1", "Team 1", 0xDD3333, false);
+        this.teamGrid.addColumn("team_2", "Team 2", 0x3344DD, false);
     }
 
     @Override
@@ -93,6 +87,7 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         this.mapGrid.setAccentColor(0xFF223366); // Dark blue accent for bridge map list
         this.startButton = new UiLayout.Rect(panel.x() + panel.width() - 126, panel.y() + 12, 112, 22);
         this.teamsArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 84, panel.width() - 24, panel.height() - 106);
+        this.teamGrid.setBounds(this.teamsArea);
         this.autoAssignButton = new UiLayout.Rect(panel.x() + 14, panel.y() + 50, 102, BUTTON_HEIGHT);
         this.clearButton = new UiLayout.Rect(panel.x() + 124, panel.y() + 50, 62, BUTTON_HEIGHT);
         
@@ -130,7 +125,7 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         
         if (this.activeModule == Module.TEAMS) {
             this.renderTeamActions(context, textRenderer, mouseX, mouseY);
-            this.renderTeams(context, textRenderer, this.teamsArea, mouseX, mouseY);
+            this.teamGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.MAP) {
             this.mapGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.RULES) {
@@ -145,12 +140,8 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
 
     @Override
     public void renderForeground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
-        if (this.draggedEntry != null) {
-            int x = (int) this.dragX + 10;
-            int y = (int) this.dragY + 10;
-            int width = Math.max(104, textRenderer.getWidth(this.draggedEntry.name()) + 28);
-            UiRenderer.panel(context, x, y, width, 22, UiTheme.PANEL_RAISED, UiTheme.ACCENT);
-            context.drawText(textRenderer, Text.literal(this.draggedEntry.name()), x + 12, y + 7, UiTheme.TEXT, false);
+        if (this.activeModule == Module.TEAMS) {
+            this.teamGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
     }
 
@@ -169,26 +160,11 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
                 return true;
             }
             if (this.clearButton.contains(mouseX, mouseY)) {
-                this.resetAssignments();
+                this.teamGrid.clear();
                 return true;
             }
 
-            for (int i = 0; i < this.columns.size(); i++) {
-                ColumnState column = this.columns.get(i);
-                UiLayout.Rect rect = this.columnRect(i);
-                if (!rect.contains(mouseX, mouseY)) continue;
-                int row = column.rowAt(mouseY, rect);
-                List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
-                int index = column.scrollOffset + row;
-                if (row >= 0 && index >= 0 && index < entries.size()) {
-                    this.selectedPlayerUuid = entries.get(index).uuid();
-                    this.draggedEntry = entries.get(index);
-                    this.draggedFrom = column.kind;
-                    this.dragX = mouseX;
-                    this.dragY = mouseY;
-                    return true;
-                }
-            }
+            return this.teamGrid.mouseClicked(mouseX, mouseY, button);
         }
         if (this.activeModule == Module.MAP) {
             return this.mapGrid.mouseClicked(mouseX, mouseY, button);
@@ -198,41 +174,24 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        if (button == 0 && this.draggedEntry != null) {
-            this.dragX = mouseX;
-            this.dragY = mouseY;
-            return true;
+        if (this.activeModule == Module.TEAMS) {
+            return this.teamGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
         }
         return false;
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button != 0 || this.draggedEntry == null) {
-            return false;
+        if (this.activeModule == Module.TEAMS) {
+            return this.teamGrid.mouseReleased(mouseX, mouseY, button);
         }
-        ColumnKind target = this.dragTarget(mouseX, mouseY);
-        if (target != ColumnKind.NONE) {
-            this.moveEntryTo(this.draggedEntry, target);
-            this.status = this.draggedEntry.name() + " moved to " + target.displayName + ".";
-        }
-        this.draggedEntry = null;
-        this.draggedFrom = ColumnKind.NONE;
-        return true;
+        return false;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (this.activeModule == Module.TEAMS) {
-            for (int i = 0; i < this.columns.size(); i++) {
-                ColumnState column = this.columns.get(i);
-                UiLayout.Rect rect = this.columnRect(i);
-                if (rect.contains(mouseX, mouseY)) {
-                    int maxScroll = Math.max(0, this.getEntries(column.kind).size() - column.visibleRows(rect.height()));
-                    column.scrollOffset = Math.clamp(column.scrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
-                    return maxScroll > 0;
-                }
-            }
+            return this.teamGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
         } else if (this.activeModule == Module.MAP) {
             return this.mapGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
         }
@@ -241,8 +200,7 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
 
     @Override
     public void refreshRoster() {
-        this.getColumn(ColumnKind.RED_TEAM).members.removeIf(entry -> !this.isOnline(entry.uuid()));
-        this.getColumn(ColumnKind.BLUE_TEAM).members.removeIf(entry -> !this.isOnline(entry.uuid()));
+        this.teamGrid.refreshRoster();
     }
 
     @Override
@@ -289,63 +247,7 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         context.drawText(textRenderer, Text.literal("Drag players to teams. Empty teams will be filled randomly."), this.clearButton.x() + this.clearButton.width() + 12, this.clearButton.y() + 7, UiTheme.TEXT_DIM, false);
     }
 
-    private void renderTeams(DrawContext context, TextRenderer textRenderer, UiLayout.Rect area, int mouseX, int mouseY) {
-        int columnWidth = (area.width() - COLUMN_GAP * 2) / 3;
-        for (int i = 0; i < this.columns.size(); i++) {
-            ColumnState column = this.columns.get(i);
-            UiLayout.Rect rect = new UiLayout.Rect(area.x() + i * (columnWidth + COLUMN_GAP), area.y(), columnWidth, area.height());
-            this.renderColumn(context, textRenderer, rect, column, mouseX, mouseY, this.draggedEntry != null && rect.contains(mouseX, mouseY));
-        }
-    }
 
-    private void renderColumn(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, ColumnState column, int mouseX, int mouseY, boolean dropTarget) {
-        List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
-        int accent = 0xFF000000 | column.accentColor;
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), dropTarget ? UiTheme.CARD_HOVER : UiTheme.CARD, dropTarget ? accent : UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + 3, accent);
-        context.drawText(textRenderer, Text.literal(column.title + " (" + entries.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = column.visibleRows(rect.height());
-        int rows = Math.min(entries.size() - column.scrollOffset, visibleRows);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            SessionSnapshotData.RosterEntry entry = entries.get(column.scrollOffset + row);
-            if (this.draggedEntry != null && this.draggedEntry.uuid().equals(entry.uuid())) {
-                continue;
-            }
-            int rowY = listTop + row * TEAM_ROW_HEIGHT;
-            boolean selected = entry.uuid().equals(this.selectedPlayerUuid);
-            boolean hovered = mouseX >= rect.x() + 1 && mouseX <= rect.x() + rect.width() - 1 && mouseY >= rowY && mouseY <= rowY + TEAM_ROW_HEIGHT - 2;
-            UiAnimation.Value hover = this.rowHovers.computeIfAbsent(column.kind.name() + ":" + entry.uuid(), ignored -> new UiAnimation.Value(0.0F));
-            hover.animateTo(hovered ? 1.0F : 0.0F, UiTheme.HOVER_MS);
-            float progress = hover.get();
-            int background = selected ? UiAnimation.lerpColor(0xAA2F5D94, 0xCC3E79B8, progress) : UiAnimation.lerpColor(0x26222A34, 0x66304052, progress);
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + TEAM_ROW_HEIGHT - 2, background);
-            context.fill(rect.x() + 6, rowY + 4, rect.x() + 10, rowY + TEAM_ROW_HEIGHT - 5, UiAnimation.lerpColor(accent, UiTheme.ACCENT, progress * 0.35F));
-            context.drawText(textRenderer, Text.literal(entry.name()), rect.x() + 16, rowY + 6, selected ? UiTheme.TEXT : UiAnimation.lerpColor(UiTheme.TEXT_MUTED, UiTheme.TEXT, progress), false);
-        }
-        this.drawScrollbar(context, rect, entries.size(), visibleRows, column.scrollOffset);
-    }
-
-    private UiLayout.Rect columnRect(int index) {
-        int columnWidth = (this.teamsArea.width() - COLUMN_GAP * 2) / 3;
-        return new UiLayout.Rect(this.teamsArea.x() + index * (columnWidth + COLUMN_GAP), this.teamsArea.y(), columnWidth, this.teamsArea.height());
-    }
-
-    private void drawScrollbar(DrawContext context, UiLayout.Rect rect, int totalRows, int visibleRows, int scrollOffset) {
-        if (totalRows <= visibleRows || visibleRows <= 0) {
-            return;
-        }
-        int trackX = rect.x() + rect.width() - 7;
-        int trackY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int trackHeight = rect.height() - COLUMN_HEADER_HEIGHT - 8;
-        int thumbHeight = Math.max(14, (int) ((trackHeight * (double) visibleRows) / totalRows));
-        int maxScroll = Math.max(1, totalRows - visibleRows);
-        int thumbY = trackY + (int) (((trackHeight - thumbHeight) * (double) scrollOffset) / maxScroll);
-        context.fill(trackX, trackY, trackX + 3, trackY + trackHeight, 0x66101822);
-        context.fill(trackX, thumbY, trackX + 3, thumbY + thumbHeight, UiTheme.BORDER_STRONG);
-    }
 
     private void renderRules(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel) {
         int y = panel.y() + 74;
@@ -373,10 +275,10 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), panel.x() + 28, panel.y() + 92, UiTheme.TEXT_MUTED, false);
         context.drawText(textRenderer, Text.literal("Map: " + (this.selectedMapId.isBlank() ? "None selected" : this.selectedMapId)), panel.x() + 28, panel.y() + 112, UiTheme.TEXT, false);
         
-        int red = this.getColumn(ColumnKind.RED_TEAM).members.size();
-        int blue = this.getColumn(ColumnKind.BLUE_TEAM).members.size();
-        int unassigned = this.getEntries(ColumnKind.AVAILABLE).size();
-        String players = red + " Red, " + blue + " Blue" + (unassigned > 0 ? " (" + unassigned + " unassigned, will be auto-filled)" : "");
+        int team1 = this.teamGrid.getMembers("team_1").size();
+        int team2 = this.teamGrid.getMembers("team_2").size();
+        int unassigned = this.teamGrid.getMembers("available").size();
+        String players = team1 + " Team 1, " + team2 + " Team 2" + (unassigned > 0 ? " (" + unassigned + " unassigned, will be auto-filled)" : "");
         context.drawText(textRenderer, Text.literal("Players: " + players), panel.x() + 28, panel.y() + 132, UiTheme.TEXT_MUTED, false);
     }
 
@@ -401,49 +303,46 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         
         NbtList groups = new NbtList();
         
-        NbtCompound redGroup = new NbtCompound();
-        redGroup.putString("id", "red");
-        redGroup.putString("name", "Red");
-        NbtList redMembers = new NbtList();
-        NbtList redRoles = new NbtList();
-        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.RED_TEAM).members) {
-            redMembers.add(this.member(entry));
-            redRoles.add(this.roleMember(entry, "member"));
+        NbtCompound team1Group = new NbtCompound();
+        team1Group.putString("id", "team_1");
+        team1Group.putString("name", "Team 1");
+        NbtList team1Members = new NbtList();
+        NbtList team1Roles = new NbtList();
+        for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("team_1")) {
+            team1Members.add(this.member(entry));
+            team1Roles.add(this.roleMember(entry, "member"));
         }
-        redGroup.put("members", redMembers);
-        redGroup.put("roles", redRoles);
+        team1Group.put("members", team1Members);
+        team1Group.put("roles", team1Roles);
         
-        NbtCompound blueGroup = new NbtCompound();
-        blueGroup.putString("id", "blue");
-        blueGroup.putString("name", "Blue");
-        NbtList blueMembers = new NbtList();
-        NbtList blueRoles = new NbtList();
-        for (SessionSnapshotData.RosterEntry entry : this.getColumn(ColumnKind.BLUE_TEAM).members) {
-            blueMembers.add(this.member(entry));
-            blueRoles.add(this.roleMember(entry, "member"));
+        NbtCompound team2Group = new NbtCompound();
+        team2Group.putString("id", "team_2");
+        team2Group.putString("name", "Team 2");
+        NbtList team2Members = new NbtList();
+        NbtList team2Roles = new NbtList();
+        for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("team_2")) {
+            team2Members.add(this.member(entry));
+            team2Roles.add(this.roleMember(entry, "member"));
         }
-        blueGroup.put("members", blueMembers);
-        blueGroup.put("roles", blueRoles);
+        team2Group.put("members", team2Members);
+        team2Group.put("roles", team2Roles);
 
-        // For unassigned players, BridgeMinigame has logic to automatically shuffle players who aren't in teams yet?
-        // Actually, let's just assign everyone left in AVAILABLE evenly to red and blue right now if we want, or rely on core.
-        // I will add them round-robin to the NBT if they are available.
-        int rb = redMembers.size();
-        int bb = blueMembers.size();
-        for (SessionSnapshotData.RosterEntry entry : this.getEntries(ColumnKind.AVAILABLE)) {
-            if (rb <= bb) {
-                redMembers.add(this.member(entry));
-                redRoles.add(this.roleMember(entry, "member"));
-                rb++;
+        int t1 = team1Members.size();
+        int t2 = team2Members.size();
+        for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("available")) {
+            if (t1 <= t2) {
+                team1Members.add(this.member(entry));
+                team1Roles.add(this.roleMember(entry, "member"));
+                t1++;
             } else {
-                blueMembers.add(this.member(entry));
-                blueRoles.add(this.roleMember(entry, "member"));
-                bb++;
+                team2Members.add(this.member(entry));
+                team2Roles.add(this.roleMember(entry, "member"));
+                t2++;
             }
         }
 
-        groups.add(redGroup);
-        groups.add(blueGroup);
+        groups.add(team1Group);
+        groups.add(team2Group);
         plan.put("groups", groups);
         
         ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(BridgeDefinition.ID, this.sessionName, plan));
@@ -504,74 +403,17 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         }
     }
 
-    private void resetAssignments() {
-        this.getColumn(ColumnKind.RED_TEAM).members.clear();
-        this.getColumn(ColumnKind.BLUE_TEAM).members.clear();
-        this.selectedPlayerUuid = "";
-    }
-
     private void autoAssign() {
-        this.resetAssignments();
-        List<SessionSnapshotData.RosterEntry> available = new ArrayList<>(this.getEntries(ColumnKind.AVAILABLE));
-        // Simple round-robin for auto assign preview
+        this.teamGrid.clear();
+        List<SessionSnapshotData.RosterEntry> available = new ArrayList<>(this.teamGrid.getMembers("available"));
         for (int i = 0; i < available.size(); i++) {
             if (i % 2 == 0) {
-                this.getColumn(ColumnKind.RED_TEAM).members.add(available.get(i));
+                this.teamGrid.addMember("team_1", available.get(i));
             } else {
-                this.getColumn(ColumnKind.BLUE_TEAM).members.add(available.get(i));
+                this.teamGrid.addMember("team_2", available.get(i));
             }
         }
-        this.status = "Auto-assigned players to Red and Blue.";
-    }
-
-    private void moveEntryTo(SessionSnapshotData.RosterEntry entry, ColumnKind target) {
-        this.getColumn(ColumnKind.RED_TEAM).remove(entry.uuid());
-        this.getColumn(ColumnKind.BLUE_TEAM).remove(entry.uuid());
-        if (target != ColumnKind.AVAILABLE) {
-            this.getColumn(target).members.add(entry);
-        }
-        this.selectedPlayerUuid = entry.uuid();
-    }
-
-    private List<SessionSnapshotData.RosterEntry> getEntries(ColumnKind kind) {
-        if (kind == ColumnKind.AVAILABLE) {
-            List<SessionSnapshotData.RosterEntry> available = new ArrayList<>();
-            for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-                if (!this.isAssigned(entry.uuid())) {
-                    available.add(entry);
-                }
-            }
-            return available;
-        }
-        return this.getColumn(kind).members;
-    }
-
-    private boolean isAssigned(String uuid) {
-        return this.getColumn(ColumnKind.RED_TEAM).members.stream().anyMatch(entry -> entry.uuid().equals(uuid))
-            || this.getColumn(ColumnKind.BLUE_TEAM).members.stream().anyMatch(entry -> entry.uuid().equals(uuid));
-    }
-
-    private boolean isOnline(String uuid) {
-        return SessionSnapshotData.roster().stream().anyMatch(entry -> entry.uuid().equals(uuid));
-    }
-
-    private ColumnKind dragTarget(double mouseX, double mouseY) {
-        for (int i = 0; i < this.columns.size(); i++) {
-            UiLayout.Rect rect = this.columnRect(i);
-            if (rect.contains(mouseX, mouseY)) {
-                return this.columns.get(i).kind;
-            }
-        }
-        return this.draggedFrom;
-    }
-
-    private ColumnState getColumn(ColumnKind kind) {
-        for (ColumnState column : this.columns) {
-            if (column.kind == kind) {
-                return column;
-            }
-        }
-        throw new IllegalStateException("Missing column: " + kind);
+        this.status = "Auto-assigned players to Team 1 and Team 2.";
     }
 
     private NbtCompound member(SessionSnapshotData.RosterEntry entry) {
@@ -614,50 +456,5 @@ public final class BridgeWorkspaceView implements WorkspaceView, GamemodeWorkspa
         }
     }
 
-    private enum ColumnKind {
-        NONE(""),
-        AVAILABLE("Available"),
-        RED_TEAM("Red Team"),
-        BLUE_TEAM("Blue Team");
 
-        private final String displayName;
-
-        ColumnKind(String displayName) {
-            this.displayName = displayName;
-        }
-    }
-
-    private static final class ColumnState {
-        private final ColumnKind kind;
-        private final String title;
-        private final int accentColor;
-        private final List<SessionSnapshotData.RosterEntry> members = new ArrayList<>();
-        private int scrollOffset;
-
-        private ColumnState(ColumnKind kind, String title, int accentColor) {
-            this.kind = kind;
-            this.title = title;
-            this.accentColor = accentColor;
-        }
-
-        private int visibleRows(int height) {
-            return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / TEAM_ROW_HEIGHT);
-        }
-
-        private int rowAt(double mouseY, UiLayout.Rect rect) {
-            int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-            if (mouseY < rowStartY || mouseY > rect.y() + rect.height()) {
-                return -1;
-            }
-            return (int) ((mouseY - rowStartY) / TEAM_ROW_HEIGHT);
-        }
-
-        private void remove(String uuid) {
-            this.members.removeIf(entry -> entry.uuid().equals(uuid));
-        }
-
-        private boolean contains(String uuid) {
-            return this.members.stream().anyMatch(entry -> entry.uuid().equals(uuid));
-        }
-    }
 }

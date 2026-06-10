@@ -5,6 +5,8 @@ import dev.frost.miniverse.client.gui.SessionSnapshotData;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
+import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -18,11 +20,15 @@ import net.minecraft.text.Text;
 
 import java.util.List;
 
-public final class MurderMysteryWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider {
+public final class MurderMysteryWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider, GamemodeWorkspaceView.RosterRefreshable {
     private static final int ROW_HEIGHT = 28;
     private final MinecraftClient client = MinecraftClient.getInstance();
-    private Module activeModule = Module.MAP;
+    private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
+    private Module activeModule = Module.PLAYERS;
     private UiLayout.Rect mapList = new UiLayout.Rect(0, 0, 0, 0);
+    private UiLayout.Rect playerArea = new UiLayout.Rect(0, 0, 0, 0);
+    private UiLayout.Rect selectAllButton = new UiLayout.Rect(0, 0, 0, 0);
+    private UiLayout.Rect clearButton = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect startButton = new UiLayout.Rect(0, 0, 0, 0);
     private TextFieldWidget durationField;
     private TextFieldWidget detectiveCountField;
@@ -38,13 +44,22 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
         this.mapGrid.setSelectedMapId(mapId);
     });
 
+    public MurderMysteryWorkspaceView() {
+        this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
+        this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
+    }
+
     @Override
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
         UiLayout.Rect panel = workspace.inset(4);
         this.mapList = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, panel.width() - 28, panel.height() - 116);
+        this.playerArea = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, panel.width() - 28, panel.height() - 116);
         this.mapGrid.setBounds(this.mapList);
+        this.playerGrid.setBounds(this.playerArea);
         this.mapGrid.setMaps(compatibleMaps());
         this.mapGrid.setAccentColor(0xFF2A2A4A); // Similar to their selected color 0xAA2A2A4A, let's use 0xFF2A2A4A or 0xFF0055AA for a blue accent
+        this.selectAllButton = new UiLayout.Rect(panel.x() + 14, panel.y() + 50, 90, 22);
+        this.clearButton = new UiLayout.Rect(panel.x() + 112, panel.y() + 50, 70, 22);
         this.startButton = new UiLayout.Rect(panel.x() + panel.width() - 126, panel.y() + 12, 112, 22);
         if (this.activeModule == Module.RULES) {
             this.durationField = field(screen, panel.x() + 180, panel.y() + 88, "300", "Round duration (seconds)");
@@ -62,7 +77,12 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
         context.drawText(textRenderer, Text.literal(this.activeModule.label), panel.x() + 14, panel.y() + 14, UiTheme.TEXT, false);
         context.drawText(textRenderer, Text.literal(this.activeModule.description), panel.x() + 14, panel.y() + 28, UiTheme.TEXT_DIM, false);
         this.renderButton(context, textRenderer, this.startButton, "Start Match", UiTheme.ACCENT_BLUE, this.startButton.contains(mouseX, mouseY));
-        if (this.activeModule == Module.MAP) {
+        if (this.activeModule == Module.PLAYERS) {
+            this.renderButton(context, textRenderer, this.selectAllButton, "Select All", UiTheme.ACCENT_BLUE, this.selectAllButton.contains(mouseX, mouseY));
+            this.renderButton(context, textRenderer, this.clearButton, "Clear", UiTheme.ACCENT, this.clearButton.contains(mouseX, mouseY));
+            this.playerGrid.render(context, textRenderer, mouseX, mouseY, delta);
+            this.playerGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
+        } else if (this.activeModule == Module.MAP) {
             this.mapGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.RULES) {
             this.renderRules(context, textRenderer, panel);
@@ -83,6 +103,22 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
             this.createSession();
             return true;
         }
+        if (this.activeModule == Module.PLAYERS) {
+            if (this.selectAllButton.contains(mouseX, mouseY)) {
+                this.playerGrid.clear();
+                for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
+                    this.playerGrid.addMember("selected", entry);
+                }
+                this.status = "Selected all players.";
+                return true;
+            }
+            if (this.clearButton.contains(mouseX, mouseY)) {
+                this.playerGrid.clear();
+                this.status = "Selection cleared.";
+                return true;
+            }
+            return this.playerGrid.mouseClicked(mouseX, mouseY, button);
+        }
         if (this.activeModule == Module.MAP) {
             return this.mapGrid.mouseClicked(mouseX, mouseY, button);
         }
@@ -90,7 +126,26 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
     }
 
     @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.activeModule == Module.PLAYERS) {
+            return this.playerGrid.mouseReleased(mouseX, mouseY, button);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (this.activeModule == Module.PLAYERS) {
+            return this.playerGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        }
+        return false;
+    }
+
+    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (this.activeModule == Module.PLAYERS) {
+            return this.playerGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
+        }
         if (this.activeModule == Module.MAP) {
             return this.mapGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
         }
@@ -115,6 +170,7 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
     @Override
     public List<WorkspaceModule> modules() {
         return List.of(
+            new WorkspaceModule(Module.PLAYERS.id, "P", Module.PLAYERS.label, "Setup"),
             new WorkspaceModule(Module.MAP.id, "M", Module.MAP.label, "Setup"),
             new WorkspaceModule(Module.RULES.id, "R", Module.RULES.label, "Rules"),
             new WorkspaceModule(Module.SUMMARY.id, "S", Module.SUMMARY.label, "Summary")
@@ -129,6 +185,11 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
     @Override
     public void setActiveModule(String moduleId) {
         this.activeModule = Module.fromId(moduleId);
+    }
+
+    @Override
+    public void refreshRoster() {
+        this.playerGrid.refreshRoster();
     }
 
     private void renderRules(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel) {
@@ -159,7 +220,22 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
         plan.putString("name", this.sessionName);
         plan.putBoolean("launch", true);
         plan.put("settings", this.settingsNbt());
-        plan.put("groups", new NbtList());
+        
+        NbtList groups = new NbtList();
+        NbtCompound group = new NbtCompound();
+        group.putString("id", "players");
+        group.putString("name", "Players");
+        NbtList members = new NbtList();
+        for (SessionSnapshotData.RosterEntry entry : this.playerGrid.getMembers("selected")) {
+            NbtCompound compound = new NbtCompound();
+            compound.putString("uuid", entry.uuid());
+            compound.putString("name", entry.name());
+            members.add(compound);
+        }
+        group.put("members", members);
+        groups.add(group);
+        plan.put("groups", groups);
+        
         ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(MurderMysteryDefinition.ID, this.sessionName, plan));
         this.status = "Requested Murder Mystery session creation.";
     }
@@ -202,6 +278,7 @@ public final class MurderMysteryWorkspaceView implements WorkspaceView, Gamemode
     }
 
     private enum Module {
+        PLAYERS("players", "Players", "Select participating players."),
         MAP("map", "Map Selection", "Choose a validated map configured for Murder Mystery."),
         RULES("rules", "Match Rules", "Tune duration, detective count, and coin economy."),
         SUMMARY("summary", "Summary", "Review and launch the map-backed session.");

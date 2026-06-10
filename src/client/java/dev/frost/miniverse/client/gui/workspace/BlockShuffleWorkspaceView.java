@@ -2,11 +2,11 @@ package dev.frost.miniverse.client.gui.workspace;
 
 import dev.frost.miniverse.client.gui.SessionScreen;
 import dev.frost.miniverse.client.gui.SessionSnapshotData;
-import dev.frost.miniverse.client.gui.TeamDraft;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorContext;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorScreen;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorState;
 import dev.frost.miniverse.client.gui.selector.providers.BlockRegistryProvider;
+import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
@@ -49,17 +49,13 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final Map<String, UiAnimation.Value> rowHovers = new HashMap<>();
-    private final List<TeamDraft> teams = new ArrayList<>();
-    private final Set<String> selectedPlayerUuids = new LinkedHashSet<>();
+    private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
-    private Module activeModule = Module.TEAMS;
+    private Module activeModule = Module.PLAYERS;
     private UiLayout.Rect workspace = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect teamsArea = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect actionCreate = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect actionAssign = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect actionRemove = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect actionDelete = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect actionSolo = new UiLayout.Rect(0, 0, 0, 0);
+    private UiLayout.Rect rosterArea = new UiLayout.Rect(0, 0, 0, 0);
+    private UiLayout.Rect selectAllButton = new UiLayout.Rect(0, 0, 0, 0);
+    private UiLayout.Rect clearButton = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect startButton = new UiLayout.Rect(0, 0, 0, 0);
 
     private SessionScreen parentScreen;
@@ -83,25 +79,22 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
     private Set<Identifier> blockPool = new java.util.HashSet<>(lastBlockPool);
     private RegistrySelectorState selectorState = new RegistrySelectorState();
 
-    private int selectedTeamIndex = -1;
-    private int rosterScrollOffset;
-    private int teamScrollOffset;
-    private int nextTeamNumber = 1;
     private String statusMessage = "";
+
+    public BlockShuffleWorkspaceView() {
+        this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
+        this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
+    }
 
     @Override
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
         this.parentScreen = screen;
         this.workspace = workspace;
         UiLayout.Rect mainPanel = workspace.inset(4);
-        this.teamsArea = new UiLayout.Rect(mainPanel.x() + 12, mainPanel.y() + 88, mainPanel.width() - 24, mainPanel.height() - 116);
-        int actionY = mainPanel.y() + 50;
-        int actionStart = mainPanel.x() + 14;
-        this.actionCreate = new UiLayout.Rect(actionStart, actionY, 96, BUTTON_HEIGHT);
-        this.actionAssign = new UiLayout.Rect(actionStart + 104, actionY, 164, BUTTON_HEIGHT);
-        this.actionRemove = new UiLayout.Rect(actionStart + 276, actionY, 140, BUTTON_HEIGHT);
-        this.actionDelete = new UiLayout.Rect(actionStart + 424, actionY, 96, BUTTON_HEIGHT);
-        this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, BUTTON_HEIGHT);
+        this.rosterArea = new UiLayout.Rect(mainPanel.x() + 12, mainPanel.y() + 88, mainPanel.width() - 24, mainPanel.height() - 116);
+        this.playerGrid.setBounds(this.rosterArea);
+        this.selectAllButton = new UiLayout.Rect(mainPanel.x() + 14, mainPanel.y() + 50, 90, BUTTON_HEIGHT);
+        this.clearButton = new UiLayout.Rect(mainPanel.x() + 112, mainPanel.y() + 50, 70, BUTTON_HEIGHT);
         this.startButton = new UiLayout.Rect(mainPanel.x() + mainPanel.width() - 126, mainPanel.y() + 10, 112, BUTTON_HEIGHT);
 
         if (this.activeModule == Module.MATCH_RULES) {
@@ -136,11 +129,6 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
                 client.setScreen(new RegistrySelectorScreen<>(context, new BlockRegistryProvider()));
             });
         }
-
-        if (this.teams.isEmpty()) {
-            this.addTeam(this.nextTeamLabel());
-            this.selectedTeamIndex = 0;
-        }
     }
 
     @Override
@@ -151,9 +139,9 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
         context.drawText(textRenderer, Text.literal(this.activeModule.label), mainPanel.x() + 14, mainPanel.y() + 14, UiTheme.TEXT, false);
         context.drawText(textRenderer, Text.literal(this.activeModule.description), mainPanel.x() + 14, mainPanel.y() + 28, UiTheme.TEXT_DIM, false);
 
-        if (this.activeModule == Module.TEAMS) {
-            this.renderTeamActions(context, textRenderer, mouseX, mouseY);
-            this.renderTeams(context, textRenderer, this.teamsArea, mouseX, mouseY);
+        if (this.activeModule == Module.PLAYERS) {
+            this.renderPlayerActions(context, textRenderer, mouseX, mouseY);
+            this.playerGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.SUMMARY) {
             this.renderSummary(context, textRenderer, mainPanel);
         } else {
@@ -176,6 +164,8 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
             context.drawText(textRenderer, Text.literal("Round Duration"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Player Assignment"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Block Pool"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
+        } else if (this.activeModule == Module.PLAYERS) {
+            this.playerGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
     }
 
@@ -186,33 +176,33 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
             this.createSession();
             return true;
         }
-        if (this.activeModule != Module.TEAMS) return false;
-        
-        if (this.actionCreate.contains(mouseX, mouseY)) { this.createTeam(); return true; }
-        if (this.actionAssign.contains(mouseX, mouseY)) { this.assignSelectedPlayersToTeam(); return true; }
-        if (this.actionRemove.contains(mouseX, mouseY)) { this.removeSelectedPlayersFromTeams(); return true; }
-        if (this.actionDelete.contains(mouseX, mouseY)) { this.deleteSelectedTeam(); return true; }
-        if (this.actionSolo.contains(mouseX, mouseY)) { this.soloAll(); return true; }
-        
-        int rosterIndex = this.getRosterRowAt(mouseX, mouseY);
-        if (rosterIndex >= 0) {
-            SessionSnapshotData.RosterEntry entry = this.getAvailablePlayers().get(rosterIndex);
-            this.togglePlayerSelection(entry.uuid());
-            return true;
-        }
+        if (this.activeModule != Module.PLAYERS) return false;
 
-        MemberHit memberHit = this.getTeamMemberHit(mouseX, mouseY);
-        if (memberHit != null) {
-            this.selectedTeamIndex = memberHit.teamIndex;
-            this.togglePlayerSelection(memberHit.uuid);
-            this.statusMessage = this.selectedPlayerUuids.contains(memberHit.uuid)
-                ? "Selected " + memberHit.name + "."
-                : "Deselected " + memberHit.name + ".";
+        if (this.selectAllButton.contains(mouseX, mouseY)) {
+            this.selectAll();
             return true;
         }
-        int teamIndex = this.getTeamRowAt(mouseX, mouseY);
-        if (teamIndex >= 0) {
-            this.selectedTeamIndex = teamIndex;
+        if (this.clearButton.contains(mouseX, mouseY)) {
+            this.clearSelection();
+            return true;
+        }
+        if (this.playerGrid.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.activeModule == Module.PLAYERS && this.playerGrid.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (this.activeModule == Module.PLAYERS && this.playerGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
             return true;
         }
         return false;
@@ -220,22 +210,10 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (this.activeModule != Module.TEAMS) return false;
+        if (this.activeModule != Module.PLAYERS) return false;
         int delta = (int) Math.signum(verticalAmount);
         if (delta == 0) return false;
-        UiLayout.Rect rosterRect = this.rosterRect();
-        UiLayout.Rect teamRect = this.teamRect();
-        if (rosterRect.contains(mouseX, mouseY)) {
-            int max = Math.max(0, this.getAvailablePlayers().size() - this.visibleRows(rosterRect.height()));
-            this.rosterScrollOffset = Math.clamp(this.rosterScrollOffset - delta, 0, max);
-            return max > 0;
-        }
-        if (teamRect.contains(mouseX, mouseY)) {
-            int max = Math.max(0, this.teams.size() - this.visibleTeamRows(teamRect.height()));
-            this.teamScrollOffset = Math.clamp(this.teamScrollOffset - delta, 0, max);
-            return max > 0;
-        }
-        return false;
+        return this.playerGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
     }
 
     @Override
@@ -251,8 +229,8 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
     public List<WorkspaceModule> modules() {
         List<WorkspaceModule> modules = new ArrayList<>();
         for (Module module : Module.values()) {
-            if (module == Module.OBJECTIVES) continue; // Block Shuffle doesn't use the objectives module
-            String group = module == Module.SUMMARY ? "Summary" : module == Module.TEAMS ? "Setup" : "Rules";
+            if (module == Module.OBJECTIVES) continue;
+            String group = module == Module.SUMMARY ? "Summary" : module == Module.PLAYERS ? "Setup" : "Rules";
             modules.add(new WorkspaceModule(module.id, module.icon, module.label, group));
         }
         return modules;
@@ -269,17 +247,7 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
 
     @Override
     public void refreshRoster() {
-        this.selectedPlayerUuids.retainAll(this.currentRosterUuids());
-        for (TeamDraft team : this.teams) {
-            team.members().forEach(member -> {
-                if (!this.currentRosterUuids().contains(member.uuid().toString())) {
-                    team.remove(member.uuid());
-                }
-            });
-        }
-        if (this.selectedTeamIndex >= this.teams.size()) {
-            this.selectedTeamIndex = this.teams.isEmpty() ? -1 : this.teams.size() - 1;
-        }
+        this.playerGrid.refreshRoster();
     }
 
     private void renderSettingsModule(DrawContext context, TextRenderer textRenderer, UiLayout.Rect mainPanel) {
@@ -315,68 +283,9 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
         }
     }
 
-    private void renderTeamActions(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
-        this.renderActionButton(context, textRenderer, this.actionCreate, "Create Team", UiTheme.ACCENT_BLUE, this.actionCreate.contains(mouseX, mouseY));
-        this.renderActionButton(context, textRenderer, this.actionAssign, "Assign To Team", UiTheme.ACCENT_GREEN, this.actionAssign.contains(mouseX, mouseY));
-        this.renderActionButton(context, textRenderer, this.actionRemove, "Remove From Team", UiTheme.ACCENT, this.actionRemove.contains(mouseX, mouseY));
-        this.renderActionButton(context, textRenderer, this.actionDelete, "Delete Team", UiTheme.ACCENT_RED, this.actionDelete.contains(mouseX, mouseY));
-        this.renderActionButton(context, textRenderer, this.actionSolo, "Solo All", UiTheme.ACCENT_GREEN, this.actionSolo.contains(mouseX, mouseY));
-    }
-
-    private void renderTeams(DrawContext context, TextRenderer textRenderer, UiLayout.Rect area, int mouseX, int mouseY) {
-        this.renderRosterPanel(context, textRenderer, this.rosterRect(), mouseX, mouseY);
-        this.renderTeamPanel(context, textRenderer, this.teamRect(), mouseX, mouseY);
-    }
-
-    private void renderRosterPanel(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, int mouseX, int mouseY) {
-        List<SessionSnapshotData.RosterEntry> roster = this.getAvailablePlayers();
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.drawText(textRenderer, Text.literal("Available Players (" + roster.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = this.visibleRows(rect.height());
-        int rows = Math.min(visibleRows, roster.size() - this.rosterScrollOffset);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            SessionSnapshotData.RosterEntry entry = roster.get(this.rosterScrollOffset + row);
-            int rowY = listTop + row * ROW_HEIGHT;
-            boolean selected = this.selectedPlayerUuids.contains(entry.uuid());
-            boolean hovered = mouseX >= rect.x() + 1 && mouseX <= rect.x() + rect.width() - 1 && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT - 2;
-            UiAnimation.Value hover = this.rowHovers.computeIfAbsent("roster:" + entry.uuid(), ignored -> new UiAnimation.Value(0.0F));
-            hover.animateTo(hovered ? 1.0F : 0.0F, UiTheme.HOVER_MS);
-            int background = selected ? UiAnimation.lerpColor(0xAA2F5D94, 0xCC3E79B8, hover.get()) : UiAnimation.lerpColor(0x26222A34, 0x66304052, hover.get());
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + ROW_HEIGHT - 2, background);
-            context.drawText(textRenderer, Text.literal(entry.name()), rect.x() + 12, rowY + 6, UiTheme.TEXT, false);
-        }
-        this.drawScrollbar(context, rect, roster.size(), visibleRows, this.rosterScrollOffset);
-    }
-
-    private void renderTeamPanel(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, int mouseX, int mouseY) {
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.drawText(textRenderer, Text.literal("Teams (" + this.teams.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = this.visibleTeamRows(rect.height());
-        int rows = Math.min(visibleRows, this.teams.size() - this.teamScrollOffset);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            int teamIndex = this.teamScrollOffset + row;
-            TeamDraft team = this.teams.get(teamIndex);
-            int rowY = listTop + row * TEAM_ROW_HEIGHT;
-            boolean selected = teamIndex == this.selectedTeamIndex;
-            int accent = TEAM_COLORS[teamIndex % TEAM_COLORS.length];
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + TEAM_ROW_HEIGHT - 2, selected ? 0xAA405D8A : 0x33222222);
-            context.fill(rect.x() + 6, rowY + 4, rect.x() + 10, rowY + TEAM_ROW_HEIGHT - 5, accent);
-            String label = team.label().isBlank() ? this.fallbackTeamLabel(teamIndex) : team.label();
-            int textX = rect.x() + 16;
-            String labelTrim = textRenderer.trimToWidth(label, rect.width() - 28);
-            context.drawText(textRenderer, Text.literal(labelTrim), textX, rowY + 5, UiTheme.TEXT, false);
-            MemberLine members = this.buildMemberLine(team, rect.width() - 24, 6, textRenderer);
-            if (!members.text.isBlank()) {
-                context.drawText(textRenderer, Text.literal(members.text), textX, rowY + 19, UiTheme.TEXT_MUTED, false);
-            }
-        }
-        this.drawScrollbar(context, rect, this.teams.size(), visibleRows, this.teamScrollOffset);
+    private void renderPlayerActions(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
+        this.renderActionButton(context, textRenderer, this.selectAllButton, "Select All", UiTheme.ACCENT_BLUE, this.selectAllButton.contains(mouseX, mouseY));
+        this.renderActionButton(context, textRenderer, this.clearButton, "Clear", UiTheme.ACCENT, this.clearButton.contains(mouseX, mouseY));
     }
 
     private void renderActionButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered) {
@@ -399,78 +308,17 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
         return screen.addWorkspaceChild(field);
     }
 
-    private void createTeam() {
-        TeamDraft team = this.addTeam(this.nextTeamLabel());
-        this.selectedTeamIndex = this.teams.indexOf(team);
-        this.statusMessage = "Created " + this.displayTeamName(team) + ".";
+    private void selectAll() {
+        this.playerGrid.clear();
+        for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
+            this.playerGrid.addMember("selected", entry);
+        }
+        this.statusMessage = "Selected all players.";
     }
 
-    private TeamDraft addTeam(String label) {
-        TeamDraft team = new TeamDraft(label);
-        this.teams.add(team);
-        return team;
-    }
-
-    private void assignSelectedPlayersToTeam() {
-        TeamDraft team = this.getSelectedTeam();
-        if (team == null) {
-            this.statusMessage = "Select a team first.";
-            return;
-        }
-        List<SessionSnapshotData.RosterEntry> selectedPlayers = this.getSelectedPlayers();
-        if (selectedPlayers.isEmpty()) {
-            this.statusMessage = "Select one or more players first.";
-            return;
-        }
-        for (SessionSnapshotData.RosterEntry player : selectedPlayers) {
-            this.removePlayerFromAllTeams(player.uuid());
-            team.add(new TeamDraft.Member(UUID.fromString(player.uuid()), player.name()));
-        }
-        this.selectedPlayerUuids.clear();
-        this.statusMessage = "Assigned " + selectedPlayers.size() + " player(s) to " + this.displayTeamName(team) + ".";
-    }
-
-    private void removeSelectedPlayersFromTeams() {
-        List<SessionSnapshotData.RosterEntry> selectedPlayers = this.getSelectedPlayers();
-        if (selectedPlayers.isEmpty()) {
-            this.statusMessage = "Select one or more players first.";
-            return;
-        }
-        int removed = 0;
-        for (SessionSnapshotData.RosterEntry player : selectedPlayers) {
-            removed += this.removePlayerFromAllTeams(player.uuid()) ? 1 : 0;
-        }
-        this.selectedPlayerUuids.clear();
-        this.statusMessage = removed == 0 ? "Selected players are not assigned." : "Removed " + removed + " player(s) from teams.";
-    }
-
-    private void deleteSelectedTeam() {
-        TeamDraft team = this.getSelectedTeam();
-        if (team == null) return;
-        String label = this.displayTeamName(team);
-        this.teams.remove(this.selectedTeamIndex);
-        if (this.teams.isEmpty()) {
-            this.selectedTeamIndex = -1;
-        } else if (this.selectedTeamIndex >= this.teams.size()) {
-            this.selectedTeamIndex = this.teams.size() - 1;
-        }
-        this.statusMessage = "Deleted " + label + ".";
-    }
-
-    private void soloAll() {
-        List<SessionSnapshotData.RosterEntry> roster = SessionSnapshotData.roster();
-        if (roster.isEmpty()) return;
-        this.teams.clear();
-        this.nextTeamNumber = 1;
-        for (SessionSnapshotData.RosterEntry entry : roster) {
-            TeamDraft team = new TeamDraft(this.nextTeamLabel());
-            team.add(new TeamDraft.Member(UUID.fromString(entry.uuid()), entry.name()));
-            this.teams.add(team);
-        }
-        this.selectedPlayerUuids.clear();
-        this.selectedTeamIndex = this.teams.isEmpty() ? -1 : 0;
-        this.teamScrollOffset = 0;
-        this.statusMessage = "Created one solo team per player.";
+    private void clearSelection() {
+        this.playerGrid.clear();
+        this.statusMessage = "Selection cleared.";
     }
 
     private void createSession() {
@@ -496,18 +344,21 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
         settings.put("blockPool", blockList);
         plan.put("settings", settings);
 
-        NbtList groups = new NbtList();
-        for (int i = 0; i < this.teams.size(); i++) {
-            TeamDraft team = this.teams.get(i);
-            if (!team.isEmpty()) {
-                groups.add(team.toPlanCompound(this.fallbackTeamLabel(i)));
-            }
+        net.minecraft.nbt.NbtList groups = new net.minecraft.nbt.NbtList();
+        net.minecraft.nbt.NbtCompound group = new net.minecraft.nbt.NbtCompound();
+        group.putString("id", "players");
+        group.putString("name", "Players");
+        net.minecraft.nbt.NbtList members = new net.minecraft.nbt.NbtList();
+        for (SessionSnapshotData.RosterEntry entry : this.playerGrid.getMembers("selected")) {
+            net.minecraft.nbt.NbtCompound compound = new net.minecraft.nbt.NbtCompound();
+            compound.putString("uuid", entry.uuid());
+            compound.putString("name", entry.name());
+            members.add(compound);
         }
-        if (groups.isEmpty()) {
-            this.statusMessage = "Create at least one team with one player.";
-            return;
-        }
+        group.put("members", members);
+        groups.add(group);
         plan.put("groups", groups);
+
         ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(BlockShuffleDefinition.ID, this.sessionName, plan));
         this.statusMessage = "Requested Block Shuffle session creation.";
     }
@@ -550,143 +401,8 @@ public final class BlockShuffleWorkspaceView implements WorkspaceView, GamemodeW
         return "";
     }
 
-    private List<SessionSnapshotData.RosterEntry> getAvailablePlayers() {
-        return SessionSnapshotData.roster().stream().filter(e -> !this.isAssigned(e.uuid())).toList();
-    }
-
-    private List<SessionSnapshotData.RosterEntry> getSelectedPlayers() {
-        return SessionSnapshotData.roster().stream().filter(e -> this.selectedPlayerUuids.contains(e.uuid())).toList();
-    }
-
-    private boolean removePlayerFromAllTeams(String uuid) {
-        boolean removed = false;
-        UUID playerUuid = UUID.fromString(uuid);
-        for (TeamDraft team : this.teams) removed |= team.remove(playerUuid);
-        return removed;
-    }
-
-    private TeamDraft getSelectedTeam() {
-        if (this.selectedTeamIndex < 0 || this.selectedTeamIndex >= this.teams.size()) return null;
-        return this.teams.get(this.selectedTeamIndex);
-    }
-
-    private String displayTeamName(TeamDraft team) {
-        String label = team.label();
-        if (!label.isBlank()) return label;
-        int index = this.teams.indexOf(team);
-        return this.fallbackTeamLabel(Math.max(index, 0));
-    }
-
-    private MemberLine buildMemberLine(TeamDraft team, int maxWidth, int maxNames, TextRenderer textRenderer) {
-        int memberCount = team.members().size();
-        if (memberCount == 0) return new MemberLine("No players", List.of());
-        List<MemberSpan> spans = new ArrayList<>();
-        StringBuilder builder = new StringBuilder();
-        int width = 0;
-        int shown = 0;
-        for (TeamDraft.Member member : team.members()) {
-            if (shown >= maxNames) break;
-            String prefix = builder.isEmpty() ? "" : ", ";
-            int prefixWidth = textRenderer.getWidth(prefix);
-            int nameWidth = textRenderer.getWidth(member.name());
-            if (width + prefixWidth + nameWidth > maxWidth) break;
-            builder.append(prefix).append(member.name());
-            int startX = width + prefixWidth;
-            spans.add(new MemberSpan(startX, startX + nameWidth, member.uuid().toString(), member.name()));
-            width += prefixWidth + nameWidth;
-            shown++;
-        }
-        int remaining = memberCount - shown;
-        if (shown == 0) return new MemberLine(remaining == 0 ? "No players" : "+" + remaining, List.of());
-        if (remaining > 0) {
-            String suffix = " +" + remaining;
-            if (width + textRenderer.getWidth(suffix) <= maxWidth) builder.append(suffix);
-        }
-        return new MemberLine(builder.toString(), spans);
-    }
-
-    private String fallbackTeamLabel(int index) { return "Team " + (index + 1); }
-    private String nextTeamLabel() { return "Team " + this.nextTeamNumber++; }
-    private boolean isAssigned(String uuid) { return this.teams.stream().anyMatch(t -> t.contains(UUID.fromString(uuid))); }
-    private void togglePlayerSelection(String uuid) {
-        if (!this.selectedPlayerUuids.remove(uuid)) this.selectedPlayerUuids.add(uuid);
-    }
-
-    private MemberHit getTeamMemberHit(double mouseX, double mouseY) {
-        UiLayout.Rect rect = this.teamRect();
-        if (!rect.contains(mouseX, mouseY)) return null;
-        int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int row = (int) ((mouseY - rowStartY) / TEAM_ROW_HEIGHT);
-        int teamIndex = this.teamScrollOffset + row;
-        if (row < 0 || teamIndex < 0 || teamIndex >= this.teams.size()) return null;
-        TextRenderer textRenderer = this.client.textRenderer;
-        int rowY = rowStartY + row * TEAM_ROW_HEIGHT;
-        int textY = rowY + 19;
-        if (mouseY < textY || mouseY > textY + textRenderer.fontHeight) return null;
-        TeamDraft team = this.teams.get(teamIndex);
-        MemberLine line = this.buildMemberLine(team, rect.width() - 24, 6, textRenderer);
-        if (line.spans.isEmpty()) return null;
-        int textX = rect.x() + 16;
-        double relativeX = mouseX - textX;
-        if (relativeX < 0 || relativeX > textRenderer.getWidth(line.text)) return null;
-        for (MemberSpan span : line.spans) {
-            if (relativeX >= span.startX && relativeX <= span.endX) {
-                return new MemberHit(span.uuid, span.name, teamIndex);
-            }
-        }
-        return null;
-    }
-
-    private UiLayout.Rect rosterRect() {
-        int columnWidth = (this.teamsArea.width() - COLUMN_GAP) / 2;
-        return new UiLayout.Rect(this.teamsArea.x(), this.teamsArea.y(), columnWidth, this.teamsArea.height());
-    }
-
-    private UiLayout.Rect teamRect() {
-        int columnWidth = (this.teamsArea.width() - COLUMN_GAP) / 2;
-        return new UiLayout.Rect(this.teamsArea.x() + columnWidth + COLUMN_GAP, this.teamsArea.y(), columnWidth, this.teamsArea.height());
-    }
-
-    private int visibleRows(int height) { return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / ROW_HEIGHT); }
-    private int visibleTeamRows(int height) { return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / TEAM_ROW_HEIGHT); }
-    private int getRosterRowAt(double mouseX, double mouseY) {
-        UiLayout.Rect rect = this.rosterRect();
-        if (!rect.contains(mouseX, mouseY)) return -1;
-        int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int row = (int) ((mouseY - rowStartY) / ROW_HEIGHT);
-        int index = this.rosterScrollOffset + row;
-        return (row >= 0 && index >= 0 && index < this.getAvailablePlayers().size()) ? index : -1;
-    }
-    private int getTeamRowAt(double mouseX, double mouseY) {
-        UiLayout.Rect rect = this.teamRect();
-        if (!rect.contains(mouseX, mouseY)) return -1;
-        int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int row = (int) ((mouseY - rowStartY) / TEAM_ROW_HEIGHT);
-        int index = this.teamScrollOffset + row;
-        return (row >= 0 && index >= 0 && index < this.teams.size()) ? index : -1;
-    }
-
-    private void drawScrollbar(DrawContext context, UiLayout.Rect rect, int totalItems, int visibleItems, int scrollOffset) {
-        if (totalItems <= visibleItems) return;
-        int scrollbarX = rect.x() + rect.width() - 4;
-        int scrollbarY = rect.y() + COLUMN_HEADER_HEIGHT + 2;
-        int scrollbarHeight = rect.height() - COLUMN_HEADER_HEIGHT - 4;
-        int thumbHeight = Math.max(20, (int) ((float) visibleItems / totalItems * scrollbarHeight));
-        int thumbY = scrollbarY + (int) ((float) scrollOffset / (totalItems - visibleItems) * (scrollbarHeight - thumbHeight));
-        context.fill(scrollbarX, scrollbarY, scrollbarX + 2, scrollbarY + scrollbarHeight, 0x44FFFFFF);
-        context.fill(scrollbarX, thumbY, scrollbarX + 2, thumbY + thumbHeight, UiTheme.BORDER_SUBTLE);
-    }
-
-    private Set<String> currentRosterUuids() {
-        return SessionSnapshotData.roster().stream().map(SessionSnapshotData.RosterEntry::uuid).collect(Collectors.toSet());
-    }
-
-    private record MemberHit(String uuid, String name, int teamIndex) {}
-    private record MemberLine(String text, List<MemberSpan> spans) {}
-    private record MemberSpan(int startX, int endX, String uuid, String name) {}
-
     private enum Module {
-        TEAMS("teams", "T", "Teams", "Draft and assign teams.", UiTheme.ACCENT),
+        PLAYERS("players", "P", "Players", "Select participating players.", UiTheme.ACCENT),
         MATCH_RULES("rules", "R", "Match Rules", "Configure scoring and win rules.", UiTheme.ACCENT_BLUE),
         OBJECTIVES("objectives", "O", "Objectives", "Pick the objectives.", UiTheme.ACCENT_GREEN),
         SUMMARY("summary", "U", "Summary", "Review and launch the match.", UiTheme.ACCENT_BLUE);

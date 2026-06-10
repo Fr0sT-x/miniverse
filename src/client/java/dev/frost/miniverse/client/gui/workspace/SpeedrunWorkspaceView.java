@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.workspace.components.DynamicTeamSelectionGrid;
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.impl.speedrun.SpeedrunDefinition;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -28,26 +29,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider, GamemodeWorkspaceView.RosterRefreshable {
-    private static final int ROW_HEIGHT = 20;
-    private static final int TEAM_ROW_HEIGHT = 36;
-    private static final int COLUMN_HEADER_HEIGHT = 22;
-    private static final int COLUMN_GAP = 12;
-    private static final int BUTTON_HEIGHT = 22;
-    private static final int[] TEAM_COLORS = {
-        0xFF5B8CFF,
-        0xFF6BCB77,
-        0xFFFF8A5B,
-        0xFFE26EFD,
-        0xFFF7D154,
-        0xFF52D0D1,
-        0xFFB06CFF,
-        0xFFFF6E91
-    };
-
     private final MinecraftClient client = MinecraftClient.getInstance();
-    private final Map<String, UiAnimation.Value> rowHovers = new HashMap<>();
-    private final List<TeamDraft> teams = new ArrayList<>();
-    private final Set<String> selectedPlayerUuids = new LinkedHashSet<>();
+    private final DynamicTeamSelectionGrid teamGrid = new DynamicTeamSelectionGrid();
 
     private Module activeModule = Module.TEAMS;
     private UiLayout.Rect workspace = new UiLayout.Rect(0, 0, 0, 0);
@@ -58,6 +41,7 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
     private UiLayout.Rect actionDelete = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect actionSolo = new UiLayout.Rect(0, 0, 0, 0);
     private UiLayout.Rect startButton = new UiLayout.Rect(0, 0, 0, 0);
+    private static final int BUTTON_HEIGHT = 22;
 
     private TextFieldWidget seedValueField;
     private ButtonWidget seedModeButton;
@@ -65,10 +49,6 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
     private String sessionName = "speedrun-" + System.currentTimeMillis();
     private SeedMode seedMode = SeedMode.RANDOM;
     private long seedValue = System.currentTimeMillis();
-    private int selectedTeamIndex = -1;
-    private int rosterScrollOffset;
-    private int teamScrollOffset;
-    private int nextTeamNumber = 1;
     private String statusMessage = "";
 
     @Override
@@ -92,11 +72,8 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
             });
             this.seedValueField = this.addField(screen, mainPanel.x() + 180, mainPanel.y() + 128, Long.toString(this.seedValue), 170, "Seed value");
         }
-
-        if (this.teams.isEmpty()) {
-            this.addTeam(this.nextTeamLabel());
-            this.selectedTeamIndex = 0;
-        }
+        
+        this.teamGrid.setBounds(this.teamsArea);
     }
 
     @Override
@@ -109,7 +86,7 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
 
         if (this.activeModule == Module.TEAMS) {
             this.renderTeamActions(context, textRenderer, mouseX, mouseY);
-            this.renderTeams(context, textRenderer, this.teamsArea, mouseX, mouseY);
+            this.teamGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.SUMMARY) {
             this.renderSummary(context, textRenderer, mainPanel);
         } else {
@@ -127,6 +104,8 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
         if (this.activeModule == Module.MATCH_RULES) {
             this.drawLabel(context, textRenderer, "Seed Mode", workspace.inset(4).x() + 38, workspace.inset(4).y() + 102);
             this.drawLabel(context, textRenderer, "Fixed Seed", workspace.inset(4).x() + 38, workspace.inset(4).y() + 134);
+        } else if (this.activeModule == Module.TEAMS) {
+            this.teamGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
     }
 
@@ -143,49 +122,60 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
             return false;
         }
         if (this.actionCreate.contains(mouseX, mouseY)) {
-            this.createTeam();
+            this.teamGrid.createTeam();
+            this.statusMessage = "Created " + this.teamGrid.fallbackTeamLabel(this.teamGrid.getTeams().size() - 1) + ".";
             return true;
         }
         if (this.actionAssign.contains(mouseX, mouseY)) {
-            this.assignSelectedPlayersToTeam();
+            if (this.teamGrid.assignSelectedPlayersToTeam()) {
+                TeamDraft team = this.teamGrid.getSelectedTeam();
+                this.statusMessage = "Assigned player(s) to " + (team != null ? team.label().isBlank() ? "selected team" : team.label() : "team") + ".";
+            } else {
+                this.statusMessage = "Select a team and one or more players first.";
+            }
             return true;
         }
         if (this.actionRemove.contains(mouseX, mouseY)) {
-            this.removeSelectedPlayersFromTeams();
+            if (this.teamGrid.removeSelectedPlayersFromTeams()) {
+                this.statusMessage = "Removed player(s) from teams.";
+            } else {
+                this.statusMessage = "Selected players are not assigned.";
+            }
             return true;
         }
         if (this.actionDelete.contains(mouseX, mouseY)) {
-            this.deleteSelectedTeam();
+            if (this.teamGrid.deleteSelectedTeam()) {
+                this.statusMessage = "Deleted team.";
+            } else {
+                this.statusMessage = "Select a team first.";
+            }
             return true;
         }
         if (this.actionSolo.contains(mouseX, mouseY)) {
-            this.soloAll();
+            if (this.teamGrid.soloAll()) {
+                this.statusMessage = "Created one solo team per player.";
+            } else {
+                this.statusMessage = "No players to split into solo teams.";
+            }
             return true;
         }
 
-        int rosterIndex = this.getRosterRowAt(mouseX, mouseY);
-        if (rosterIndex >= 0) {
-            SessionSnapshotData.RosterEntry entry = this.getAvailablePlayers().get(rosterIndex);
-            this.togglePlayerSelection(entry.uuid());
-            return true;
-        }
+        return this.teamGrid.mouseClicked(mouseX, mouseY, button);
+    }
 
-        MemberHit memberHit = this.getTeamMemberHit(mouseX, mouseY);
-        if (memberHit != null) {
-            this.selectedTeamIndex = memberHit.teamIndex;
-            this.togglePlayerSelection(memberHit.uuid);
-            this.statusMessage = this.selectedPlayerUuids.contains(memberHit.uuid)
-                ? "Selected " + memberHit.name + "."
-                : "Deselected " + memberHit.name + ".";
-            return true;
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.activeModule == Module.TEAMS) {
+            return this.teamGrid.mouseReleased(mouseX, mouseY, button);
         }
+        return false;
+    }
 
-        int teamIndex = this.getTeamRowAt(mouseX, mouseY);
-        if (teamIndex >= 0) {
-            this.selectedTeamIndex = teamIndex;
-            return true;
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (this.activeModule == Module.TEAMS) {
+            return this.teamGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
         }
-
         return false;
     }
 
@@ -194,23 +184,7 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
         if (this.activeModule != Module.TEAMS) {
             return false;
         }
-        int delta = (int) Math.signum(verticalAmount);
-        if (delta == 0) {
-            return false;
-        }
-        UiLayout.Rect rosterRect = this.rosterRect();
-        UiLayout.Rect teamRect = this.teamRect();
-        if (rosterRect.contains(mouseX, mouseY)) {
-            int max = Math.max(0, this.getAvailablePlayers().size() - this.visibleRows(rosterRect.height()));
-            this.rosterScrollOffset = Math.clamp(this.rosterScrollOffset - delta, 0, max);
-            return max > 0;
-        }
-        if (teamRect.contains(mouseX, mouseY)) {
-            int max = Math.max(0, this.teams.size() - this.visibleTeamRows(teamRect.height()));
-            this.teamScrollOffset = Math.clamp(this.teamScrollOffset - delta, 0, max);
-            return max > 0;
-        }
-        return false;
+        return this.teamGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
     }
 
     @Override
@@ -251,17 +225,7 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
 
     @Override
     public void refreshRoster() {
-        this.selectedPlayerUuids.retainAll(this.currentRosterUuids());
-        for (TeamDraft team : this.teams) {
-            team.members().forEach(member -> {
-                if (!this.currentRosterUuids().contains(member.uuid().toString())) {
-                    team.remove(member.uuid());
-                }
-            });
-        }
-        if (this.selectedTeamIndex >= this.teams.size()) {
-            this.selectedTeamIndex = this.teams.isEmpty() ? -1 : this.teams.size() - 1;
-        }
+        this.teamGrid.refreshRoster();
     }
 
     private void renderSettingsModule(DrawContext context, TextRenderer textRenderer, UiLayout.Rect mainPanel) {
@@ -284,7 +248,7 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
         int line = y + 18;
         context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
         line += 20;
-        context.drawText(textRenderer, Text.literal("Teams: " + this.teams.size()), x + 14, line, UiTheme.TEXT, false);
+        context.drawText(textRenderer, Text.literal("Teams: " + this.teamGrid.getTeams().size()), x + 14, line, UiTheme.TEXT, false);
         line += 18;
         context.drawText(textRenderer, Text.literal("Seed: " + this.seedMode.label), x + 14, line, UiTheme.TEXT, false);
         String validation = this.getStartValidationMessage();
@@ -301,167 +265,7 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
         this.renderActionButton(context, textRenderer, this.actionSolo, "Solo All", UiTheme.ACCENT_GREEN, this.actionSolo.contains(mouseX, mouseY));
     }
 
-    private void renderTeams(DrawContext context, TextRenderer textRenderer, UiLayout.Rect area, int mouseX, int mouseY) {
-        UiLayout.Rect rosterRect = this.rosterRect();
-        UiLayout.Rect teamRect = this.teamRect();
-        this.renderRosterPanel(context, textRenderer, rosterRect, mouseX, mouseY);
-        this.renderTeamPanel(context, textRenderer, teamRect, mouseX, mouseY);
-    }
 
-    private void renderRosterPanel(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, int mouseX, int mouseY) {
-        List<SessionSnapshotData.RosterEntry> roster = this.getAvailablePlayers();
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.drawText(textRenderer, Text.literal("Available Players (" + roster.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = this.visibleRows(rect.height());
-        int rows = Math.min(visibleRows, roster.size() - this.rosterScrollOffset);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            SessionSnapshotData.RosterEntry entry = roster.get(this.rosterScrollOffset + row);
-            int rowY = listTop + row * ROW_HEIGHT;
-            boolean selected = this.selectedPlayerUuids.contains(entry.uuid());
-            boolean hovered = mouseX >= rect.x() + 1 && mouseX <= rect.x() + rect.width() - 1 && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT - 2;
-            UiAnimation.Value hover = this.rowHovers.computeIfAbsent("roster:" + entry.uuid(), ignored -> new UiAnimation.Value(0.0F));
-            hover.animateTo(hovered ? 1.0F : 0.0F, UiTheme.HOVER_MS);
-            int background = selected ? UiAnimation.lerpColor(0xAA2F5D94, 0xCC3E79B8, hover.get()) : UiAnimation.lerpColor(0x26222A34, 0x66304052, hover.get());
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + ROW_HEIGHT - 2, background);
-            context.drawText(textRenderer, Text.literal(entry.name()), rect.x() + 12, rowY + 6, UiTheme.TEXT, false);
-        }
-        this.drawScrollbar(context, rect, roster.size(), visibleRows, this.rosterScrollOffset);
-    }
-
-    private void renderTeamPanel(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, int mouseX, int mouseY) {
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.drawText(textRenderer, Text.literal("Teams (" + this.teams.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = this.visibleTeamRows(rect.height());
-        int rows = Math.min(visibleRows, this.teams.size() - this.teamScrollOffset);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            int teamIndex = this.teamScrollOffset + row;
-            TeamDraft team = this.teams.get(teamIndex);
-            int rowY = listTop + row * TEAM_ROW_HEIGHT;
-            boolean selected = teamIndex == this.selectedTeamIndex;
-            int accent = TEAM_COLORS[teamIndex % TEAM_COLORS.length];
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + TEAM_ROW_HEIGHT - 2, selected ? 0xAA405D8A : 0x33222222);
-            context.fill(rect.x() + 6, rowY + 4, rect.x() + 10, rowY + TEAM_ROW_HEIGHT - 5, accent);
-            String label = team.label().isBlank() ? this.fallbackTeamLabel(teamIndex) : team.label();
-            int textX = rect.x() + 16;
-            String labelTrim = textRenderer.trimToWidth(label, rect.width() - 28);
-            context.drawText(textRenderer, Text.literal(labelTrim), textX, rowY + 5, UiTheme.TEXT, false);
-            MemberLine members = this.buildMemberLine(team, rect.width() - 24, 6, textRenderer);
-            if (!members.text.isBlank()) {
-                context.drawText(textRenderer, Text.literal(members.text), textX, rowY + 19, UiTheme.TEXT_MUTED, false);
-            }
-        }
-        this.drawScrollbar(context, rect, this.teams.size(), visibleRows, this.teamScrollOffset);
-    }
-
-    private void renderActionButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered) {
-        int fill = UiAnimation.lerpColor(UiTheme.PANEL_RAISED, UiAnimation.alpha(accent, 0.34F), hovered ? 1.0F : 0.0F);
-        int border = UiAnimation.lerpColor(UiTheme.BORDER_SUBTLE, accent, hovered ? 1.0F : 0.0F);
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), fill, border);
-        context.drawCenteredTextWithShadow(textRenderer, Text.literal(label), rect.x() + rect.width() / 2, rect.y() + 7, UiTheme.TEXT);
-    }
-
-    private void drawLabel(DrawContext context, TextRenderer textRenderer, String label, int x, int y) {
-        context.drawText(textRenderer, Text.literal(label), x, y, UiTheme.TEXT_MUTED, false);
-    }
-
-    private ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, Runnable action) {
-        return screen.addWorkspaceChild(ButtonWidget.builder(Text.literal(label), ignored -> action.run())
-            .dimensions(x, y, width, BUTTON_HEIGHT)
-            .build());
-    }
-
-    private TextFieldWidget addField(SessionScreen screen, int x, int y, String value, int width, String narration) {
-        TextFieldWidget field = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, x, y, width, BUTTON_HEIGHT, Text.literal(narration));
-        field.setMaxLength(64);
-        field.setText(value);
-        return screen.addWorkspaceChild(field);
-    }
-
-    private void createTeam() {
-        TeamDraft team = this.addTeam(this.nextTeamLabel());
-        this.selectedTeamIndex = this.teams.indexOf(team);
-        this.statusMessage = "Created " + this.displayTeamName(team) + ".";
-    }
-
-    private TeamDraft addTeam(String label) {
-        TeamDraft team = new TeamDraft(label);
-        this.teams.add(team);
-        return team;
-    }
-
-    private void assignSelectedPlayersToTeam() {
-        TeamDraft team = this.getSelectedTeam();
-        if (team == null) {
-            this.statusMessage = "Select a team first.";
-            return;
-        }
-        List<SessionSnapshotData.RosterEntry> selectedPlayers = this.getSelectedPlayers();
-        if (selectedPlayers.isEmpty()) {
-            this.statusMessage = "Select one or more players first.";
-            return;
-        }
-        for (SessionSnapshotData.RosterEntry player : selectedPlayers) {
-            this.removePlayerFromAllTeams(player.uuid());
-            team.add(new TeamDraft.Member(UUID.fromString(player.uuid()), player.name()));
-        }
-        this.selectedPlayerUuids.clear();
-        this.statusMessage = "Assigned " + selectedPlayers.size() + " player(s) to " + this.displayTeamName(team) + ".";
-    }
-
-    private void removeSelectedPlayersFromTeams() {
-        List<SessionSnapshotData.RosterEntry> selectedPlayers = this.getSelectedPlayers();
-        if (selectedPlayers.isEmpty()) {
-            this.statusMessage = "Select one or more players first.";
-            return;
-        }
-        int removed = 0;
-        for (SessionSnapshotData.RosterEntry player : selectedPlayers) {
-            removed += this.removePlayerFromAllTeams(player.uuid()) ? 1 : 0;
-        }
-        this.selectedPlayerUuids.clear();
-        this.statusMessage = removed == 0 ? "Selected players are not assigned." : "Removed " + removed + " player(s) from teams.";
-    }
-
-    private void deleteSelectedTeam() {
-        TeamDraft team = this.getSelectedTeam();
-        if (team == null) {
-            this.statusMessage = "Select a team first.";
-            return;
-        }
-        String label = this.displayTeamName(team);
-        this.teams.remove(this.selectedTeamIndex);
-        if (this.teams.isEmpty()) {
-            this.selectedTeamIndex = -1;
-        } else if (this.selectedTeamIndex >= this.teams.size()) {
-            this.selectedTeamIndex = this.teams.size() - 1;
-        }
-        this.statusMessage = "Deleted " + label + ".";
-    }
-
-    private void soloAll() {
-        List<SessionSnapshotData.RosterEntry> roster = SessionSnapshotData.roster();
-        if (roster.isEmpty()) {
-            this.statusMessage = "No players to split into solo teams.";
-            return;
-        }
-        this.teams.clear();
-        this.nextTeamNumber = 1;
-        for (SessionSnapshotData.RosterEntry entry : roster) {
-            TeamDraft team = new TeamDraft(this.nextTeamLabel());
-            team.add(new TeamDraft.Member(UUID.fromString(entry.uuid()), entry.name()));
-            this.teams.add(team);
-        }
-        this.selectedPlayerUuids.clear();
-        this.selectedTeamIndex = this.teams.isEmpty() ? -1 : 0;
-        this.teamScrollOffset = 0;
-        this.statusMessage = "Created one solo team per player.";
-    }
 
     private void createSession() {
         this.syncStateFromWidgets();
@@ -478,12 +282,12 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
 
         NbtList groups = new NbtList();
         int exportedTeams = 0;
-        for (int i = 0; i < this.teams.size(); i++) {
-            TeamDraft team = this.teams.get(i);
+        for (int i = 0; i < this.teamGrid.getTeams().size(); i++) {
+            TeamDraft team = this.teamGrid.getTeams().get(i);
             if (team.isEmpty()) {
                 continue;
             }
-            groups.add(team.toPlanCompound(this.fallbackTeamLabel(i)));
+            groups.add(team.toPlanCompound(this.teamGrid.fallbackTeamLabel(i)));
             exportedTeams++;
         }
         if (exportedTeams == 0) {
@@ -527,252 +331,30 @@ public final class SpeedrunWorkspaceView implements WorkspaceView, GamemodeWorks
         return "";
     }
 
-    private List<SessionSnapshotData.RosterEntry> getAvailablePlayers() {
-        List<SessionSnapshotData.RosterEntry> available = new ArrayList<>();
-        for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-            if (!this.isAssigned(entry.uuid())) {
-                available.add(entry);
-            }
-        }
-        return available;
+
+
+    private void drawLabel(DrawContext context, TextRenderer textRenderer, String label, int x, int y) {
+        context.drawText(textRenderer, Text.literal(label), x, y, UiTheme.TEXT_MUTED, false);
     }
 
-    private List<SessionSnapshotData.RosterEntry> getSelectedPlayers() {
-        List<SessionSnapshotData.RosterEntry> selected = new ArrayList<>();
-        for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-            if (this.selectedPlayerUuids.contains(entry.uuid())) {
-                selected.add(entry);
-            }
-        }
-        return selected;
+    private void renderActionButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered) {
+        int fill = UiAnimation.lerpColor(UiTheme.PANEL_RAISED, UiAnimation.alpha(accent, 0.34F), hovered ? 1.0F : 0.0F);
+        int border = UiAnimation.lerpColor(UiTheme.BORDER_SUBTLE, accent, hovered ? 1.0F : 0.0F);
+        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), fill, border);
+        context.drawCenteredTextWithShadow(textRenderer, Text.literal(label), rect.x() + rect.width() / 2, rect.y() + 7, UiTheme.TEXT);
     }
 
-    private boolean removePlayerFromAllTeams(String uuid) {
-        boolean removed = false;
-        UUID playerUuid = UUID.fromString(uuid);
-        for (TeamDraft team : this.teams) {
-            removed |= team.remove(playerUuid);
-        }
-        return removed;
+    private ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, Runnable action) {
+        return screen.addWorkspaceChild(ButtonWidget.builder(Text.literal(label), ignored -> action.run())
+            .dimensions(x, y, width, BUTTON_HEIGHT)
+            .build());
     }
 
-    private TeamDraft getSelectedTeam() {
-        if (this.selectedTeamIndex < 0 || this.selectedTeamIndex >= this.teams.size()) {
-            return null;
-        }
-        return this.teams.get(this.selectedTeamIndex);
-    }
-
-    private String displayTeamName(TeamDraft team) {
-        String label = team.label();
-        if (!label.isBlank()) {
-            return label;
-        }
-        int index = this.teams.indexOf(team);
-        return this.fallbackTeamLabel(index >= 0 ? index : 0);
-    }
-
-    private MemberLine buildMemberLine(TeamDraft team, int maxWidth, int maxNames, TextRenderer textRenderer) {
-        int memberCount = team.members().size();
-        if (memberCount == 0) {
-            return new MemberLine("No players", List.of());
-        }
-        List<MemberSpan> spans = new ArrayList<>();
-        StringBuilder builder = new StringBuilder();
-        int width = 0;
-        int shown = 0;
-        for (TeamDraft.Member member : team.members()) {
-            if (shown >= maxNames) {
-                break;
-            }
-            String prefix = builder.isEmpty() ? "" : ", ";
-            int prefixWidth = textRenderer.getWidth(prefix);
-            int nameWidth = textRenderer.getWidth(member.name());
-            if (width + prefixWidth + nameWidth > maxWidth) {
-                break;
-            }
-            builder.append(prefix).append(member.name());
-            int startX = width + prefixWidth;
-            spans.add(new MemberSpan(startX, startX + nameWidth, member.uuid().toString(), member.name()));
-            width += prefixWidth + nameWidth;
-            shown++;
-        }
-        int remaining = memberCount - shown;
-        if (shown == 0) {
-            String summary = remaining == 0 ? "No players" : "+" + remaining;
-            return new MemberLine(summary, List.of());
-        }
-        if (remaining > 0) {
-            String suffix = " +" + remaining;
-            if (width + textRenderer.getWidth(suffix) <= maxWidth) {
-                builder.append(suffix);
-            }
-        }
-        return new MemberLine(builder.toString(), spans);
-    }
-
-    private String fallbackTeamLabel(int index) {
-        return "Team " + (index + 1);
-    }
-
-    private String nextTeamLabel() {
-        return "Team " + this.nextTeamNumber++;
-    }
-
-    private boolean isAssigned(String uuid) {
-        for (TeamDraft team : this.teams) {
-            if (team.contains(UUID.fromString(uuid))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void togglePlayerSelection(String uuid) {
-        if (this.selectedPlayerUuids.contains(uuid)) {
-            this.selectedPlayerUuids.remove(uuid);
-        } else {
-            this.selectedPlayerUuids.add(uuid);
-        }
-    }
-
-    private MemberHit getTeamMemberHit(double mouseX, double mouseY) {
-        UiLayout.Rect rect = this.teamRect();
-        if (!rect.contains(mouseX, mouseY)) {
-            return null;
-        }
-        int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int row = (int) ((mouseY - rowStartY) / TEAM_ROW_HEIGHT);
-        int teamIndex = this.teamScrollOffset + row;
-        if (row < 0 || teamIndex < 0 || teamIndex >= this.teams.size()) {
-            return null;
-        }
-        TextRenderer textRenderer = this.client.textRenderer;
-        int rowY = rowStartY + row * TEAM_ROW_HEIGHT;
-        int textY = rowY + 19;
-        if (mouseY < textY || mouseY > textY + textRenderer.fontHeight) {
-            return null;
-        }
-        TeamDraft team = this.teams.get(teamIndex);
-        MemberLine line = this.buildMemberLine(team, rect.width() - 24, 6, textRenderer);
-        if (line.spans.isEmpty()) {
-            return null;
-        }
-        int textX = rect.x() + 16;
-        double relativeX = mouseX - textX;
-        if (relativeX < 0 || relativeX > textRenderer.getWidth(line.text)) {
-            return null;
-        }
-        for (MemberSpan span : line.spans) {
-            if (relativeX >= span.startX && relativeX <= span.endX) {
-                return new MemberHit(span.uuid, span.name, teamIndex);
-            }
-        }
-        return null;
-    }
-
-    private UiLayout.Rect rosterRect() {
-        int columnWidth = (this.teamsArea.width() - COLUMN_GAP) / 2;
-        return new UiLayout.Rect(this.teamsArea.x(), this.teamsArea.y(), columnWidth, this.teamsArea.height());
-    }
-
-    private UiLayout.Rect teamRect() {
-        int columnWidth = (this.teamsArea.width() - COLUMN_GAP) / 2;
-        return new UiLayout.Rect(this.teamsArea.x() + columnWidth + COLUMN_GAP, this.teamsArea.y(), columnWidth, this.teamsArea.height());
-    }
-
-    private int visibleRows(int height) {
-        return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / ROW_HEIGHT);
-    }
-
-    private int visibleTeamRows(int height) {
-        return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / TEAM_ROW_HEIGHT);
-    }
-
-    private int getRosterRowAt(double mouseX, double mouseY) {
-        UiLayout.Rect rect = this.rosterRect();
-        if (!rect.contains(mouseX, mouseY)) {
-            return -1;
-        }
-        int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int row = (int) ((mouseY - rowStartY) / ROW_HEIGHT);
-        int index = this.rosterScrollOffset + row;
-        if (row < 0 || index < 0 || index >= this.getAvailablePlayers().size()) {
-            return -1;
-        }
-        return index;
-    }
-
-    private int getTeamRowAt(double mouseX, double mouseY) {
-        UiLayout.Rect rect = this.teamRect();
-        if (!rect.contains(mouseX, mouseY)) {
-            return -1;
-        }
-        int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int row = (int) ((mouseY - rowStartY) / TEAM_ROW_HEIGHT);
-        int index = this.teamScrollOffset + row;
-        if (row < 0 || index < 0 || index >= this.teams.size()) {
-            return -1;
-        }
-        return index;
-    }
-
-    private void drawScrollbar(DrawContext context, UiLayout.Rect rect, int totalRows, int visibleRows, int scrollOffset) {
-        if (totalRows <= visibleRows || visibleRows <= 0) {
-            return;
-        }
-        int trackX = rect.x() + rect.width() - 7;
-        int trackY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int trackHeight = rect.height() - COLUMN_HEADER_HEIGHT - 8;
-        int thumbHeight = Math.max(14, (int) ((trackHeight * (double) visibleRows) / totalRows));
-        int maxScroll = Math.max(1, totalRows - visibleRows);
-        int thumbY = trackY + (int) (((trackHeight - thumbHeight) * (double) scrollOffset) / maxScroll);
-        context.fill(trackX, trackY, trackX + 3, trackY + trackHeight, 0x66101822);
-        context.fill(trackX, thumbY, trackX + 3, thumbY + thumbHeight, UiTheme.BORDER_STRONG);
-    }
-
-    private static final class MemberLine {
-        private final String text;
-        private final List<MemberSpan> spans;
-
-        private MemberLine(String text, List<MemberSpan> spans) {
-            this.text = text;
-            this.spans = spans;
-        }
-    }
-
-    private static final class MemberSpan {
-        private final int startX;
-        private final int endX;
-        private final String uuid;
-        private final String name;
-
-        private MemberSpan(int startX, int endX, String uuid, String name) {
-            this.startX = startX;
-            this.endX = endX;
-            this.uuid = uuid;
-            this.name = name;
-        }
-    }
-
-    private static final class MemberHit {
-        private final String uuid;
-        private final String name;
-        private final int teamIndex;
-
-        private MemberHit(String uuid, String name, int teamIndex) {
-            this.uuid = uuid;
-            this.name = name;
-            this.teamIndex = teamIndex;
-        }
-    }
-
-    private Set<String> currentRosterUuids() {
-        Set<String> rosterUuids = new LinkedHashSet<>();
-        for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-            rosterUuids.add(entry.uuid());
-        }
-        return rosterUuids;
+    private TextFieldWidget addField(SessionScreen screen, int x, int y, String value, int width, String narration) {
+        TextFieldWidget field = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, x, y, width, BUTTON_HEIGHT, Text.literal(narration));
+        field.setMaxLength(64);
+        field.setText(value);
+        return screen.addWorkspaceChild(field);
     }
 
     private enum SeedMode {

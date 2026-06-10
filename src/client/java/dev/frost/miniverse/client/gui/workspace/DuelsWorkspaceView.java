@@ -6,6 +6,7 @@ import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorContext;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorScreen;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorState;
@@ -37,15 +38,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
     private UiLayout.Rect teamsArea = new UiLayout.Rect(0, 0, 0, 0);
     private String activeModuleId = "team_selection";
 
-    // --- State ---
-    // Team Selection
-    private final List<ColumnState> columns = new ArrayList<>();
-    private final Map<String, UiAnimation.Value> rowHovers = new HashMap<>();
-    private SessionSnapshotData.RosterEntry draggedEntry;
-    private ColumnKind draggedFrom = ColumnKind.NONE;
-    private double dragX;
-    private double dragY;
-    private String selectedPlayerUuid = "";
+    private final StaticTeamSelectionGrid teamGrid = new StaticTeamSelectionGrid();
     private ButtonWidget randomizeTeamsBtn;
 
     // Duel Types
@@ -119,9 +112,9 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
     private ButtonWidget kitCancelDeleteBtn;
 
     public DuelsWorkspaceView() {
-        this.columns.add(new ColumnState(ColumnKind.AVAILABLE, "Available", 0x7C8088));
-        this.columns.add(new ColumnState(ColumnKind.TEAM_1, "Team 1", 0xDD3333));
-        this.columns.add(new ColumnState(ColumnKind.TEAM_2, "Team 2", 0x3344DD));
+        this.teamGrid.addColumn("available", "Available", 0x7C8088, true);
+        this.teamGrid.addColumn("team_1", "Team 1", 0xDD3333, false);
+        this.teamGrid.addColumn("team_2", "Team 2", 0x3344DD, false);
         
         this.mapGrid = new dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid("Supported Maps", mapId -> {
             SessionSnapshotData.maps().stream().filter(m -> m.id().equals(mapId)).findFirst().ifPresent(m -> {
@@ -138,6 +131,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
         this.workspace = workspace;
         UiLayout.Rect mainPanel = workspace.inset(4);
         this.teamsArea = new UiLayout.Rect(mainPanel.x() + 12, mainPanel.y() + 84, mainPanel.width() - 24, mainPanel.height() - 106);
+        this.teamGrid.setBounds(this.teamsArea);
         int dialogW = 260;
         int dialogX = mainPanel.x() + (mainPanel.width() - dialogW) / 2;
         int dialogY = mainPanel.y() + 48;
@@ -433,7 +427,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
 
         if (activeModuleId.equals("team_selection")) {
             context.drawText(textRenderer, Text.literal("Team Selection"), mainPanel.x() + 14, yOffset, UiTheme.TEXT, false);
-            this.renderTeams(context, textRenderer, this.teamsArea, mouseX, mouseY);
+            this.teamGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (activeModuleId.equals("duel_types")) {
             context.drawText(textRenderer, Text.literal("Duel Types"), mainPanel.x() + 14, yOffset, UiTheme.TEXT, false);
             
@@ -648,14 +642,24 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
         this.drawScrollbar(context, rect, totalRows, visibleRows, scrollOffset);
     }
 
+    private void drawScrollbar(DrawContext context, UiLayout.Rect rect, int totalRows, int visibleRows, int scrollOffset) {
+        if (totalRows <= visibleRows || visibleRows <= 0) {
+            return;
+        }
+        int trackX = rect.x() + rect.width() - 7;
+        int trackY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
+        int trackHeight = rect.height() - COLUMN_HEADER_HEIGHT - 8;
+        int thumbHeight = Math.max(14, (int) ((trackHeight * (double) visibleRows) / totalRows));
+        int maxScroll = Math.max(1, totalRows - visibleRows);
+        int thumbY = trackY + (int) (((trackHeight - thumbHeight) * (double) scrollOffset) / maxScroll);
+        context.fill(trackX, trackY, trackX + 3, trackY + trackHeight, 0x66101822);
+        context.fill(trackX, thumbY, trackX + 3, thumbY + thumbHeight, UiTheme.BORDER_STRONG);
+    }
+
     @Override
     public void renderForeground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
-        if (this.draggedEntry != null) {
-            int x = (int) this.dragX + 10;
-            int y = (int) this.dragY + 10;
-            int width = Math.max(104, textRenderer.getWidth(this.draggedEntry.name()) + 28);
-            UiRenderer.panel(context, x, y, width, 22, UiTheme.PANEL_RAISED, UiTheme.ACCENT);
-            context.drawText(textRenderer, Text.literal(this.draggedEntry.name()), x + 12, y + 7, UiTheme.TEXT, false);
+        if (activeModuleId.equals("team_selection")) {
+            this.teamGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
 
         if (this.contextMenuOpen) {
@@ -700,7 +704,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
         boolean showStartBtn = !this.createTypeDialogOpen && !this.deleteWarningOpen && !this.createKitDialogOpen && !this.kitDeleteWarningOpen;
         if (showStartBtn && this.startButton != null && this.startButton.contains(mouseX, mouseY) && button == 0) {
             if (this.selectedType != null && this.selectedMap != null && this.selectedKit != null) {
-                if (this.getColumn(ColumnKind.TEAM_1).members.isEmpty() || this.getColumn(ColumnKind.TEAM_2).members.isEmpty()) return true;
+                if (this.teamGrid.getMembers("team_1").isEmpty() || this.teamGrid.getMembers("team_2").isEmpty()) return true;
 
                 net.minecraft.nbt.NbtCompound settings = new net.minecraft.nbt.NbtCompound();
                 settings.putString("mapId", this.selectedMap.id());
@@ -713,8 +717,8 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
                 nbtPlan.putBoolean("launch", true);
                 nbtPlan.put("settings", settings);
                 net.minecraft.nbt.NbtList groups = new net.minecraft.nbt.NbtList();
-                groups.add(this.group("team_1", this.getColumn(ColumnKind.TEAM_1).members));
-                groups.add(this.group("team_2", this.getColumn(ColumnKind.TEAM_2).members));
+                groups.add(this.group("team_1", this.teamGrid.getMembers("team_1")));
+                groups.add(this.group("team_2", this.teamGrid.getMembers("team_2")));
                 nbtPlan.put("groups", groups);
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
                     new dev.frost.miniverse.common.NetworkConstants.CreateSessionPayload(DuelsDefinition.ID, "Duel " + this.selectedType.name(), nbtPlan)
@@ -724,24 +728,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
         }
 
         if (activeModuleId.equals("team_selection")) {
-            if (button != 0) return false;
-            for (int i = 0; i < this.columns.size(); i++) {
-                ColumnState column = this.columns.get(i);
-                UiLayout.Rect rect = this.columnRect(i);
-                if (rect.contains(mouseX, mouseY)) {
-                    int row = column.rowAt(mouseY, rect);
-                    List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
-                    int index = column.scrollOffset + row;
-                    if (row >= 0 && index >= 0 && index < entries.size()) {
-                        this.selectedPlayerUuid = entries.get(index).uuid();
-                        this.draggedEntry = entries.get(index);
-                        this.draggedFrom = column.kind;
-                        this.dragX = mouseX;
-                        this.dragY = mouseY;
-                        return true;
-                    }
-                }
-            }
+            if (this.teamGrid.mouseClicked(mouseX, mouseY, button)) return true;
         }
         
         UiLayout.Rect mainPanel = workspace.inset(4);
@@ -842,26 +829,18 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        if (button == 0 && this.draggedEntry != null) {
-            this.dragX = mouseX;
-            this.dragY = mouseY;
-            return true;
+        if (activeModuleId.equals("team_selection")) {
+            return this.teamGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
         }
         return false;
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button != 0 || this.draggedEntry == null) {
-            return false;
+        if (activeModuleId.equals("team_selection")) {
+            return this.teamGrid.mouseReleased(mouseX, mouseY, button);
         }
-        ColumnKind target = this.dragTarget(mouseX, mouseY);
-        if (target != ColumnKind.NONE) {
-            this.moveEntryTo(this.draggedEntry, target);
-        }
-        this.draggedEntry = null;
-        this.draggedFrom = ColumnKind.NONE;
-        return true;
+        return false;
     }
 
     @Override
@@ -869,15 +848,7 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
         if (this.createTypeDialogOpen || this.deleteWarningOpen || this.contextMenuOpen) return false;
 
         if (activeModuleId.equals("team_selection")) {
-            for (int i = 0; i < this.columns.size(); i++) {
-                ColumnState column = this.columns.get(i);
-                UiLayout.Rect rect = this.columnRect(i);
-                if (rect.contains(mouseX, mouseY)) {
-                    int maxScroll = Math.max(0, this.getEntries(column.kind).size() - column.visibleRows(rect.height()));
-                    column.scrollOffset = Math.clamp(column.scrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
-                    return maxScroll > 0;
-                }
-            }
+            return this.teamGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
         } else if (activeModuleId.equals("duel_types")) {
             int columnWidth = (this.teamsArea.width() - COLUMN_GAP * 2) / 3;
             UiLayout.Rect rect1 = new UiLayout.Rect(this.teamsArea.x(), this.teamsArea.y(), columnWidth, this.teamsArea.height());
@@ -927,130 +898,19 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
 
     @Override
     public void refreshRoster() {
-        this.getColumn(ColumnKind.TEAM_1).members.removeIf(entry -> !this.isOnline(entry.uuid()));
-        this.getColumn(ColumnKind.TEAM_2).members.removeIf(entry -> !this.isOnline(entry.uuid()));
+        this.teamGrid.refreshRoster();
     }
 
     private void autoAssign() {
-        this.getColumn(ColumnKind.TEAM_1).members.clear();
-        this.getColumn(ColumnKind.TEAM_2).members.clear();
-        this.selectedPlayerUuid = "";
-        List<SessionSnapshotData.RosterEntry> available = new ArrayList<>(this.getEntries(ColumnKind.AVAILABLE));
+        this.teamGrid.clear();
+        List<SessionSnapshotData.RosterEntry> available = new ArrayList<>(this.teamGrid.getMembers("available"));
         for (int i = 0; i < available.size(); i++) {
             if (i % 2 == 0) {
-                this.getColumn(ColumnKind.TEAM_1).members.add(available.get(i));
+                this.teamGrid.addMember("team_1", available.get(i));
             } else {
-                this.getColumn(ColumnKind.TEAM_2).members.add(available.get(i));
+                this.teamGrid.addMember("team_2", available.get(i));
             }
         }
-    }
-
-    private void renderTeams(DrawContext context, TextRenderer textRenderer, UiLayout.Rect area, int mouseX, int mouseY) {
-        int columnWidth = (area.width() - COLUMN_GAP * 2) / 3;
-        for (int i = 0; i < this.columns.size(); i++) {
-            ColumnState column = this.columns.get(i);
-            UiLayout.Rect rect = new UiLayout.Rect(area.x() + i * (columnWidth + COLUMN_GAP), area.y(), columnWidth, area.height());
-            this.renderColumn(context, textRenderer, rect, column, mouseX, mouseY, this.draggedEntry != null && rect.contains(mouseX, mouseY));
-        }
-    }
-
-    private void renderColumn(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, ColumnState column, int mouseX, int mouseY, boolean dropTarget) {
-        List<SessionSnapshotData.RosterEntry> entries = this.getEntries(column.kind);
-        int accent = 0xFF000000 | column.accentColor;
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), dropTarget ? UiTheme.CARD_HOVER : UiTheme.CARD, dropTarget ? accent : UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + 3, accent);
-        context.drawText(textRenderer, Text.literal(column.title + " (" + entries.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = column.visibleRows(rect.height());
-        int rows = Math.min(entries.size() - column.scrollOffset, visibleRows);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            SessionSnapshotData.RosterEntry entry = entries.get(column.scrollOffset + row);
-            if (this.draggedEntry != null && this.draggedEntry.uuid().equals(entry.uuid())) {
-                continue;
-            }
-            int rowY = listTop + row * TEAM_ROW_HEIGHT;
-            boolean selected = entry.uuid().equals(this.selectedPlayerUuid);
-            boolean hovered = mouseX >= rect.x() + 1 && mouseX <= rect.x() + rect.width() - 1 && mouseY >= rowY && mouseY <= rowY + TEAM_ROW_HEIGHT - 2;
-            UiAnimation.Value hover = this.rowHovers.computeIfAbsent(column.kind.name() + ":" + entry.uuid(), ignored -> new UiAnimation.Value(0.0F));
-            hover.animateTo(hovered ? 1.0F : 0.0F, UiTheme.HOVER_MS);
-            float progress = hover.get();
-            int background = selected ? UiAnimation.lerpColor(0xAA2F5D94, 0xCC3E79B8, progress) : UiAnimation.lerpColor(0x26222A34, 0x66304052, progress);
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + TEAM_ROW_HEIGHT - 2, background);
-            context.fill(rect.x() + 6, rowY + 4, rect.x() + 10, rowY + TEAM_ROW_HEIGHT - 5, UiAnimation.lerpColor(accent, UiTheme.ACCENT, progress * 0.35F));
-            context.drawText(textRenderer, Text.literal(entry.name()), rect.x() + 16, rowY + 6, selected ? UiTheme.TEXT : UiAnimation.lerpColor(UiTheme.TEXT_MUTED, UiTheme.TEXT, progress), false);
-        }
-        this.drawScrollbar(context, rect, entries.size(), visibleRows, column.scrollOffset);
-    }
-
-    private UiLayout.Rect columnRect(int index) {
-        int columnWidth = (this.teamsArea.width() - COLUMN_GAP * 2) / 3;
-        return new UiLayout.Rect(this.teamsArea.x() + index * (columnWidth + COLUMN_GAP), this.teamsArea.y(), columnWidth, this.teamsArea.height());
-    }
-
-    private void drawScrollbar(DrawContext context, UiLayout.Rect rect, int totalRows, int visibleRows, int scrollOffset) {
-        if (totalRows <= visibleRows || visibleRows <= 0) {
-            return;
-        }
-        int trackX = rect.x() + rect.width() - 7;
-        int trackY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int trackHeight = rect.height() - COLUMN_HEADER_HEIGHT - 8;
-        int thumbHeight = Math.max(14, (int) ((trackHeight * (double) visibleRows) / totalRows));
-        int maxScroll = Math.max(1, totalRows - visibleRows);
-        int thumbY = trackY + (int) (((trackHeight - thumbHeight) * (double) scrollOffset) / maxScroll);
-        context.fill(trackX, trackY, trackX + 3, trackY + trackHeight, 0x66101822);
-        context.fill(trackX, thumbY, trackX + 3, thumbY + thumbHeight, UiTheme.BORDER_STRONG);
-    }
-
-    private void moveEntryTo(SessionSnapshotData.RosterEntry entry, ColumnKind target) {
-        this.getColumn(ColumnKind.TEAM_1).remove(entry.uuid());
-        this.getColumn(ColumnKind.TEAM_2).remove(entry.uuid());
-        if (target != ColumnKind.AVAILABLE) {
-            this.getColumn(target).members.add(entry);
-        }
-        this.selectedPlayerUuid = entry.uuid();
-    }
-
-    private List<SessionSnapshotData.RosterEntry> getEntries(ColumnKind kind) {
-        if (kind == ColumnKind.AVAILABLE) {
-            List<SessionSnapshotData.RosterEntry> available = new ArrayList<>();
-            for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-                if (!this.isAssigned(entry.uuid())) {
-                    available.add(entry);
-                }
-            }
-            return available;
-        }
-        return this.getColumn(kind).members;
-    }
-
-    private boolean isAssigned(String uuid) {
-        return this.getColumn(ColumnKind.TEAM_1).members.stream().anyMatch(entry -> entry.uuid().equals(uuid))
-            || this.getColumn(ColumnKind.TEAM_2).members.stream().anyMatch(entry -> entry.uuid().equals(uuid));
-    }
-
-    private boolean isOnline(String uuid) {
-        return SessionSnapshotData.roster().stream().anyMatch(entry -> entry.uuid().equals(uuid));
-    }
-
-    private ColumnKind dragTarget(double mouseX, double mouseY) {
-        for (int i = 0; i < this.columns.size(); i++) {
-            UiLayout.Rect rect = this.columnRect(i);
-            if (rect.contains(mouseX, mouseY)) {
-                return this.columns.get(i).kind;
-            }
-        }
-        return this.draggedFrom;
-    }
-
-    private ColumnState getColumn(ColumnKind kind) {
-        for (ColumnState column : this.columns) {
-            if (column.kind == kind) {
-                return column;
-            }
-        }
-        throw new IllegalStateException("Missing column: " + kind);
     }
 
     private boolean sameType(dev.frost.miniverse.minigame.impl.duels.DuelType left, dev.frost.miniverse.minigame.impl.duels.DuelType right) {
@@ -1100,44 +960,5 @@ public final class DuelsWorkspaceView implements WorkspaceView, GamemodeWorkspac
         }
     }
 
-    private enum ColumnKind {
-        NONE,
-        AVAILABLE,
-        TEAM_1,
-        TEAM_2;
-    }
 
-    private static final class ColumnState {
-        private final ColumnKind kind;
-        private final String title;
-        private final int accentColor;
-        private final List<SessionSnapshotData.RosterEntry> members = new ArrayList<>();
-        private int scrollOffset;
-
-        private ColumnState(ColumnKind kind, String title, int accentColor) {
-            this.kind = kind;
-            this.title = title;
-            this.accentColor = accentColor;
-        }
-
-        private int visibleRows(int height) {
-            return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / TEAM_ROW_HEIGHT);
-        }
-
-        private int rowAt(double mouseY, UiLayout.Rect rect) {
-            int rowStartY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-            if (mouseY < rowStartY || mouseY > rect.y() + rect.height()) {
-                return -1;
-            }
-            return (int) ((mouseY - rowStartY) / TEAM_ROW_HEIGHT);
-        }
-
-        private void remove(String uuid) {
-            this.members.removeIf(entry -> entry.uuid().equals(uuid));
-        }
-
-        private boolean contains(String uuid) {
-            return this.members.stream().anyMatch(entry -> entry.uuid().equals(uuid));
-        }
-    }
 }

@@ -17,6 +17,7 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
 
+import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -31,7 +32,7 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final Map<String, UiAnimation.Value> rowHovers = new HashMap<>();
-    private final Set<String> selectedPlayerUuids = new LinkedHashSet<>();
+    private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
     private Module activeModule = Module.PLAYERS;
     private UiLayout.Rect workspace = new UiLayout.Rect(0, 0, 0, 0);
@@ -58,15 +59,19 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
     private boolean trackerEnabled = true;
     private boolean netherTrackingEnabled = true;
     private String trackerItemId = "minecraft:compass";
-    private int rosterScrollOffset;
-    private int teamScrollOffset;
     private String statusMessage = "";
+
+    public BountyHuntWorkspaceView() {
+        this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
+        this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
+    }
 
     @Override
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
         this.workspace = workspace;
         UiLayout.Rect mainPanel = workspace.inset(4);
         this.rosterArea = new UiLayout.Rect(mainPanel.x() + 12, mainPanel.y() + 88, mainPanel.width() - 24, mainPanel.height() - 116);
+        this.playerGrid.setBounds(this.rosterArea);
         this.selectAllButton = new UiLayout.Rect(mainPanel.x() + 14, mainPanel.y() + 50, 90, BUTTON_HEIGHT);
         this.clearButton = new UiLayout.Rect(mainPanel.x() + 112, mainPanel.y() + 50, 70, BUTTON_HEIGHT);
         this.startButton = new UiLayout.Rect(mainPanel.x() + mainPanel.width() - 126, mainPanel.y() + 10, 112, BUTTON_HEIGHT);
@@ -100,7 +105,7 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
 
         if (this.activeModule == Module.PLAYERS) {
             this.renderPlayerActions(context, textRenderer, mouseX, mouseY);
-            this.renderRoster(context, textRenderer, this.rosterArea, mouseX, mouseY);
+            this.playerGrid.render(context, textRenderer, mouseX, mouseY, delta);
         } else if (this.activeModule == Module.SUMMARY) {
             this.renderSummary(context, textRenderer, mainPanel);
         } else {
@@ -128,6 +133,8 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
             context.drawText(textRenderer, Text.literal("Nether"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Cooldown"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Tracker Item"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
+        } else if (this.activeModule == Module.PLAYERS) {
+            this.playerGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
     }
 
@@ -151,10 +158,23 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
             this.clearSelection();
             return true;
         }
-        int rosterIndex = this.getRosterRowAt(mouseX, mouseY);
-        if (rosterIndex >= 0) {
-            SessionSnapshotData.RosterEntry entry = SessionSnapshotData.roster().get(rosterIndex);
-            this.togglePlayerSelection(entry.uuid());
+        if (this.playerGrid.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (this.activeModule == Module.PLAYERS && this.playerGrid.mouseReleased(mouseX, mouseY, button)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (this.activeModule == Module.PLAYERS && this.playerGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
             return true;
         }
         return false;
@@ -169,12 +189,7 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
         if (delta == 0) {
             return false;
         }
-        if (this.rosterArea.contains(mouseX, mouseY)) {
-            int max = Math.max(0, SessionSnapshotData.roster().size() - this.visibleRows(this.rosterArea.height()));
-            this.rosterScrollOffset = Math.clamp(this.rosterScrollOffset - delta, 0, max);
-            return max > 0;
-        }
-        return false;
+        return this.playerGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
     }
 
     @Override
@@ -215,16 +230,7 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
 
     @Override
     public void refreshRoster() {
-        Set<String> rosterUuids = new LinkedHashSet<>();
-        for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-            rosterUuids.add(entry.uuid());
-        }
-        this.selectedPlayerUuids.retainAll(rosterUuids);
-        if (this.selectedPlayerUuids.isEmpty() && !rosterUuids.isEmpty()) {
-            this.selectedPlayerUuids.addAll(rosterUuids);
-        }
-        int max = Math.max(0, SessionSnapshotData.roster().size() - this.visibleRows(this.rosterArea.height()));
-        this.rosterScrollOffset = Math.clamp(this.rosterScrollOffset, 0, max);
+        this.playerGrid.refreshRoster();
     }
 
     private void renderSettingsModule(DrawContext context, TextRenderer textRenderer, UiLayout.Rect mainPanel) {
@@ -247,7 +253,7 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
         int line = y + 18;
         context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
         line += 20;
-        context.drawText(textRenderer, Text.literal("Players: " + this.selectedPlayerUuids.size()), x + 14, line, UiTheme.TEXT_MUTED, false);
+        context.drawText(textRenderer, Text.literal("Players: " + this.playerGrid.getMembers("selected").size()), x + 14, line, UiTheme.TEXT_MUTED, false);
         line += 18;
         context.drawText(textRenderer, Text.literal("Score To Win: " + this.scoreToWin), x + 14, line, UiTheme.TEXT_MUTED, false);
         String validation = this.getStartValidationMessage();
@@ -259,29 +265,6 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
     private void renderPlayerActions(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY) {
         this.renderActionButton(context, textRenderer, this.selectAllButton, "Select All", UiTheme.ACCENT_BLUE, this.selectAllButton.contains(mouseX, mouseY));
         this.renderActionButton(context, textRenderer, this.clearButton, "Clear", UiTheme.ACCENT, this.clearButton.contains(mouseX, mouseY));
-    }
-
-    private void renderRoster(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, int mouseX, int mouseY) {
-        List<SessionSnapshotData.RosterEntry> roster = SessionSnapshotData.roster();
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.fill(rect.x() + 1, rect.y() + 1, rect.x() + rect.width() - 1, rect.y() + COLUMN_HEADER_HEIGHT, 0xA0192230);
-        context.drawText(textRenderer, Text.literal("Players (" + roster.size() + ")"), rect.x() + 8, rect.y() + 7, UiTheme.TEXT, false);
-
-        int visibleRows = this.visibleRows(rect.height());
-        int rows = Math.min(visibleRows, roster.size() - this.rosterScrollOffset);
-        int listTop = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        for (int row = 0; row < rows; row++) {
-            SessionSnapshotData.RosterEntry entry = roster.get(this.rosterScrollOffset + row);
-            int rowY = listTop + row * ROW_HEIGHT;
-            boolean selected = this.selectedPlayerUuids.contains(entry.uuid());
-            boolean hovered = mouseX >= rect.x() + 1 && mouseX <= rect.x() + rect.width() - 1 && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT - 2;
-            UiAnimation.Value hover = this.rowHovers.computeIfAbsent("roster:" + entry.uuid(), ignored -> new UiAnimation.Value(0.0F));
-            hover.animateTo(hovered ? 1.0F : 0.0F, UiTheme.HOVER_MS);
-            int background = selected ? UiAnimation.lerpColor(0xAA2F5D94, 0xCC3E79B8, hover.get()) : UiAnimation.lerpColor(0x26222A34, 0x66304052, hover.get());
-            context.fill(rect.x() + 1, rowY, rect.x() + rect.width() - 1, rowY + ROW_HEIGHT - 2, background);
-            context.drawText(textRenderer, Text.literal(entry.name()), rect.x() + 12, rowY + 6, UiTheme.TEXT, false);
-        }
-        this.drawScrollbar(context, rect, roster.size(), visibleRows, this.rosterScrollOffset);
     }
 
     private void renderActionButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered) {
@@ -305,55 +288,16 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
     }
 
     private void selectAll() {
-        this.selectedPlayerUuids.clear();
+        this.playerGrid.clear();
         for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-            this.selectedPlayerUuids.add(entry.uuid());
+            this.playerGrid.addMember("selected", entry);
         }
         this.statusMessage = "Selected all players.";
     }
 
     private void clearSelection() {
-        this.selectedPlayerUuids.clear();
+        this.playerGrid.clear();
         this.statusMessage = "Selection cleared.";
-    }
-
-    private void togglePlayerSelection(String uuid) {
-        if (this.selectedPlayerUuids.contains(uuid)) {
-            this.selectedPlayerUuids.remove(uuid);
-        } else {
-            this.selectedPlayerUuids.add(uuid);
-        }
-    }
-
-    private int getRosterRowAt(double mouseX, double mouseY) {
-        if (!this.rosterArea.contains(mouseX, mouseY)) {
-            return -1;
-        }
-        int rowStartY = this.rosterArea.y() + COLUMN_HEADER_HEIGHT + 4;
-        int row = (int) ((mouseY - rowStartY) / ROW_HEIGHT);
-        int index = this.rosterScrollOffset + row;
-        if (row < 0 || index < 0 || index >= SessionSnapshotData.roster().size()) {
-            return -1;
-        }
-        return index;
-    }
-
-    private int visibleRows(int height) {
-        return Math.max(0, (height - COLUMN_HEADER_HEIGHT - 8) / ROW_HEIGHT);
-    }
-
-    private void drawScrollbar(DrawContext context, UiLayout.Rect rect, int totalRows, int visibleRows, int scrollOffset) {
-        if (totalRows <= visibleRows || visibleRows <= 0) {
-            return;
-        }
-        int trackX = rect.x() + rect.width() - 7;
-        int trackY = rect.y() + COLUMN_HEADER_HEIGHT + 4;
-        int trackHeight = rect.height() - COLUMN_HEADER_HEIGHT - 8;
-        int thumbHeight = Math.max(14, (int) ((trackHeight * (double) visibleRows) / totalRows));
-        int maxScroll = Math.max(1, totalRows - visibleRows);
-        int thumbY = trackY + (int) (((trackHeight - thumbHeight) * (double) scrollOffset) / maxScroll);
-        context.fill(trackX, trackY, trackX + 3, trackY + trackHeight, 0x66101822);
-        context.fill(trackX, thumbY, trackX + 3, thumbY + thumbHeight, UiTheme.BORDER_STRONG);
     }
 
     private void createSession() {
@@ -368,6 +312,22 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
         plan.putString("name", this.sessionName);
         plan.putBoolean("launch", true);
         plan.put("settings", this.buildSettingsCompound());
+
+        net.minecraft.nbt.NbtList groups = new net.minecraft.nbt.NbtList();
+        net.minecraft.nbt.NbtCompound group = new net.minecraft.nbt.NbtCompound();
+        group.putString("id", "players");
+        group.putString("name", "Players");
+        net.minecraft.nbt.NbtList members = new net.minecraft.nbt.NbtList();
+        for (SessionSnapshotData.RosterEntry entry : this.playerGrid.getMembers("selected")) {
+            net.minecraft.nbt.NbtCompound compound = new net.minecraft.nbt.NbtCompound();
+            compound.putString("uuid", entry.uuid());
+            compound.putString("name", entry.name());
+            members.add(compound);
+        }
+        group.put("members", members);
+        groups.add(group);
+        plan.put("groups", groups);
+
         ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(BountyHuntDefinition.ID, this.sessionName, plan));
         this.statusMessage = "Requested Bounty Hunt session creation.";
     }
@@ -422,7 +382,7 @@ public final class BountyHuntWorkspaceView implements WorkspaceView, GamemodeWor
         if (this.sessionName.isBlank()) {
             return "Enter a session name.";
         }
-        if (this.selectedPlayerUuids.size() < 2) {
+        if (this.playerGrid.getMembers("selected").size() < 2) {
             return "Select at least two players.";
         }
         return "";

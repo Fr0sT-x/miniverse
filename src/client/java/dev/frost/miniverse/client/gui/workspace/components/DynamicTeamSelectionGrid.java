@@ -30,11 +30,10 @@ public class DynamicTeamSelectionGrid extends TeamSelectionGrid {
     private int selectedTeamIndex = -1;
     private int rosterScrollOffset;
     private int teamScrollOffset;
-    private int nextTeamNumber = 1;
 
     public DynamicTeamSelectionGrid() {
         if (this.teams.isEmpty()) {
-            this.addTeam(this.nextTeamLabel());
+            this.addTeam("");
             this.selectedTeamIndex = 0;
         }
     }
@@ -47,8 +46,7 @@ public class DynamicTeamSelectionGrid extends TeamSelectionGrid {
         this.teams.clear();
         this.selectedPlayerUuids.clear();
         this.selectedTeamIndex = -1;
-        this.nextTeamNumber = 1;
-        this.addTeam(this.nextTeamLabel());
+        this.addTeam("");
         this.selectedTeamIndex = 0;
     }
 
@@ -59,7 +57,7 @@ public class DynamicTeamSelectionGrid extends TeamSelectionGrid {
     }
 
     public void createTeam() {
-        TeamDraft team = this.addTeam(this.nextTeamLabel());
+        TeamDraft team = this.addTeam("");
         this.selectedTeamIndex = this.teams.indexOf(team);
     }
 
@@ -105,9 +103,8 @@ public class DynamicTeamSelectionGrid extends TeamSelectionGrid {
         if (roster.isEmpty()) return false;
         
         this.teams.clear();
-        this.nextTeamNumber = 1;
         for (SessionSnapshotData.RosterEntry entry : roster) {
-            TeamDraft team = new TeamDraft(this.nextTeamLabel());
+            TeamDraft team = new TeamDraft("");
             team.add(new TeamDraft.Member(UUID.fromString(entry.uuid()), entry.name()));
             this.teams.add(team);
         }
@@ -409,10 +406,6 @@ public class DynamicTeamSelectionGrid extends TeamSelectionGrid {
 
     public String fallbackTeamLabel(int index) {
         return "Team " + (index + 1);
-    }
-
-    private String nextTeamLabel() {
-        return "Team " + this.nextTeamNumber++;
     }
 
     private MemberLine buildMemberLine(TeamDraft team, int maxWidth, int maxNames, TextRenderer textRenderer) {

@@ -1,305 +1,126 @@
 package dev.frost.miniverse.client.gui.workspace;
 
 import dev.frost.miniverse.client.gui.SessionScreen;
-import dev.frost.miniverse.client.gui.SessionSnapshotData;
-import dev.frost.miniverse.client.gui.ui.UiLayout;
-import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
-import dev.frost.miniverse.client.gui.ui.UiAnimation;
-import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
+import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
+import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 
-import java.util.List;
-
-public final class MurderMysteryWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider, GamemodeWorkspaceView.RosterRefreshable {
-    private static final int ROW_HEIGHT = 28;
-    private final MinecraftClient client = MinecraftClient.getInstance();
+public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
-    private Module activeModule = Module.PLAYERS;
-    private UiLayout.Rect mapList = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect playerArea = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect selectAllButton = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect clearButton = new UiLayout.Rect(0, 0, 0, 0);
-    private UiLayout.Rect startButton = new UiLayout.Rect(0, 0, 0, 0);
+
     private TextFieldWidget durationField;
     private TextFieldWidget detectiveCountField;
     private TextFieldWidget coinIntervalField;
     private TextFieldWidget bowPriceField;
-    private String sessionName = "murdermystery-" + System.currentTimeMillis();
-    private String selectedMapId = "";
-    private String status = "";
-    
-    private dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid mapGrid = new dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid("Valid Murder Mystery Maps", mapId -> {
-        this.selectedMapId = mapId;
-        this.status = "Selected map.";
-        this.mapGrid.setSelectedMapId(mapId);
-    });
+
+    private int durationSeconds = 300;
+    private int detectiveCount = 1;
+    private int coinInterval = 5;
+    private int bowPrice = 10;
 
     public MurderMysteryWorkspaceView() {
+        super("murdermystery");
         this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
+        this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
+        this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for Murder Mystery.", UiTheme.ACCENT_BLUE, "Valid Murder Mystery Maps");
+        this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune duration, detective count, and coin economy.", UiTheme.ACCENT_BLUE);
+        this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the map-backed session.", UiTheme.ACCENT);
     }
 
     @Override
-    public void init(SessionScreen screen, UiLayout.Rect workspace) {
-        UiLayout.Rect panel = workspace.inset(4);
-        this.mapList = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, panel.width() - 28, panel.height() - 116);
-        this.playerArea = new UiLayout.Rect(panel.x() + 14, panel.y() + 72, panel.width() - 28, panel.height() - 116);
-        this.mapGrid.setBounds(this.mapList);
-        this.playerGrid.setBounds(this.playerArea);
-        this.mapGrid.setMaps(compatibleMaps());
-        this.mapGrid.setAccentColor(0xFF2A2A4A); // Similar to their selected color 0xAA2A2A4A, let's use 0xFF2A2A4A or 0xFF0055AA for a blue accent
-        this.selectAllButton = new UiLayout.Rect(panel.x() + 14, panel.y() + 50, 90, 22);
-        this.clearButton = new UiLayout.Rect(panel.x() + 112, panel.y() + 50, 70, 22);
-        this.startButton = new UiLayout.Rect(panel.x() + panel.width() - 126, panel.y() + 12, 112, 22);
-        if (this.activeModule == Module.RULES) {
-            this.durationField = field(screen, panel.x() + 180, panel.y() + 88, "300", "Round duration (seconds)");
-            this.detectiveCountField = field(screen, panel.x() + 180, panel.y() + 118, "1", "Detective count");
-            this.coinIntervalField = field(screen, panel.x() + 180, panel.y() + 148, "5", "Coin spawn interval (seconds)");
-            this.bowPriceField = field(screen, panel.x() + 180, panel.y() + 178, "10", "Detective bow price (coins)");
+    protected void initGamemode(SessionScreen screen) {
+        if (this.moduleManager.isActive("rules")) {
+            this.durationField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.durationSeconds), "Round duration (seconds)");
+            this.detectiveCountField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.detectiveCount), "Detective count");
+            this.coinIntervalField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.coinInterval), "Coin spawn interval (seconds)");
+            this.bowPriceField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, Integer.toString(this.bowPrice), "Detective bow price (coins)");
         }
     }
 
     @Override
-    public void renderBackground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
-        UiLayout.Rect panel = workspace.inset(4);
-        UiRenderer.panel(context, panel.x(), panel.y(), panel.width(), panel.height(), UiTheme.PANEL, UiTheme.BORDER_SUBTLE);
-        context.fill(panel.x() + 1, panel.y() + 1, panel.x() + panel.width() - 1, panel.y() + 46, 0x701A1A2E);
-        context.drawText(textRenderer, Text.literal(this.activeModule.label), panel.x() + 14, panel.y() + 14, UiTheme.TEXT, false);
-        context.drawText(textRenderer, Text.literal(this.activeModule.description), panel.x() + 14, panel.y() + 28, UiTheme.TEXT_DIM, false);
-        this.renderButton(context, textRenderer, this.startButton, "Start Match", UiTheme.ACCENT_BLUE, this.startButton.contains(mouseX, mouseY));
-        if (this.activeModule == Module.PLAYERS) {
-            this.renderButton(context, textRenderer, this.selectAllButton, "Select All", UiTheme.ACCENT_BLUE, this.selectAllButton.contains(mouseX, mouseY));
-            this.renderButton(context, textRenderer, this.clearButton, "Clear", UiTheme.ACCENT, this.clearButton.contains(mouseX, mouseY));
-            this.playerGrid.render(context, textRenderer, mouseX, mouseY, delta);
-            this.playerGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
-        } else if (this.activeModule == Module.MAP) {
-            this.mapGrid.render(context, textRenderer, mouseX, mouseY, delta);
-        } else if (this.activeModule == Module.RULES) {
-            this.renderRules(context, textRenderer, panel);
-        } else {
-            this.renderSummary(context, textRenderer, panel);
-        }
-        if (!this.status.isBlank()) {
-            context.drawText(textRenderer, Text.literal(this.status), panel.x() + 14, panel.y() + panel.height() - 18, UiTheme.WARNING, false);
+    protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
+        if (this.moduleManager.isActive("summary")) {
+            this.syncStateFromWidgets();
+            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT);
+            int x = this.layout.mainPanel().x() + 14;
+            int y = this.layout.mainPanel().y() + 72;
+            int line = y + 18;
+            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
+            line += 20;
+            context.drawText(textRenderer, Text.literal("Players: " + this.playerGrid.getMembers("selected").size()), x + 14, line, UiTheme.TEXT_MUTED, false);
+            line += 18;
+            context.drawText(textRenderer, Text.literal("Round Duration: " + this.durationSeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
+            line += 18;
+            context.drawText(textRenderer, Text.literal("Detectives: " + this.detectiveCount), x + 14, line, UiTheme.TEXT_MUTED, false);
+        } else if (this.moduleManager.isActive("rules")) {
+            this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) {
-            return false;
+    protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
+        int labelX = this.layout.mainPanel().x() + 38;
+        int labelY = this.layout.mainPanel().y() + 102;
+        if (this.moduleManager.isActive("rules")) {
+            context.drawText(textRenderer, Text.literal("Match Duration (s)"), labelX, labelY, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Detective Count"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Coin Interval (s)"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Detective Bow Price"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
         }
-        if (this.startButton.contains(mouseX, mouseY)) {
-            this.createSession();
-            return true;
-        }
-        if (this.activeModule == Module.PLAYERS) {
-            if (this.selectAllButton.contains(mouseX, mouseY)) {
-                this.playerGrid.clear();
-                for (SessionSnapshotData.RosterEntry entry : SessionSnapshotData.roster()) {
-                    this.playerGrid.addMember("selected", entry);
-                }
-                this.status = "Selected all players.";
-                return true;
-            }
-            if (this.clearButton.contains(mouseX, mouseY)) {
-                this.playerGrid.clear();
-                this.status = "Selection cleared.";
-                return true;
-            }
-            return this.playerGrid.mouseClicked(mouseX, mouseY, button);
-        }
-        if (this.activeModule == Module.MAP) {
-            return this.mapGrid.mouseClicked(mouseX, mouseY, button);
-        }
-        return false;
-    }
-
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (this.activeModule == Module.PLAYERS) {
-            return this.playerGrid.mouseReleased(mouseX, mouseY, button);
-        }
-        return false;
-    }
-
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        if (this.activeModule == Module.PLAYERS) {
-            return this.playerGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
-        }
-        return false;
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (this.activeModule == Module.PLAYERS) {
-            return this.playerGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
-        }
-        if (this.activeModule == Module.MAP) {
-            return this.mapGrid.mouseScrolled(mouseX, mouseY, verticalAmount);
-        }
-        return false;
-    }
-
-    @Override
-    public String title() {
-        return "Murder Mystery Setup";
-    }
-
-    @Override
-    public String subtitle() {
-        return "Find the murderer before it's too late!";
-    }
-
-    @Override
-    public String gameId() {
-        return MurderMysteryDefinition.ID;
-    }
-
-    @Override
-    public List<WorkspaceModule> modules() {
-        return List.of(
-            new WorkspaceModule(Module.PLAYERS.id, "P", Module.PLAYERS.label, "Setup"),
-            new WorkspaceModule(Module.MAP.id, "M", Module.MAP.label, "Setup"),
-            new WorkspaceModule(Module.RULES.id, "R", Module.RULES.label, "Rules"),
-            new WorkspaceModule(Module.SUMMARY.id, "S", Module.SUMMARY.label, "Summary")
-        );
-    }
-
-    @Override
-    public String activeModuleId() {
-        return this.activeModule.id;
     }
 
     @Override
     public void setActiveModule(String moduleId) {
-        this.activeModule = Module.fromId(moduleId);
+        this.syncStateFromWidgets();
+        super.setActiveModule(moduleId);
+    }
+
+    private void syncStateFromWidgets() {
+        if (this.moduleManager.isActive("rules")) {
+            this.durationSeconds = readClamped(this.durationField, this.durationSeconds, 10, 3600);
+            this.detectiveCount = readClamped(this.detectiveCountField, this.detectiveCount, 1, 100);
+            this.coinInterval = readClamped(this.coinIntervalField, this.coinInterval, 1, 600);
+            this.bowPrice = readClamped(this.bowPriceField, this.bowPrice, 1, 64);
+        }
     }
 
     @Override
-    public void refreshRoster() {
-        this.playerGrid.refreshRoster();
-    }
+    public String title() { return "Murder Mystery Setup"; }
 
-    private void renderRules(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel) {
-        context.drawText(textRenderer, Text.literal("Match Duration (s)"), panel.x() + 38, panel.y() + 94, UiTheme.TEXT_MUTED, false);
-        context.drawText(textRenderer, Text.literal("Detective Count"), panel.x() + 38, panel.y() + 124, UiTheme.TEXT_MUTED, false);
-        context.drawText(textRenderer, Text.literal("Coin Interval (s)"), panel.x() + 38, panel.y() + 154, UiTheme.TEXT_MUTED, false);
-        context.drawText(textRenderer, Text.literal("Detective Bow Price"), panel.x() + 38, panel.y() + 184, UiTheme.TEXT_MUTED, false);
-    }
+    @Override
+    public String subtitle() { return "Find the murderer before it's too late!"; }
 
-    private void renderSummary(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel) {
-        UiRenderer.panel(context, panel.x() + 14, panel.y() + 72, 420, 130, UiTheme.CARD, UiTheme.BORDER_SUBTLE);
-        context.drawText(textRenderer, Text.literal("Map: " + (this.selectedMapId.isBlank() ? "None selected" : this.selectedMapId)), panel.x() + 28, panel.y() + 92, UiTheme.TEXT, false);
-        context.drawText(textRenderer, Text.literal("Players: all online players"), panel.x() + 28, panel.y() + 112, UiTheme.TEXT_MUTED, false);
-        context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), panel.x() + 28, panel.y() + 132, UiTheme.TEXT_MUTED, false);
-    }
+    @Override
+    public String gameId() { return MurderMysteryDefinition.ID; }
 
-    private void createSession() {
-        if (this.client.player == null) {
-            this.status = "Not connected to a server.";
-            return;
+    @Override
+    protected ValidationResult validateGamemodeStart() {
+        this.syncStateFromWidgets();
+        if (this.playerGrid.getMembers("selected").size() < 3) {
+            return ValidationResult.error("Select at least three players.");
         }
-        if (this.selectedMapId.isBlank()) {
-            this.status = "Select a valid Murder Mystery map first.";
-            return;
-        }
-        NbtCompound plan = new NbtCompound();
-        plan.putString("game", MurderMysteryDefinition.ID);
-        plan.putString("name", this.sessionName);
-        plan.putBoolean("launch", true);
-        plan.put("settings", this.settingsNbt());
-        
-        NbtList groups = new NbtList();
-        NbtCompound group = new NbtCompound();
-        group.putString("id", "players");
-        group.putString("name", "Players");
-        NbtList members = new NbtList();
-        for (SessionSnapshotData.RosterEntry entry : this.playerGrid.getMembers("selected")) {
-            NbtCompound compound = new NbtCompound();
-            compound.putString("uuid", entry.uuid());
-            compound.putString("name", entry.name());
-            members.add(compound);
-        }
-        group.put("members", members);
-        groups.add(group);
-        plan.put("groups", groups);
-        
-        ClientPlayNetworking.send(new NetworkConstants.CreateSessionPayload(MurderMysteryDefinition.ID, this.sessionName, plan));
-        this.status = "Requested Murder Mystery session creation.";
+        return ValidationResult.success("");
     }
 
-    private NbtCompound settingsNbt() {
-        NbtCompound settings = new NbtCompound();
-        settings.putString("seedMode", "random");
-        settings.putString("mapId", this.selectedMapId);
-        settings.putInt("roundDurationTicks", parseInt(this.durationField, 300) * 20);
-        settings.putInt("detectiveCount", parseInt(this.detectiveCountField, 1));
-        settings.putInt("coinSpawnIntervalTicks", parseInt(this.coinIntervalField, 5) * 20);
-        settings.putInt("detectiveBowPrice", parseInt(this.bowPriceField, 10));
-        return settings;
+    @Override
+    protected void buildSessionSettings(SessionPayloadBuilder builder) {
+        builder.settings().putString("seedMode", "random");
+        builder.settings().putInt("roundDurationTicks", this.durationSeconds * 20);
+        builder.settings().putInt("detectiveCount", this.detectiveCount);
+        builder.settings().putInt("coinSpawnIntervalTicks", this.coinInterval * 20);
+        builder.settings().putInt("detectiveBowPrice", this.bowPrice);
     }
 
-    private List<SessionSnapshotData.MapSummary> compatibleMaps() {
-        return SessionSnapshotData.maps().stream().filter(map -> map.validFor(MurderMysteryDefinition.ID)).toList();
-    }
-
-    private TextFieldWidget field(SessionScreen screen, int x, int y, String value, String narration) {
-        TextFieldWidget field = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, x, y, 170, 22, Text.literal(narration));
-        field.setText(value);
-        return screen.addWorkspaceChild(field);
-    }
-
-    private void renderButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered) {
-        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), hovered ? 0x88202040 : UiTheme.PANEL_RAISED, accent);
-        context.drawCenteredTextWithShadow(textRenderer, Text.literal(label), rect.x() + rect.width() / 2, rect.y() + 7, UiTheme.TEXT);
-    }
-
-    private static int parseInt(TextFieldWidget widget, int fallback) {
-        if (widget == null) {
-            return fallback;
-        }
-        try {
-            return Integer.parseInt(widget.getText().trim());
-        } catch (NumberFormatException ignored) {
-            return fallback;
-        }
-    }
-
-    private enum Module {
-        PLAYERS("players", "Players", "Select participating players."),
-        MAP("map", "Map Selection", "Choose a validated map configured for Murder Mystery."),
-        RULES("rules", "Match Rules", "Tune duration, detective count, and coin economy."),
-        SUMMARY("summary", "Summary", "Review and launch the map-backed session.");
-
-        private final String id;
-        private final String label;
-        private final String description;
-
-        Module(String id, String label, String description) {
-            this.id = id;
-            this.label = label;
-            this.description = description;
-        }
-
-        private static Module fromId(String id) {
-            for (Module module : values()) {
-                if (module.id.equalsIgnoreCase(id)) {
-                    return module;
-                }
-            }
-            return MAP;
-        }
+    @Override
+    protected void buildSessionGroups(SessionPayloadBuilder builder) {
+        builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
 }

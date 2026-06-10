@@ -22,6 +22,10 @@ public class StaticTeamSelectionGrid extends TeamSelectionGrid {
         this.columns.add(new ColumnState(id, title, accentColor, isAvailablePool));
     }
 
+    public List<String> getColumnIds() {
+        return this.columns.stream().map(c -> c.id).collect(java.util.stream.Collectors.toList());
+    }
+
     public void setOnDropCallback(BiConsumer<String, String> callback) {
         this.onDropCallback = callback;
     }

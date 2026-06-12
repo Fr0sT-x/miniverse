@@ -13,7 +13,6 @@ public record BridgeSettings(
     int heightLimitOffset,
     boolean allowBuilding,
     boolean allowBlockBreaking,
-    boolean keepInventoryOnDeath,
     boolean enableBow,
     boolean enablePickaxe
 ) {
@@ -30,7 +29,6 @@ public record BridgeSettings(
             nbt.contains("heightLimitOffset") ? nbt.getInt("heightLimitOffset") : 0,
             !nbt.contains("allowBuilding") || nbt.getBoolean("allowBuilding"),
             !nbt.contains("allowBlockBreaking") || nbt.getBoolean("allowBlockBreaking"),
-            !nbt.contains("keepInventoryOnDeath") || nbt.getBoolean("keepInventoryOnDeath"),
             !nbt.contains("enableBow") || nbt.getBoolean("enableBow"),
             !nbt.contains("enablePickaxe") || nbt.getBoolean("enablePickaxe")
         );
@@ -45,7 +43,6 @@ public record BridgeSettings(
         properties.setProperty("bridge.heightLimitOffset", String.valueOf(this.heightLimitOffset));
         properties.setProperty("bridge.allowBuilding", String.valueOf(this.allowBuilding));
         properties.setProperty("bridge.allowBlockBreaking", String.valueOf(this.allowBlockBreaking));
-        properties.setProperty("bridge.keepInventoryOnDeath", String.valueOf(this.keepInventoryOnDeath));
         properties.setProperty("bridge.enableBow", String.valueOf(this.enableBow));
         properties.setProperty("bridge.enablePickaxe", String.valueOf(this.enablePickaxe));
     }
@@ -60,7 +57,6 @@ public record BridgeSettings(
             Integer.parseInt(properties.getProperty("bridge.heightLimitOffset", "0")),
             Boolean.parseBoolean(properties.getProperty("bridge.allowBuilding", "true")),
             Boolean.parseBoolean(properties.getProperty("bridge.allowBlockBreaking", "true")),
-            Boolean.parseBoolean(properties.getProperty("bridge.keepInventoryOnDeath", "true")),
             Boolean.parseBoolean(properties.getProperty("bridge.enableBow", "true")),
             Boolean.parseBoolean(properties.getProperty("bridge.enablePickaxe", "true"))
         );

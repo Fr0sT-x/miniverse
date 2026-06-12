@@ -45,6 +45,12 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
     private boolean perPlayerBlocks = lastPerPlayerBlocks;
     private Set<Identifier> blockPool = new java.util.HashSet<>(lastBlockPool);
     private RegistrySelectorState selectorState = new RegistrySelectorState();
+    private int timeLimitSeconds = 3600;
+
+    @Override
+    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true);
+    }
 
     public BlockShuffleWorkspaceView() {
         super("blockshuffle");
@@ -52,6 +58,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure scoring and win rules.", UiTheme.ACCENT_BLUE);
+        this.useGameRules();
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_BLUE);
     }
 
@@ -93,24 +100,19 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
 
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT_BLUE);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal("Points to Win: " + this.pointsToWin), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Round Duration: " + this.roundDurationSeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Per-Player Blocks: " + (this.perPlayerBlocks ? "Yes" : "No")), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Block Pool Size: " + this.blockPool.size() + " blocks"), x + 14, line, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("rules")) {
+        if (this.moduleManager.isActive("rules")) {
             this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
+    }
+
+    @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal("Points to Win: " + this.pointsToWin),
+            Text.literal("Round Duration: " + this.roundDurationSeconds + "s"),
+            Text.literal("Per-Player Blocks: " + (this.perPlayerBlocks ? "Yes" : "No")),
+            Text.literal("Block Pool Size: " + this.blockPool.size() + " blocks")
+        );
     }
 
     @Override
@@ -131,7 +133,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         super.setActiveModule(moduleId);
     }
 
-    private void syncStateFromWidgets() {
+    protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
             this.pointsToWin = readClamped(this.pointsToWinField, this.pointsToWin, 1, 100);
             this.roundDurationSeconds = readClamped(this.roundDurationField, this.roundDurationSeconds, 10, 3600);

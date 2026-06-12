@@ -118,6 +118,11 @@ public class SessionScreen extends Screen {
                     getIntOrDefault(group, "playerCount", 0)
                 ));
             }
+            List<String> playerNames = new ArrayList<>();
+            NbtList playersListNbt = entry.getList("players", NbtElement.STRING_TYPE);
+            for (int p = 0; p < playersListNbt.size(); p++) {
+                playerNames.add(playersListNbt.getString(p));
+            }
             sessions.add(new SessionSnapshotData.SessionSummary(
                 getStringOrDefault(entry, "id", ""),
                 getStringOrDefault(entry, "game", ""),
@@ -130,7 +135,8 @@ public class SessionScreen extends Screen {
                 getLongOrDefault(entry, "playedMillis", 0L),
                 getBooleanOrDefault(entry, "inspectable", false),
                 getBooleanOrDefault(entry, "retained", false),
-                groups
+                groups,
+                playerNames
             ));
         }
 
@@ -277,7 +283,6 @@ public class SessionScreen extends Screen {
                 getStringOrDefault(serverSettings, "advertisedHost", SessionSnapshotData.serverSettings().advertisedHost())
             ),
             new SessionSnapshotData.RetentionSettings(
-                getIntOrDefault(retention, "keepLatestSessions", SessionSnapshotData.retentionSettings().keepLatestSessions()),
                 getIntOrDefault(retention, "maxAgeDays", SessionSnapshotData.retentionSettings().maxAgeDays())
             ),
             sessionServer

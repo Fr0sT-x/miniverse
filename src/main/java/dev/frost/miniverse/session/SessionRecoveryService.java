@@ -88,7 +88,7 @@ public final class SessionRecoveryService {
                         Miniverse.LOGGER.warn("Session recovery: failed to relaunch session {}.", candidate.sessionId(), error);
                         return;
                     }
-                    SessionManager.getInstance().transferAssignedPlayers(server, session);
+                    new dev.frost.miniverse.session.PlayerTransferService().transferAssignedPlayers(server, session);
                     SessionRegistry.markRecoveryComplete(candidate.sessionId());
                     Miniverse.LOGGER.info("Session recovery: relaunched session {}.", candidate.sessionId());
                 }));

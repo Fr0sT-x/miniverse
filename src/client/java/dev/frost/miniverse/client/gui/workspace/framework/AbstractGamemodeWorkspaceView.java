@@ -32,6 +32,26 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private UiLayout.Rect selectAllButtonRect;
     private UiLayout.Rect clearButtonRect;
 
+    private String keepInventoryState = "DEFAULT";
+    private String pvpEnabledState = "DEFAULT";
+    private String doDaylightCycleState = "DEFAULT";
+    private String doWeatherCycleState = "DEFAULT";
+    private String fallDamageState = "DEFAULT";
+    private String naturalRegenerationState = "DEFAULT";
+    private String announceAdvancementsState = "DEFAULT";
+
+    private ButtonWidget keepInventoryBtn;
+    private ButtonWidget pvpEnabledBtn;
+    private ButtonWidget doDaylightCycleBtn;
+    private ButtonWidget doWeatherCycleBtn;
+    private ButtonWidget fallDamageBtn;
+    private ButtonWidget naturalRegenerationBtn;
+    private ButtonWidget announceAdvancementsBtn;
+
+    protected void useGameRules() {
+        this.moduleManager.register("gamerules", "G", "Game Rules", "Rules", "Override default session match rules.", UiTheme.ACCENT_BLUE);
+    }
+
     public AbstractGamemodeWorkspaceView(String defaultSessionNamePrefix) {
         this.sessionName = defaultSessionNamePrefix + "-" + System.currentTimeMillis();
     }
@@ -65,6 +85,68 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.mapGrid.setMaps(dev.frost.miniverse.client.gui.SessionSnapshotData.maps().stream().filter(map -> map.validFor(this.gameId())).toList());
         }
         this.initGamemode(screen);
+        this.initGameRules(screen);
+    }
+
+    private void initGameRules(SessionScreen screen) {
+        if (this.moduleManager.isActive("gamerules")) {
+            int y = this.layout.mainPanel().y() + 96;
+            this.keepInventoryBtn = this.addButton(screen, "Keep Inventory: " + formatRuleState(this.keepInventoryState, defaultMatchRules().keepInventory()), this.layout.mainPanel().x() + 180, y, 170, () -> {
+                this.keepInventoryState = nextTriState(this.keepInventoryState);
+                this.keepInventoryBtn.setMessage(Text.literal("Keep Inventory: " + formatRuleState(this.keepInventoryState, defaultMatchRules().keepInventory())));
+            });
+            y += 30;
+            this.pvpEnabledBtn = this.addButton(screen, "PvP Enabled: " + formatRuleState(this.pvpEnabledState, defaultMatchRules().pvpEnabled()), this.layout.mainPanel().x() + 180, y, 170, () -> {
+                this.pvpEnabledState = nextTriState(this.pvpEnabledState);
+                this.pvpEnabledBtn.setMessage(Text.literal("PvP Enabled: " + formatRuleState(this.pvpEnabledState, defaultMatchRules().pvpEnabled())));
+            });
+            y += 30;
+            this.doDaylightCycleBtn = this.addButton(screen, "Daylight Cycle: " + formatRuleState(this.doDaylightCycleState, defaultMatchRules().doDaylightCycle()), this.layout.mainPanel().x() + 180, y, 170, () -> {
+                this.doDaylightCycleState = nextTriState(this.doDaylightCycleState);
+                this.doDaylightCycleBtn.setMessage(Text.literal("Daylight Cycle: " + formatRuleState(this.doDaylightCycleState, defaultMatchRules().doDaylightCycle())));
+            });
+            y += 30;
+            this.doWeatherCycleBtn = this.addButton(screen, "Weather Cycle: " + formatRuleState(this.doWeatherCycleState, defaultMatchRules().doWeatherCycle()), this.layout.mainPanel().x() + 180, y, 170, () -> {
+                this.doWeatherCycleState = nextTriState(this.doWeatherCycleState);
+                this.doWeatherCycleBtn.setMessage(Text.literal("Weather Cycle: " + formatRuleState(this.doWeatherCycleState, defaultMatchRules().doWeatherCycle())));
+            });
+            y += 30;
+            this.fallDamageBtn = this.addButton(screen, "Fall Damage: " + formatRuleState(this.fallDamageState, defaultMatchRules().fallDamage()), this.layout.mainPanel().x() + 180, y, 170, () -> {
+                this.fallDamageState = nextTriState(this.fallDamageState);
+                this.fallDamageBtn.setMessage(Text.literal("Fall Damage: " + formatRuleState(this.fallDamageState, defaultMatchRules().fallDamage())));
+            });
+            y += 30;
+            this.naturalRegenerationBtn = this.addButton(screen, "Natural Regen: " + formatRuleState(this.naturalRegenerationState, defaultMatchRules().naturalRegeneration()), this.layout.mainPanel().x() + 180, y, 170, () -> {
+                this.naturalRegenerationState = nextTriState(this.naturalRegenerationState);
+                this.naturalRegenerationBtn.setMessage(Text.literal("Natural Regen: " + formatRuleState(this.naturalRegenerationState, defaultMatchRules().naturalRegeneration())));
+            });
+            y += 30;
+            this.announceAdvancementsBtn = this.addButton(screen, "Advancements: " + formatRuleState(this.announceAdvancementsState, defaultMatchRules().announceAdvancements()), this.layout.mainPanel().x() + 180, y, 170, () -> {
+                this.announceAdvancementsState = nextTriState(this.announceAdvancementsState);
+                this.announceAdvancementsBtn.setMessage(Text.literal("Advancements: " + formatRuleState(this.announceAdvancementsState, defaultMatchRules().announceAdvancements())));
+            });
+        }
+    }
+
+    private String nextTriState(String state) {
+        return state.equals("DEFAULT") ? "FORCE ON" : state.equals("FORCE ON") ? "FORCE OFF" : "DEFAULT";
+    }
+
+    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
+        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
+    }
+
+    private String formatRuleState(String state, boolean defaultValue) {
+        if ("DEFAULT".equals(state)) {
+            return "DEFAULT: " + (defaultValue ? "§aON" : "§cOFF");
+        }
+        if ("FORCE ON".equals(state)) {
+            return "FORCE §aON";
+        }
+        if ("FORCE OFF".equals(state)) {
+            return "FORCE §cOFF";
+        }
+        return state;
     }
 
     protected abstract void initGamemode(SessionScreen screen);
@@ -94,6 +176,25 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
         this.renderGamemodeBackground(context, textRenderer, mouseX, mouseY, delta);
 
+        if (this.moduleManager.isActive("gamerules")) {
+            this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
+        }
+
+        if (this.moduleManager.isActive("summary")) {
+            this.syncStateFromWidgets();
+            WorkspaceModuleManager.RegisteredModule activeModule = this.moduleManager.getActiveModule();
+            this.renderSettingsModulePanel(context, textRenderer, activeModule.label(), activeModule.accent());
+            int x = this.layout.mainPanel().x() + 14;
+            int y = this.layout.mainPanel().y() + 92;
+            int line = y + 18;
+            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
+            line += 20;
+            for (Text t : this.getSummaryLines()) {
+                context.drawText(textRenderer, t, x + 14, line, UiTheme.TEXT_MUTED, false);
+                line += 18;
+            }
+        }
+
         if (this.status != null && !this.status.message().isBlank()) {
             context.drawText(textRenderer, Text.literal(this.status.message()), mainPanel.x() + 14, mainPanel.y() + mainPanel.height() - 18, this.status.type().color(), false);
         }
@@ -109,6 +210,25 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         if (this.rosterGrid != null && (this.moduleManager.isActive("players") || this.moduleManager.isActive("teams"))) {
             this.rosterGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
+        
+        if (this.moduleManager.isActive("gamerules")) {
+            int labelX = this.layout.mainPanel().x() + 38;
+            int y = this.layout.mainPanel().y() + 102;
+            context.drawText(textRenderer, Text.literal("Keep Inventory"), labelX, y, UiTheme.TEXT_MUTED, false);
+            y += 30;
+            context.drawText(textRenderer, Text.literal("PvP Enabled"), labelX, y, UiTheme.TEXT_MUTED, false);
+            y += 30;
+            context.drawText(textRenderer, Text.literal("Daylight Cycle"), labelX, y, UiTheme.TEXT_MUTED, false);
+            y += 30;
+            context.drawText(textRenderer, Text.literal("Weather Cycle"), labelX, y, UiTheme.TEXT_MUTED, false);
+            y += 30;
+            context.drawText(textRenderer, Text.literal("Fall Damage"), labelX, y, UiTheme.TEXT_MUTED, false);
+            y += 30;
+            context.drawText(textRenderer, Text.literal("Natural Regen"), labelX, y, UiTheme.TEXT_MUTED, false);
+            y += 30;
+            context.drawText(textRenderer, Text.literal("Advancements"), labelX, y, UiTheme.TEXT_MUTED, false);
+        }
+
         this.renderGamemodeForeground(context, textRenderer, mouseX, mouseY, delta);
     }
     
@@ -146,6 +266,12 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     }
 
     protected boolean gamemodeMouseClicked(double mouseX, double mouseY, int button) { return false; }
+
+    protected void syncStateFromWidgets() {}
+
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.Collections.emptyList();
+    }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
@@ -234,8 +360,8 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     protected void renderSettingsModulePanel(DrawContext context, TextRenderer textRenderer, String title, int accent) {
         int moduleX = this.layout.mainPanel().x() + 14;
         int moduleY = this.layout.mainPanel().y() + 72;
-        int moduleWidth = Math.min(520, this.layout.mainPanel().width() - 28);
-        int moduleHeight = Math.min(250, this.layout.mainPanel().height() - 104);
+        int moduleWidth = this.layout.mainPanel().width() - 28;
+        int moduleHeight = this.layout.mainPanel().height() - 104;
         UiRenderer.panel(context, moduleX, moduleY, moduleWidth, moduleHeight, UiTheme.CARD, UiTheme.BORDER_SUBTLE);
         context.fill(moduleX, moduleY, moduleX + 3, moduleY + moduleHeight, accent);
         context.drawText(textRenderer, Text.literal(title), moduleX + 12, moduleY + 12, accent, false);
@@ -283,10 +409,21 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             builder.settings().putString("mapId", this.selectedMapId);
         }
         this.buildSessionSettings(builder);
+        this.buildGameRulesSettings(builder);
         this.buildSessionGroups(builder);
         builder.dispatch();
         
         this.status = ValidationResult.success("Requested " + this.title() + " session creation.");
+    }
+
+    private void buildGameRulesSettings(SessionPayloadBuilder builder) {
+        if (!"DEFAULT".equals(this.keepInventoryState)) builder.settings().putString("gamerule.keepInventory", "FORCE ON".equals(this.keepInventoryState) ? "true" : "false");
+        if (!"DEFAULT".equals(this.pvpEnabledState)) builder.settings().putString("gamerule.pvpEnabled", "FORCE ON".equals(this.pvpEnabledState) ? "true" : "false");
+        if (!"DEFAULT".equals(this.doDaylightCycleState)) builder.settings().putString("gamerule.doDaylightCycle", "FORCE ON".equals(this.doDaylightCycleState) ? "true" : "false");
+        if (!"DEFAULT".equals(this.doWeatherCycleState)) builder.settings().putString("gamerule.doWeatherCycle", "FORCE ON".equals(this.doWeatherCycleState) ? "true" : "false");
+        if (!"DEFAULT".equals(this.fallDamageState)) builder.settings().putString("gamerule.fallDamage", "FORCE ON".equals(this.fallDamageState) ? "true" : "false");
+        if (!"DEFAULT".equals(this.naturalRegenerationState)) builder.settings().putString("gamerule.naturalRegeneration", "FORCE ON".equals(this.naturalRegenerationState) ? "true" : "false");
+        if (!"DEFAULT".equals(this.announceAdvancementsState)) builder.settings().putString("gamerule.announceAdvancements", "FORCE ON".equals(this.announceAdvancementsState) ? "true" : "false");
     }
 
     protected abstract ValidationResult validateGamemodeStart();

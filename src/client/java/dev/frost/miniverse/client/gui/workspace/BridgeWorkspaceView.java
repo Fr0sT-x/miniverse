@@ -26,7 +26,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     private TextFieldWidget voidDeathOffsetField;
     private ButtonWidget allowBuildingBtn;
     private ButtonWidget allowBlockBreakingBtn;
-    private ButtonWidget keepInventoryBtn;
     private ButtonWidget enableBowBtn;
     private ButtonWidget enablePickaxeBtn;
 
@@ -36,9 +35,13 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     private int voidDeathOffset = 60;
     private boolean allowBuilding = true;
     private boolean allowBlockBreaking = true;
-    private boolean keepInventory = true;
     private boolean enableBow = true;
     private boolean enablePickaxe = true;
+
+    @Override
+    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true, true);
+    }
 
     public BridgeWorkspaceView() {
         super("bridge");
@@ -49,6 +52,7 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players to Team 1 and Team 2.", UiTheme.ACCENT_RED);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for The Bridge.", UiTheme.ACCENT_BLUE, "Valid Bridge Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune score limits, respawn delays, and item permissions.", UiTheme.ACCENT);
+        this.useGameRules();
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
     }
 
@@ -75,11 +79,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
                 this.allowBlockBreakingBtn.setMessage(Text.literal("Allow Block Breaking: " + onOff(this.allowBlockBreaking)));
             });
             y += 30;
-            this.keepInventoryBtn = this.addButton(screen, "Keep Inventory: " + onOff(this.keepInventory), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.keepInventory = !this.keepInventory;
-                this.keepInventoryBtn.setMessage(Text.literal("Keep Inventory: " + onOff(this.keepInventory)));
-            });
-            y += 30;
             this.enableBowBtn = this.addButton(screen, "Enable Bows: " + onOff(this.enableBow), this.layout.mainPanel().x() + 180, y, 170, () -> {
                 this.enableBow = !this.enableBow;
                 this.enableBowBtn.setMessage(Text.literal("Enable Bows: " + onOff(this.enableBow)));
@@ -94,24 +93,20 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            int team1 = this.teamGrid.getMembers("team_1").size();
-            int team2 = this.teamGrid.getMembers("team_2").size();
-            int unassigned = this.teamGrid.getMembers("available").size();
-            String players = team1 + " Team 1, " + team2 + " Team 2" + (unassigned > 0 ? " (" + unassigned + " unassigned, will be auto-filled)" : "");
-            context.drawText(textRenderer, Text.literal("Players: " + players), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Target Score: " + this.targetScore), x + 14, line, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("rules")) {
+        if (this.moduleManager.isActive("rules")) {
             this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
+    }
+
+    @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal("Target Score: " + this.targetScore),
+            Text.literal("Allow Building: " + (this.allowBuilding ? "Yes" : "No")),
+            Text.literal("Allow Block Breaking: " + (this.allowBlockBreaking ? "Yes" : "No")),
+            Text.literal("Enable Bows: " + (this.enableBow ? "Yes" : "No")),
+            Text.literal("Enable Pickaxes: " + (this.enablePickaxe ? "Yes" : "No"))
+        );
     }
 
     @Override
@@ -131,8 +126,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
             y += 30;
             context.drawText(textRenderer, Text.literal("Allow Block Breaking"), labelX, y, UiTheme.TEXT_MUTED, false);
             y += 30;
-            context.drawText(textRenderer, Text.literal("Keep Inventory"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
             context.drawText(textRenderer, Text.literal("Enable Bows"), labelX, y, UiTheme.TEXT_MUTED, false);
             y += 30;
             context.drawText(textRenderer, Text.literal("Enable Pickaxes"), labelX, y, UiTheme.TEXT_MUTED, false);
@@ -145,7 +138,7 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         super.setActiveModule(moduleId);
     }
 
-    private void syncStateFromWidgets() {
+    protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
             this.targetScore = readClamped(this.targetScoreField, this.targetScore, 1, 100);
             this.respawnDelay = readClamped(this.respawnDelayField, this.respawnDelay, 0, 60);
@@ -183,7 +176,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putInt("voidDeathOffset", this.voidDeathOffset);
         builder.settings().putBoolean("allowBuilding", this.allowBuilding);
         builder.settings().putBoolean("allowBlockBreaking", this.allowBlockBreaking);
-        builder.settings().putBoolean("keepInventoryOnDeath", this.keepInventory);
         builder.settings().putBoolean("enableBow", this.enableBow);
         builder.settings().putBoolean("enablePickaxe", this.enablePickaxe);
     }

@@ -92,4 +92,9 @@ public final class ManhuntDefinition implements MinigameDefinition {
     public void registerEvents() {
         ManhuntGameEvents.register();
     }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.LateJoinPolicy lateJoinPolicy() {
+        return new ManhuntLateJoinPolicy();
+    }
 }

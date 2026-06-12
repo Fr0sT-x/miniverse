@@ -36,7 +36,6 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
     private static final int COLUMN_GAP = 12;
 
     private SessionScreen parentScreen;
-
     private final StaticTeamSelectionGrid teamGrid = new StaticTeamSelectionGrid();
 
     // Duel Types
@@ -108,9 +107,13 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
         });
         this.mapGrid.setAccentColor(0xFF00AA66);
         
-        this.useRosterGrid(this.teamGrid, "teams", "T", "Team Selection", "Teams", "Assign players to Team 1 and Team 2.", UiTheme.ACCENT_RED);
-        this.moduleManager.register("duel_types", "D", "Duel Types", "Types", "Configure duel types, maps, and kits.", 0xFF6600CC);
-        this.moduleManager.register("kits", "K", "Kits", "Kits", "Manage kit layouts and inventory.", 0xFFFFAA00);
+        this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players to Team 1 and Team 2.", UiTheme.ACCENT_RED);
+        this.moduleManager.register("duel_types", "D", "Types, Map, Kit selection", "Setup", "Configure duel types, maps, and kits.", 0xFF6600CC);
+        
+        this.moduleManager.register("kits", "K", "Kits", "Kits & Duel Types", "Manage kit layouts and inventory.", 0xFFFFAA00);
+        this.moduleManager.register("duel_types_config", "D", "Duel Types", "Kits & Duel Types", "Create and manage Duel Types.", 0xFF6600CC);
+        
+        this.useGameRules();
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
     }
 
@@ -119,7 +122,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.parentScreen = screen;
         UiLayout.Rect mainPanel = this.layout.mainPanel();
 
-        if (this.moduleManager.isActive("duel_types")) {
+        if (this.moduleManager.isActive("duel_types_config")) {
             if (!this.createTypeDialogOpen && !this.deleteWarningOpen) {
                 this.addButton(screen, "Create Type", mainPanel.x() + 14, mainPanel.y() + 40, 110, () -> {
                     this.isEditingType = false;
@@ -386,6 +389,24 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                 this.renderCustomColumn(context, textRenderer, rect3, "Available Kits", 0xFFFFAA00, 0, 0, mouseX, mouseY, row -> {});
                 context.drawText(textRenderer, Text.literal("Select a type first"), rect3.x() + 12, rect3.y() + COLUMN_HEADER_HEIGHT + 10, UiTheme.TEXT_MUTED, false);
             }
+        } else if (this.moduleManager.isActive("duel_types_config")) {
+            int columnWidth = (teamsArea.width() - COLUMN_GAP * 2) / 3;
+            UiLayout.Rect rect1 = new UiLayout.Rect(teamsArea.x(), teamsArea.y(), columnWidth, teamsArea.height());
+            List<DuelType> types = new ArrayList<>(SessionSnapshotData.duelTypes());
+            this.renderCustomColumn(context, textRenderer, rect1, "Duel Types (" + types.size() + ")", 0xFF6600CC, types.size(), this.duelTypeScrollOffset, mouseX, mouseY, row -> {
+                int index = this.duelTypeScrollOffset + row;
+                if (index < types.size()) {
+                    DuelType t = types.get(index);
+                    boolean isSelected = this.sameType(this.selectedType, t);
+                    int rowY = rect1.y() + COLUMN_HEADER_HEIGHT + 4 + row * TEAM_ROW_HEIGHT;
+                    int bg = isSelected ? 0x663E79B8 : 0x26222A34;
+                    if (!isSelected && mouseX >= rect1.x() && mouseX <= rect1.x() + rect1.width() && mouseY >= rowY && mouseY < rowY + TEAM_ROW_HEIGHT) {
+                        bg = 0x44304052;
+                    }
+                    context.fill(rect1.x() + 1, rowY, rect1.x() + rect1.width() - 1, rowY + TEAM_ROW_HEIGHT - 2, bg);
+                    context.drawText(textRenderer, Text.literal(t.name()), rect1.x() + 12, rowY + 6, isSelected ? UiTheme.TEXT : UiTheme.TEXT_MUTED, false);
+                }
+            });
         } else if (this.moduleManager.isActive("kits")) {
             int columnWidth = (teamsArea.width() - COLUMN_GAP) / 2;
             
@@ -425,24 +446,8 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                 this.renderCustomColumn(context, textRenderer, rect2, "Kits", 0xFFFFAA00, 0, 0, mouseX, mouseY, row -> {});
                 context.drawText(textRenderer, Text.literal("Select a type first"), rect2.x() + 12, rect2.y() + COLUMN_HEADER_HEIGHT + 10, UiTheme.TEXT_MUTED, false);
             }
-        } else if (this.moduleManager.isActive("summary")) {
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT);
-            int x = mainPanel.x() + 14;
-            int y = mainPanel.y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal("Mode: " + (this.selectedType != null ? this.selectedType.name() : "None selected")), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Map: " + (this.selectedMap != null ? this.selectedMap.id() : "None selected")), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Kit: " + (this.selectedKit != null ? this.selectedKit.getDisplayName().getString() : "None selected")), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            int t1 = this.teamGrid.getMembers("team_1").size();
-            int t2 = this.teamGrid.getMembers("team_2").size();
-            context.drawText(textRenderer, Text.literal("Players: " + t1 + " vs " + t2), x + 14, line, UiTheme.TEXT_MUTED, false);
         }
-
+        
         if (this.moduleManager.isActive("kits") && this.kitStatusMessage != null) {
             long elapsed = System.currentTimeMillis() - this.kitStatusMessageTime;
             if (elapsed < 3000) {
@@ -547,14 +552,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                     int index = this.duelTypeScrollOffset + row;
                     List<DuelType> types = new ArrayList<>(SessionSnapshotData.duelTypes());
                     if (index >= 0 && index < types.size()) {
-                        if (button == 1) { // Right click
-                            this.contextMenuTarget = types.get(index);
-                            this.contextMenuOpen = true;
-                            this.contextMenuX = (int) mouseX;
-                            this.contextMenuY = (int) mouseY;
-                            if (this.parentScreen != null) this.parentScreen.openWorkspaceView(this);
-                            return true;
-                        } else if (button == 0) {
+                        if (button == 0) {
                             this.selectedType = types.get(index);
                             this.selectedMap = null;
                             this.selectedKit = null;
@@ -579,6 +577,31 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                             .toList();
                         if (index >= 0 && index < kits.size()) {
                             this.selectedKit = kits.get(index);
+                            return true;
+                        }
+                    }
+                }
+            }
+        } else if (this.moduleManager.isActive("duel_types_config")) {
+            int columnWidth = (teamsArea.width() - COLUMN_GAP * 2) / 3;
+            UiLayout.Rect rect1 = new UiLayout.Rect(teamsArea.x(), teamsArea.y(), columnWidth, teamsArea.height());
+
+            if (rect1.contains(mouseX, mouseY)) {
+                int rowStartY = rect1.y() + COLUMN_HEADER_HEIGHT + 4;
+                if (mouseY >= rowStartY) {
+                    int row = (int) ((mouseY - rowStartY) / TEAM_ROW_HEIGHT);
+                    int index = this.duelTypeScrollOffset + row;
+                    List<DuelType> types = new ArrayList<>(SessionSnapshotData.duelTypes());
+                    if (index >= 0 && index < types.size()) {
+                        if (button == 1) { // Right click
+                            this.contextMenuTarget = types.get(index);
+                            this.contextMenuOpen = true;
+                            this.contextMenuX = (int) mouseX;
+                            this.contextMenuY = (int) mouseY;
+                            if (this.parentScreen != null) this.parentScreen.openWorkspaceView(this);
+                            return true;
+                        } else if (button == 0) {
+                            this.selectedType = types.get(index);
                             return true;
                         }
                     }
@@ -656,6 +679,18 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                     .count();
                 int maxScroll = Math.max(0, total - visibleRows);
                 this.duelKitScrollOffset = Math.clamp(this.duelKitScrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
+                return maxScroll > 0;
+            }
+        } else if (this.moduleManager.isActive("duel_types_config")) {
+            int columnWidth = (teamsArea.width() - COLUMN_GAP * 2) / 3;
+            UiLayout.Rect rect1 = new UiLayout.Rect(teamsArea.x(), teamsArea.y(), columnWidth, teamsArea.height());
+
+            int visibleRows = Math.max(0, (teamsArea.height() - COLUMN_HEADER_HEIGHT - 8) / TEAM_ROW_HEIGHT);
+
+            if (rect1.contains(mouseX, mouseY)) {
+                int total = SessionSnapshotData.duelTypes().size();
+                int maxScroll = Math.max(0, total - visibleRows);
+                this.duelTypeScrollOffset = Math.clamp(this.duelTypeScrollOffset - (int) Math.signum(verticalAmount), 0, maxScroll);
                 return maxScroll > 0;
             }
         } else if (this.moduleManager.isActive("kits")) {
@@ -775,5 +810,17 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
     protected void buildSessionGroups(SessionPayloadBuilder builder) {
         builder.addGroup("team_1", "Team 1", this.teamGrid.getMembers("team_1"));
         builder.addGroup("team_2", "Team 2", this.teamGrid.getMembers("team_2"));
+    }
+
+    @Override
+    protected java.util.List<Text> getSummaryLines() {
+        int t1 = this.teamGrid.getMembers("team_1").size();
+        int t2 = this.teamGrid.getMembers("team_2").size();
+        return java.util.List.of(
+            Text.literal("Mode: " + (this.selectedType != null ? this.selectedType.name() : "None selected")),
+            Text.literal("Map: " + (this.selectedMap != null ? this.selectedMap.id() : "None selected")),
+            Text.literal("Kit: " + (this.selectedKit != null ? this.selectedKit.getDisplayName().getString() : "None selected")),
+            Text.literal("Players: " + t1 + " vs " + t2)
+        );
     }
 }

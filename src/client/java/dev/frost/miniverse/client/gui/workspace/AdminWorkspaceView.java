@@ -37,7 +37,7 @@ public final class AdminWorkspaceView implements WorkspaceView {
     private static final int SETTINGS_SAVE_WIDTH = 68;
     private static final String[] DIFFICULTY_VALUES = {"peaceful", "easy", "normal", "hard"};
     private static final String[] DIFFICULTY_LABELS = {"Peaceful", "Easy", "Medium", "Hard"};
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("'['hh:mm a , dd/MMM/yyyy']'").withZone(ZoneId.systemDefault());
 
     private final Mode mode;
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -50,6 +50,7 @@ public final class AdminWorkspaceView implements WorkspaceView {
     private int scrollOffset;
     private int maxScroll;
     private HistorySortOrder historySortOrder = HistorySortOrder.LATEST_PLAYED;
+    private boolean draggingScrollbar;
 
     private TextFieldWidget viewDistanceField;
     private TextFieldWidget simulationDistanceField;
@@ -58,7 +59,7 @@ public final class AdminWorkspaceView implements WorkspaceView {
     private TextFieldWidget maxHeapField;
     private TextFieldWidget initialHeapField;
     private TextFieldWidget maxConcurrentLaunchesField;
-    private TextFieldWidget keepLatestSessionsField;
+
     private TextFieldWidget maxAgeDaysField;
 
     private boolean onlineMode;
@@ -134,6 +135,15 @@ public final class AdminWorkspaceView implements WorkspaceView {
                 }
             }
             context.disableScissor();
+
+            if (this.maxScroll > 0) {
+                int scrollbarX = this.listArea.x() + this.listArea.width() - 8;
+                int height = bottom - top;
+                int thumbHeight = Math.max(20, (int) (height * ((float) height / (height + this.maxScroll))));
+                int thumbY = top + (int) ((height - thumbHeight) * ((float) this.scrollOffset / this.maxScroll));
+                context.fill(scrollbarX, top, scrollbarX + 8, bottom, 0x40000000);
+                context.fill(scrollbarX, thumbY, scrollbarX + 8, thumbY + thumbHeight, this.draggingScrollbar ? 0xFFFFFFFF : 0xFFAAAAAA);
+            }
         }
     }
 
@@ -142,6 +152,17 @@ public final class AdminWorkspaceView implements WorkspaceView {
         if (button != 0) {
             return false;
         }
+
+        if (this.maxScroll > 0 && (this.mode == Mode.SESSIONS || this.mode == Mode.HISTORY)) {
+            int top = this.mode == Mode.HISTORY ? this.listArea.y() + 36 : this.listArea.y();
+            int height = this.mode == Mode.HISTORY ? this.listArea.height() - 36 : this.listArea.height();
+            int scrollbarX = this.listArea.x() + this.listArea.width() - 8;
+            if (mouseX >= scrollbarX && mouseX <= scrollbarX + 8 && mouseY >= top && mouseY <= top + height) {
+                this.draggingScrollbar = true;
+                return true;
+            }
+        }
+
         for (ActionButton actionButton : this.buttons) {
             if (actionButton.scrollManaged() && !this.inScrollableButtonViewport(mouseX, mouseY)) {
                 continue;
@@ -149,6 +170,42 @@ public final class AdminWorkspaceView implements WorkspaceView {
             if (actionButton.click(mouseX, mouseY)) {
                 return true;
             }
+        }
+
+        if (this.mode == Mode.HISTORY && this.inScrollableButtonViewport(mouseX, mouseY)) {
+            int top = this.listArea.y() + 36;
+            int rowY = top - this.scrollOffset;
+            for (SessionEntry entry : this.retainedSessions()) {
+                if (mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT && mouseX >= this.listArea.x() && mouseX <= this.listArea.x() + this.listArea.width() - 10) {
+                    this.screen.openWorkspaceView(new HistorySessionDetailsWorkspaceView(entry, this));
+                    return true;
+                }
+                rowY += ROW_HEIGHT + ROW_GAP;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (this.draggingScrollbar && this.maxScroll > 0) {
+            int top = this.mode == Mode.HISTORY ? this.listArea.y() + 36 : this.listArea.y();
+            int height = this.mode == Mode.HISTORY ? this.listArea.height() - 36 : this.listArea.height();
+            int thumbHeight = Math.max(20, (int) (height * ((float) height / (height + this.maxScroll))));
+            int trackHeight = height - thumbHeight;
+            double scrollRatio = (mouseY - top - (thumbHeight / 2.0)) / (double) trackHeight;
+            this.scrollOffset = Math.clamp((int) (scrollRatio * this.maxScroll), 0, this.maxScroll);
+            this.rebuildScrollableButtons();
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && this.draggingScrollbar) {
+            this.draggingScrollbar = false;
+            return true;
         }
         return false;
     }
@@ -191,10 +248,9 @@ public final class AdminWorkspaceView implements WorkspaceView {
     private void initHistoryFields() {
         SessionSnapshotData.RetentionSettings retention = SessionSnapshotData.retentionSettings();
         int y = this.listArea.y();
-        this.keepLatestSessionsField = this.addField(this.listArea.x() + 104, y, 46, "Retained Sessions", Integer.toString(retention.keepLatestSessions()), 2);
-        this.maxAgeDaysField = this.addField(this.listArea.x() + 310, y, 46, "Retention Days", Integer.toString(retention.maxAgeDays()), 3);
-        this.buttons.add(new ActionButton(new UiLayout.Rect(this.listArea.x() + 156, y, 48, BUTTON_HEIGHT), () -> "Save", this::saveKeepLatestSessions, UiTheme.ACCENT_GREEN, () -> true));
-        this.buttons.add(new ActionButton(new UiLayout.Rect(this.listArea.x() + 362, y, 48, BUTTON_HEIGHT), () -> "Save", this::saveMaxAgeDays, UiTheme.ACCENT_GREEN, () -> true));
+        this.maxAgeDaysField = this.addField(this.listArea.x() + 160, y, 36, "Retention Days", Integer.toString(retention.maxAgeDays()), 3);
+        this.buttons.add(new ActionButton(new UiLayout.Rect(this.listArea.x() + 204, y, 44, BUTTON_HEIGHT), () -> "Save", this::saveMaxAgeDays, UiTheme.ACCENT_GREEN, () -> true));
+        this.buttons.add(new ActionButton(new UiLayout.Rect(this.listArea.x() + this.listArea.width() - 250, y, 90, BUTTON_HEIGHT), () -> "Delete All", this::confirmDeleteAllSessions, UiTheme.ACCENT_RED, () -> !this.retainedSessions().isEmpty()));
         this.buttons.add(new ActionButton(new UiLayout.Rect(this.listArea.x() + this.listArea.width() - 150, y, 150, BUTTON_HEIGHT), this::historySortLabel, this::toggleHistorySort, UiTheme.ACCENT_BLUE, () -> true));
         this.rebuildScrollableButtons();
     }
@@ -284,43 +340,65 @@ public final class AdminWorkspaceView implements WorkspaceView {
         if (entries.isEmpty()) {
             SessionLaunchStatus.latest().ifPresentOrElse(
                 status -> SessionLaunchStatus.renderPanel(context, textRenderer, this.listArea.x(), this.listArea.y(), Math.min(320, this.listArea.width()), status),
-                () -> this.renderEmpty(context, textRenderer, "No active sessions.")
+                () -> this.renderEmpty(context, textRenderer, "No active sessions.", false)
             );
             return;
         }
-        this.renderSessionRows(context, textRenderer, entries, false);
+        this.renderSessionRows(context, textRenderer, entries, false, mouseX, mouseY);
     }
 
     private void renderHistory(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        context.drawText(textRenderer, Text.literal("Retain latest"), this.listArea.x(), this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
-        context.drawText(textRenderer, Text.literal("Delete older than days"), this.listArea.x() + 208, this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
+        context.drawText(textRenderer, Text.literal("Delete sessions older than"), this.listArea.x(), this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
+        context.drawText(textRenderer, Text.literal("days (0 to disable)"), this.listArea.x() + 256, this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
         List<SessionEntry> entries = this.retainedSessions();
         this.updateScrollBounds(entries, true);
         if (entries.isEmpty()) {
-            this.renderEmpty(context, textRenderer, "No retained sessions.");
+            this.renderEmpty(context, textRenderer, "No retained sessions.", true);
             return;
         }
-        this.renderSessionRows(context, textRenderer, entries, true);
+        this.renderSessionRows(context, textRenderer, entries, true, mouseX, mouseY);
     }
 
-    private void renderSessionRows(DrawContext context, TextRenderer textRenderer, List<SessionEntry> entries, boolean history) {
+    private void renderSessionRows(DrawContext context, TextRenderer textRenderer, List<SessionEntry> entries, boolean history, int mouseX, int mouseY) {
         int top = history ? this.listArea.y() + 36 : this.listArea.y();
         int height = history ? this.listArea.height() - 36 : this.listArea.height();
         context.enableScissor(this.listArea.x(), top, this.listArea.x() + this.listArea.width(), top + height);
         int y = top - this.scrollOffset;
         for (SessionEntry entry : entries) {
             int rowHeight = history ? ROW_HEIGHT : this.rowHeight(entry);
-            UiRenderer.card(context, this.listArea.x(), y, this.listArea.width(), rowHeight, 0.0F, history ? UiTheme.ACCENT_BLUE : UiTheme.ACCENT_GREEN);
+            int rowWidth = this.listArea.width() - (this.maxScroll > 0 ? 12 : 0);
+            boolean hovered = history && this.inScrollableButtonViewport(mouseX, mouseY) && mouseY >= y && mouseY <= y + rowHeight && mouseX >= this.listArea.x() && mouseX <= this.listArea.x() + rowWidth;
+            int fill = hovered ? 0x20FFFFFF : 0x00000000;
+            UiRenderer.card(context, this.listArea.x(), y, rowWidth, rowHeight, 0.0F, history ? UiTheme.ACCENT_BLUE : UiTheme.ACCENT_GREEN);
+            if (fill != 0) {
+                context.fill(this.listArea.x(), y, this.listArea.x() + rowWidth, y + rowHeight, fill);
+            }
             int textX = this.listArea.x() + 14;
-            context.drawText(textRenderer, Text.literal(entry.id() + " - " + entry.game()), textX, y + 10, UiTheme.TEXT, false);
-            context.drawText(textRenderer, Text.literal("State: " + entry.state() + "  Players: " + entry.playerCount()), textX, y + 24, UiTheme.TEXT_MUTED, false);
             if (history) {
-                context.drawText(textRenderer, Text.literal("Created: " + formatTime(entry.createdAtMillis()) + "  Updated: " + formatTime(entry.updatedAtMillis())), textX, y + 38, UiTheme.TEXT_MUTED, false);
-                context.drawText(textRenderer, Text.literal("Played: " + formatDuration(entry.playedMillis()) + "  Seed: " + entry.seed()), textX, y + 52, UiTheme.TEXT_DIM, false);
+                Text gamemodeText = Text.literal("Gamemode: ").styled(s -> s.withColor(UiTheme.TEXT_MUTED)).append(Text.literal(entry.game()).styled(s -> s.withColor(UiTheme.ACCENT_GREEN)));
+                context.drawText(textRenderer, gamemodeText, textX, y + 10, 0xFFFFFFFF, false);
+
+                Text nameText = Text.literal("Session name: ").styled(s -> s.withColor(UiTheme.TEXT_MUTED)).append(Text.literal(entry.id()).styled(s -> s.withColor(UiTheme.TEXT)));
+                context.drawText(textRenderer, nameText, textX, y + 24, 0xFFFFFFFF, false);
+
+                Text playersText = Text.literal("Players: ").styled(s -> s.withColor(UiTheme.TEXT_MUTED)).append(Text.literal(String.valueOf(entry.playerCount())).styled(s -> s.withColor(UiTheme.TEXT)));
+                context.drawText(textRenderer, playersText, textX, y + 38, 0xFFFFFFFF, false);
+
+                long timeAgoMillis = System.currentTimeMillis() - entry.updatedAtMillis();
+                String timeAgo = formatTimeAgo(timeAgoMillis);
+                String actualTime = formatTime(entry.updatedAtMillis());
+                Text lastPlayedText = Text.literal("Last played: ").styled(s -> s.withColor(UiTheme.TEXT_MUTED)).append(Text.literal(timeAgo + " ago " + actualTime).styled(s -> s.withColor(UiTheme.TEXT)));
+                context.drawText(textRenderer, lastPlayedText, textX, y + 52, 0xFFFFFFFF, false);
+
+                Text playtimeText = Text.literal("Total Playtime: ").styled(s -> s.withColor(UiTheme.TEXT_MUTED)).append(Text.literal(formatDuration(entry.playedMillis())).styled(s -> s.withColor(UiTheme.ACCENT_BLUE)));
+                context.drawText(textRenderer, playtimeText, textX, y + 66, 0xFFFFFFFF, false);
+
                 if (!entry.inspectable()) {
-                    context.drawText(textRenderer, Text.literal("No world copy available"), textX, y + 66, UiTheme.WARNING, false);
+                    context.drawText(textRenderer, Text.literal("No world copy available"), textX + 220, y + 66, UiTheme.WARNING, false);
                 }
             } else {
+                context.drawText(textRenderer, Text.literal(entry.id() + " - " + entry.game()), textX, y + 10, UiTheme.TEXT, false);
+                context.drawText(textRenderer, Text.literal("State: " + entry.state() + "  Players: " + entry.playerCount()), textX, y + 24, UiTheme.TEXT_MUTED, false);
                 context.drawText(textRenderer, Text.literal("Seed: " + entry.seed()), textX, y + 38, UiTheme.TEXT_DIM, false);
                 context.drawText(textRenderer, Text.literal("Started: " + formatTime(entry.launchedAtMillis())), textX, y + 52, UiTheme.TEXT_DIM, false);
                 SessionSnapshotData.PendingJoiner pendingJoiner = this.firstPendingJoiner();
@@ -439,9 +517,10 @@ public final class AdminWorkspaceView implements WorkspaceView {
         context.drawText(textRenderer, Text.literal("Lower values reduce CPU and memory spikes during session launches."), this.listArea.x(), this.listArea.y() + 116, UiTheme.TEXT_DIM, false);
     }
 
-    private void renderEmpty(DrawContext context, TextRenderer textRenderer, String message) {
-        UiRenderer.panel(context, this.listArea.x(), this.listArea.y(), this.listArea.width(), 64, UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
-        context.drawCenteredTextWithShadow(textRenderer, Text.literal(message), this.listArea.x() + this.listArea.width() / 2, this.listArea.y() + 27, UiTheme.TEXT_MUTED);
+    private void renderEmpty(DrawContext context, TextRenderer textRenderer, String message, boolean history) {
+        int yOffset = history ? 36 : 0;
+        UiRenderer.panel(context, this.listArea.x(), this.listArea.y() + yOffset, this.listArea.width(), 64, UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
+        context.drawCenteredTextWithShadow(textRenderer, Text.literal(message), this.listArea.x() + this.listArea.width() / 2, this.listArea.y() + yOffset + 27, UiTheme.TEXT_MUTED);
     }
 
     private void rebuildScrollableButtons() {
@@ -449,18 +528,6 @@ public final class AdminWorkspaceView implements WorkspaceView {
         int top = this.mode == Mode.HISTORY ? this.listArea.y() + 36 : this.listArea.y();
         int rowY = top - this.scrollOffset;
         if (this.mode == Mode.HISTORY) {
-            for (SessionEntry entry : this.retainedSessions()) {
-                int capturedY = rowY;
-                int relaunchWidth = 86;
-                int inspectWidth = 108;
-                int deleteWidth = 64;
-                int totalWidth = relaunchWidth + inspectWidth + deleteWidth + (BUTTON_GAP * 2);
-                int buttonX = this.listArea.x() + this.listArea.width() - totalWidth;
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX, capturedY + 10, relaunchWidth, BUTTON_HEIGHT), () -> "Relaunch", () -> this.relaunchSession(entry.id()), UiTheme.ACCENT_GREEN, () -> this.rowVisible(capturedY), true));
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + relaunchWidth + BUTTON_GAP, capturedY + 10, inspectWidth, BUTTON_HEIGHT), () -> "Inspect Copy", () -> this.inspectSession(entry.id()), UiTheme.ACCENT_BLUE, () -> this.rowVisible(capturedY) && entry.inspectable(), true));
-                this.buttons.add(new ActionButton(new UiLayout.Rect(buttonX + relaunchWidth + BUTTON_GAP + inspectWidth + BUTTON_GAP, capturedY + 10, deleteWidth, BUTTON_HEIGHT), () -> "Delete", () -> this.confirmDeleteSession(entry.id()), UiTheme.ACCENT_RED, () -> this.rowVisible(capturedY), true));
-                rowY += ROW_HEIGHT + ROW_GAP;
-            }
             this.updateScrollBounds(this.retainedSessions(), true);
         } else {
             for (SessionEntry entry : this.activeSessions()) {
@@ -713,6 +780,35 @@ public final class AdminWorkspaceView implements WorkspaceView {
         this.statusMessage = "Deleting " + sessionId + ".";
     }
 
+    private void confirmDeleteAllSessions() {
+        this.client.setScreen(new ConfirmScreen(
+            confirmed -> {
+                this.client.setScreen(this.screen);
+                if (confirmed) {
+                    this.deleteAllSessions();
+                }
+            },
+            Text.literal("Delete all retained sessions?"),
+            Text.literal("This permanently deletes all " + this.retainedSessions().size() + " saved sessions."),
+            Text.literal("Yes"),
+            Text.literal("No")
+        ));
+    }
+
+    private void deleteAllSessions() {
+        if (!this.connected()) {
+            return;
+        }
+        int count = 0;
+        for (SessionEntry entry : this.retainedSessions()) {
+            ClientPlayNetworking.send(new NetworkConstants.DeleteSessionPayload(entry.id()));
+            count++;
+        }
+        this.statusMessage = "Deleting " + count + " retained sessions.";
+        this.scrollOffset = 0;
+        this.rebuildScrollableButtons();
+    }
+
     private void toggleAssignment(String sessionId) {
         this.assignmentSessionId = this.assignmentSessionId.equals(sessionId) ? "" : sessionId;
         this.rebuildScrollableButtons();
@@ -828,19 +924,10 @@ public final class AdminWorkspaceView implements WorkspaceView {
         this.statusMessage = "Max concurrent launches set to " + value + ".";
     }
 
-    private void saveKeepLatestSessions() {
-        Integer value = this.parseInt(this.keepLatestSessionsField, 1, 50, "Retained sessions");
-        if (value == null) {
-            return;
-        }
-        NbtCompound retention = new NbtCompound();
-        retention.putInt("keepLatestSessions", value);
-        this.sendServerSettings(null, null, retention);
-        this.statusMessage = "Saved retained session count " + value + ".";
-    }
+
 
     private void saveMaxAgeDays() {
-        Integer value = this.parseInt(this.maxAgeDaysField, 1, 365, "Retention days");
+        Integer value = this.parseInt(this.maxAgeDaysField, 0, 365, "Retention days");
         if (value == null) {
             return;
         }
@@ -935,6 +1022,28 @@ public final class AdminWorkspaceView implements WorkspaceView {
         return (totalMinutes / 60L) + "h " + (totalMinutes % 60L) + "m";
     }
 
+    private static String formatTimeAgo(long millis) {
+        if (millis < 0) return "just now";
+        long seconds = millis / 1000L;
+        if (seconds < 60) return "just now";
+        long minutes = seconds / 60L;
+        if (minutes < 60) return minutes + " min" + (minutes == 1 ? "" : "s");
+        long hours = minutes / 60L;
+        if (hours < 24) return hours + " hour" + (hours == 1 ? "" : "s");
+        long days = hours / 24L;
+        if (days < 30) {
+            long remainingHours = hours % 24L;
+            if (remainingHours > 0) {
+                return days + " day" + (days == 1 ? "" : "s") + " " + remainingHours + " hour" + (remainingHours == 1 ? "" : "s");
+            }
+            return days + " day" + (days == 1 ? "" : "s");
+        }
+        long months = days / 30L;
+        if (months < 12) return months + " month" + (months == 1 ? "" : "s");
+        long years = days / 365L;
+        return years + " year" + (years == 1 ? "" : "s");
+    }
+
     public enum Mode {
         SESSIONS,
         HISTORY,
@@ -947,9 +1056,9 @@ public final class AdminWorkspaceView implements WorkspaceView {
         OLDEST_PLAYED
     }
 
-    private record SessionEntry(String id, String game, String state, long seed, int playerCount, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, List<SessionSnapshotData.GroupSummary> groups) {
+    public record SessionEntry(String id, String game, String state, long seed, int playerCount, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, List<SessionSnapshotData.GroupSummary> groups, List<String> playerNames) {
         private static SessionEntry from(SessionSnapshotData.SessionSummary summary) {
-            return new SessionEntry(summary.id(), summary.game(), summary.state(), summary.seed(), summary.players(), summary.createdAtMillis(), summary.launchedAtMillis(), summary.updatedAtMillis(), summary.playedMillis(), summary.inspectable(), summary.groups());
+            return new SessionEntry(summary.id(), summary.game(), summary.state(), summary.seed(), summary.players(), summary.createdAtMillis(), summary.launchedAtMillis(), summary.updatedAtMillis(), summary.playedMillis(), summary.inspectable(), summary.groups(), summary.playerNames());
         }
 
         private boolean paused() {

@@ -10,7 +10,8 @@ import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.corpse.CorpseManager;
 import dev.frost.miniverse.minigame.core.event.ItemUseAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
@@ -43,16 +44,21 @@ import net.minecraft.util.Hand;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.World;
 import com.google.gson.JsonObject;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PauseAwareMinigame, PersistentMinigame, DynamicParticipantMinigame, PlayerDamageAware, PlayerLeaveAware, ItemUseAware, PlayerJoinAware {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+
+public class MurderMysteryMinigame extends AbstractMinigame {
 
     private static final String NAME = MurderMysteryDefinition.ID;
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController("mm_display", Text.literal("Murder Mystery"));
+    private ScoreboardTemplate scoreboard;
+    private ScoreboardLine timeLine;
+    private ScoreboardLine innocentsLine;
     
     private MinigameContext context;
     private GameState state = GameState.WAITING_FOR_PLAYERS;
@@ -61,13 +67,13 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
     private MurderMysterySettings settings;
     private MurderMysteryMapConfig mapConfig;
     
-    private RoleManager roleManager;
-    private VisibilityManager visibilityManager;
-    private CorpseManager corpseManager;
+    private final RoleManager roleManager = new RoleManager();
+    private final VisibilityManager visibilityManager = new VisibilityManager("murdermystery", roleManager);
+    private final CorpseManager corpseManager = new CorpseManager();
     
-    private VirtualEconomyManager economyManager;
-    private MurderMysteryWeaponManager weaponManager;
-    private MurderMysteryWinConditionManager winConditionManager;
+    private final VirtualEconomyManager economyManager = new VirtualEconomyManager();
+    private final MurderMysteryWeaponManager weaponManager = new MurderMysteryWeaponManager();
+    private final MurderMysteryWinConditionManager winConditionManager = new MurderMysteryWinConditionManager(roleManager);
     private CoinManager coinManager;
     private ShopManager shopManager;
 
@@ -75,17 +81,7 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
     private MinecraftServer server;
     private int nextSpawnIndex = 0;
 
-    @Override
-    public void attachContext(MinigameContext context) {
-        this.context = context;
-        this.roleManager = new RoleManager();
-        this.visibilityManager = new VisibilityManager("murdermystery", roleManager);
-        this.corpseManager = new CorpseManager();
-        this.economyManager = new VirtualEconomyManager();
-        this.weaponManager = new MurderMysteryWeaponManager();
-        this.winConditionManager = new MurderMysteryWinConditionManager(roleManager);
-    }
-    
+
     public void applySettings(MurderMysterySettings settings) {
         this.settings = settings;
         this.mapConfig = MurderMysteryMapConfig.load(settings.mapId());
@@ -95,14 +91,14 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
 
     @Override
     public void initialize() {
-        this.state = GameState.WAITING_FOR_PLAYERS;
+        this.setState(GameState.WAITING_FOR_PLAYERS);
         this.paused = false;
         this.elapsedTicks = 0;
         if (server != null) {
-            roleManager.clear(server);
+            roleManager.cleanup(server);
             visibilityManager.clear(server);
         }
-        corpseManager.clear();
+        corpseManager.cleanup(server);
         economyManager.clear();
         weaponManager.clear();
         if (coinManager != null) coinManager.clear();
@@ -111,10 +107,22 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
     }
 
     @Override
-    public void startGame() {
-        if (this.state == GameState.IN_PROGRESS) return;
-        this.state = GameState.IN_PROGRESS;
-        this.context.setState(GameState.IN_PROGRESS);
+    protected GlobalMatchRules configureGameRules() {
+        return GlobalMatchRules.defaults();
+    }
+
+    @Override
+    protected boolean isTeamBased() {
+        return false;
+    }
+
+    @Override
+    protected void onMatchStart() {
+        if (this.getState() == GameState.IN_PROGRESS) return;
+        this.setState(GameState.IN_PROGRESS);
+        if (this.context != null) {
+            this.context.setState(GameState.IN_PROGRESS);
+        }
         
         List<ServerPlayerEntity> players = new ArrayList<>(this.context.liveParticipants());
         Collections.shuffle(players);
@@ -149,23 +157,25 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
         }
 
         visibilityManager.sync(server);
-        updateScoreboard();
+        rebuildScoreboard();
     }
 
     @Override
-    public void stopGame() {
-        this.state = GameState.ENDING;
-        this.context.setState(GameState.ENDING);
+    protected void onMatchEnd() {
+        this.setState(GameState.ENDING);
+        if (this.context != null) {
+            this.context.setState(GameState.ENDING);
+        }
         initialize();
-        if (server != null) {
-            SCOREBOARD.clear(server);
+        if (server != null && this.scoreboard != null) {
+            this.scoreboard.cleanup(server);
         }
     }
 
     @Override
-    public void onServerTick(MinecraftServer server) {
+    protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.state != GameState.IN_PROGRESS || paused) return;
+        if (this.getState() != GameState.IN_PROGRESS || paused) return;
 
         this.elapsedTicks++;
         List<ServerPlayerEntity> activePlayers = new ArrayList<>();
@@ -190,7 +200,7 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
         }
 
         if (this.elapsedTicks % 20 == 0) {
-            updateScoreboard();
+            updateScoreboardTick();
         }
 
         for (ServerPlayerEntity p : activePlayers) {
@@ -264,7 +274,7 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
             Text.literal("You died. Right-click to cycle targets, sneak to free-fly.").formatted(Formatting.GRAY)
         );
         visibilityManager.sync(server);
-        updateScoreboard();
+        updateScoreboardTick();
 
         checkWinConditions();
     }
@@ -324,7 +334,7 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
     }
 
     @Override
-    public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
+    protected void onPlayerJoinGame(ServerPlayerEntity player, MinecraftServer server) {
         if (state == GameState.WAITING_FOR_PLAYERS || state == GameState.FROZEN || state == GameState.STARTING) {
             teleportToRandomSpawn(player);
         }
@@ -375,7 +385,22 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
         }
     }
 
-    private void updateScoreboard() {
+    private void rebuildScoreboard() {
+        if (this.server == null) return;
+        if (this.scoreboard == null) {
+            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Murder Mystery").formatted(Formatting.RED, Formatting.BOLD)));
+            this.scoreboard.show(this.context.liveParticipants());
+        }
+
+        this.scoreboard.clearLines();
+        this.scoreboard.addBlankLine();
+        this.timeLine = this.scoreboard.addLine(Text.empty());
+        this.innocentsLine = this.scoreboard.addLine(Text.empty());
+        this.scoreboard.resendStructure();
+        this.updateScoreboardTick();
+    }
+
+    private void updateScoreboardTick() {
         if (server == null) return;
         int timeRemaining = Math.max(0, (settings.roundDurationTicks() - elapsedTicks) / 20);
         
@@ -384,8 +409,14 @@ public class MurderMysteryMinigame implements Minigame, RuntimeContextAware, Ser
             if (roleManager.hasRole(p, InnocentRole.class) || roleManager.hasRole(p, DetectiveRole.class)) innocents++;
         }
         
-        SCOREBOARD.setScore(server, "Time", timeRemaining);
-        SCOREBOARD.setScore(server, "Innocents Alive", innocents);
+        if (this.timeLine != null) {
+            this.timeLine.setText(Text.literal("Time: " + timeRemaining));
+            this.timeLine.updateAll();
+        }
+        if (this.innocentsLine != null) {
+            this.innocentsLine.setText(Text.literal("Innocents Alive: " + innocents));
+            this.innocentsLine.updateAll();
+        }
     }
 
     @Override

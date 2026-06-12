@@ -40,4 +40,8 @@ public interface MinigameDefinition {
     void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher);
 
     void registerEvents();
+
+    default LateJoinPolicy lateJoinPolicy() {
+        return new DefaultLateJoinPolicy();
+    }
 }

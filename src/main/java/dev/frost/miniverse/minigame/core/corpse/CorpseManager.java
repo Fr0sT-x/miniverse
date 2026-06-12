@@ -9,7 +9,10 @@ import net.minecraft.util.math.Vec3d;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CorpseManager {
+import net.minecraft.server.MinecraftServer;
+import dev.frost.miniverse.minigame.core.FrameworkModule;
+
+public class CorpseManager implements FrameworkModule {
     private final List<ArmorStandEntity> corpses = new ArrayList<>();
 
     public void spawnCorpse(ServerPlayerEntity player) {
@@ -31,7 +34,8 @@ public class CorpseManager {
         corpses.add(corpse);
     }
 
-    public void clear() {
+    @Override
+    public void cleanup(MinecraftServer server) {
         for (ArmorStandEntity corpse : corpses) {
             if (corpse != null && !corpse.isRemoved()) {
                 corpse.discard();

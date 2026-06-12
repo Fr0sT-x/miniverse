@@ -7,7 +7,8 @@ import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
@@ -41,11 +42,13 @@ import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
 import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 
-public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerLeaveAware, PersistentMinigame, DynamicParticipantMinigame, PauseAwareMinigame {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+
+public class BlockShuffleMinigame extends AbstractMinigame {
     private static final int TICKS_PER_SECOND = 20;
     private static final int INTERMISSION_SECONDS = 5;
 
-    private MinigameContext context;
     private BlockShuffleSettings settings;
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private RoundState roundState = RoundState.INTERMISSION;
@@ -60,7 +63,8 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     private final Map<UUID, Identifier> assignedBlocks = new HashMap<>();
     private final Set<Integer> timeWarningsShown = new HashSet<>();
 
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController("blockshuffle_display", Text.literal("Block Shuffle"));
+    private ScoreboardTemplate scoreboard;
+    private ScoreboardLine statusLine;
 
     private enum RoundState {
         INTERMISSION,
@@ -72,8 +76,13 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     @Override
-    public void attachContext(MinigameContext context) {
-        this.context = context;
+    protected GlobalMatchRules configureGameRules() {
+        return new GlobalMatchRules(true, false, true, true, true, true, true);
+    }
+
+    @Override
+    protected boolean isTeamBased() {
+        return false;
     }
 
     public void applySettings(BlockShuffleSettings settings) {
@@ -95,8 +104,7 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     @Override
-    public void startGame() {
-        if (this.state == GameState.IN_PROGRESS) return;
+    protected void onMatchStart() {
         
         List<ServerPlayerEntity> participants = this.context.liveParticipants();
         if (participants.isEmpty()) {
@@ -104,9 +112,11 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
             return;
         }
 
-        this.state = GameState.IN_PROGRESS;
-        this.context.setState(GameState.IN_PROGRESS);
-        this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
+        this.setState(GameState.IN_PROGRESS);
+        if (this.context != null) {
+            this.context.setState(GameState.IN_PROGRESS);
+            this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
+        }
         
         for (UUID uuid : this.activePlayers) {
             this.points.put(uuid, 0);
@@ -117,21 +127,24 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     @Override
-    public void stopGame() {
-        this.state = GameState.ENDING;
-        this.context.setState(GameState.ENDING);
+    protected void onMatchEnd() {
+        this.setState(GameState.ENDING);
+        if (this.context != null) {
+            this.context.setState(GameState.ENDING);
+        }
         if (this.server != null) {
-            SCOREBOARD.clear(this.server);
             SpectatorService.getInstance().clearAll();
         }
+        if (this.scoreboard != null) {
+            this.scoreboard.cleanup(this.server);
+        }
         this.activePlayers.clear();
-        this.context.participants().clear();
     }
 
     @Override
-    public void onServerTick(MinecraftServer server) {
+    protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.state != GameState.IN_PROGRESS) return;
+        if (this.getState() != GameState.IN_PROGRESS) return;
 
         if (this.activePlayers.isEmpty()) {
             if (!MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
@@ -141,7 +154,7 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         }
 
         this.elapsedTicks++;
-        this.updateScoreboard();
+        this.updateScoreboardTick();
 
         if (this.roundState == RoundState.INTERMISSION) {
             if (this.elapsedTicks >= INTERMISSION_SECONDS * TICKS_PER_SECOND) {
@@ -168,6 +181,7 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         this.roundState = RoundState.INTERMISSION;
         this.elapsedTicks = 0;
         this.assignedBlocks.clear();
+        this.rebuildScoreboard();
     }
 
     private void startRound() {
@@ -200,6 +214,7 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
             player.sendMessage(Text.literal("Your block is: ").append(Text.literal(blockName).formatted(Formatting.GOLD, Formatting.BOLD)), false);
             GameMessenger.showGameTitle(List.of(player), Text.literal(blockName).formatted(Formatting.GOLD), Text.literal("Find and stand on this block!").formatted(Formatting.AQUA));
         }
+        this.rebuildScoreboard();
     }
 
     private void checkTimeWarnings() {
@@ -337,20 +352,15 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         this.stopGame();
     }
 
-    private void updateScoreboard() {
-        if (this.server == null) return;
-
-        if (this.roundState == RoundState.ACTIVE) {
-            int seconds = this.roundTimerTicks / TICKS_PER_SECOND;
-            SCOREBOARD.setScore(this.server, "Time Left", seconds);
-            SCOREBOARD.resetScore(this.server, "Intermission");
-        } else {
-            int seconds = INTERMISSION_SECONDS - (this.elapsedTicks / TICKS_PER_SECOND);
-            SCOREBOARD.setScore(this.server, "Intermission", seconds);
-            SCOREBOARD.resetScore(this.server, "Time Left");
+    private void rebuildScoreboard() {
+        if (this.scoreboard == null) {
+            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Block Shuffle").formatted(Formatting.AQUA, Formatting.BOLD)));
+            this.scoreboard.show(this.context.liveParticipants());
         }
-        
-        SCOREBOARD.setScore(this.server, "──────────────", 99);
+
+        this.scoreboard.clearLines();
+        this.statusLine = this.scoreboard.addLine(Text.empty());
+        this.scoreboard.addBlankLine();
 
         List<Map.Entry<UUID, Integer>> sorted = this.points.entrySet().stream()
             .filter(e -> this.activePlayers.contains(e.getKey()))
@@ -358,13 +368,28 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
             .toList();
 
         for (Map.Entry<UUID, Integer> entry : sorted) {
-            ServerPlayerEntity p = this.server.getPlayerManager().getPlayer(entry.getKey());
+            ServerPlayerEntity p = this.server != null ? this.server.getPlayerManager().getPlayer(entry.getKey()) : null;
             String name = p != null ? p.getName().getString() : "Offline";
-            SCOREBOARD.setScore(this.server, name, entry.getValue());
+            this.scoreboard.addLine(Text.literal(name + ": " + entry.getValue()));
         }
+
+        this.scoreboard.addBlankLine();
+        this.scoreboard.addLine(Text.literal("Goal: " + this.settings.pointsToWin()).formatted(Formatting.YELLOW));
         
-        SCOREBOARD.setScore(this.server, "───────────── ", 0);
-        SCOREBOARD.setScore(this.server, "Goal", this.settings.pointsToWin());
+        this.scoreboard.resendStructure();
+    }
+
+    private void updateScoreboardTick() {
+        if (this.statusLine == null) return;
+
+        if (this.roundState == RoundState.ACTIVE) {
+            int seconds = this.roundTimerTicks / TICKS_PER_SECOND;
+            this.statusLine.setText(Text.literal("Time Left: " + seconds));
+        } else {
+            int seconds = INTERMISSION_SECONDS - (this.elapsedTicks / TICKS_PER_SECOND);
+            this.statusLine.setText(Text.literal("Intermission: " + seconds));
+        }
+        this.statusLine.updateAll();
     }
 
     @Override
@@ -373,6 +398,9 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         
         this.context.participants().remove(player);
         this.activePlayers.remove(player.getUuid());
+        if (this.scoreboard != null) {
+            this.scoreboard.remove(player);
+        }
         SpectatorService.getInstance().stopSpectating(player, SpectatorStopReason.MANUAL);
 
         if (this.state == GameState.IN_PROGRESS && this.activePlayers.isEmpty()) {
@@ -380,17 +408,7 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         }
     }
 
-    private void broadcastToSpectators(Text text) {
-        if (this.context.nullableServer() == null) return;
-        List<ServerPlayerEntity> spectators = this.context.nullableServer().getPlayerManager().getPlayerList().stream()
-            .filter(p -> dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance().isSpectating(p.getUuid()))
-            .toList();
-        GameMessenger.broadcast(spectators, text);
-    }
 
-    @Override
-    public void onPlayerDeath(ServerPlayerEntity player) {
-    }
 
     private void broadcast(Text text) {
         GameMessenger.broadcast(this.context.participants().livePlayers(this.context.nullableServer()), text);
@@ -523,6 +541,10 @@ public class BlockShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         } else {
             player.sendMessage(Text.literal("You joined late! Waiting for the next round to start.").formatted(Formatting.YELLOW), false);
         }
+        if (this.scoreboard != null) {
+            this.scoreboard.show(player);
+        }
+        this.rebuildScoreboard();
     }
 
     @Override

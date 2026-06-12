@@ -463,16 +463,19 @@ public final class SessionRegistry {
         }
 
         SessionRetentionConfig retention = SessionRetentionConfig.getInstance();
+        if (retention.maxAgeDays() <= 0) {
+            return;
+        }
         long cutoffMillis = Instant.now().minus(retention.maxAgeDays(), ChronoUnit.DAYS).toEpochMilli();
         List<CleanupCandidate> sessionCandidates = entries.stream()
             .filter(Files::isDirectory)
-            .map(path -> new CleanupCandidate(path, lastModifiedMillis(path)))
+            .map(path -> new CleanupCandidate(path, MiniverseFileUtils.lastModifiedMillis(path)))
             .sorted(Comparator.comparingLong(CleanupCandidate::updatedAtMillis).reversed())
             .toList();
         Set<Path> retained = new HashSet<>();
         for (int index = 0; index < sessionCandidates.size(); index++) {
             CleanupCandidate candidate = sessionCandidates.get(index);
-            if (index == 0 || index < retention.keepLatestSessions() || candidate.updatedAtMillis() >= cutoffMillis) {
+            if (candidate.updatedAtMillis() >= cutoffMillis) {
                 retained.add(candidate.path());
             }
         }
@@ -555,7 +558,7 @@ public final class SessionRegistry {
             }
         }
 
-        long updatedAt = lastModifiedMillis(sessionRoot);
+        long updatedAt = MiniverseFileUtils.lastModifiedMillis(sessionRoot);
         long createdAt = updatedAt;
         long launchedAt = updatedAt;
         long playedMillis = 0L;
@@ -590,7 +593,7 @@ public final class SessionRegistry {
         }
         long seed = SessionConfigJson.longValue(object, "seed", 0L);
         int playerCount = SessionConfigJson.integer(object, "playerCount", 0);
-        long updatedAt = lastModifiedMillis(sessionRoot);
+        long updatedAt = MiniverseFileUtils.lastModifiedMillis(sessionRoot);
         long createdAt = SessionConfigJson.longValue(object, "createdAt", updatedAt);
         long launchedAt = SessionConfigJson.longValue(object, "launchedAt", 0L);
         long playedMillis = launchedAt > 0L ? Math.max(0L, updatedAt - launchedAt) : 0L;
@@ -1016,41 +1019,6 @@ public final class SessionRegistry {
         }
     }
 
-    private static long lastModifiedMillis(Path root) {
-        if (!Files.exists(root)) {
-            return 0L;
-        }
-
-        try {
-            return lastModifiedMillis(root, 0);
-        } catch (IOException e) {
-            try {
-                return Files.getLastModifiedTime(root).toMillis();
-            } catch (IOException ignored) {
-                return 0L;
-            }
-        }
-    }
-
-    private static long lastModifiedMillis(Path path, int depth) throws IOException {
-        long latest = Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS).toMillis();
-        if (depth > 8 || isDirectoryLink(path)) {
-            return latest;
-        }
-
-        BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-        if (!attrs.isDirectory()) {
-            return latest;
-        }
-
-        try (DirectoryStream<Path> entries = Files.newDirectoryStream(path)) {
-            for (Path entry : entries) {
-                latest = Math.max(latest, lastModifiedMillis(entry, depth + 1));
-            }
-        }
-        return latest;
-    }
-
     private static boolean isInspectable(Path sessionRoot) {
         try (var stream = Files.list(sessionRoot)) {
             return stream.anyMatch(path -> Files.isDirectory(path.resolve("world")));
@@ -1059,25 +1027,6 @@ public final class SessionRegistry {
         }
     }
 
-    private static boolean isDirectoryLink(Path path) {
-        if (Files.isSymbolicLink(path)) {
-            return true;
-        }
-        if (!System.getProperty("os.name", "").toLowerCase().contains("win") || !Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-            return false;
-        }
-        Path parent = path.getParent();
-        if (parent == null) {
-            return false;
-        }
-        try {
-            Path expectedRealPath = parent.toRealPath().resolve(path.getFileName());
-            Path actualRealPath = path.toRealPath();
-            return !expectedRealPath.toString().equalsIgnoreCase(actualRealPath.toString());
-        } catch (IOException ignored) {
-            return false;
-        }
-    }
 
     private static void deleteRecursively(Path root) {
         try {
@@ -1109,7 +1058,7 @@ public final class SessionRegistry {
         }
         long clockTicks = readClockTicks(root.get());
         long savedAtMillis = readSavedAtMillis(root.get());
-        long lastModifiedMillis = lastModifiedMillis(savePath);
+        long lastModifiedMillis = MiniverseFileUtils.lastModifiedMillis(savePath);
         return Optional.of(new SaveMetadata(clockTicks, savedAtMillis, lastModifiedMillis));
     }
 

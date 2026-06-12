@@ -19,8 +19,6 @@ public record DeathSwapSettings(
     int borderSize,
     SeedMode seedMode,
     long seed,
-    boolean keepInventory,
-    boolean pvpEnabled,
     RespawnMode respawnMode,
     int pointsToWin,
     boolean preserveVelocity,
@@ -42,8 +40,6 @@ public record DeathSwapSettings(
             DEFAULT_BORDER_SIZE,
             SeedMode.RANDOM,
             ThreadLocalRandom.current().nextLong(),
-            true,
-            false,
             RespawnMode.POINTS,
             DEFAULT_POINTS_TO_WIN,
             true,
@@ -63,8 +59,6 @@ public record DeathSwapSettings(
             clamp(getIntOrDefault(nbt, "borderSize", defaults.borderSize()), 16, 60_000),
             parseSeedMode(getStringOrDefault(nbt, "seedMode", defaults.seedMode().nbtValue())),
             getLongOrDefault(nbt, "seed", defaults.seed()),
-            getBooleanOrDefault(nbt, "keepInventory", defaults.keepInventory()),
-            getBooleanOrDefault(nbt, "pvpEnabled", defaults.pvpEnabled()),
             RespawnMode.parse(getStringOrDefault(nbt, "respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
             clamp(getIntOrDefault(nbt, "pointsToWin", defaults.pointsToWin()), 1, 100),
             getBooleanOrDefault(nbt, "preserveVelocity", defaults.preserveVelocity()),
@@ -84,8 +78,6 @@ public record DeathSwapSettings(
             clamp(parseInt(properties.getProperty("deathswap.borderSize"), defaults.borderSize()), 16, 60_000),
             parseSeedMode(properties.getProperty("deathswap.seedMode", defaults.seedMode().nbtValue())),
             parseLong(properties.getProperty("deathswap.seed"), defaults.seed()),
-            parseBoolean(properties.getProperty("deathswap.keepInventory"), defaults.keepInventory()),
-            parseBoolean(properties.getProperty("deathswap.pvpEnabled"), defaults.pvpEnabled()),
             RespawnMode.parse(properties.getProperty("deathswap.respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
             clamp(parseInt(properties.getProperty("deathswap.pointsToWin"), defaults.pointsToWin()), 1, 100),
             parseBoolean(properties.getProperty("deathswap.preserveVelocity"), defaults.preserveVelocity()),
@@ -99,8 +91,6 @@ public record DeathSwapSettings(
         properties.setProperty("deathswap.borderSize", Integer.toString(this.borderSize));
         properties.setProperty("deathswap.seedMode", this.seedMode.nbtValue());
         properties.setProperty("deathswap.seed", Long.toString(this.seed));
-        properties.setProperty("deathswap.keepInventory", Boolean.toString(this.keepInventory));
-        properties.setProperty("deathswap.pvpEnabled", Boolean.toString(this.pvpEnabled));
         properties.setProperty("deathswap.respawnMode", this.respawnMode.configValue());
         properties.setProperty("deathswap.pointsToWin", Integer.toString(this.pointsToWin));
         properties.setProperty("deathswap.preserveVelocity", Boolean.toString(this.preserveVelocity));
@@ -125,8 +115,6 @@ public record DeathSwapSettings(
         nbt.putInt("borderSize", this.borderSize);
         nbt.putString("seedMode", this.seedMode.nbtValue());
         nbt.putLong("seed", this.seed);
-        nbt.putBoolean("keepInventory", this.keepInventory);
-        nbt.putBoolean("pvpEnabled", this.pvpEnabled);
         nbt.putString("respawnMode", this.respawnMode.configValue());
         nbt.putInt("pointsToWin", this.pointsToWin);
         nbt.putBoolean("preserveVelocity", this.preserveVelocity);

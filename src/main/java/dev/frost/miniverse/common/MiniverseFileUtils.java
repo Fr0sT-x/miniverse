@@ -33,7 +33,7 @@ public final class MiniverseFileUtils {
         deletePath(root);
     }
 
-    private static boolean isDirectoryLink(Path path) {
+    public static boolean isDirectoryLink(Path path) {
         if (Files.isSymbolicLink(path)) {
             return true;
         }
@@ -54,6 +54,41 @@ public final class MiniverseFileUtils {
         } catch (IOException ignored) {
             return false;
         }
+    }
+
+    public static long lastModifiedMillis(Path root) {
+        if (!Files.exists(root)) {
+            return 0L;
+        }
+
+        try {
+            return lastModifiedMillis(root, 0);
+        } catch (IOException e) {
+            try {
+                return Files.getLastModifiedTime(root).toMillis();
+            } catch (IOException ignored) {
+                return 0L;
+            }
+        }
+    }
+
+    private static long lastModifiedMillis(Path path, int depth) throws IOException {
+        long latest = Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS).toMillis();
+        if (depth > 8 || isDirectoryLink(path)) {
+            return latest;
+        }
+
+        BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!attrs.isDirectory()) {
+            return latest;
+        }
+
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(path)) {
+            for (Path entry : entries) {
+                latest = Math.max(latest, lastModifiedMillis(entry, depth + 1));
+            }
+        }
+        return latest;
     }
 
     private static void deletePath(Path path) throws IOException {

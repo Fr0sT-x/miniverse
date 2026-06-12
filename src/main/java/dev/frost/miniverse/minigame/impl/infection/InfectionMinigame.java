@@ -10,7 +10,8 @@ import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
@@ -43,11 +44,17 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public final class InfectionMinigame implements Minigame, RuntimeContextAware, ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerDamageAware, PlayerLeaveAware, TeamManagerProvider, PersistentMinigame {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+
+public final class InfectionMinigame extends AbstractMinigame implements PlayerRespawnAware, PlayerDamageAware, TeamManagerProvider {
     private static final String NAME = "Infection";
     private static final String SURVIVOR_TEAM = "survivor";
     private static final String INFECTED_TEAM = "infected";
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController("infection_display", Text.literal("Infection"));
+    private ScoreboardTemplate scoreboard;
+    private ScoreboardLine survivorsLine;
+    private ScoreboardLine infectedLine;
+    private ScoreboardLine timeLine;
 
     private final TeamManager teams = new TeamManager();
     private final Set<UUID> survivors = ConcurrentHashMap.newKeySet();
@@ -58,16 +65,10 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
     private InfectionMapConfig mapConfig = new InfectionMapConfig(List.of());
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     @Nullable
-    private MinigameContext context;
-    @Nullable
     private MinecraftServer server;
     private int ticksRemaining;
     private int secondAccumulator;
 
-    @Override
-    public void attachContext(MinigameContext context) {
-        this.context = context;
-    }
 
     public void applySettings(InfectionSettings settings, InfectionMapConfig mapConfig) {
         this.settings = settings == null ? InfectionSettings.defaults() : settings;
@@ -80,8 +81,7 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
 
     @Override
     public void initialize() {
-        this.state = GameState.WAITING_FOR_PLAYERS;
-        this.server = null;
+        this.setState(GameState.WAITING_FOR_PLAYERS);
         this.survivors.clear();
         this.infected.clear();
         this.teams.clear();
@@ -90,7 +90,17 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
     }
 
     @Override
-    public void startGame() {
+    protected GlobalMatchRules configureGameRules() {
+        return GlobalMatchRules.defaults();
+    }
+
+    @Override
+    protected boolean isTeamBased() {
+        return false;
+    }
+
+    @Override
+    protected void onMatchStart() {
         List<ServerPlayerEntity> participants = this.participants();
         if (participants.size() < 2) {
             this.broadcast(Text.literal("Need at least two players to start Infection.").formatted(Formatting.RED));
@@ -101,8 +111,10 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
             return;
         }
 
-        this.state = GameState.RUNNING;
-        this.context().setState(GameState.RUNNING);
+        this.setState(GameState.RUNNING);
+        if (this.context != null) {
+            this.context.setState(GameState.RUNNING);
+        }
         this.ticksRemaining = Math.max(1, this.settings.matchDurationSeconds()) * 20;
         this.secondAccumulator = 0;
         this.survivors.clear();
@@ -123,19 +135,21 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
 
         this.teleportToMapSpawns(participants);
         this.syncVanillaTeams();
-        this.updateScoreboard();
+        this.rebuildScoreboard();
         this.broadcast(Text.literal("Infection has begun. Survivors must last " + formatTime(this.settings.matchDurationSeconds()) + ".").formatted(Formatting.GOLD));
     }
 
     @Override
-    public void stopGame() {
-        this.state = GameState.ENDING;
+    protected void onMatchEnd() {
+        this.setState(GameState.ENDING);
         if (this.context != null) {
             this.context.setState(GameState.ENDING);
             this.context.participants().clear();
         }
         if (this.server != null) {
-            SCOREBOARD.clear(this.server);
+            if (this.scoreboard != null) {
+                this.scoreboard.cleanup(this.server);
+            }
             this.vanillaTeams.clear(this.server);
         }
         this.survivors.clear();
@@ -144,16 +158,16 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
     }
 
     @Override
-    public void onServerTick(MinecraftServer server) {
+    protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.state != GameState.RUNNING) {
+        if (this.getState() != GameState.RUNNING) {
             return;
         }
         this.ticksRemaining = Math.max(0, this.ticksRemaining - 1);
         this.secondAccumulator++;
         if (this.secondAccumulator >= 20) {
             this.secondAccumulator = 0;
-            this.updateScoreboard();
+            this.updateScoreboardTick();
             if (this.ticksRemaining <= 0) {
                 this.endSurvivorWin();
             }
@@ -215,7 +229,7 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
         }
         this.survivors.remove(player.getUuid());
         this.infected.remove(player.getUuid());
-        if (this.state == GameState.RUNNING) {
+        if (this.getState() == GameState.RUNNING) {
             this.checkInfectedWin();
         }
     }
@@ -228,7 +242,7 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
     @Override
     public JsonObject saveRuntimeState() {
         JsonObject json = new JsonObject();
-        json.addProperty("state", this.state.name());
+        json.addProperty("state", this.getState().name());
         json.addProperty("ticksRemaining", this.ticksRemaining);
         JsonArray survivorArray = new JsonArray();
         for (UUID survivor : this.survivors) {
@@ -245,7 +259,7 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
 
     @Override
     public void loadRuntimeState(JsonObject state) {
-        this.state = GameState.valueOf(state.has("state") ? state.get("state").getAsString() : GameState.WAITING_FOR_PLAYERS.name());
+        this.setState(GameState.valueOf(state.has("state") ? state.get("state").getAsString() : GameState.WAITING_FOR_PLAYERS.name()));
         this.ticksRemaining = state.has("ticksRemaining") ? state.get("ticksRemaining").getAsInt() : 0;
         this.survivors.clear();
         this.infected.clear();
@@ -272,19 +286,21 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
         this.state = state == null ? GameState.WAITING_FOR_PLAYERS : state;
     }
 
+
+
     private void infect(ServerPlayerEntity player) {
         if (!this.survivors.remove(player.getUuid())) {
             return;
         }
         this.markInfected(player);
         this.syncVanillaTeams();
-        this.updateScoreboard();
+        this.updateScoreboardTick();
         this.broadcast(Text.literal(player.getName().getString() + " was infected.").formatted(Formatting.RED));
         this.checkInfectedWin();
     }
 
     private void checkInfectedWin() {
-        if (this.state == GameState.RUNNING && this.survivors.isEmpty()) {
+        if (this.getState() == GameState.RUNNING && this.survivors.isEmpty()) {
             this.endInfectedWin();
         }
     }
@@ -312,7 +328,7 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
     }
 
     private void startEndSequence(List<ServerPlayerEntity> winners, Text winnerLabel) {
-        this.state = GameState.ENDING;
+        this.setState(GameState.ENDING);
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime == null) {
             return;
@@ -347,7 +363,8 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
         player.teleport(world, spawn.x(), spawn.y(), spawn.z(), Set.<PositionFlag>of(), spawn.yaw(), spawn.pitch());
     }
 
-    private void syncVanillaTeams() {
+    @Override
+    protected void syncVanillaTeams() {
         if (this.server == null) {
             return;
         }
@@ -359,13 +376,36 @@ public final class InfectionMinigame implements Minigame, RuntimeContextAware, S
         });
     }
 
-    private void updateScoreboard() {
+    private void rebuildScoreboard() {
         if (this.server == null) {
             return;
         }
-        SCOREBOARD.setScore(this.server, "Survivors", this.survivors.size());
-        SCOREBOARD.setScore(this.server, "Infected", this.infected.size());
-        SCOREBOARD.setScore(this.server, "Time", Math.max(0, this.ticksRemaining / 20));
+        if (this.scoreboard == null) {
+            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Infection").formatted(Formatting.DARK_GREEN, Formatting.BOLD)));
+            this.scoreboard.show(this.participants());
+        }
+
+        this.scoreboard.clearLines();
+        this.survivorsLine = this.scoreboard.addLine(Text.literal("Survivors: " + this.survivors.size()).formatted(Formatting.GREEN));
+        this.infectedLine = this.scoreboard.addLine(Text.literal("Infected: " + this.infected.size()).formatted(Formatting.RED));
+        this.scoreboard.addBlankLine();
+        this.timeLine = this.scoreboard.addLine(Text.literal("Time: " + Math.max(0, this.ticksRemaining / 20)));
+        this.scoreboard.resendStructure();
+    }
+
+    private void updateScoreboardTick() {
+        if (this.survivorsLine != null) {
+            this.survivorsLine.setText(Text.literal("Survivors: " + this.survivors.size()).formatted(Formatting.GREEN));
+            this.survivorsLine.updateAll();
+        }
+        if (this.infectedLine != null) {
+            this.infectedLine.setText(Text.literal("Infected: " + this.infected.size()).formatted(Formatting.RED));
+            this.infectedLine.updateAll();
+        }
+        if (this.timeLine != null) {
+            this.timeLine.setText(Text.literal("Time: " + Math.max(0, this.ticksRemaining / 20)));
+            this.timeLine.updateAll();
+        }
     }
 
     private List<ServerPlayerEntity> participants() {

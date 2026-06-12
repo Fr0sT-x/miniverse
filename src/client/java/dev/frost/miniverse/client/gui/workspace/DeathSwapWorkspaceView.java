@@ -25,7 +25,6 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     private TextFieldWidget borderSizeField;
     private TextFieldWidget seedValueField;
     private ButtonWidget seedModeButton;
-    private ButtonWidget keepInventoryButton;
     private ButtonWidget preserveVelocityButton;
 
     private int swapIntervalSeconds = 300;
@@ -33,8 +32,12 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     private int borderSize = 3000;
     private DeathSwapSettings.SeedMode seedMode = DeathSwapSettings.SeedMode.RANDOM;
     private long seedValue = System.currentTimeMillis();
-    private boolean keepInventory = true;
     private boolean preserveVelocity = true;
+
+    @Override
+    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true);
+    }
 
     public DeathSwapWorkspaceView() {
         super("deathswap");
@@ -42,6 +45,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure swap timing and match rules.", UiTheme.ACCENT_BLUE);
+        this.useGameRules();
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_RED);
     }
 
@@ -56,11 +60,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
                 this.seedModeButton.setMessage(Text.literal(seedModeLabel()));
             });
             this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, Long.toString(this.seedValue), 170, "Seed value");
-            this.keepInventoryButton = this.addButton(screen, toggleLabel("Keep Inventory", this.keepInventory), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 256, 170, () -> {
-                this.keepInventory = !this.keepInventory;
-                this.keepInventoryButton.setMessage(Text.literal(toggleLabel("Keep Inventory", this.keepInventory)));
-            });
-            this.preserveVelocityButton = this.addButton(screen, toggleLabel("Preserve Velocity", this.preserveVelocity), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 288, 190, () -> {
+            this.preserveVelocityButton = this.addButton(screen, toggleLabel("Preserve Velocity", this.preserveVelocity), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 256, 190, () -> {
                 this.preserveVelocity = !this.preserveVelocity;
                 this.preserveVelocityButton.setMessage(Text.literal(toggleLabel("Preserve Velocity", this.preserveVelocity)));
             });
@@ -69,22 +69,18 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
 
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT_RED);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal("Swap Interval: " + this.swapIntervalSeconds + "s"), x + 14, line, UiTheme.TEXT, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Grace: " + this.gracePeriodSeconds + "s"), x + 14, line, UiTheme.TEXT, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Seed: " + this.seedMode.nbtValue()), x + 14, line, UiTheme.TEXT, false);
-        } else if (this.moduleManager.isActive("rules")) {
+        if (this.moduleManager.isActive("rules")) {
             this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
+    }
+
+    @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal("Swap Interval: " + this.swapIntervalSeconds + "s"),
+            Text.literal("Grace: " + this.gracePeriodSeconds + "s"),
+            Text.literal("Seed: " + this.seedMode.nbtValue())
+        );
     }
 
     @Override
@@ -97,8 +93,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
             context.drawText(textRenderer, Text.literal("Border Size"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Seed Mode"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Seed Value"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Keep Inventory"), labelX, labelY + 160, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Preserve Velocity"), labelX, labelY + 192, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Preserve Velocity"), labelX, labelY + 160, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -108,7 +103,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
         super.setActiveModule(moduleId);
     }
 
-    private void syncStateFromWidgets() {
+    protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
             this.swapIntervalSeconds = readClamped(this.swapIntervalField, this.swapIntervalSeconds, 10, 3600);
             this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
@@ -152,7 +147,6 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
         builder.settings().putInt("swapIntervalSeconds", this.swapIntervalSeconds);
         builder.settings().putInt("initialGracePeriodSeconds", this.gracePeriodSeconds);
         builder.settings().putInt("borderSize", this.borderSize);
-        builder.settings().putBoolean("keepInventory", this.keepInventory);
         builder.settings().putBoolean("preserveVelocity", this.preserveVelocity);
         builder.settings().putString("seedMode", this.seedMode.nbtValue());
         builder.settings().putLong("seed", this.seedMode == DeathSwapSettings.SeedMode.FIXED ? this.seedValue : System.currentTimeMillis());

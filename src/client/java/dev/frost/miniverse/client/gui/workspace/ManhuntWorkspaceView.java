@@ -39,7 +39,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     private int runnerLives = -1;
     private int hunterLives = -1;
     private SeedMode seedMode = SeedMode.RANDOM;
-    private long seedValue = System.currentTimeMillis();
+    private String seedValue = "";
 
     public ManhuntWorkspaceView() {
         super("manhunt");
@@ -47,103 +47,142 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.teamGrid.addColumn("speedrunner", "Speedrunners", 0x4D8DFF, false);
         this.teamGrid.addColumn("hunter", "Hunters", 0xE85D75, false);
         
-        this.useRosterGrid(this.teamGrid, "teams", ">", "Teams", "Setup", "Assign players into speedrunners and hunters.", UiTheme.ACCENT_RED);
-        this.moduleManager.register("seed", "w", "World Seed", "Rules", "Choose the world seed behavior.", UiTheme.ACCENT);
-        this.moduleManager.register("rules", "r", "Match Rules", "Rules", "Tune release timing and match startup rules.", UiTheme.ACCENT);
-        this.moduleManager.register("tracking", "t", "Tracking", "Rules", "Configure compass behavior and Nether tracking.", UiTheme.ACCENT_BLUE);
-        this.moduleManager.register("lives", "l", "Lives & Respawns", "Rules", "Set life limits and respawn delays.", UiTheme.ACCENT_RED);
-        this.moduleManager.register("difficulty", "d", "Difficulty", "Rules", "Add pressure and visibility modifiers.", UiTheme.ACCENT_GREEN);
+        this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players into speedrunners and hunters.", UiTheme.ACCENT_RED);
+        this.moduleManager.register("rules", "r", "Match Rules", "Rules", "Configure seed, tracking, lives, and difficulty.", UiTheme.ACCENT);
+        this.useGameRules();
         this.moduleManager.register("summary", "s", "Summary", "Summary", "Review and launch the configured match.", UiTheme.ACCENT);
     }
 
     @Override
     protected void initGamemode(SessionScreen screen) {
-        if (this.moduleManager.isActive("seed")) {
-            this.seedModeButton = this.addButton(screen, this.seedMode.displayName, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, 170, () -> {
+        if (this.moduleManager.isActive("rules")) {
+            int cx1 = this.layout.mainPanel().x() + 150;
+            int cx2 = this.layout.mainPanel().x() + 500;
+            int sx1 = cx1 + 178;
+            int sx2 = cx2 + 178;
+
+            // Row 1
+            this.seedModeButton = this.addButton(screen, this.seedMode.displayName, cx1, this.layout.mainPanel().y() + 124, 170, () -> {
                 this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
                 this.seedModeButton.setMessage(Text.literal(this.seedMode.displayName));
+                
+                if (this.seedMode == SeedMode.RANDOM) {
+                    this.seedValueField.setEditable(false);
+                    this.seedValueField.active = false;
+                    this.seedValueField.setText("");
+                    this.seedValueField.setSuggestion("Enter world seed");
+                } else {
+                    this.seedValueField.setEditable(true);
+                    this.seedValueField.active = true;
+                    this.seedValueField.setSuggestion("");
+                    this.seedValueField.setText(this.seedValue);
+                }
             });
-            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Long.toString(this.seedValue), "Fixed seed");
-        } else if (this.moduleManager.isActive("rules")) {
-            this.gracePeriodField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.gracePeriodSeconds), "Hunter release seconds");
-            this.addStepper(screen, this.gracePeriodField, this.layout.mainPanel().x() + 358, this.layout.mainPanel().y() + 96, 0, 3600, 5);
-        } else if (this.moduleManager.isActive("tracking")) {
-            this.huntersCompassButton = this.addButton(screen, "Hunters Compass: " + onOff(this.huntersCompassEnabled), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, 170, () -> {
+            this.seedValueField = this.addField(screen, cx2, this.layout.mainPanel().y() + 124, this.seedMode == SeedMode.FIXED ? this.seedValue : "", "Fixed seed");
+            if (this.seedMode == SeedMode.RANDOM) {
+                this.seedValueField.setEditable(false);
+                this.seedValueField.active = false;
+                this.seedValueField.setSuggestion("Enter world seed");
+            } else {
+                this.seedValueField.setEditable(true);
+                this.seedValueField.active = true;
+                this.seedValueField.setSuggestion("");
+            }
+
+            // Row 2
+            this.gracePeriodField = this.addField(screen, cx1, this.layout.mainPanel().y() + 156, Integer.toString(this.gracePeriodSeconds), "Hunter release seconds");
+            this.addStepper(screen, this.gracePeriodField, sx1, this.layout.mainPanel().y() + 156, 0, 3600, 5);
+
+            // Row 3
+            this.huntersCompassButton = this.addButton(screen, "Hunters Compass: " + onOff(this.huntersCompassEnabled), cx1, this.layout.mainPanel().y() + 208, 170, () -> {
                 this.huntersCompassEnabled = !this.huntersCompassEnabled;
                 this.huntersCompassButton.setMessage(Text.literal("Hunters Compass: " + onOff(this.huntersCompassEnabled)));
             });
-            this.compassCooldownField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.compassCooldownSeconds), "Compass cooldown seconds");
-            this.addStepper(screen, this.compassCooldownField, this.layout.mainPanel().x() + 358, this.layout.mainPanel().y() + 128, 0, 300, 1);
-            this.netherTrackingButton = this.addButton(screen, "Nether Tracking: " + onOff(this.netherTrackingEnabled), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, 170, () -> {
+            this.compassCooldownField = this.addField(screen, cx2, this.layout.mainPanel().y() + 208, Integer.toString(this.compassCooldownSeconds), "Compass cooldown seconds");
+            this.addStepper(screen, this.compassCooldownField, sx2, this.layout.mainPanel().y() + 208, 0, 300, 1);
+
+            // Row 4
+            this.netherTrackingButton = this.addButton(screen, "Nether Tracking: " + onOff(this.netherTrackingEnabled), cx1, this.layout.mainPanel().y() + 240, 170, () -> {
                 this.netherTrackingEnabled = !this.netherTrackingEnabled;
                 this.netherTrackingButton.setMessage(Text.literal("Nether Tracking: " + onOff(this.netherTrackingEnabled)));
             });
-        } else if (this.moduleManager.isActive("lives")) {
-            this.runnerLivesButton = this.addButton(screen, "Runner Lives: " + formatLives(this.runnerLives), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, 170, () -> {
+            this.runnerGlowPulseField = this.addField(screen, cx2, this.layout.mainPanel().y() + 240, Integer.toString(this.runnerGlowPulseMinutes), "Runner glow pulse minutes");
+            this.addStepper(screen, this.runnerGlowPulseField, sx2, this.layout.mainPanel().y() + 240, 0, 120, 5);
+
+            // Row 5
+            this.runnerLivesButton = this.addButton(screen, "Runner Lives: " + formatLives(this.runnerLives), cx1, this.layout.mainPanel().y() + 292, 170, () -> {
                 this.runnerLives = nextLivesValue(this.runnerLives);
                 this.runnerLivesButton.setMessage(Text.literal("Runner Lives: " + formatLives(this.runnerLives)));
             });
-            this.respawnDelayField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.respawnDelaySeconds), "Runner respawn seconds");
-            this.addStepper(screen, this.respawnDelayField, this.layout.mainPanel().x() + 358, this.layout.mainPanel().y() + 128, 0, 3600, 30);
-            this.hunterLivesButton = this.addButton(screen, "Hunter Lives: " + formatLives(this.hunterLives), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, 170, () -> {
+            this.respawnDelayField = this.addField(screen, cx2, this.layout.mainPanel().y() + 292, Integer.toString(this.respawnDelaySeconds), "Runner respawn seconds");
+            this.addStepper(screen, this.respawnDelayField, sx2, this.layout.mainPanel().y() + 292, 0, 3600, 30);
+
+            // Row 6
+            this.hunterLivesButton = this.addButton(screen, "Hunter Lives: " + formatLives(this.hunterLives), cx1, this.layout.mainPanel().y() + 324, 170, () -> {
                 this.hunterLives = nextLivesValue(this.hunterLives);
                 this.hunterLivesButton.setMessage(Text.literal("Hunter Lives: " + formatLives(this.hunterLives)));
             });
-            this.hunterRespawnDelayField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, Integer.toString(this.hunterRespawnDelaySeconds), "Hunter respawn seconds");
-            this.addStepper(screen, this.hunterRespawnDelayField, this.layout.mainPanel().x() + 358, this.layout.mainPanel().y() + 192, 0, 3600, 5);
-        } else if (this.moduleManager.isActive("difficulty")) {
-            this.runnerGlowPulseField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.runnerGlowPulseMinutes), "Runner glow pulse minutes");
-            this.addStepper(screen, this.runnerGlowPulseField, this.layout.mainPanel().x() + 358, this.layout.mainPanel().y() + 96, 0, 120, 5);
+            this.hunterRespawnDelayField = this.addField(screen, cx2, this.layout.mainPanel().y() + 324, Integer.toString(this.hunterRespawnDelaySeconds), "Hunter respawn seconds");
+            this.addStepper(screen, this.hunterRespawnDelayField, sx2, this.layout.mainPanel().y() + 324, 0, 3600, 5);
         }
     }
 
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal(this.teamGrid.getMembers("speedrunner").size() + " speedrunner(s) vs " + this.teamGrid.getMembers("hunter").size() + " hunter(s)"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Release delay: " + this.gracePeriodSeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Tracking: " + onOff(this.huntersCompassEnabled) + ", Nether " + onOff(this.netherTrackingEnabled) + ", cooldown " + this.compassCooldownSeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Runner lives: " + formatLives(this.runnerLives) + ", respawn " + this.respawnDelaySeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Hunter lives: " + formatLives(this.hunterLives) + ", respawn " + this.hunterRespawnDelaySeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Seed: " + this.seedMode.displayName), x + 14, line, UiTheme.TEXT_MUTED, false);
-        } else if (!this.moduleManager.isActive("teams")) {
+        if (!this.moduleManager.isActive("teams")) {
             this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
     }
 
     @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal(this.teamGrid.getMembers("speedrunner").size() + " speedrunner(s) vs " + this.teamGrid.getMembers("hunter").size() + " hunter(s)"),
+            Text.literal("Release delay: " + this.gracePeriodSeconds + "s"),
+            Text.literal("Tracking: " + onOff(this.huntersCompassEnabled) + ", Nether " + onOff(this.netherTrackingEnabled) + ", cooldown " + this.compassCooldownSeconds + "s"),
+            Text.literal("Runner lives: " + formatLives(this.runnerLives) + ", respawn " + this.respawnDelaySeconds + "s"),
+            Text.literal("Hunter lives: " + formatLives(this.hunterLives) + ", respawn " + this.hunterRespawnDelaySeconds + "s"),
+            Text.literal("Seed: " + this.seedMode.displayName)
+        );
+    }
+
+    @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int labelX = this.layout.mainPanel().x() + 38;
-        int labelY = this.layout.mainPanel().y() + 102;
-        if (this.moduleManager.isActive("seed")) {
-            context.drawText(textRenderer, Text.literal("Seed Mode"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Fixed Seed"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Hunter Release Delay"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("tracking")) {
-            context.drawText(textRenderer, Text.literal("Hunters Compass"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Compass Cooldown"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Nether Tracking"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("lives")) {
-            context.drawText(textRenderer, Text.literal("Runner Lives"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Runner Respawn"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Hunter Lives"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Hunter Respawn"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("difficulty")) {
-            context.drawText(textRenderer, Text.literal("Runner Glow Pulse"), labelX, labelY, UiTheme.TEXT_MUTED, false);
+        int lx1 = this.layout.mainPanel().x() + 24;
+        int lx2 = this.layout.mainPanel().x() + 374;
+        int by = this.layout.mainPanel().y();
+
+        if (this.moduleManager.isActive("rules")) {
+            context.drawText(textRenderer, Text.literal("World & Startup"), lx1, by + 108, UiTheme.ACCENT_BLUE, false);
+            context.drawText(textRenderer, Text.literal("Seed Mode"), lx1, by + 130, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Fixed Seed"), lx2, by + 130, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Release Delay"), lx1, by + 162, UiTheme.TEXT_MUTED, false);
+
+            context.drawText(textRenderer, Text.literal("Tracking & Difficulty"), lx1, by + 192, UiTheme.ACCENT_BLUE, false);
+            context.drawText(textRenderer, Text.literal("Hunters Compass"), lx1, by + 214, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Compass Cooldown"), lx2, by + 214, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Nether Tracking"), lx1, by + 246, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Runner Glow Pulse"), lx2, by + 246, UiTheme.TEXT_MUTED, false);
+
+            context.drawText(textRenderer, Text.literal("Lives & Respawns"), lx1, by + 276, UiTheme.ACCENT_BLUE, false);
+            context.drawText(textRenderer, Text.literal("Runner Lives"), lx1, by + 298, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Runner Respawn"), lx2, by + 298, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Hunter Lives"), lx1, by + 330, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Hunter Respawn"), lx2, by + 330, UiTheme.TEXT_MUTED, false);
         }
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        
+        if (this.moduleManager.isActive("rules") && this.seedMode == SeedMode.RANDOM && this.seedValueField != null) {
+            if (this.seedValueField.isMouseOver(mouseX, mouseY)) {
+                this.status = ValidationResult.error("Seed mode is random, change to Fixed to enter your own world seed.");
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -152,23 +191,15 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         super.setActiveModule(moduleId);
     }
 
-    private void syncStateFromWidgets() {
-        if (this.moduleManager.isActive("seed")) {
-            if (this.seedValueField != null) {
-                try {
-                    this.seedValue = Long.parseLong(this.seedValueField.getText().trim());
-                } catch (NumberFormatException ignored) {
-                    this.seedValueField.setText(Long.toString(this.seedValue));
-                }
+    protected void syncStateFromWidgets() {
+        if (this.moduleManager.isActive("rules")) {
+            if (this.seedValueField != null && this.seedMode == SeedMode.FIXED) {
+                this.seedValue = this.seedValueField.getText().trim();
             }
-        } else if (this.moduleManager.isActive("rules")) {
             this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
-        } else if (this.moduleManager.isActive("tracking")) {
             this.compassCooldownSeconds = readClamped(this.compassCooldownField, this.compassCooldownSeconds, 0, 300);
-        } else if (this.moduleManager.isActive("lives")) {
             this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 0, 3600);
             this.hunterRespawnDelaySeconds = readClamped(this.hunterRespawnDelayField, this.hunterRespawnDelaySeconds, 0, 3600);
-        } else if (this.moduleManager.isActive("difficulty")) {
             this.runnerGlowPulseMinutes = readClamped(this.runnerGlowPulseField, this.runnerGlowPulseMinutes, 0, 120);
         }
     }
@@ -210,7 +241,17 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putBoolean("netherTracking", this.netherTrackingEnabled);
         builder.settings().putString("seedMode", this.seedMode.nbtValue);
         if (this.seedMode == SeedMode.FIXED) {
-            builder.settings().putLong("seed", this.seedValue);
+            long parsedSeed;
+            if (this.seedValue.isEmpty()) {
+                parsedSeed = System.currentTimeMillis();
+            } else {
+                try {
+                    parsedSeed = Long.parseLong(this.seedValue);
+                } catch (NumberFormatException e) {
+                    parsedSeed = (long) this.seedValue.hashCode();
+                }
+            }
+            builder.settings().putLong("seed", parsedSeed);
         }
     }
 

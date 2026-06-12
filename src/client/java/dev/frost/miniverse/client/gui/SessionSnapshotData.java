@@ -3,7 +3,7 @@ package dev.frost.miniverse.client.gui;
 import java.util.List;
 
 public final class SessionSnapshotData {
-    public record SessionSummary(String id, String game, String state, long seed, int players, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, boolean retained, List<GroupSummary> groups) {
+    public record SessionSummary(String id, String game, String state, long seed, int players, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, boolean retained, List<GroupSummary> groups, List<String> playerNames) {
     }
 
     public record GroupSummary(String label, String displayName, String state, int playerCount) {
@@ -109,7 +109,7 @@ public final class SessionSnapshotData {
     public record ServerSettings(int viewDistance, int simulationDistance, boolean onlineMode, int spawnProtection, String difficulty, boolean allowFlight, boolean acceptsTransfers, String advertisedHost) {
     }
 
-    public record RetentionSettings(int keepLatestSessions, int maxAgeDays) {
+    public record RetentionSettings(int maxAgeDays) {
     }
 
     private static volatile List<SessionSummary> sessions = List.of();
@@ -125,7 +125,7 @@ public final class SessionSnapshotData {
     private static volatile int launcherQueueCapacity = 64;
     private static volatile MemorySettings memorySettings = new MemorySettings(2, 1, true);
     private static volatile ServerSettings serverSettings = new ServerSettings(16, 8, false, 0, "easy", true, true, "127.0.0.1");
-    private static volatile RetentionSettings retentionSettings = new RetentionSettings(3, 7);
+    private static volatile RetentionSettings retentionSettings = new RetentionSettings(7);
     private static volatile boolean sessionServer = false;
 
     private SessionSnapshotData() {

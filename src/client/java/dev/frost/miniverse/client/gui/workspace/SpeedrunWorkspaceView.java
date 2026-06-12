@@ -30,12 +30,13 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
     private ButtonWidget seedModeButton;
 
     private SeedMode seedMode = SeedMode.RANDOM;
-    private long seedValue = System.currentTimeMillis();
+    private String seedValue = "";
 
     public SpeedrunWorkspaceView() {
         super("speedrun");
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Draft and assign teams.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Control seed and world behavior.", UiTheme.ACCENT_BLUE);
+        this.useGameRules();
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_GREEN);
     }
 
@@ -54,9 +55,29 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.seedModeButton = this.addButton(screen, "Seed Mode: " + this.seedMode.label, this.layout.mainPanel().x() + 180, y, 170, () -> {
                 this.seedMode = this.seedMode.next();
                 this.seedModeButton.setMessage(Text.literal("Seed Mode: " + this.seedMode.label));
+                if (this.seedMode == SeedMode.RANDOM) {
+                    this.seedValueField.setEditable(false);
+                    this.seedValueField.active = false;
+                    this.seedValueField.setText("");
+                    this.seedValueField.setSuggestion("Enter world seed");
+                } else {
+                    this.seedValueField.setEditable(true);
+                    this.seedValueField.active = true;
+                    this.seedValueField.setSuggestion("");
+                    this.seedValueField.setText(this.seedValue);
+                }
             });
             y += 32;
-            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, y, Long.toString(this.seedValue), 170, "Seed value");
+            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", 170, "Seed value");
+            if (this.seedMode == SeedMode.RANDOM) {
+                this.seedValueField.setEditable(false);
+                this.seedValueField.active = false;
+                this.seedValueField.setSuggestion("Enter world seed");
+            } else {
+                this.seedValueField.setEditable(true);
+                this.seedValueField.active = true;
+                this.seedValueField.setSuggestion("");
+            }
         }
     }
 
@@ -68,20 +89,17 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.renderActionButton(context, textRenderer, this.actionRemove, "Remove From Team", UiTheme.ACCENT, this.actionRemove.contains(mouseX, mouseY));
             this.renderActionButton(context, textRenderer, this.actionDelete, "Delete Team", UiTheme.ACCENT_RED, this.actionDelete.contains(mouseX, mouseY));
             this.renderActionButton(context, textRenderer, this.actionSolo, "Solo All", UiTheme.ACCENT_GREEN, this.actionSolo.contains(mouseX, mouseY));
-        } else if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT_GREEN);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal("Teams: " + this.teamGrid.getTeams().size()), x + 14, line, UiTheme.TEXT, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Seed: " + this.seedMode.label), x + 14, line, UiTheme.TEXT, false);
         } else if (this.moduleManager.isActive("rules")) {
             this.renderSettingsModulePanel(context, textRenderer, "Match Rules", UiTheme.ACCENT_BLUE);
         }
+    }
+
+    @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal("Teams: " + this.teamGrid.getTeams().size()),
+            Text.literal("Seed: " + this.seedMode.label)
+        );
     }
 
     @Override
@@ -93,6 +111,19 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        
+        if (this.moduleManager.isActive("rules") && this.seedMode == SeedMode.RANDOM && this.seedValueField != null) {
+            if (this.seedValueField.isMouseOver(mouseX, mouseY)) {
+                this.status = ValidationResult.error("Seed mode is random, change to Fixed to enter your own world seed.");
+                return true;
+            }
+        }
+        
+        return this.gamemodeMouseClicked(mouseX, mouseY, button);
+    }
+
     protected boolean gamemodeMouseClicked(double mouseX, double mouseY, int button) {
         if (button != 0 || !this.moduleManager.isActive("teams")) return false;
         
@@ -137,12 +168,10 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
         return false;
     }
 
-    private void syncStateFromWidgets() {
-        if (this.seedValueField != null) {
-            try {
-                this.seedValue = Long.parseLong(this.seedValueField.getText().trim());
-            } catch (NumberFormatException ignored) {
-                this.seedValueField.setText(Long.toString(this.seedValue));
+    protected void syncStateFromWidgets() {
+        if (this.moduleManager.isActive("rules")) {
+            if (this.seedValueField != null && this.seedMode == SeedMode.FIXED) {
+                this.seedValue = this.seedValueField.getText().trim();
             }
         }
     }
@@ -173,7 +202,17 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.syncStateFromWidgets();
         builder.settings().putString("seedMode", this.seedMode.nbtValue);
         if (this.seedMode == SeedMode.FIXED) {
-            builder.settings().putLong("seed", this.seedValue);
+            long parsedSeed;
+            if (this.seedValue.isEmpty()) {
+                parsedSeed = System.currentTimeMillis();
+            } else {
+                try {
+                    parsedSeed = Long.parseLong(this.seedValue);
+                } catch (NumberFormatException e) {
+                    parsedSeed = (long) this.seedValue.hashCode();
+                }
+            }
+            builder.settings().putLong("seed", parsedSeed);
         }
     }
 

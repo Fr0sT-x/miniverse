@@ -50,11 +50,13 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
     private ResourceSprintSettings.TieBreakRule tieBreakRule = ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
     private int timeLimitSeconds = 3600;
     private Set<String> objectivesPool = new LinkedHashSet<>();
+    private int amount = 64;
 
     public ResourceSprintWorkspaceView() {
         super("resourcesprint");
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Draft and assign teams.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure scoring and win rules.", UiTheme.ACCENT_BLUE);
+        this.useGameRules();
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_BLUE);
     }
 
@@ -119,22 +121,18 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
             this.renderActionButton(context, textRenderer, this.actionRemove, "Remove From Team", UiTheme.ACCENT, this.actionRemove.contains(mouseX, mouseY));
             this.renderActionButton(context, textRenderer, this.actionDelete, "Delete Team", UiTheme.ACCENT_RED, this.actionDelete.contains(mouseX, mouseY));
             this.renderActionButton(context, textRenderer, this.actionSolo, "Solo All", UiTheme.ACCENT_GREEN, this.actionSolo.contains(mouseX, mouseY));
-        } else if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT_BLUE);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal("Mode: " + titleCase(this.mode.nbtValue())), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Time Limit: " + this.timeLimitSeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Distribution: " + shortDistribution(this.distributionMode)), x + 14, line, UiTheme.TEXT_MUTED, false);
         } else if (this.moduleManager.isActive("rules")) {
             this.renderSettingsModulePanel(context, textRenderer, "Match Rules", UiTheme.ACCENT_BLUE);
         }
+    }
+
+    @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal("Mode: " + titleCase(this.mode.nbtValue())),
+            Text.literal("Time Limit: " + this.timeLimitSeconds + "s"),
+            Text.literal("Distribution: " + shortDistribution(this.distributionMode))
+        );
     }
 
     @Override
@@ -195,7 +193,7 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
         return false;
     }
 
-    private void syncStateFromWidgets() {
+    protected void syncStateFromWidgets() {
         if (this.timeLimitField != null) {
             this.timeLimitSeconds = this.readClamped(this.timeLimitField, this.timeLimitSeconds, 60, 7200);
         }

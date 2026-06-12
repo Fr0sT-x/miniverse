@@ -23,7 +23,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 
-public class DuelsMinigame implements Minigame, ServerTickAware, EntityDeathAware, PlayerLeaveAware {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+
+public class DuelsMinigame extends AbstractMinigame {
 
     private ServerWorld world;
     private DuelsMetadata metadata = new DuelsMetadata(List.of(), List.of());
@@ -59,6 +62,16 @@ public class DuelsMinigame implements Minigame, ServerTickAware, EntityDeathAwar
         setState(GameState.WAITING_FOR_PLAYERS);
     }
 
+    @Override
+    protected GlobalMatchRules configureGameRules() {
+        return GlobalMatchRules.defaults();
+    }
+
+    @Override
+    protected boolean isTeamBased() {
+        return true;
+    }
+
     private void setupEventInterceptors(ServerWorld world) {
         // Enforce block breaking rules
         PlayerBlockBreakEvents.BEFORE.register((w, player, pos, state, blockEntity) -> {
@@ -85,7 +98,7 @@ public class DuelsMinigame implements Minigame, ServerTickAware, EntityDeathAwar
     }
 
     @Override
-    public void startGame() {
+    protected void onMatchStart() {
         if (!this.canStartMatch()) {
             setState(GameState.ENDING);
             return;
@@ -110,9 +123,12 @@ public class DuelsMinigame implements Minigame, ServerTickAware, EntityDeathAwar
     }
 
     @Override
-    public void stopGame() {
+    protected void onMatchEnd() {
         this.restoreGamerules();
         setState(GameState.ENDING);
+        if (this.context != null) {
+            this.context.setState(GameState.ENDING);
+        }
     }
 
     @Override
@@ -137,7 +153,7 @@ public class DuelsMinigame implements Minigame, ServerTickAware, EntityDeathAwar
     }
 
     @Override
-    public void onServerTick(net.minecraft.server.MinecraftServer server) {
+    protected void onGameTick(net.minecraft.server.MinecraftServer server) {
         if (this.matchManager != null) {
             this.matchManager.tick();
         }
@@ -251,5 +267,47 @@ public class DuelsMinigame implements Minigame, ServerTickAware, EntityDeathAwar
     @Override
     public boolean canBreakBlocks() {
         return this.duelType != null && this.duelType.allowBreaking();
+    }
+
+    @Override
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject stateObj = new com.google.gson.JsonObject();
+        stateObj.addProperty("state", this.state.name());
+        stateObj.addProperty("duelTypeId", this.duelTypeId);
+        stateObj.addProperty("kitId", this.kitId);
+        
+        com.google.gson.JsonArray t1 = new com.google.gson.JsonArray();
+        for (ServerPlayerEntity p : this.team1) {
+            t1.add(p.getUuidAsString());
+        }
+        stateObj.add("team1", t1);
+        
+        com.google.gson.JsonArray t2 = new com.google.gson.JsonArray();
+        for (ServerPlayerEntity p : this.team2) {
+            t2.add(p.getUuidAsString());
+        }
+        stateObj.add("team2", t2);
+        
+        return stateObj;
+    }
+
+    @Override
+    public void loadRuntimeState(com.google.gson.JsonObject stateObj) {
+        if (stateObj == null) return;
+        if (stateObj.has("state")) {
+            try {
+                this.state = GameState.valueOf(stateObj.get("state").getAsString());
+            } catch (Exception ignored) {}
+        }
+        if (stateObj.has("duelTypeId")) {
+            this.duelTypeId = stateObj.get("duelTypeId").getAsString();
+            this.duelType = DuelTypeRegistry.get(this.duelTypeId).orElse(null);
+        }
+        if (stateObj.has("kitId")) {
+            this.kitId = stateObj.get("kitId").getAsString();
+        }
+        
+        // Cannot restore team1 and team2 directly since ServerPlayerEntity isn't available at load time,
+        // it must be resolved later or during attachContext/reconnect. We will save them for potential future use.
     }
 }

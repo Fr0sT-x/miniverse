@@ -10,7 +10,8 @@ import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
@@ -40,10 +41,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, ServerTickAware, EntityDeathAware, PlayerLeaveAware, PersistentMinigame, DynamicParticipantMinigame, PauseAwareMinigame {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+
+public class DeathShuffleMinigame extends AbstractMinigame {
     private static final int TICKS_PER_SECOND = 20;
 
-    private MinigameContext context;
     private DeathShuffleSettings settings;
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private RoundState roundState = RoundState.INTERMISSION;
@@ -59,7 +62,8 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     private final Set<UUID> completedThisRound = new HashSet<>();
     private final Set<Integer> timeWarningsShown = new HashSet<>();
 
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController("deathshuffle_display", Text.literal("Death Shuffle").formatted(Formatting.RED, Formatting.BOLD));
+    private ScoreboardTemplate baseScoreboard;
+    private final Map<UUID, ScoreboardLine> timerLines = new HashMap<>();
 
     private enum RoundState {
         INTERMISSION,
@@ -72,8 +76,13 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     @Override
-    public void attachContext(MinigameContext context) {
-        this.context = context;
+    protected GlobalMatchRules configureGameRules() {
+        return new GlobalMatchRules(true, false, true, true, true, true, true);
+    }
+
+    @Override
+    protected boolean isTeamBased() {
+        return false;
     }
 
     public void applySettings(DeathShuffleSettings settings) {
@@ -82,7 +91,7 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
 
     @Override
     public void initialize() {
-        this.state = GameState.WAITING_FOR_PLAYERS;
+        this.setState(GameState.WAITING_FOR_PLAYERS);
         this.roundState = RoundState.INTERMISSION;
         this.server = null;
         this.elapsedTicks = 0;
@@ -94,8 +103,7 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     @Override
-    public void startGame() {
-        if (this.state == GameState.IN_PROGRESS) return;
+    protected void onMatchStart() {
         
         List<ServerPlayerEntity> participants = this.context.liveParticipants();
         if (participants.isEmpty()) {
@@ -103,9 +111,11 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
             return;
         }
 
-        this.state = GameState.IN_PROGRESS;
-        this.context.setState(GameState.IN_PROGRESS);
-        this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
+        this.setState(GameState.IN_PROGRESS);
+        if (this.context != null) {
+            this.context.setState(GameState.IN_PROGRESS);
+            this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
+        }
         
         for (UUID uuid : this.activePlayers) {
             this.points.put(uuid, 0);
@@ -116,24 +126,26 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         }
 
         this.broadcast(Text.literal("☠ Death Shuffle started! First to " + this.settings.pointsToWin() + " points wins.").formatted(Formatting.RED));
+        this.rebuildScoreboards();
         this.startGracePeriod();
     }
 
     @Override
-    public void stopGame() {
-        this.state = GameState.ENDING;
-        this.context.setState(GameState.ENDING);
-        if (this.server != null) {
-            SCOREBOARD.clear(this.server);
+    protected void onMatchEnd() {
+        this.setState(GameState.ENDING);
+        if (this.context != null) {
+            this.context.setState(GameState.ENDING);
+        }
+        if (this.server != null && this.baseScoreboard != null) {
+            this.baseScoreboard.cleanup(this.server);
         }
         this.activePlayers.clear();
-        this.context.participants().clear();
     }
 
     @Override
-    public void onServerTick(MinecraftServer server) {
+    protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.state != GameState.IN_PROGRESS) return;
+        if (this.getState() != GameState.IN_PROGRESS) return;
 
         if (this.activePlayers.isEmpty()) {
             if (!MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
@@ -148,7 +160,7 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         }
 
         this.elapsedTicks++;
-        this.updateScoreboard();
+        this.updateScoreboardTimers();
 
         if (this.roundState == RoundState.INTERMISSION) {
             if (this.elapsedTicks >= 5 * TICKS_PER_SECOND) {
@@ -217,12 +229,14 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
                 GameMessenger.showGameTitle(List.of(player), objectiveAssigned.displayName().copy().formatted(Formatting.RED), titleSubtitle);
             }
         }
+        this.rebuildScoreboards();
     }
 
     private void startRound() {
         this.roundState = RoundState.ACTIVE;
         this.timeWarningsShown.clear();
         this.roundTimerTicks = Math.max(10, this.settings.roundDurationSeconds()) * TICKS_PER_SECOND;
+        this.rebuildScoreboards();
     }
 
     private void checkTimeWarnings() {
@@ -274,6 +288,8 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         this.checkWinCondition();
         if (this.state == GameState.IN_PROGRESS) {
             this.startIntermission();
+        } else {
+            this.rebuildScoreboards();
         }
     }
 
@@ -281,6 +297,7 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         this.roundState = RoundState.INTERMISSION;
         this.elapsedTicks = 0;
         GameMessenger.showGameTitle(this.getAliveParticipants(), Text.literal("Round Results").formatted(Formatting.GOLD), Text.literal("Check chat for details").formatted(Formatting.GRAY));
+        this.rebuildScoreboards();
     }
 
     private void checkWinCondition() {
@@ -363,6 +380,7 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
                 
                 player.sendMessage(Text.literal("Objective Complete! +1 Point!").formatted(Formatting.GREEN, Formatting.BOLD), false);
                 GameMessenger.showGameTitle(List.of(player), Text.literal("Completed!").formatted(Formatting.GREEN), Text.literal("Wait for the next round...").formatted(Formatting.GRAY));
+                this.rebuildScoreboards();
             } else {
                 player.sendMessage(Text.literal("Wrong death cause! Try again.").formatted(Formatting.RED), true);
             }
@@ -384,27 +402,30 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
         if (this.state == GameState.WAITING_FOR_PLAYERS) {
-            this.context.participants().remove(player);
+            if (this.context != null) this.context.participants().remove(player);
             this.activePlayers.remove(player.getUuid());
+        } else {
+            this.rebuildScoreboards();
         }
     }
 
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         if (this.state == GameState.WAITING_FOR_PLAYERS) {
-            this.context.participants().add(player);
+            if (this.context != null) this.context.participants().add(player);
             this.activePlayers.add(player.getUuid());
         } else if (this.state == GameState.IN_PROGRESS) {
-            this.context.participants().add(player);
+            if (this.context != null) this.context.participants().add(player);
             this.activePlayers.add(player.getUuid());
             this.points.putIfAbsent(player.getUuid(), 0);
             player.sendMessage(Text.literal("You joined the game late. Wait for your next objective!").formatted(Formatting.YELLOW), false);
+            this.rebuildScoreboards();
         }
     }
 
     @Override
     public void removeParticipantMidGame(ServerPlayerEntity player) {
-        this.context.participants().remove(player);
+        if (this.context != null) this.context.participants().remove(player);
         this.activePlayers.remove(player.getUuid());
     }
 
@@ -475,18 +496,6 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     @Override
-    public void onPlayerDeath(ServerPlayerEntity player) {
-    }
-
-    @Override
-    public void onPause(GameState previousState) {
-    }
-
-    @Override
-    public void onResume(GameState resumedState) {
-    }
-
-    @Override
     public String getName() {
         return DeathShuffleDefinition.DISPLAY_NAME;
     }
@@ -497,8 +506,10 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     private void broadcast(Text message) {
-        for (ServerPlayerEntity player : this.getAliveParticipants()) {
-            player.sendMessage(message, false);
+        if (this.context != null && this.context.nullableServer() != null) {
+            for (ServerPlayerEntity player : this.getAliveParticipants()) {
+                player.sendMessage(message, false);
+            }
         }
     }
 
@@ -514,91 +525,95 @@ public class DeathShuffleMinigame implements Minigame, RuntimeContextAware, Serv
         return this.activePlayers.contains(uuid);
     }
 
-    private void updateScoreboard() {
+    private void rebuildScoreboards() {
         if (this.server == null) return;
         List<ServerPlayerEntity> participants = this.getAliveParticipants();
         if (participants.isEmpty()) return;
 
-        List<Text> lines = new ArrayList<>();
-
-        if (this.roundState == RoundState.ACTIVE) {
-            int secondsRemaining = this.roundTimerTicks / TICKS_PER_SECOND;
-            int minutes = secondsRemaining / 60;
-            int seconds = secondsRemaining % 60;
-            lines.add(Text.literal("Time: ").formatted(Formatting.WHITE)
-                .append(Text.literal(String.format("%02d:%02d", minutes, seconds)).formatted(Formatting.RED)));
-        } else if (this.roundState == RoundState.GRACE_PERIOD) {
-            int secondsRemaining = (int) Math.ceil(this.graceTimerTicks / (float) TICKS_PER_SECOND);
-            lines.add(Text.literal("Starting in: ").formatted(Formatting.WHITE)
-                .append(Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.GOLD)));
+        if (this.baseScoreboard == null) {
+            this.baseScoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Death Shuffle").formatted(Formatting.RED, Formatting.BOLD)));
+            this.baseScoreboard.show(participants);
         } else {
-            int secondsRemaining = 5 - (this.elapsedTicks / TICKS_PER_SECOND);
-            lines.add(Text.literal("Next Round: ").formatted(Formatting.WHITE)
-                .append(Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.YELLOW)));
-        }
-
-        lines.add(Text.empty());
-
-        List<Map.Entry<UUID, Integer>> sortedScores = new ArrayList<>(this.points.entrySet());
-        sortedScores.sort((a, b) -> b.getValue().compareTo(a.getValue()));
-
-        for (int i = 0; i < Math.min(sortedScores.size(), 10); i++) {
-            Map.Entry<UUID, Integer> entry = sortedScores.get(i);
-            ServerPlayerEntity player = this.server.getPlayerManager().getPlayer(entry.getKey());
-            String name = player != null ? player.getName().getString() : "Unknown";
-            
-            Formatting nameColor = Formatting.GRAY;
-            if (this.roundState == RoundState.ACTIVE) {
-                if (this.completedThisRound.contains(entry.getKey())) {
-                    nameColor = Formatting.GREEN;
-                } else if (this.activePlayers.contains(entry.getKey())) {
-                    nameColor = Formatting.WHITE;
+            for (ServerPlayerEntity player : participants) {
+                if (!this.baseScoreboard.isViewing(player)) {
+                    this.baseScoreboard.show(player);
                 }
             }
-
-            lines.add(Text.literal(name + ": ")
-                .formatted(nameColor)
-                .append(Text.literal(String.valueOf(entry.getValue())).formatted(Formatting.GOLD)));
-            
-            // Show objective for the player watching if per-player is on
-            if (this.roundState == RoundState.ACTIVE && this.settings.perPlayerObjectives()) {
-                // Actually scoreboard lines are global to the controller unless we do per-player scoreboards.
-                // Miniverse ScoreboardController sends same lines to all.
-                // So we can't easily show the objective in the scoreboard if it's per player, without refactoring.
-            }
         }
-        
-        if (this.roundState == RoundState.ACTIVE && !this.settings.perPlayerObjectives()) {
-            lines.add(Text.empty());
-            lines.add(Text.literal("Objective:").formatted(Formatting.RED));
+
+        this.baseScoreboard.rebuild(player -> {
+            UUID uuid = player.getUuid();
+            ScoreboardTemplate board = new ScoreboardTemplate(this.getName(), Text.literal("Death Shuffle").formatted(Formatting.RED, Formatting.BOLD));
             
-            // Get the shared objective
-            UUID anyPlayer = this.activePlayers.stream().findFirst().orElse(null);
-            if (anyPlayer != null) {
-                Identifier objId = this.assignedObjectives.get(anyPlayer);
+            ScoreboardLine timerLine = board.addLine(Text.empty());
+            this.timerLines.put(uuid, timerLine);
+            
+            board.addBlankLine();
+
+            List<Map.Entry<UUID, Integer>> sortedScores = new ArrayList<>(this.points.entrySet());
+            sortedScores.sort((a, b) -> b.getValue().compareTo(a.getValue()));
+
+            for (int i = 0; i < Math.min(sortedScores.size(), 10); i++) {
+                Map.Entry<UUID, Integer> entry = sortedScores.get(i);
+                ServerPlayerEntity p = this.server.getPlayerManager().getPlayer(entry.getKey());
+                String name = p != null ? p.getName().getString() : "Unknown";
+                
+                Formatting nameColor = Formatting.GRAY;
+                if (this.roundState == RoundState.ACTIVE) {
+                    if (this.completedThisRound.contains(entry.getKey())) {
+                        nameColor = Formatting.GREEN;
+                    } else if (this.activePlayers.contains(entry.getKey())) {
+                        nameColor = Formatting.WHITE;
+                    }
+                }
+
+                board.addLine(Text.literal(name + ": ")
+                    .formatted(nameColor)
+                    .append(Text.literal(String.valueOf(entry.getValue())).formatted(Formatting.GOLD)));
+            }
+
+            if (this.roundState == RoundState.ACTIVE) {
+                board.addBlankLine();
+                board.addLine(Text.literal("Objective:").formatted(Formatting.RED));
+                
+                Identifier objId = this.assignedObjectives.get(this.settings.perPlayerObjectives() ? uuid : this.activePlayers.stream().findFirst().orElse(null));
                 if (objId != null) {
                     DeathObjective obj = dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjectiveManager.get(this.server, objId);
                     if (obj != null) {
-                        lines.add(obj.displayName().copy().formatted(Formatting.WHITE));
+                        board.addLine(obj.displayName().copy().formatted(Formatting.WHITE));
                         if (obj.description().isPresent()) {
-                            lines.add(obj.description().get().copy().formatted(Formatting.GRAY, Formatting.ITALIC));
+                            board.addLine(obj.description().get().copy().formatted(Formatting.GRAY, Formatting.ITALIC));
                         }
                     }
                 }
             }
-        }
+            return board;
+        });
 
-        SCOREBOARD.clear(this.server);
-        
-        int order = lines.size();
-        for (Text line : lines) {
-            String textStr = line.getString();
-            // Scoreboard needs unique names, so we add invisible color codes if there are duplicates
-            // But for simple implementation, we just use the raw string.
-            if (!textStr.isEmpty()) {
-                SCOREBOARD.setScore(this.server, textStr, order);
+        this.updateScoreboardTimers();
+    }
+
+    private void updateScoreboardTimers() {
+        for (ServerPlayerEntity player : this.getAliveParticipants()) {
+            ScoreboardLine timerLine = this.timerLines.get(player.getUuid());
+            if (timerLine != null) {
+                if (this.roundState == RoundState.ACTIVE) {
+                    int secondsRemaining = this.roundTimerTicks / TICKS_PER_SECOND;
+                    int minutes = secondsRemaining / 60;
+                    int seconds = secondsRemaining % 60;
+                    timerLine.setText(Text.literal("Time: ").formatted(Formatting.WHITE)
+                        .append(Text.literal(String.format("%02d:%02d", minutes, seconds)).formatted(Formatting.RED)));
+                } else if (this.roundState == RoundState.GRACE_PERIOD) {
+                    int secondsRemaining = (int) Math.ceil(this.graceTimerTicks / (float) TICKS_PER_SECOND);
+                    timerLine.setText(Text.literal("Starting in: ").formatted(Formatting.WHITE)
+                        .append(Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.GOLD)));
+                } else {
+                    int secondsRemaining = 5 - (this.elapsedTicks / TICKS_PER_SECOND);
+                    timerLine.setText(Text.literal("Next Round: ").formatted(Formatting.WHITE)
+                        .append(Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.YELLOW)));
+                }
+                timerLine.updateAll();
             }
-            order--;
         }
     }
 }

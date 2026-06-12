@@ -34,6 +34,7 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for Infection.", UiTheme.ACCENT_RED, "Valid Infection Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune duration, infected count, respawn delay, and friendly fire.", UiTheme.ACCENT_BLUE);
+        this.useGameRules();
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the map-backed session.", UiTheme.ACCENT);
     }
 
@@ -52,22 +53,18 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
 
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal("Players: " + this.playerGrid.getMembers("selected").size()), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Match Duration: " + this.durationSeconds + "s"), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Starting Infected: " + this.startingInfected), x + 14, line, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("rules")) {
+        if (this.moduleManager.isActive("rules")) {
             this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
+    }
+
+    @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal("Players: " + this.playerGrid.getMembers("selected").size()),
+            Text.literal("Match Duration: " + this.durationSeconds + "s"),
+            Text.literal("Starting Infected: " + this.startingInfected)
+        );
     }
 
     @Override
@@ -88,7 +85,7 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
         super.setActiveModule(moduleId);
     }
 
-    private void syncStateFromWidgets() {
+    protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
             this.durationSeconds = readClamped(this.durationField, this.durationSeconds, 10, 3600);
             this.startingInfected = readClamped(this.infectedField, this.startingInfected, 1, 100);

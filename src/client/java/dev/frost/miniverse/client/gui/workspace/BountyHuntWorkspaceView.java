@@ -42,29 +42,38 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
         this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
-        this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure scoring and timers.", UiTheme.ACCENT_BLUE);
-        this.moduleManager.register("tracking", "T", "Tracking", "Rules", "Configure tracker behavior.", UiTheme.ACCENT_GREEN);
-        this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
+        this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure scoring, timers, and tracking.", UiTheme.ACCENT_BLUE);
+        this.useGameRules();
+        this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_GREEN);
     }
 
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.graceField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.graceSeconds), "Grace seconds");
-            this.invincibilityField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.invincibilitySeconds), "Invincibility seconds");
-            this.scoreToWinField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.scoreToWin), "Score to win");
-            this.targetSwapField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, Integer.toString(this.targetSwapSeconds), "Target swap seconds");
-        } else if (this.moduleManager.isActive("tracking")) {
-            this.trackerToggle = this.addButton(screen, toggleLabel("Tracker", this.trackerEnabled), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, 170, () -> {
+            int cx1 = this.layout.mainPanel().x() + 150;
+            int cx2 = this.layout.mainPanel().x() + 500;
+
+            // Row 1
+            this.scoreToWinField = this.addField(screen, cx1, this.layout.mainPanel().y() + 124, Integer.toString(this.scoreToWin), "Score to win");
+            this.targetSwapField = this.addField(screen, cx2, this.layout.mainPanel().y() + 124, Integer.toString(this.targetSwapSeconds), "Target swap seconds");
+
+            // Row 2
+            this.graceField = this.addField(screen, cx1, this.layout.mainPanel().y() + 156, Integer.toString(this.graceSeconds), "Grace seconds");
+            this.invincibilityField = this.addField(screen, cx2, this.layout.mainPanel().y() + 156, Integer.toString(this.invincibilitySeconds), "Invincibility seconds");
+
+            // Row 3
+            this.trackerToggle = this.addButton(screen, toggleLabel("Tracker", this.trackerEnabled), cx1, this.layout.mainPanel().y() + 208, 170, () -> {
                 this.trackerEnabled = !this.trackerEnabled;
                 this.trackerToggle.setMessage(Text.literal(toggleLabel("Tracker", this.trackerEnabled)));
             });
-            this.netherToggle = this.addButton(screen, toggleLabel("Nether", this.netherTrackingEnabled), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, 170, () -> {
+            this.netherToggle = this.addButton(screen, toggleLabel("Nether Tracking", this.netherTrackingEnabled), cx2, this.layout.mainPanel().y() + 208, 170, () -> {
                 this.netherTrackingEnabled = !this.netherTrackingEnabled;
-                this.netherToggle.setMessage(Text.literal(toggleLabel("Nether", this.netherTrackingEnabled)));
+                this.netherToggle.setMessage(Text.literal(toggleLabel("Nether Tracking", this.netherTrackingEnabled)));
             });
-            this.compassCooldownField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.compassCooldownSeconds), "Cooldown seconds");
-            this.trackerItemField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, this.trackerItemId, "Tracker item");
+
+            // Row 4
+            this.compassCooldownField = this.addField(screen, cx1, this.layout.mainPanel().y() + 240, Integer.toString(this.compassCooldownSeconds), "Cooldown seconds");
+            this.trackerItemField = this.addField(screen, cx2, this.layout.mainPanel().y() + 240, this.trackerItemId, "Tracker item");
         }
     }
 
@@ -72,36 +81,35 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
         if (this.moduleManager.isActive("players")) {
             // Action buttons are not auto-handled yet, so let's just let players use drag/drop or we could add them to init
-        } else if (this.moduleManager.isActive("summary")) {
-            this.syncStateFromWidgets();
-            this.renderSettingsModulePanel(context, textRenderer, "Summary", UiTheme.ACCENT);
-            int x = this.layout.mainPanel().x() + 14;
-            int y = this.layout.mainPanel().y() + 72;
-            int line = y + 18;
-            context.drawText(textRenderer, Text.literal("Session: " + this.sessionName), x + 14, line, UiTheme.TEXT, false);
-            line += 20;
-            context.drawText(textRenderer, Text.literal("Players: " + this.playerGrid.getMembers("selected").size()), x + 14, line, UiTheme.TEXT_MUTED, false);
-            line += 18;
-            context.drawText(textRenderer, Text.literal("Score To Win: " + this.scoreToWin), x + 14, line, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("rules") || this.moduleManager.isActive("tracking")) {
-            this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
     }
 
     @Override
+    protected java.util.List<Text> getSummaryLines() {
+        return java.util.List.of(
+            Text.literal("Players: " + this.playerGrid.getMembers("selected").size()),
+            Text.literal("Score To Win: " + this.scoreToWin)
+        );
+    }
+
+    @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int labelX = this.layout.mainPanel().x() + 38;
-        int labelY = this.layout.mainPanel().y() + 102;
+        int lx1 = this.layout.mainPanel().x() + 24;
+        int lx2 = this.layout.mainPanel().x() + 374;
+        int by = this.layout.mainPanel().y();
+
         if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Grace Period"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Invincibility"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Score To Win"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Target Swap"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-        } else if (this.moduleManager.isActive("tracking")) {
-            context.drawText(textRenderer, Text.literal("Tracker"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Nether"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Cooldown"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Tracker Item"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Match Settings"), lx1, by + 108, UiTheme.ACCENT_BLUE, false);
+            context.drawText(textRenderer, Text.literal("Score To Win"), lx1, by + 130, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Target Swap"), lx2, by + 130, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Grace Period"), lx1, by + 162, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Invincibility"), lx2, by + 162, UiTheme.TEXT_MUTED, false);
+
+            context.drawText(textRenderer, Text.literal("Tracking Options"), lx1, by + 192, UiTheme.ACCENT_BLUE, false);
+            context.drawText(textRenderer, Text.literal("Tracker Toggle"), lx1, by + 214, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Nether Toggle"), lx2, by + 214, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Cooldown"), lx1, by + 246, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Tracker Item"), lx2, by + 246, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -111,13 +119,12 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
         super.setActiveModule(moduleId);
     }
 
-    private void syncStateFromWidgets() {
+    protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
             this.graceSeconds = readClamped(this.graceField, this.graceSeconds, 0, 3600);
             this.invincibilitySeconds = readClamped(this.invincibilityField, this.invincibilitySeconds, 0, 3600);
             this.scoreToWin = readClamped(this.scoreToWinField, this.scoreToWin, 1, 99);
             this.targetSwapSeconds = readClamped(this.targetSwapField, this.targetSwapSeconds, 0, 3600);
-        } else if (this.moduleManager.isActive("tracking")) {
             this.compassCooldownSeconds = readClamped(this.compassCooldownField, this.compassCooldownSeconds, 0, 300);
             if (this.trackerItemField != null) {
                 this.trackerItemId = this.trackerItemField.getText().trim();

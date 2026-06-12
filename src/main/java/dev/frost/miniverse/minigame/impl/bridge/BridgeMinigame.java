@@ -11,7 +11,8 @@ import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
 import dev.frost.miniverse.minigame.core.event.PlayerJoinAware;
@@ -75,11 +76,17 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
-public final class BridgeMinigame implements Minigame, RuntimeContextAware, ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerDamageAware, PlayerJoinAware, PlayerLeaveAware, PlayerRegionAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+
+public final class BridgeMinigame extends AbstractMinigame implements PlayerDamageAware, PlayerRegionAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware {
 
     public static final String RED_TEAM = "red";
     public static final String BLUE_TEAM = "blue";
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController("bridge_display", Text.literal("The Bridge").formatted(Formatting.AQUA, Formatting.BOLD));
+    private ScoreboardTemplate scoreboard;
+    private ScoreboardLine redScoreLine;
+    private ScoreboardLine blueScoreLine;
+    private ScoreboardLine timeLine;
 
     private final TeamManager teams = new TeamManager();
     private final Set<UUID> redPlayers = ConcurrentHashMap.newKeySet();
@@ -89,8 +96,6 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
     private BridgeSettings settings = BridgeSettings.fromNbt(null);
     private BridgeMapConfig mapConfig = new BridgeMapConfig(List.of(), List.of(), null, null);
     private GameState state = GameState.WAITING_FOR_PLAYERS;
-    @Nullable
-    private MinigameContext context;
     @Nullable
     private MinecraftServer server;
 
@@ -106,13 +111,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
     private final Map<UUID, Integer> arrowTimers = new java.util.HashMap<>();
 
     @Override
-    public void attachContext(MinigameContext context) {
-        this.context = context;
-    }
-
-    @Override
-    public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
-        this.server = server;
+    protected void onPlayerJoinGame(ServerPlayerEntity player, MinecraftServer server) {
         if (this.getTeamId(player) != null && !this.mapConfig.redSpawns().isEmpty()) {
             this.teleportToTeamSpawn(player);
         }
@@ -129,8 +128,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     public boolean canStartMatch() {
-        if (this.context == null) return false;
-        if (this.context.participants().size() < 2) return false;
+        if (this.participants().size() < 2) return false;
         MapValidationResult validation = this.mapConfig.validate();
         if (!validation.valid()) {
             dev.frost.miniverse.Miniverse.LOGGER.warn("Bridge canStartMatch failed validation: {}", validation.errors());
@@ -141,7 +139,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     public MapValidationResult startValidation() {
         MapValidationResult.Builder builder = MapValidationResult.builder();
-        if (this.context == null || this.context.participants().size() < 2) {
+        if (this.participants().size() < 2) {
             builder.error("Need at least two players to start The Bridge.");
         }
 
@@ -159,7 +157,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     @Override
     public void initialize() {
-        this.state = GameState.WAITING_FOR_PLAYERS;
+        this.setState(GameState.WAITING_FOR_PLAYERS);
         
         dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.registerGamemode(
             BridgeDefinition.ID, 
@@ -223,7 +221,17 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     @Override
-    public void startGame() {
+    protected GlobalMatchRules configureGameRules() {
+        return new GlobalMatchRules(true, true, true, true, true, true, true);
+    }
+
+    @Override
+    protected boolean isTeamBased() {
+        return true;
+    }
+
+    @Override
+    protected void onMatchStart() {
         try {
             this.doStartGame();
             
@@ -258,7 +266,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
             } else if (this.bluePlayers.contains(player.getUuid())) {
                 this.teams.assign(player, BLUE_TEAM, "Blue", TeamRole.MEMBER);
             }
-            if (this.state != GameState.FROZEN) {
+            if (this.getState() != GameState.FROZEN) {
                 this.teleportToTeamSpawnSafe(player);
             }
             player.changeGameMode(GameMode.SURVIVAL);
@@ -268,15 +276,13 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
         this.syncVanillaTeams();
         
         this.ticksRemaining = 15 * 60 * 20; // 15 minutes match timer
-        this.state = GameState.PLAYING;
+        this.setState(GameState.PLAYING);
         this.broadcast(Text.literal("The Bridge has started! First to " + this.settings.targetScore() + " wins.").formatted(Formatting.YELLOW));
     }
 
     private void startRound() {
-        this.state = GameState.PLAYING;
-        if (this.context != null) {
-            this.context.setState(GameState.PLAYING);
-        }
+        this.setState(GameState.PLAYING);
+        this.setRuntimeState(GameState.PLAYING);
         this.acceptingGoals = true;
         this.stateTicks = 0;
 
@@ -286,32 +292,32 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
             player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 3 * 20, 255, false, false, true));
         }
 
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
     @Override
-    public void stopGame() {
+    protected void onMatchEnd() {
         dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload clearPayload = new dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload("", "");
         for (ServerPlayerEntity player : this.participants()) {
             net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, clearPayload);
         }
 
-        this.state = GameState.ENDING;
-        if (this.context != null) {
-            this.context.setState(GameState.ENDING);
-            this.context.participants().clear();
-        }
+        this.setState(GameState.ENDING);
+        this.setRuntimeState(GameState.ENDING);
+
         if (this.server != null) {
-            SCOREBOARD.clear(this.server);
-            this.vanillaTeams.clear(this.server);
+            if (this.scoreboard != null) {
+                this.scoreboard.cleanup(this.server);
+            }
+            this.clearVanillaTeams();
         }
     }
 
     @Override
-    public void onServerTick(MinecraftServer server) {
+    protected void onGameTick(MinecraftServer server) {
         this.server = server;
 
-        if (this.state == GameState.ROUND_RESET) {
+        if (this.getState() == GameState.ROUND_RESET) {
             this.stateTicks++;
             int elapsed = this.stateTicks;
             int remainingTicks = 100 - elapsed;
@@ -341,7 +347,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
             return;
         }
 
-        if (this.state != GameState.PLAYING) {
+        if (this.getState() != GameState.PLAYING) {
             return;
         }
 
@@ -396,7 +402,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
         this.ticksRemaining = Math.max(0, this.ticksRemaining - 1);
         if (this.ticksRemaining % 20 == 0) {
-            this.updateScoreboard();
+            this.updateScoreboardTick();
             if (this.ticksRemaining <= 0) {
                 this.endMatchOnTimer();
             }
@@ -417,7 +423,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
                 if (remaining <= 0) {
                     this.respawnTimers.remove(entry.getKey());
                     ServerPlayerEntity p = this.server.getPlayerManager().getPlayer(entry.getKey());
-                    if (p != null && this.isParticipant(p) && this.state == GameState.PLAYING) {
+                    if (p != null && this.isParticipant(p) && this.getState() == GameState.PLAYING) {
                         p.changeGameMode(GameMode.SURVIVAL);
                         this.applyKit(p);
                         this.teleportToTeamSpawn(p);
@@ -432,7 +438,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     @Override
     public void onPlayerEnterRegion(ServerPlayerEntity player, MapMarker region) {
-        if (!this.acceptingGoals || this.state != GameState.PLAYING) {
+        if (!this.acceptingGoals || this.getState() != GameState.PLAYING) {
             return;
         }
         if (!this.isParticipant(player) || player.isDead()) {
@@ -457,8 +463,8 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     private void scoreGoal(String scoringTeamId, ServerPlayerEntity scorer, MapMarker region) {
         this.acceptingGoals = false;
-        this.state = GameState.ROUND_RESET;
-        this.context().setState(GameState.ROUND_RESET);
+        this.setState(GameState.ROUND_RESET);
+        this.setRuntimeState(GameState.ROUND_RESET);
         this.stateTicks = 0;
         this.arrowTimers.clear();
 
@@ -474,7 +480,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
         }
         
         BridgeStatsEvents.GOAL_SCORED.invoker().onGoalScored(scorer, scoringTeamId, 1);
-        this.updateScoreboard();
+        this.updateScoreboardTick();
 
         // Spawn firework 35 blocks above Goal Region Center
         double cx = scorer.getX();
@@ -561,18 +567,14 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     @Override
     public void onPlayerDeath(ServerPlayerEntity player) {
-        if (!this.settings.keepInventoryOnDeath()) {
-            player.getInventory().clear();
-        }
     }
 
     @Override
     public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
-        if (!this.context().participants().contains(oldPlayer.getUuid())) {
+        if (!this.isParticipant(oldPlayer)) {
             return;
         }
-        this.context().participants().remove(oldPlayer.getUuid());
-        this.context().participants().add(newPlayer);
+        this.replaceParticipant(oldPlayer, newPlayer);
         
         if (this.redPlayers.contains(oldPlayer.getUuid())) {
             this.redPlayers.remove(oldPlayer.getUuid());
@@ -586,7 +588,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
         // Always teleport to team spawn on respawn (handles freeze, playing, etc.)
         this.teleportToTeamSpawn(newPlayer);
-        if (this.state == GameState.PLAYING) {
+        if (this.getState() == GameState.PLAYING) {
             this.applyKit(newPlayer);
             newPlayer.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 3 * 20, 255, false, false, true));
         }
@@ -606,7 +608,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
         // During non-playing states (FROZEN, WAITING, STARTING), block ALL damage
         // This prevents void deaths during the freeze countdown on void maps
-        if (this.state != GameState.PLAYING && this.state != GameState.ROUND_RESET) {
+        if (this.getState() != GameState.PLAYING && this.getState() != GameState.ROUND_RESET) {
             // If player is somehow falling into the void during freeze, teleport them back
             if (player.getY() < -64) {
                 this.teleportToTeamSpawn(player);
@@ -653,7 +655,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
     @Override
     public JsonObject saveRuntimeState() {
         JsonObject json = new JsonObject();
-        json.addProperty("state", this.state.name());
+        json.addProperty("state", this.getState().name());
         json.addProperty("ticksRemaining", this.ticksRemaining);
         json.addProperty("redScore", this.redScore);
         json.addProperty("blueScore", this.blueScore);
@@ -662,7 +664,7 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     @Override
     public void loadRuntimeState(JsonObject state) {
-        this.state = GameState.valueOf(state.has("state") ? state.get("state").getAsString() : GameState.WAITING_FOR_PLAYERS.name());
+        this.setState(GameState.valueOf(state.has("state") ? state.get("state").getAsString() : GameState.WAITING_FOR_PLAYERS.name()));
         this.ticksRemaining = state.has("ticksRemaining") ? state.get("ticksRemaining").getAsInt() : 0;
         this.redScore = state.has("redScore") ? state.get("redScore").getAsInt() : 0;
         this.blueScore = state.has("blueScore") ? state.get("blueScore").getAsInt() : 0;
@@ -680,10 +682,10 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     @Override
     public void setState(GameState state) {
-        GameState oldState = this.state;
+        GameState oldState = this.getState();
         this.state = state == null ? GameState.WAITING_FOR_PLAYERS : state;
         
-        if (oldState != GameState.FROZEN && this.state == GameState.FROZEN) {
+        if (oldState != GameState.FROZEN && this.getState() == GameState.FROZEN) {
             for (ServerPlayerEntity player : this.participants()) {
                 this.teleportToTeamSpawn(player);
                 player.changeGameMode(GameMode.SURVIVAL);
@@ -693,13 +695,13 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
 
     @Override
     public boolean canBuild() {
-        if (this.state == GameState.ROUND_RESET) return false;
+        if (this.getState() == GameState.ROUND_RESET) return false;
         return this.settings.allowBuilding();
     }
 
     @Override
     public boolean canBreakBlocks() {
-        if (this.state == GameState.ROUND_RESET) return false;
+        if (this.getState() == GameState.ROUND_RESET) return false;
         return this.settings.allowBlockBreaking();
     }
 
@@ -778,8 +780,8 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
     }
 
     private void startEndSequence(List<ServerPlayerEntity> winners, Text winnerLabel) {
-        this.state = GameState.MATCH_OVER;
-        this.context().setState(GameState.MATCH_OVER);
+        this.setState(GameState.MATCH_OVER);
+        this.setRuntimeState(GameState.MATCH_OVER);
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime == null) {
             return;
@@ -829,45 +831,94 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
         player.teleport(world, spawn.x(), spawn.y(), spawn.z(), Set.of(), spawn.yaw(), spawn.pitch());
     }
 
-    private void syncVanillaTeams() {
+    @Override
+    protected void syncVanillaTeams() {
         if (this.server == null) {
             return;
         }
         this.vanillaTeams.syncSnapshots(this.server, this.teams.snapshots(), snapshot -> {
             Formatting color = RED_TEAM.equals(snapshot.id()) ? Formatting.RED : Formatting.BLUE;
-            return VanillaTeamOptions.defaults().withColor(color).withFriendlyFireAllowed(false);
+            return dev.frost.miniverse.minigame.core.util.VanillaTeamSync.aliveOptionsTemplate()
+                .withColor(color)
+                .withFriendlyFireAllowed(false);
         });
     }
 
-    private void updateScoreboard() {
-        if (this.server == null) {
-            return;
+    private void rebuildScoreboard() {
+        if (this.scoreboard == null) {
+            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("The Bridge").formatted(Formatting.AQUA, Formatting.BOLD)));
+            this.scoreboard.show(this.participants());
         }
-        SCOREBOARD.setScore(this.server, "Red", this.redScore);
-        SCOREBOARD.setScore(this.server, "Blue", this.blueScore);
-        SCOREBOARD.setScore(this.server, "Target", this.settings.targetScore());
-        SCOREBOARD.setScore(this.server, "Time", Math.max(0, this.ticksRemaining / 20));
+
+        this.scoreboard.clearLines();
+        this.redScoreLine = this.scoreboard.addLine(Text.literal("Red: " + this.redScore).formatted(Formatting.RED));
+        this.blueScoreLine = this.scoreboard.addLine(Text.literal("Blue: " + this.blueScore).formatted(Formatting.BLUE));
+        this.scoreboard.addBlankLine();
+        this.scoreboard.addLine(Text.literal("Target: " + this.settings.targetScore()));
+        this.scoreboard.addBlankLine();
+        this.timeLine = this.scoreboard.addLine(Text.literal("Time: " + Math.max(0, this.ticksRemaining / 20)));
+        this.scoreboard.resendStructure();
     }
 
-    private List<ServerPlayerEntity> participants() {
-        return this.context().liveParticipants();
+    private void updateScoreboardTick() {
+        if (this.redScoreLine != null) {
+            this.redScoreLine.setText(Text.literal("Red: " + this.redScore).formatted(Formatting.RED));
+            this.redScoreLine.updateAll();
+        }
+        if (this.blueScoreLine != null) {
+            this.blueScoreLine.setText(Text.literal("Blue: " + this.blueScore).formatted(Formatting.BLUE));
+            this.blueScoreLine.updateAll();
+        }
+        if (this.timeLine != null) {
+            this.timeLine.setText(Text.literal("Time: " + Math.max(0, this.ticksRemaining / 20)));
+            this.timeLine.updateAll();
+        }
     }
+
+
 
     private List<ServerPlayerEntity> livePlayers(Set<UUID> ids) {
         List<ServerPlayerEntity> players = new ArrayList<>();
         for (UUID id : new LinkedHashSet<>(ids)) {
-            this.context().resolvePlayer(id).ifPresent(players::add);
+            ServerPlayerEntity p = this.findParticipant(id);
+            if (p != null) {
+                players.add(p);
+            }
         }
         return players;
     }
 
-    private boolean isParticipant(ServerPlayerEntity player) {
-        return this.context != null && this.context.participants().contains(player);
-    }
+    // isParticipant is inherited from AbstractMinigame
 
     private String getTeamId(ServerPlayerEntity player) {
         if (this.redPlayers.contains(player.getUuid())) return RED_TEAM;
         if (this.bluePlayers.contains(player.getUuid())) return BLUE_TEAM;
+        return null;
+    }
+
+    protected List<ServerPlayerEntity> participants() {
+        return this.context != null ? this.context.liveParticipants() : List.of();
+    }
+
+    protected boolean isParticipant(ServerPlayerEntity player) {
+        return this.context != null && this.context.participants().contains(player);
+    }
+
+    protected void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
+        if (this.context != null) {
+            this.context.participants().remove(oldPlayer);
+            this.context.participants().add(newPlayer);
+        }
+    }
+
+    protected void setRuntimeState(GameState state) {
+        if (this.context != null) this.context.setState(state);
+    }
+
+    protected ServerPlayerEntity findParticipant(UUID uuid) {
+        if (this.context != null) {
+            return this.context.resolvePlayer(uuid).orElse(null);
+        }
         return null;
     }
 
@@ -876,12 +927,4 @@ public final class BridgeMinigame implements Minigame, RuntimeContextAware, Serv
             player.sendMessage(message, false);
         }
     }
-
-    private MinigameContext context() {
-        if (this.context == null) {
-            throw new IllegalStateException("Bridge context is not attached.");
-        }
-        return this.context;
-    }
 }
-

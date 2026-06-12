@@ -52,7 +52,7 @@ public final class SessionRoutingEvents {
                     return session.getAssignment(handler.player.getUuid());
                 })
                 .filter(assignment -> assignment.getState() == SessionState.RUNNING)
-                .ifPresent(assignment -> manager.transferPlayer(handler.player, assignment));
+                .ifPresent(assignment -> new dev.frost.miniverse.session.PlayerTransferService().transferPlayer(handler.player, assignment));
             PendingSessionJoinManager.getInstance().recordIfNeeded(handler.player, server);
         });
 
@@ -123,7 +123,7 @@ public final class SessionRoutingEvents {
                 for (ServerPlayerEntity player : players) {
                     returnState.pending.add(player.getUuid());
                     Miniverse.LOGGER.info("Returning player {} ({}) to {}:{}", player.getName().getString(), player.getUuidAsString(), returnHost, returnPort);
-                    sessionManager.transferPlayer(player, returnHost, returnPort);
+                    new dev.frost.miniverse.session.PlayerTransferService().transferPlayer(player, returnHost, returnPort);
                 }
                 return;
             }
@@ -358,7 +358,7 @@ public final class SessionRoutingEvents {
                     }
 
                     PendingSessionJoinManager.getInstance().remove(request.playerId());
-                    sessionManager.transferPlayer(target, group);
+                    new dev.frost.miniverse.session.PlayerTransferService().transferPlayer(target, group);
                     Miniverse.LOGGER.info(
                         "Processed backend mid-game assignment request {} for {} into session {}.",
                         request.requestId(),

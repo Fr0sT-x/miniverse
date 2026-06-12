@@ -11,7 +11,8 @@ import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.countdown.CountdownService;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
@@ -59,13 +60,20 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerTickAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, TeamManagerProvider, DynamicParticipantMinigame, PersistentMinigame {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.PersistentMinigame;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.team.TeamManagerProvider;
+
+public class DeathSwapMinigame extends AbstractMinigame implements PersistentMinigame, PlayerDamageAware, PlayerRespawnAware, TeamManagerProvider {
     private static final String NAME = "Death Swap";
     private static final String SCOREBOARD_OBJECTIVE = "deathswap_display";
     private static final int DEATH_ATTRIBUTION_SECONDS = 90;
     private static final int SWAP_WARNING_SECONDS = 10;
     private static final int RECENT_TARGET_LIMIT = 3;
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Death Swap"));
+    private ScoreboardTemplate scoreboard;
+    private ScoreboardLine nextSwapLine;
 
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("deathswap");
     private final CountdownService visibleCountdowns = new CountdownService();
@@ -81,8 +89,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private DeathSwapSettings settings = DeathSwapSettings.defaults();
     private RespawnPolicyController respawns = new RespawnPolicyController(RespawnMode.POINTS, this.spectators);
-    @Nullable
-    private MinigameContext context;
+
     @Nullable
     private MinecraftServer server;
     private long gameTicks;
@@ -92,8 +99,13 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     private boolean warnedCurrentSwap;
 
     @Override
-    public void attachContext(MinigameContext context) {
-        this.context = context;
+    protected GlobalMatchRules configureGameRules() {
+        return new GlobalMatchRules(true, false, true, true, true, true, true);
+    }
+
+    @Override
+    protected boolean isTeamBased() {
+        return false;
     }
 
     public void applySettings(DeathSwapSettings settings) {
@@ -121,15 +133,17 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
     }
 
     @Override
-    public void startGame() {
+    protected void onMatchStart() {
         List<ServerPlayerEntity> participants = this.getParticipants();
         if (participants.size() < 2) {
             this.broadcast(Text.literal("Need at least two players to start Death Swap.").formatted(Formatting.RED));
             return;
         }
 
-        this.state = GameState.RUNNING;
-        this.context().setState(GameState.RUNNING);
+        this.setState(GameState.RUNNING);
+        if (this.context != null) {
+            this.context.setState(GameState.RUNNING);
+        }
         this.gameTicks = 0L;
         this.secondAccumulator = 0;
         this.swapCount = 0;
@@ -146,28 +160,31 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         }
         this.rebuildSoloTeams(participants);
         this.prepareMatch(participants);
-        this.updateScoreboard();
+        this.rebuildScoreboard();
         this.broadcast(Text.literal("Swap in " + formatDuration(this.settings.swapIntervalSeconds())).formatted(Formatting.AQUA));
     }
 
     @Override
-    public void stopGame() {
-        this.state = GameState.ENDING;
-        this.context().setState(GameState.ENDING);
+    protected void onMatchEnd() {
+        this.setState(GameState.ENDING);
+        if (this.context != null) {
+            this.context.setState(GameState.ENDING);
+        }
         for (ServerPlayerEntity participant : this.getParticipants()) {
             participant.changeGameMode(GameMode.SURVIVAL);
         }
-        this.clearScoreboard();
         if (this.server != null) {
+            if (this.scoreboard != null) {
+                this.scoreboard.cleanup(this.server);
+            }
             this.vanillaTeams.clear(this.server);
         }
-        this.context().participants().clear();
     }
 
     @Override
-    public void onServerTick(MinecraftServer server) {
+    protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.state != GameState.RUNNING) {
+        if (this.getState() != GameState.RUNNING) {
             return;
         }
 
@@ -179,7 +196,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         }
         this.secondAccumulator = 0;
         this.tickSwapTimer();
-        this.updateScoreboard();
+        this.updateScoreboardTick();
     }
 
     @Override
@@ -187,7 +204,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         if (!this.isParticipant(player)) {
             return true;
         }
-        if (!this.settings.pvpEnabled() && this.isParticipantAttacker(source)) {
+        if (!this.gameRules.pvpEnabled() && this.isParticipantAttacker(source)) {
             return false;
         }
         return true;
@@ -268,7 +285,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
             player.getHungerManager().setFoodLevel(20);
             player.getHungerManager().setSaturationLevel(20.0F);
             this.rebuildSoloTeams(this.getParticipants());
-            this.updateScoreboard();
+            this.rebuildScoreboard();
             player.sendMessage(Text.literal("Joined Death Swap in progress. You will be included in the next swap cycle.").formatted(Formatting.GREEN), false);
         }
     }
@@ -285,7 +302,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         if (this.server == null) {
             return;
         }
-        new GlobalMatchRules(this.settings.keepInventory(), this.settings.pvpEnabled()).apply(this.server);
+        this.gameRules.apply(this.server);
         for (ServerPlayerEntity participant : participants) {
             participant.changeGameMode(GameMode.SURVIVAL);
             participant.setHealth(participant.getMaxHealth());
@@ -368,7 +385,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         this.swapCount = nextSwapId;
         this.broadcast(Text.literal("Swapped " + teleported + " player" + (teleported == 1 ? "" : "s") + ".").formatted(Formatting.AQUA));
         this.resetSwapTimer();
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
     private void resetSwapTimer() {
@@ -394,7 +411,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
             this.broadcast(Text.literal(player.getName().getString() + " was eliminated.").formatted(Formatting.RED));
             this.checkEliminationEnd();
         }
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
     private void awardSwapPoint(UUID deadPlayerId) {
@@ -434,7 +451,9 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         }
         this.state = GameState.ENDING;
         this.context().setState(GameState.ENDING);
-        this.clearScoreboard();
+        if (this.server != null && this.scoreboard != null) {
+            this.scoreboard.cleanup(this.server);
+        }
 
         Set<UUID> winnerSet = new LinkedHashSet<>(winners == null ? Set.of() : winners);
         Text winnerLabel = Text.literal(this.winnerLabel(winnerSet));
@@ -498,7 +517,8 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         this.syncVanillaTeams();
     }
 
-    private void syncVanillaTeams() {
+    @Override
+    protected void syncVanillaTeams() {
         if (this.server == null) {
             return;
         }
@@ -507,35 +527,48 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
             return VanillaTeamOptions.defaults()
                 .withColor(color)
                 .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
-                .withFriendlyFireAllowed(this.settings.pvpEnabled())
+                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
                 .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
         });
     }
 
-    private void updateScoreboard() {
+    private void rebuildScoreboard() {
         if (this.server == null) {
             return;
         }
+        if (this.scoreboard == null) {
+            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Death Swap").formatted(Formatting.GOLD, Formatting.BOLD)));
+            this.scoreboard.show(this.getParticipants());
+        }
+
         this.syncVanillaTeams();
-        SCOREBOARD.setScore(this.server, "Alive", this.aliveParticipants.size());
-        SCOREBOARD.setScore(this.server, "Swaps", this.swapCount);
-        SCOREBOARD.setScore(this.server, "Next Swap", Math.max(0, this.swapTicksRemaining / 20));
+        this.scoreboard.clearLines();
+        this.scoreboard.addLine(Text.literal("Alive: " + this.aliveParticipants.size()));
+        this.scoreboard.addLine(Text.literal("Swaps: " + this.swapCount));
+        this.nextSwapLine = this.scoreboard.addLine(Text.empty());
+
         if (this.settings.respawnMode() == RespawnMode.POINTS) {
-            SCOREBOARD.setScore(this.server, "Points To Win", this.settings.pointsToWin());
+            this.scoreboard.addBlankLine();
+            this.scoreboard.addLine(Text.literal("Goal: " + this.settings.pointsToWin()).formatted(Formatting.YELLOW));
             for (UUID playerId : this.context().participantIds()) {
                 ServerPlayerEntity player = this.getPlayerByUuid(playerId);
                 String label = player == null ? playerId.toString().substring(0, 8) : player.getName().getString();
-                SCOREBOARD.setScore(this.server, label, this.points.getOrDefault(playerId, 0));
+                this.scoreboard.addLine(Text.literal(label + ": " + this.points.getOrDefault(playerId, 0)));
             }
+        }
+
+        this.scoreboard.resendStructure();
+        this.updateScoreboardTick();
+    }
+
+    private void updateScoreboardTick() {
+        if (this.nextSwapLine != null) {
+            this.nextSwapLine.setText(Text.literal("Next Swap: " + Math.max(0, this.swapTicksRemaining / 20)));
+            this.nextSwapLine.updateAll();
         }
     }
 
-    private void clearScoreboard() {
-        if (this.server != null) {
-            SCOREBOARD.clear(this.server);
-            this.vanillaTeams.clear(this.server);
-        }
-    }
+
 
     private void refreshAliveParticipants() {
         this.aliveParticipants.removeIf(playerId -> {
@@ -577,14 +610,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         GameMessenger.broadcast(this.getParticipants(), message);
     }
 
-    @Nullable
-    private ServerPlayerEntity getPlayerByUuid(UUID playerId) {
-        Optional<ServerPlayerEntity> participant = this.context().resolvePlayer(playerId);
-        if (participant.isPresent()) {
-            return participant.get();
-        }
-        return this.server == null ? null : this.server.getPlayerManager().getPlayer(playerId);
-    }
+
 
     private MinigameContext context() {
         if (this.context == null) {
@@ -659,7 +685,7 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         this.readRecentTargets(root);
         this.readDeathAttributions(root);
         this.pendingAssignment = readUuidUuidMap(root, "pendingAssignment");
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
     private JsonObject writeSettings() {
@@ -669,8 +695,6 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
         object.addProperty("borderSize", this.settings.borderSize());
         object.addProperty("seedMode", this.settings.seedMode().name());
         object.addProperty("seed", this.settings.seed());
-        object.addProperty("keepInventory", this.settings.keepInventory());
-        object.addProperty("pvpEnabled", this.settings.pvpEnabled());
         object.addProperty("respawnMode", this.settings.respawnMode().name());
         object.addProperty("pointsToWin", this.settings.pointsToWin());
         object.addProperty("preserveVelocity", this.settings.preserveVelocity());
@@ -692,8 +716,6 @@ public class DeathSwapMinigame implements Minigame, RuntimeContextAware, ServerT
             intValue(root, "borderSize", base.borderSize()),
             seedMode,
             longValue(root, "seed", base.seed()),
-            booleanValue(root, "keepInventory", base.keepInventory()),
-            booleanValue(root, "pvpEnabled", base.pvpEnabled()),
             respawnMode,
             intValue(root, "pointsToWin", base.pointsToWin()),
             booleanValue(root, "preserveVelocity", base.preserveVelocity()),

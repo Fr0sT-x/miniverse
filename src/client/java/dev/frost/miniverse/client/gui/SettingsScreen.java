@@ -37,7 +37,7 @@ public class SettingsScreen extends Screen {
     private static final int TEXT_MUTED = 0xFFB8B8B8;
     private static final String[] DIFFICULTY_VALUES = {"peaceful", "easy", "normal", "hard"};
     private static final String[] DIFFICULTY_LABELS = {"Peaceful", "Easy", "Medium", "Hard"};
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("'['hh:mm a , dd/MMM/yyyy']'").withZone(ZoneId.systemDefault());
 
     private final MinecraftClient client = MinecraftClient.getInstance();
     private final List<SessionEntry> sessions = new ArrayList<>();
@@ -81,9 +81,7 @@ public class SettingsScreen extends Screen {
     private int maxConcurrentLaunchesValue;
 
     // Retention config state
-    private TextFieldWidget keepLatestSessionsField;
     private TextFieldWidget maxAgeDaysField;
-    private int keepLatestSessionsValue;
     private int maxAgeDaysValue;
 
     public SettingsScreen() {
@@ -113,7 +111,7 @@ public class SettingsScreen extends Screen {
         this.advertisedHostValue = serverSettings.advertisedHost();
         this.maxConcurrentLaunchesValue = SessionSnapshotData.maxConcurrentLaunches();
         SessionSnapshotData.RetentionSettings retentionSettings = SessionSnapshotData.retentionSettings();
-        this.keepLatestSessionsValue = retentionSettings.keepLatestSessions();
+
         this.maxAgeDaysValue = retentionSettings.maxAgeDays();
 
         // Request session list from server
@@ -217,20 +215,12 @@ public class SettingsScreen extends Screen {
         int y = layout.listY + 4;
         int fieldWidth = 58;
 
-        this.keepLatestSessionsField = new TextFieldWidget(this.textRenderer, x + 118, y, fieldWidth, 20, Text.literal("Retained Sessions"));
-        this.keepLatestSessionsField.setMaxLength(2);
-        this.keepLatestSessionsField.setText(String.valueOf(this.keepLatestSessionsValue));
-        this.addDrawableChild(this.keepLatestSessionsField);
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveKeepLatestSessions())
-            .dimensions(x + 184, y, 55, BUTTON_HEIGHT)
-            .build());
-
-        this.maxAgeDaysField = new TextFieldWidget(this.textRenderer, x + 360, y, fieldWidth, 20, Text.literal("Retention Days"));
+        this.maxAgeDaysField = new TextFieldWidget(this.textRenderer, x + 160, y, fieldWidth, 20, Text.literal("Retention Days"));
         this.maxAgeDaysField.setMaxLength(3);
         this.maxAgeDaysField.setText(String.valueOf(this.maxAgeDaysValue));
         this.addDrawableChild(this.maxAgeDaysField);
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> this.saveMaxAgeDays())
-            .dimensions(x + 426, y, 55, BUTTON_HEIGHT)
+            .dimensions(x + 226, y, 55, BUTTON_HEIGHT)
             .build());
 
         int sortWidth = 150;
@@ -606,20 +596,10 @@ public class SettingsScreen extends Screen {
         ClientPlayNetworking.send(new NetworkConstants.ServerSettingsPayload(payload));
     }
 
-    private void saveKeepLatestSessions() {
-        Integer value = this.parseInt(this.keepLatestSessionsField, 1, 50, "Retained sessions");
-        if (value == null) {
-            return;
-        }
-        this.keepLatestSessionsValue = value;
-        NbtCompound retention = new NbtCompound();
-        retention.putInt("keepLatestSessions", value);
-        this.sendServerSettings(null, null, retention);
-        this.statusMessage = "Saved retained session count " + value + ".";
-    }
+
 
     private void saveMaxAgeDays() {
-        Integer value = this.parseInt(this.maxAgeDaysField, 1, 365, "Retention days");
+        Integer value = this.parseInt(this.maxAgeDaysField, 0, 365, "Retention days");
         if (value == null) {
             return;
         }
@@ -787,9 +767,8 @@ public class SettingsScreen extends Screen {
 
     private void drawHistory(DrawContext context, Layout layout) {
         int x = layout.contentX;
-        int y = layout.listY + 4;
-        context.drawText(this.textRenderer, Text.literal("Retain latest:"), x, y + 6, TEXT_PRIMARY, false);
-        context.drawText(this.textRenderer, Text.literal("Delete older than days:"), x + 248, y + 6, TEXT_PRIMARY, false);
+        context.drawText(this.textRenderer, Text.literal("Delete sessions older than"), x, layout.listY + 10, TEXT_MUTED, false);
+        context.drawText(this.textRenderer, Text.literal("days (0 to disable)"), x + 330, layout.listY + 10, TEXT_MUTED, false);
 
         List<SessionEntry> retainedSessions = this.getSortedRetainedSessions();
         this.updateHistoryScrollBounds(layout, retainedSessions.size());
@@ -803,7 +782,7 @@ public class SettingsScreen extends Screen {
         int listHeight = this.historyListHeight(layout);
         context.enableScissor(x, listTopY, x + layout.contentWidth, listTopY + listHeight);
 
-        y = listTopY - this.historyScrollOffset;
+        int y = listTopY - this.historyScrollOffset;
         for (SessionEntry entry : retainedSessions) {
             context.fill(x, y, x + layout.contentWidth, y + SESSION_ROW_HEIGHT, 0x2AFFFFFF);
             context.fill(x + 1, y + 1, x + layout.contentWidth - 1, y + SESSION_ROW_HEIGHT - 1, 0xCC1F1F1F);

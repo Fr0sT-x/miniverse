@@ -9,7 +9,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-public class RoleManager {
+import dev.frost.miniverse.minigame.core.FrameworkModule;
+
+public class RoleManager implements FrameworkModule {
     private final Map<UUID, Role> playerRoles = new ConcurrentHashMap<>();
 
     public void assignRole(ServerPlayerEntity player, Role role) {
@@ -56,7 +58,8 @@ public class RoleManager {
         return playerRoles.keySet();
     }
 
-    public void clear(net.minecraft.server.MinecraftServer server) {
+    @Override
+    public void cleanup(net.minecraft.server.MinecraftServer server) {
         playerRoles.forEach((uuid, role) -> {
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
             if (player != null) {

@@ -11,7 +11,8 @@ import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.ScoreboardController;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.ItemUseAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
@@ -69,11 +70,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.sound.SoundEvents;
+import dev.frost.miniverse.minigame.core.tracker.PlayerTracker;
 
-public class BountyHuntMinigame implements Minigame, RuntimeContextAware, ServerTickAware, ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, PlayerJoinAware, DynamicParticipantMinigame, PersistentMinigame {
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+
+public class BountyHuntMinigame extends AbstractMinigame {
     private static final String NAME = "Bounty Hunt";
     private static final String TRACKER_TYPE = ProtectedItemTypes.TRACKER_COMPASS;
-    private static final String SCOREBOARD_OBJECTIVE = "bountyhunt_display";
     private static final Identifier RESPAWN_PROTECTION_OVERLAY = ProtectionOverlayPresets.RESPAWN_PROTECTION.overlayId();
     private static final Identifier GRACE_PROTECTION_OVERLAY = ProtectionOverlayPresets.GRACE_PERIOD.overlayId();
     private static final int BOUNTY_PROTECTION_COLOR = 0xE6FFFFFF;
@@ -84,19 +88,18 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         .withOutlineColor(0xFFFFFFFF)
         .withAlpha(0.82F)
         .withIntensity(1.0F);
-    private static final ScoreboardController SCOREBOARD = new ScoreboardController(SCOREBOARD_OBJECTIVE, Text.literal("Bounty Hunt"));
-    private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("bountyhunt");
+    private ScoreboardTemplate scoreboard;
+    private ScoreboardLine graceLine;
 
     private final Map<UUID, UUID> targetAssignments = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> scores = new ConcurrentHashMap<>();
     private final Map<UUID, Long> invincibleUntilTicks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> compassCooldownUntilTicks = new ConcurrentHashMap<>();
-    private final Map<UUID, TrackingData> trackingData = new ConcurrentHashMap<>();
+    private final PlayerTracker playerTracker = new PlayerTracker();
     private final Set<Integer> announcedGraceThresholds = ConcurrentHashMap.newKeySet();
 
     private GameState state;
     private BountyHuntSettings settings;
-    private MinigameContext context;
     private MinecraftServer server;
     private long gameTicks;
     private int tickCounter;
@@ -106,33 +109,37 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     public BountyHuntMinigame() {
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.applySettings(BountyHuntSettings.defaults());
-        this.vanillaTeams.setFriendlyFireAllowed(true);
-        this.vanillaTeams.setTeammateCollisionAllowed(false);
     }
 
     @Override
-    public void attachContext(MinigameContext context) {
-        this.context = context;
+    protected GlobalMatchRules configureGameRules() {
+        return GlobalMatchRules.defaults();
     }
 
+    // Context is attached in AbstractMinigame
+
     public void setVanillaFriendlyFireAllowed(boolean allowed) {
-        this.vanillaTeams.setFriendlyFireAllowed(allowed);
-        this.syncVanillaTeams();
+        if (this.getVanillaTeams() != null) {
+            this.getVanillaTeams().setFriendlyFireAllowed(allowed);
+            this.syncVanillaTeams();
+        }
     }
 
     public void setVanillaTeammateCollisionAllowed(boolean allowed) {
-        this.vanillaTeams.setTeammateCollisionAllowed(allowed);
-        this.syncVanillaTeams();
+        if (this.getVanillaTeams() != null) {
+            this.getVanillaTeams().setTeammateCollisionAllowed(allowed);
+            this.syncVanillaTeams();
+        }
     }
 
     @Override
     public void initialize() {
-        this.state = GameState.WAITING_FOR_PLAYERS;
+        this.setState(GameState.WAITING_FOR_PLAYERS);
         this.targetAssignments.clear();
         this.scores.clear();
         this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
-        this.trackingData.clear();
+        this.playerTracker.clear();
         this.announcedGraceThresholds.clear();
         this.gameTicks = 0L;
         this.tickCounter = 0;
@@ -141,15 +148,15 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     }
 
     @Override
-    public void startGame() {
-        this.state = GameState.STARTING;
+    protected void onMatchStart() {
+        this.setState(GameState.STARTING);
         this.setRuntimeState(GameState.STARTING);
         this.registerProtectedItems();
         this.targetAssignments.clear();
         this.scores.clear();
         this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
-        this.trackingData.clear();
+        this.playerTracker.clear();
         this.announcedGraceThresholds.clear();
         this.gameTicks = 0L;
         this.tickCounter = 0;
@@ -170,22 +177,19 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         } else {
             this.beginHunt();
         }
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
     @Override
-    public void stopGame() {
-        this.state = GameState.ENDING;
+    protected void onMatchEnd() {
+        this.setState(GameState.ENDING);
         this.targetAssignments.clear();
         this.scores.clear();
         this.clearInvincibilityStates();
         this.clearGraceProtectionStates();
         this.compassCooldownUntilTicks.clear();
-        this.trackingData.clear();
+        this.playerTracker.clear();
         this.clearScoreboard();
-        this.clearVanillaTeams();
-        this.clearParticipants();
-        ProtectedItemService.getInstance().clearRules();
     }
 
     @Override
@@ -228,12 +232,13 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             this.syncTrackerTarget(killer, true);
         }
 
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
-    public void onServerTick(MinecraftServer server) {
+    @Override
+    protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.state == GameState.ENDING) {
+        if (this.getState() == GameState.ENDING) {
             return;
         }
 
@@ -241,14 +246,14 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         this.tickCounter++;
         if (this.tickCounter >= 20) {
             this.tickCounter = 0;
-            this.updateTrackingData();
+            this.playerTracker.updatePositions(this.getParticipants(), this.settings.netherTrackingEnabled());
             this.tickGracePeriod();
             this.tickTargetSwap();
             this.tickInvincibilityWindows();
             if (this.state == GameState.IN_PROGRESS && this.settings.trackerEnabled()) {
                 this.updateTrackers();
             }
-            this.updateScoreboard();
+            this.updateScoreboardTick();
         }
     }
 
@@ -299,15 +304,15 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     }
 
     @Override
-    public void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
+    protected void onPlayerJoinGame(ServerPlayerEntity player, MinecraftServer server) {
         this.sendInvincibilityStatesTo(player);
         this.sendGraceProtectionStatesTo(player);
     }
 
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
-        if (!this.isParticipant(player)) {
-            this.context().participants().add(player);
+        if (!this.isParticipant(player) && this.context != null) {
+            this.context.participants().add(player);
         }
         this.scores.putIfAbsent(player.getUuid(), 0);
         if (this.state == GameState.IN_PROGRESS || this.state == GameState.STARTING) {
@@ -320,7 +325,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             player.sendMessage(Text.literal("Joined Bounty Hunt in progress.").formatted(Formatting.GREEN), false);
         }
         this.syncVanillaTeams();
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
     public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
@@ -336,7 +341,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         this.scores.remove(playerUuid);
         this.invincibleUntilTicks.remove(playerUuid);
         this.compassCooldownUntilTicks.remove(playerUuid);
-        this.trackingData.remove(playerUuid);
+        this.playerTracker.remove(playerUuid);
         ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, RESPAWN_PROTECTION_OVERLAY);
         if (this.state == GameState.STARTING && this.graceTicksRemaining > 0) {
             ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, GRACE_PROTECTION_OVERLAY);
@@ -361,6 +366,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             }
         }
         this.syncVanillaTeams();
+        this.rebuildScoreboard();
     }
 
     void handleDisconnectGraceExpired(List<UUID> pendingPlayers) {
@@ -612,61 +618,17 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     }
 
     private Optional<GlobalPos> resolveTrackingTarget(ServerPlayerEntity hunter, ServerPlayerEntity target) {
-        TrackingData data = this.trackingData.computeIfAbsent(target.getUuid(), uuid -> new TrackingData());
-        if (hunter.getEntityWorld().getRegistryKey().equals(World.NETHER)) {
-            if (!this.settings.netherTrackingEnabled()) {
-                return Optional.empty();
-            }
-            if (data.lastNether == null) {
-                return Optional.empty();
-            }
-            return Optional.of(GlobalPos.create(World.NETHER, data.lastNether));
-        }
-
-        if (hunter.getEntityWorld().getRegistryKey().equals(World.END)) {
-            BlockPos endPos = data.lastEnd != null ? data.lastEnd : target.getBlockPos();
-            return Optional.of(GlobalPos.create(World.END, endPos));
-        }
-
-        BlockPos overworldPos = data.lastOverworld != null ? data.lastOverworld : target.getBlockPos();
-        if (target.getEntityWorld().getRegistryKey().equals(World.END) && data.endEntryOverworld != null) {
-            overworldPos = data.endEntryOverworld;
-        }
-        return Optional.of(GlobalPos.create(World.OVERWORLD, overworldPos));
+        return this.playerTracker.resolveTrackingTarget(hunter, target, this.settings.netherTrackingEnabled());
     }
 
     private void updateTrackerStacks(ServerPlayerEntity hunter, GlobalPos target, ServerPlayerEntity trackedPlayer) {
         boolean isCompass = this.resolveTrackerItem().equals(Items.COMPASS);
-        LodestoneTrackerComponent tracker = isCompass
-            ? new LodestoneTrackerComponent(Optional.of(target), false)
-            : null;
-        for (int slot = 0; slot < hunter.getInventory().size(); slot++) {
-            ItemStack stack = hunter.getInventory().getStack(slot);
-            if (!this.isTrackerItem(stack)) {
-                continue;
-            }
-            if (tracker != null) {
-                stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
-            }
-        }
-        TrackingItemNameFormatter.applyTrackingName(hunter.getInventory(), this::isTrackerItem, trackedPlayer.getDisplayName());
+        this.playerTracker.updateTrackerStacks(hunter, trackedPlayer, Optional.of(target), this::isTrackerItem, isCompass);
     }
 
     private void setTrackerMad(ServerPlayerEntity hunter, ServerPlayerEntity trackedPlayer) {
         boolean isCompass = this.resolveTrackerItem().equals(Items.COMPASS);
-        LodestoneTrackerComponent tracker = isCompass
-            ? new LodestoneTrackerComponent(Optional.empty(), true)
-            : null;
-        for (int slot = 0; slot < hunter.getInventory().size(); slot++) {
-            ItemStack stack = hunter.getInventory().getStack(slot);
-            if (!this.isTrackerItem(stack)) {
-                continue;
-            }
-            if (tracker != null) {
-                stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
-            }
-        }
-        TrackingItemNameFormatter.applyTrackingName(hunter.getInventory(), this::isTrackerItem, trackedPlayer.getDisplayName());
+        this.playerTracker.updateTrackerStacks(hunter, trackedPlayer, Optional.empty(), this::isTrackerItem, isCompass);
     }
 
     private void registerProtectedItems() {
@@ -689,28 +651,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             .build());
     }
 
-    private void updateTrackingData() {
-        for (ServerPlayerEntity player : this.getParticipants()) {
-            if (player.isDisconnected()) {
-                continue;
-            }
 
-            TrackingData data = this.trackingData.computeIfAbsent(player.getUuid(), uuid -> new TrackingData());
-            BlockPos position = player.getBlockPos();
-            if (player.getEntityWorld().getRegistryKey().equals(World.OVERWORLD)) {
-                data.lastOverworld = position;
-            } else if (player.getEntityWorld().getRegistryKey().equals(World.NETHER)) {
-                if (this.settings.netherTrackingEnabled()) {
-                    data.lastNether = position;
-                }
-            } else if (player.getEntityWorld().getRegistryKey().equals(World.END)) {
-                data.lastEnd = position;
-                if (data.endEntryOverworld == null && data.lastOverworld != null) {
-                    data.endEntryOverworld = data.lastOverworld;
-                }
-            }
-        }
-    }
 
     private void applyRespawnInvincibility(ServerPlayerEntity player) {
         if (this.settings.respawnInvincibilitySeconds() <= 0) {
@@ -790,38 +731,30 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
     }
 
     private List<ServerPlayerEntity> getParticipants() {
-        return this.context().liveParticipants();
+        return this.context != null ? this.context.liveParticipants() : List.of();
     }
 
     private boolean isParticipant(ServerPlayerEntity player) {
-        return this.context().participants().contains(player);
+        return this.context != null && this.context.participants().contains(player);
     }
 
     private void removeParticipant(ServerPlayerEntity player) {
-        this.context().participants().remove(player);
+        if (this.context != null) this.context.participants().remove(player);
     }
 
     private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        this.context().participants().add(newPlayer);
-    }
-
-    private void clearParticipants() {
-        this.context().participants().clear();
+        if (this.context != null) this.context.participants().add(newPlayer);
     }
 
     private void setRuntimeState(GameState state) {
-        this.context().setState(state);
+        if (this.context != null) this.context.setState(state);
     }
 
-    private MinigameContext context() {
-        if (this.context == null) {
-            throw new IllegalStateException("Bounty Hunt runtime context is not attached.");
-        }
-        return this.context;
-    }
+
 
     @Nullable
-    private ServerPlayerEntity getPlayerByUuid(UUID uuid) {
+    @Override
+    protected ServerPlayerEntity getPlayerByUuid(UUID uuid) {
         if (uuid == null) {
             return null;
         }
@@ -833,31 +766,58 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         return this.server == null ? null : this.server.getPlayerManager().getPlayer(uuid);
     }
 
-    private void updateScoreboard() {
-        if (this.server == null) {
-            return;
+    private void rebuildScoreboard() {
+        if (this.scoreboard == null) {
+            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Bounty Hunt").formatted(Formatting.GOLD, Formatting.BOLD)));
+            this.scoreboard.show(this.getParticipants());
         }
-        this.syncVanillaTeams();
 
-        SCOREBOARD.setScore(this.server, "Score To Win", this.settings.scoreToWin());
-        int graceSeconds = this.state == GameState.STARTING ? Math.max(0, this.graceTicksRemaining / 20) : 0;
-        SCOREBOARD.setScore(this.server, "Grace", graceSeconds);
+        this.scoreboard.clearLines();
+        this.graceLine = this.scoreboard.addLine(Text.empty());
+        this.scoreboard.addBlankLine();
 
-        for (ServerPlayerEntity player : this.getParticipants()) {
+        List<ServerPlayerEntity> participants = this.getParticipants();
+        List<ServerPlayerEntity> sorted = participants.stream()
+            .sorted((p1, p2) -> Integer.compare(
+                this.scores.getOrDefault(p2.getUuid(), 0),
+                this.scores.getOrDefault(p1.getUuid(), 0)))
+            .toList();
+
+        for (ServerPlayerEntity player : sorted) {
             int score = this.scores.getOrDefault(player.getUuid(), 0);
-            SCOREBOARD.setScore(this.server, player.getName().getString(), score);
+            this.scoreboard.addLine(Text.literal(player.getName().getString() + ": " + score));
         }
+
+        this.scoreboard.addBlankLine();
+        this.scoreboard.addLine(Text.literal("Goal: " + this.settings.scoreToWin()).formatted(Formatting.YELLOW));
+        
+        this.scoreboard.resendStructure();
+        this.updateScoreboardTick();
+    }
+
+    private void updateScoreboardTick() {
+        if (this.graceLine == null) return;
+        int graceSeconds = this.state == GameState.STARTING ? Math.max(0, this.graceTicksRemaining / 20) : 0;
+        if (graceSeconds > 0) {
+            this.graceLine.setText(Text.literal("Grace: " + graceSeconds));
+        } else {
+            this.graceLine.setText(Text.literal("PvP Enabled").formatted(Formatting.RED));
+        }
+        this.graceLine.updateAll();
     }
 
     private void clearScoreboard() {
         if (this.server == null) {
             return;
         }
-        SCOREBOARD.clear(this.server);
+        if (this.scoreboard != null) {
+            this.scoreboard.cleanup(this.server);
+        }
         this.clearVanillaTeams();
     }
 
-    private void syncVanillaTeams() {
+    @Override
+    protected void syncVanillaTeams() {
         if (this.server == null) {
             return;
         }
@@ -867,21 +827,21 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
             TeamRole role = this.targetAssignments.containsValue(player.getUuid()) ? TeamRole.TARGET : TeamRole.HUNTER;
             snapshots.add(new TeamSnapshot("player_" + player.getUuidAsString(), player.getName().getString(), List.of(TeamMembership.of(player, role))));
         }
-        this.vanillaTeams.syncSnapshots(this.server, snapshots, snapshot -> {
+        VanillaTeamAdapter adapter = this.getVanillaTeams();
+        if (adapter == null) return;
+        adapter.syncSnapshots(this.server, snapshots, snapshot -> {
             TeamRole role = snapshot.members().isEmpty() ? TeamRole.MEMBER : snapshot.members().get(0).role();
-            Formatting color = role == TeamRole.TARGET ? Formatting.YELLOW : this.vanillaTeams.colorFor(snapshot.id());
-            String prefix = role == TeamRole.TARGET ? "[TARGET] " : "[HUNTER] ";
-            return VanillaTeamOptions.defaults()
-                .withColor(color)
-                .withPrefix(Text.literal(prefix).formatted(color))
-                .withFriendlyFireAllowed(true)
-                .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
+            Formatting color = role == TeamRole.TARGET ? Formatting.YELLOW : adapter.colorFor(snapshot.id());
+            String prefix = role == TeamRole.TARGET ? "TARGET" : "HUNTER";
+            return dev.frost.miniverse.minigame.core.util.VanillaTeamSync.roleOptions(prefix, color, true);
         });
     }
 
-    private void clearVanillaTeams() {
-        if (this.server != null) {
-            this.vanillaTeams.clear(this.server);
+    @Override
+    protected void clearVanillaTeams() {
+        VanillaTeamAdapter adapter = this.getVanillaTeams();
+        if (this.server != null && adapter != null) {
+            adapter.clear(this.server);
         }
     }
 
@@ -994,12 +954,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         }
     }
 
-    private static final class TrackingData {
-        private BlockPos lastOverworld;
-        private BlockPos lastNether;
-        private BlockPos lastEnd;
-        private BlockPos endEntryOverworld;
-    }
+
 
     @Override
     public JsonObject saveRuntimeState() {
@@ -1015,7 +970,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         root.add("scores", writeUuidIntMap(this.scores));
         root.add("invincibleUntilTicks", writeUuidLongMap(this.invincibleUntilTicks));
         root.add("compassCooldownUntilTicks", writeUuidLongMap(this.compassCooldownUntilTicks));
-        root.add("trackingData", this.writeTrackingData());
+        root.add("trackingData", this.playerTracker.writeTrackingData());
         return root;
     }
 
@@ -1028,7 +983,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         this.scores.clear();
         this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
-        this.trackingData.clear();
+        this.playerTracker.clear();
         this.announcedGraceThresholds.clear();
 
         if (root.has("settings") && root.get("settings").isJsonObject()) {
@@ -1049,10 +1004,12 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         this.scores.putAll(readUuidIntMap(root, "scores"));
         this.invincibleUntilTicks.putAll(readUuidLongMap(root, "invincibleUntilTicks"));
         this.compassCooldownUntilTicks.putAll(readUuidLongMap(root, "compassCooldownUntilTicks"));
-        this.readTrackingData(root);
+        if (root.has("trackingData") && root.get("trackingData").isJsonArray()) {
+            this.playerTracker.readTrackingData(root.getAsJsonArray("trackingData"));
+        }
         this.registerProtectedItems();
         this.syncVanillaTeams();
-        this.updateScoreboard();
+        this.rebuildScoreboard();
     }
 
     private JsonObject writeSettings() {
@@ -1084,41 +1041,7 @@ public class BountyHuntMinigame implements Minigame, RuntimeContextAware, Server
         );
     }
 
-    private JsonArray writeTrackingData() {
-        JsonArray array = new JsonArray();
-        for (Map.Entry<UUID, TrackingData> entry : this.trackingData.entrySet()) {
-            JsonObject object = new JsonObject();
-            object.addProperty("uuid", entry.getKey().toString());
-            putBlockPos(object, "lastOverworld", entry.getValue().lastOverworld);
-            putBlockPos(object, "lastNether", entry.getValue().lastNether);
-            putBlockPos(object, "lastEnd", entry.getValue().lastEnd);
-            putBlockPos(object, "endEntryOverworld", entry.getValue().endEntryOverworld);
-            array.add(object);
-        }
-        return array;
-    }
 
-    private void readTrackingData(JsonObject root) {
-        if (!root.has("trackingData") || !root.get("trackingData").isJsonArray()) {
-            return;
-        }
-        for (var element : root.getAsJsonArray("trackingData")) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            JsonObject object = element.getAsJsonObject();
-            UUID uuid = uuidValue(object, "uuid");
-            if (uuid == null) {
-                continue;
-            }
-            TrackingData data = new TrackingData();
-            data.lastOverworld = readBlockPos(object, "lastOverworld");
-            data.lastNether = readBlockPos(object, "lastNether");
-            data.lastEnd = readBlockPos(object, "lastEnd");
-            data.endEntryOverworld = readBlockPos(object, "endEntryOverworld");
-            this.trackingData.put(uuid, data);
-        }
-    }
 
     private static JsonArray writeUuidArray(Collection<UUID> uuids) {
         JsonArray array = new JsonArray();

@@ -123,7 +123,7 @@ public final class SessionCommands {
                 return;
             }
 
-            manager.transferAssignedPlayers(source.getServer(), launchedSession);
+            new dev.frost.miniverse.session.PlayerTransferService().transferAssignedPlayers(source.getServer(), launchedSession);
 
             StringBuilder message = new StringBuilder("Session ")
                 .append(launchedSession.getSessionId())

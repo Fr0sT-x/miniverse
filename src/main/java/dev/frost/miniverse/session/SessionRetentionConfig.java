@@ -59,47 +59,38 @@ public final class SessionRetentionConfig {
         }
     }
 
-    public synchronized void setKeepLatestSessions(int keepLatestSessions) {
-        this.config.keepLatestSessions = Math.clamp(keepLatestSessions, 1, 50);
-        this.save();
-    }
+
 
     public synchronized void setMaxAgeDays(int maxAgeDays) {
-        this.config.maxAgeDays = Math.clamp(maxAgeDays, 1, 365);
+        this.config.maxAgeDays = Math.clamp(maxAgeDays, 0, 365);
         this.save();
     }
 
-    public int keepLatestSessions() {
-        return this.config.keepLatestSessions;
-    }
+
 
     public int maxAgeDays() {
         return this.config.maxAgeDays;
     }
 
     private void normalize() {
-        this.config.keepLatestSessions = Math.clamp(this.config.keepLatestSessions, 1, 50);
-        this.config.maxAgeDays = Math.clamp(this.config.maxAgeDays, 1, 365);
+        this.config.maxAgeDays = Math.clamp(this.config.maxAgeDays, 0, 365);
     }
 
     public static final class Config {
-        public int keepLatestSessions;
         public int maxAgeDays;
 
-        public Config(int keepLatestSessions, int maxAgeDays) {
-            this.keepLatestSessions = keepLatestSessions;
+        public Config(int maxAgeDays) {
             this.maxAgeDays = maxAgeDays;
         }
 
         public static Config defaults() {
-            return new Config(3, 7);
+            return new Config(7);
         }
 
         @Override
         public String toString() {
             return "Config{" +
-                "keepLatestSessions=" + this.keepLatestSessions +
-                ", maxAgeDays=" + this.maxAgeDays +
+                "maxAgeDays=" + this.maxAgeDays +
                 '}';
         }
     }

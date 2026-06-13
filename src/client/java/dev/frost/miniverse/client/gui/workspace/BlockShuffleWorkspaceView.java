@@ -70,11 +70,10 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
             this.roundDurationField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.roundDurationSeconds, 160, "Round Duration (s)", val -> "Players have " + val + " seconds to find their block.");
             
             this.perPlayerButton = this.addToggleButton(screen, "Per-Player Blocks", () -> this.perPlayerBlocks, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, 220,
-                "Each player gets a different block.",
-                "All players hunt the same block.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Each player gets a different block.", "All players hunt the same block."),
                 () -> this.perPlayerBlocks = !this.perPlayerBlocks);
             
-            this.blockPoolButton = this.addButton(screen, "Configure Block Pool (" + this.blockPool.size() + " blocks)", this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 220, () -> "Click to select which blocks can be chosen during the match.", () -> {
+            this.blockPoolButton = this.addActionButton(screen, "Configure Block Pool (" + this.blockPool.size() + " blocks)", this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 220, "Click to select which blocks can be chosen during the match.", () -> {
                 Set<Block> initialSelection = this.blockPool.stream()
                     .map(Registries.BLOCK::get)
                     .collect(Collectors.toSet());

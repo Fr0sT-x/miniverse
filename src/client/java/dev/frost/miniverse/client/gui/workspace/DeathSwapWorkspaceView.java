@@ -32,7 +32,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     private int gracePeriodSeconds = 30;
     private int borderSize = 3000;
     private DeathSwapSettings.SeedMode seedMode = DeathSwapSettings.SeedMode.RANDOM;
-    private long seedValue = System.currentTimeMillis();
+    private String seedValue = "";
     private boolean preserveVelocity = true;
 
     @Override
@@ -58,14 +58,36 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
                 "No grace period, swapping begins immediately.",
                 val -> "Players have " + val + " seconds of peace before swapping begins.");
             this.borderSizeField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, this.borderSize, "Border size", val -> "Size of the world border in blocks.");
-            this.seedModeButton = this.addButton(screen, seedModeLabel(), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 170, () -> this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? "Random world seed will be used." : "Specify an exact world seed in the text field.", () -> {
+            this.seedModeButton = this.addCycleButton(screen, () -> seedModeLabel(), () -> this.seedMode.ordinal(), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 170, new String[]{
+                "Random world seed will be used.",
+                "Specify an exact world seed in the text field."
+            }, 2, () -> {
                 this.seedMode = this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? DeathSwapSettings.SeedMode.FIXED : DeathSwapSettings.SeedMode.RANDOM;
                 this.seedModeButton.setMessage(Text.literal(seedModeLabel()));
+                if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
+                    this.seedValueField.setEditable(false);
+                    this.seedValueField.active = false;
+                    this.seedValueField.setText("");
+                    this.seedValueField.setSuggestion("Enter world seed");
+                } else {
+                    this.seedValueField.setEditable(true);
+                    this.seedValueField.active = true;
+                    this.seedValueField.setSuggestion("");
+                    this.seedValueField.setText(this.seedValue);
+                }
             });
-            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, Long.toString(this.seedValue), 170, "Seed value", () -> "The exact world seed to use.");
+            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, this.seedMode == DeathSwapSettings.SeedMode.FIXED ? this.seedValue : "", 170, "Seed value", () -> "The exact world seed to use.");
+            if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
+                this.seedValueField.setEditable(false);
+                this.seedValueField.active = false;
+                this.seedValueField.setSuggestion("Enter world seed");
+            } else {
+                this.seedValueField.setEditable(true);
+                this.seedValueField.active = true;
+                this.seedValueField.setSuggestion("");
+            }
             this.preserveVelocityButton = this.addToggleButton(screen, "Preserve Velocity", () -> this.preserveVelocity, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 256, 190,
-                "Players keep their momentum when teleported.",
-                "Players lose their momentum when teleported.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players keep their momentum when teleported.", "Players lose their momentum when teleported."),
                 () -> this.preserveVelocity = !this.preserveVelocity);
         }
     }
@@ -101,6 +123,20 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        
+        if (this.moduleManager.isActive("rules") && this.seedMode == DeathSwapSettings.SeedMode.RANDOM && this.seedValueField != null) {
+            if (this.seedValueField.isMouseOver(mouseX, mouseY)) {
+                this.status = ValidationResult.error("Seed mode is random, change to Fixed to enter your own world seed.");
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    @Override
     public void setActiveModule(String moduleId) {
         this.syncStateFromWidgets();
         super.setActiveModule(moduleId);
@@ -111,12 +147,8 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
             this.swapIntervalSeconds = readClamped(this.swapIntervalField, this.swapIntervalSeconds, 10, 3600);
             this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
             this.borderSize = readClamped(this.borderSizeField, this.borderSize, 100, 30000);
-            if (this.seedValueField != null) {
-                try {
-                    this.seedValue = Long.parseLong(this.seedValueField.getText().trim());
-                } catch (NumberFormatException ignored) {
-                    this.seedValueField.setText(Long.toString(this.seedValue));
-                }
+            if (this.seedValueField != null && this.seedMode == DeathSwapSettings.SeedMode.FIXED) {
+                this.seedValue = this.seedValueField.getText().trim();
             }
         }
     }
@@ -152,7 +184,19 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
         builder.settings().putInt("borderSize", this.borderSize);
         builder.settings().putBoolean("preserveVelocity", this.preserveVelocity);
         builder.settings().putString("seedMode", this.seedMode.nbtValue());
-        builder.settings().putLong("seed", this.seedMode == DeathSwapSettings.SeedMode.FIXED ? this.seedValue : System.currentTimeMillis());
+        if (this.seedMode == DeathSwapSettings.SeedMode.FIXED) {
+            long parsedSeed;
+            if (this.seedValue.isEmpty()) {
+                parsedSeed = System.currentTimeMillis();
+            } else {
+                try {
+                    parsedSeed = Long.parseLong(this.seedValue);
+                } catch (NumberFormatException e) {
+                    parsedSeed = (long) this.seedValue.hashCode();
+                }
+            }
+            builder.settings().putLong("seed", parsedSeed);
+        }
     }
 
     @Override

@@ -70,11 +70,10 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
             this.roundDurationField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.roundDurationSeconds, 160, "Round Duration (s)", val -> "Players have " + val + " seconds to complete their death objective.");
             
             this.perPlayerButton = this.addToggleButton(screen, "Per-Player DeathObjectives", () -> this.perPlayerObjectives, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, 220,
-                "Each player gets a different objective.",
-                "All players get the same objective.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Each player gets a different objective.", "All players get the same objective."),
                 () -> this.perPlayerObjectives = !this.perPlayerObjectives);
             
-            this.blockPoolButton = this.addButton(screen, "Configure DeathObjective Pool (" + this.blockPool.size() + " objectives)", this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 240, () -> "Click to configure the pool of possible death objectives.", () -> {
+            this.blockPoolButton = this.addActionButton(screen, "Configure DeathObjective Pool (" + this.blockPool.size() + " objectives)", this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 240, "Click to configure the pool of possible death objectives.", () -> {
                 Registry<DeathObjective> registry = client.world.getRegistryManager().get(DeathObjective.REGISTRY_KEY);
                 Set<DeathObjective> initialSelection = this.blockPool.stream()
                     .map(id -> DeathObjectiveManager.get(client.getServer(), id))

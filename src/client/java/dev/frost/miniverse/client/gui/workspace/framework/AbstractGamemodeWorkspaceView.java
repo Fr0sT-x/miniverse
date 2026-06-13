@@ -98,50 +98,26 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private void initGameRules(SessionScreen screen) {
         if (this.moduleManager.isActive("gamerules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.keepInventoryBtn = this.addButton(screen, "Keep Inventory: " + formatRuleState(this.keepInventoryState, defaultMatchRules().keepInventory()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.keepInventoryState, "FORCE ON: Players keep their inventory upon death.", "FORCE OFF: Players drop their items upon death.", "DEFAULT: Use the global server setting for keep inventory."), () -> {
-                this.keepInventoryState = this.keepInventoryState.next();
-                this.keepInventoryBtn.setMessage(Text.literal("Keep Inventory: " + formatRuleState(this.keepInventoryState, defaultMatchRules().keepInventory())));
-            });
+            this.keepInventoryBtn = this.addTriStateButton(screen, "Keep Inventory", () -> this.keepInventoryState, defaultMatchRules().keepInventory(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Players keep their inventory upon death.", "FORCE OFF: Players drop their items upon death.", "DEFAULT: Use the global server setting for keep inventory."), () -> this.keepInventoryState = this.keepInventoryState.next());
             y += 30;
-            this.pvpEnabledBtn = this.addButton(screen, "PvP Enabled: " + formatRuleState(this.pvpEnabledState, defaultMatchRules().pvpEnabled()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.pvpEnabledState, "FORCE ON: Players can damage each other.", "FORCE OFF: Players cannot damage each other.", "DEFAULT: Use the global server setting for PvP."), () -> {
-                this.pvpEnabledState = this.pvpEnabledState.next();
-                this.pvpEnabledBtn.setMessage(Text.literal("PvP Enabled: " + formatRuleState(this.pvpEnabledState, defaultMatchRules().pvpEnabled())));
-            });
+            this.pvpEnabledBtn = this.addTriStateButton(screen, "PvP Enabled", () -> this.pvpEnabledState, defaultMatchRules().pvpEnabled(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Players can damage each other.", "FORCE OFF: Players cannot damage each other.", "DEFAULT: Use the global server setting for PvP."), () -> this.pvpEnabledState = this.pvpEnabledState.next());
             y += 30;
-            this.doDaylightCycleBtn = this.addButton(screen, "Daylight Cycle: " + formatRuleState(this.doDaylightCycleState, defaultMatchRules().doDaylightCycle()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.doDaylightCycleState, "FORCE ON: The sun and moon progress normally.", "FORCE OFF: Time is frozen.", "DEFAULT: Use the global server setting for daylight cycle."), () -> {
-                this.doDaylightCycleState = this.doDaylightCycleState.next();
-                this.doDaylightCycleBtn.setMessage(Text.literal("Daylight Cycle: " + formatRuleState(this.doDaylightCycleState, defaultMatchRules().doDaylightCycle())));
-            });
+            this.doDaylightCycleBtn = this.addTriStateButton(screen, "Daylight Cycle", () -> this.doDaylightCycleState, defaultMatchRules().doDaylightCycle(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: The sun and moon progress normally.", "FORCE OFF: Time is frozen.", "DEFAULT: Use the global server setting for daylight cycle."), () -> this.doDaylightCycleState = this.doDaylightCycleState.next());
             y += 30;
-            this.doWeatherCycleBtn = this.addButton(screen, "Weather Cycle: " + formatRuleState(this.doWeatherCycleState, defaultMatchRules().doWeatherCycle()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.doWeatherCycleState, "FORCE ON: Rain and thunder will occur naturally.", "FORCE OFF: Weather will remain clear.", "DEFAULT: Use the global server setting for weather cycle."), () -> {
-                this.doWeatherCycleState = this.doWeatherCycleState.next();
-                this.doWeatherCycleBtn.setMessage(Text.literal("Weather Cycle: " + formatRuleState(this.doWeatherCycleState, defaultMatchRules().doWeatherCycle())));
-            });
+            this.doWeatherCycleBtn = this.addTriStateButton(screen, "Weather Cycle", () -> this.doWeatherCycleState, defaultMatchRules().doWeatherCycle(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Rain and thunder will occur naturally.", "FORCE OFF: Weather will remain clear.", "DEFAULT: Use the global server setting for weather cycle."), () -> this.doWeatherCycleState = this.doWeatherCycleState.next());
             y += 30;
-            this.fallDamageBtn = this.addButton(screen, "Fall Damage: " + formatRuleState(this.fallDamageState, defaultMatchRules().fallDamage()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.fallDamageState, "FORCE ON: Players take damage from falling.", "FORCE OFF: Players are immune to fall damage.", "DEFAULT: Use the global server setting for fall damage."), () -> {
-                this.fallDamageState = this.fallDamageState.next();
-                this.fallDamageBtn.setMessage(Text.literal("Fall Damage: " + formatRuleState(this.fallDamageState, defaultMatchRules().fallDamage())));
-            });
+            this.fallDamageBtn = this.addTriStateButton(screen, "Fall Damage", () -> this.fallDamageState, defaultMatchRules().fallDamage(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Players take damage from falling.", "FORCE OFF: Players are immune to fall damage.", "DEFAULT: Use the global server setting for fall damage."), () -> this.fallDamageState = this.fallDamageState.next());
             y += 30;
-            this.naturalRegenerationBtn = this.addButton(screen, "Natural Regen: " + formatRuleState(this.naturalRegenerationState, defaultMatchRules().naturalRegeneration()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.naturalRegenerationState, "FORCE ON: Health regenerates naturally.", "FORCE OFF: Health does not regenerate naturally.", "DEFAULT: Use the global server setting for natural regeneration."), () -> {
-                this.naturalRegenerationState = this.naturalRegenerationState.next();
-                this.naturalRegenerationBtn.setMessage(Text.literal("Natural Regen: " + formatRuleState(this.naturalRegenerationState, defaultMatchRules().naturalRegeneration())));
-            });
+            this.naturalRegenerationBtn = this.addTriStateButton(screen, "Natural Regen", () -> this.naturalRegenerationState, defaultMatchRules().naturalRegeneration(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Health regenerates naturally.", "FORCE OFF: Health does not regenerate naturally.", "DEFAULT: Use the global server setting for natural regeneration."), () -> this.naturalRegenerationState = this.naturalRegenerationState.next());
             y += 30;
-            this.announceAdvancementsBtn = this.addButton(screen, "Advancements: " + formatRuleState(this.announceAdvancementsState, defaultMatchRules().announceAdvancements()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.announceAdvancementsState, "FORCE ON: Player advancements are broadcasted to chat.", "FORCE OFF: Player advancements are not broadcasted.", "DEFAULT: Use the global server setting for advancements."), () -> {
-                this.announceAdvancementsState = this.announceAdvancementsState.next();
-                this.announceAdvancementsBtn.setMessage(Text.literal("Advancements: " + formatRuleState(this.announceAdvancementsState, defaultMatchRules().announceAdvancements())));
-            });
+            this.announceAdvancementsBtn = this.addTriStateButton(screen, "Advancements", () -> this.announceAdvancementsState, defaultMatchRules().announceAdvancements(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Player advancements are broadcasted to chat.", "FORCE OFF: Player advancements are not broadcasted.", "DEFAULT: Use the global server setting for advancements."), () -> this.announceAdvancementsState = this.announceAdvancementsState.next());
             y += 30;
-            this.immediateRespawnBtn = this.addButton(screen, "Immediate Respawn: " + formatRuleState(this.immediateRespawnState, defaultMatchRules().doImmediateRespawn()), this.layout.mainPanel().x() + 180, y, 200, getImmediateRespawnTooltip(), () -> {
-                this.immediateRespawnState = this.immediateRespawnState.next();
-                this.immediateRespawnBtn.setMessage(Text.literal("Immediate Respawn: " + formatRuleState(this.immediateRespawnState, defaultMatchRules().doImmediateRespawn())));
-            });
+            this.immediateRespawnBtn = this.addTriStateButton(screen, "Immediate Respawn", () -> this.immediateRespawnState, defaultMatchRules().doImmediateRespawn(), this.layout.mainPanel().x() + 180, y, 200, getImmediateRespawnTooltip(), () -> this.immediateRespawnState = this.immediateRespawnState.next());
         }
     }
 
-    protected java.util.function.Supplier<String> getImmediateRespawnTooltip() {
-        return TriStateTooltip.of(() -> this.immediateRespawnState, "FORCE ON: Players instantly respawn without the vanilla death screen.", "FORCE OFF: Players see the vanilla death screen.", "DEFAULT: Use the global server setting for immediate respawn.");
+    protected TriStateTooltip getImmediateRespawnTooltip() {
+        return new TriStateTooltip("FORCE ON: Players instantly respawn without the vanilla death screen.", "FORCE OFF: Players see the vanilla death screen.", "DEFAULT: Use the global server setting for immediate respawn.");
     }
 
 
@@ -246,12 +222,10 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
         this.renderGamemodeForeground(context, textRenderer, mouseX, mouseY, delta);
 
-        if (this.moduleManager.isActive("rules") || this.moduleManager.isActive("settings") || this.moduleManager.isActive("gamerules")) {
-            for (TooltipZone zone : this.activeTooltips) {
-                if (mouseX >= zone.x() && mouseX < zone.x() + zone.width() && mouseY >= zone.y() && mouseY < zone.y() + zone.height()) {
-                    context.drawTooltip(textRenderer, Text.literal(zone.text().get()), mouseX, mouseY);
-                    break;
-                }
+        for (TooltipZone zone : this.activeTooltips) {
+            if (mouseX >= zone.x() && mouseX < zone.x() + zone.width() && mouseY >= zone.y() && mouseY < zone.y() + zone.height()) {
+                context.drawTooltip(textRenderer, Text.literal(zone.text().get()), mouseX, mouseY);
+                break;
             }
         }
     }
@@ -370,7 +344,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         }).dimensions(x + 22, y, 20, 20).build());
     }
 
-    protected ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, java.util.function.Supplier<String> tooltip, Runnable action) {
+    private ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, java.util.function.Supplier<String> tooltip, Runnable action) {
         ButtonWidget btn = new ButtonWidget.Builder(Text.literal(label), b -> action.run())
             .dimensions(x, y, width, 20)
             .build();
@@ -412,7 +386,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
                 return val <= 0 ? zeroText : activeText.apply(val);
             };
             int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-            int zoneW = (x + width) - zoneX;
+            int zoneW = (x + width + 44) - zoneX;
             this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
         }
         return field;
@@ -431,7 +405,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         if (tooltipFormatter != null) {
             java.util.function.Supplier<String> tooltip = () -> tooltipFormatter.apply(field.getIntValue(0));
             int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-            int zoneW = (x + width) - zoneX;
+            int zoneW = (x + width + 44) - zoneX;
             this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
         }
         return field;
@@ -441,18 +415,62 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         return this.addIntField(screen, x, y, value, 120, placeholder, tooltipFormatter);
     }
 
-    protected ButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, String onTooltip, String offTooltip, Runnable onToggle) {
+    protected ButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, BinaryTooltip tooltip, Runnable onToggle) {
         ButtonWidget btn = new ButtonWidget.Builder(Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")), b -> {
             onToggle.run();
             b.setMessage(Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")));
         }).dimensions(x, y, width, 20).build();
         screen.addWidget(btn);
         
-        java.util.function.Supplier<String> tooltip = () -> stateSupplier.get() ? onTooltip : offTooltip;
         int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
         int zoneW = (x + width) - zoneX;
-        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
+        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> tooltip.resolve(stateSupplier.get())));
         
+        return btn;
+    }
+
+    protected ButtonWidget addTriStateButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<TriState> stateSupplier, boolean defaultVal, int x, int y, int width, TriStateTooltip tooltip, Runnable onCycle) {
+        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(labelPrefix + ": " + formatRuleState(stateSupplier.get(), defaultVal)), b -> {
+            onCycle.run();
+            b.setMessage(Text.literal(labelPrefix + ": " + formatRuleState(stateSupplier.get(), defaultVal)));
+        }).dimensions(x, y, width, 20).build();
+        screen.addWidget(btn);
+
+        int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+        int zoneW = (x + width) - zoneX;
+        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> tooltip.resolve(stateSupplier.get())));
+
+        return btn;
+    }
+
+    protected ButtonWidget addCycleButton(SessionScreen screen, java.util.function.Supplier<String> labelSupplier, java.util.function.Supplier<Integer> cycleIndexSupplier, int x, int y, int width, String[] stateTooltips, int cycleLength, Runnable onCycle) {
+        if (stateTooltips.length != cycleLength) {
+            throw new IllegalArgumentException("addCycleButton: stateTooltips length (" + stateTooltips.length + ") must match cycle length (" + cycleLength + ")");
+        }
+        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(labelSupplier.get()), b -> {
+            onCycle.run();
+            b.setMessage(Text.literal(labelSupplier.get()));
+        }).dimensions(x, y, width, 20).build();
+        screen.addWidget(btn);
+
+        int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+        int zoneW = (x + width) - zoneX;
+        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> stateTooltips[cycleIndexSupplier.get()]));
+
+        return btn;
+    }
+
+    protected ButtonWidget addActionButton(SessionScreen screen, String label, int x, int y, int width, String tooltip, Runnable action) {
+        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(label), b -> action.run())
+            .dimensions(x, y, width, 20)
+            .build();
+        screen.addWidget(btn);
+        
+        if (tooltip != null) {
+            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+            int zoneW = (x + width) - zoneX;
+            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> tooltip));
+        }
         return btn;
     }
 
@@ -470,18 +488,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         context.drawText(textRenderer, Text.literal(title), moduleX + 12, moduleY + 12, accent, false);
     }
 
-    protected int readClamped(TextFieldWidget field, int fallback, int min, int max) {
-        if (field == null) return fallback;
-        try {
-            int value = Math.clamp(Integer.parseInt(field.getText().trim()), min, max);
-            field.setText(Integer.toString(value));
-            return value;
-        } catch (NumberFormatException ignored) {
-            field.setText(Integer.toString(fallback));
-            return fallback;
-        }
-    }
-
     protected int readClamped(dev.frost.miniverse.client.gui.ui.IntFieldWidget field, int fallback, int min, int max) {
         if (field == null) return fallback;
         int value = Math.clamp(field.getIntValue(fallback), min, max);
@@ -490,11 +496,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     }
 
     protected void stepField(dev.frost.miniverse.client.gui.ui.IntFieldWidget field, int min, int max, int delta) {
-        int value = this.readClamped(field, min, min, max);
-        field.setText(Integer.toString(Math.clamp(value + delta, min, max)));
-    }
-
-    protected void stepField(TextFieldWidget field, int min, int max, int delta) {
         int value = this.readClamped(field, min, min, max);
         field.setText(Integer.toString(Math.clamp(value + delta, min, max)));
     }

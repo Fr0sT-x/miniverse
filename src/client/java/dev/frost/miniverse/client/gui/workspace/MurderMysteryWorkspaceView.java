@@ -9,16 +9,17 @@ import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
-    private TextFieldWidget durationField;
-    private TextFieldWidget detectiveCountField;
-    private TextFieldWidget coinIntervalField;
-    private TextFieldWidget bowPriceField;
+    private IntFieldWidget durationField;
+    private IntFieldWidget detectiveCountField;
+    private IntFieldWidget coinIntervalField;
+    private IntFieldWidget bowPriceField;
 
     private int durationSeconds = 300;
     private int detectiveCount = 1;
@@ -39,10 +40,10 @@ public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceV
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.durationField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.durationSeconds), "Round duration (seconds)", () -> "The murderer must eliminate everyone within " + this.durationField.getText() + " seconds.");
-            this.detectiveCountField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.detectiveCount), "Detective count", () -> "The match will have " + this.detectiveCountField.getText() + " detective(s).");
-            this.coinIntervalField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.coinInterval), "Coin spawn interval (seconds)", () -> "Coins will spawn on the map every " + this.coinIntervalField.getText() + " seconds.");
-            this.bowPriceField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, Integer.toString(this.bowPrice), "Detective bow price (coins)", () -> "Innocents must collect " + this.bowPriceField.getText() + " coins to receive a bow.");
+            this.durationField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, this.durationSeconds, "Round duration (seconds)", val -> "The murderer must eliminate everyone within " + val + " seconds.");
+            this.detectiveCountField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.detectiveCount, "Detective count", val -> "The match will have " + val + " detective(s).");
+            this.coinIntervalField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, this.coinInterval, "Coin spawn interval (seconds)", val -> "Coins will spawn on the map every " + val + " seconds.");
+            this.bowPriceField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, this.bowPrice, "Detective bow price (coins)", val -> "Innocents must collect " + val + " coins to receive a bow.");
         }
     }
 

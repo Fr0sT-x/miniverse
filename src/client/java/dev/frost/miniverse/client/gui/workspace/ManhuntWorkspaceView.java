@@ -65,7 +65,10 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             int sx2 = cx2 + 178;
 
             // Row 1
-            this.seedModeButton = this.addButton(screen, this.seedMode.displayName, cx1, this.layout.mainPanel().y() + 124, 170, () -> this.seedMode == SeedMode.RANDOM ? "Random world seed will be used." : "Specify an exact world seed in the text field.", () -> {
+            this.seedModeButton = this.addCycleButton(screen, () -> this.seedMode.displayName, () -> this.seedMode.ordinal(), cx1, this.layout.mainPanel().y() + 124, 170, new String[]{
+                "Random world seed will be used.",
+                "Specify an exact world seed in the text field."
+            }, 2, () -> {
                 this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
                 this.seedModeButton.setMessage(Text.literal(this.seedMode.displayName));
                 
@@ -100,8 +103,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
 
             // Row 3
             this.huntersCompassButton = this.addToggleButton(screen, "Hunters Compass", () -> this.huntersCompassEnabled, cx1, this.layout.mainPanel().y() + 208, 170,
-                "ON: Hunters receive a compass pointing to the nearest speedrunner.",
-                "OFF: Hunters will not receive any compass to track speedrunners.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Hunters receive a compass pointing to the nearest speedrunner.", "OFF: Hunters will not receive any compass to track speedrunners."),
                 () -> this.huntersCompassEnabled = !this.huntersCompassEnabled);
             this.compassCooldownField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 208, this.compassCooldownSeconds, "Compass cooldown seconds",
                 "No compass cooldown.",
@@ -110,8 +112,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
 
             // Row 4
             this.netherTrackingButton = this.addToggleButton(screen, "Nether Tracking", () -> this.netherTrackingEnabled, cx1, this.layout.mainPanel().y() + 240, 170,
-                "ON: Compasses work when target is in a different dimension.",
-                "OFF: Compasses spin randomly if target is in a different dimension.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Compasses work when target is in a different dimension.", "OFF: Compasses spin randomly if target is in a different dimension."),
                 () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
             this.runnerGlowPulseField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 240, this.runnerGlowPulseMinutes, "Runner glow pulse minutes",
                 "Speedrunners will not glow.",
@@ -119,7 +120,13 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.addStepper(screen, this.runnerGlowPulseField, sx2, this.layout.mainPanel().y() + 240, 0, 120, 5);
 
             // Row 5
-            this.runnerLivesButton = this.addButton(screen, "Runner Lives: " + formatLives(this.runnerLives), cx1, this.layout.mainPanel().y() + 292, 170, () -> "Number of lives speedrunners have before elimination.", () -> {
+            this.runnerLivesButton = this.addCycleButton(screen, () -> "Runner Lives: " + formatLives(this.runnerLives), () -> livesToIndex(this.runnerLives), cx1, this.layout.mainPanel().y() + 292, 170, new String[]{
+                "Unlimited lives for speedrunners.",
+                "Speedrunners have 1 life.",
+                "Speedrunners have 2 lives.",
+                "Speedrunners have 3 lives.",
+                "Speedrunners have 5 lives."
+            }, 5, () -> {
                 this.runnerLives = nextLivesValue(this.runnerLives);
                 this.runnerLivesButton.setMessage(Text.literal("Runner Lives: " + formatLives(this.runnerLives)));
             });
@@ -129,7 +136,13 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.addStepper(screen, this.respawnDelayField, sx2, this.layout.mainPanel().y() + 292, 0, 3600, 30);
 
             // Row 6
-            this.hunterLivesButton = this.addButton(screen, "Hunter Lives: " + formatLives(this.hunterLives), cx1, this.layout.mainPanel().y() + 324, 170, () -> "Number of lives hunters have before elimination.", () -> {
+            this.hunterLivesButton = this.addCycleButton(screen, () -> "Hunter Lives: " + formatLives(this.hunterLives), () -> livesToIndex(this.hunterLives), cx1, this.layout.mainPanel().y() + 324, 170, new String[]{
+                "Unlimited lives for hunters.",
+                "Hunters have 1 life.",
+                "Hunters have 2 lives.",
+                "Hunters have 3 lives.",
+                "Hunters have 5 lives."
+            }, 5, () -> {
                 this.hunterLives = nextLivesValue(this.hunterLives);
                 this.hunterLivesButton.setMessage(Text.literal("Hunter Lives: " + formatLives(this.hunterLives)));
             });
@@ -139,7 +152,9 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.addStepper(screen, this.hunterRespawnDelayField, sx2, this.layout.mainPanel().y() + 324, 0, 3600, 5);
 
             // Row 7
-            this.midGameJoinTeleportButton = this.addButton(screen, "Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled), cx1, this.layout.mainPanel().y() + 378, 170, () -> this.midGameJoinTeleportEnabled ? "Late joiners will be placed in spectator and prompted to teleport to an active teammate." : "Late joiners will spawn at world spawn.", () -> {
+            this.midGameJoinTeleportButton = this.addToggleButton(screen, "Mid-Game Join TP", () -> this.midGameJoinTeleportEnabled, cx1, this.layout.mainPanel().y() + 378, 170, 
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Late joiners will be placed in spectator and prompted to teleport to an active teammate.", "OFF: Late joiners will spawn at world spawn."), 
+                () -> {
                 this.midGameJoinTeleportEnabled = !this.midGameJoinTeleportEnabled;
                 this.midGameJoinTeleportButton.setMessage(Text.literal("Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled)));
             });
@@ -147,11 +162,10 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     }
 
     @Override
-    protected java.util.function.Supplier<String> getImmediateRespawnTooltip() {
-        return dev.frost.miniverse.client.gui.workspace.framework.TriStateTooltip.of(
-            () -> this.immediateRespawnState, 
-            "FORCE ON: Players instantly respawn without the vanilla death screen. To provide support for our custom respawn system, leave this ON.", 
-            "FORCE OFF: Players see the vanilla death screen.", 
+    protected dev.frost.miniverse.client.gui.workspace.framework.TriStateTooltip getImmediateRespawnTooltip() {
+        return new dev.frost.miniverse.client.gui.workspace.framework.TriStateTooltip(
+            "FORCE ON: Players instantly respawn without the vanilla death screen.",
+            "FORCE OFF: Players see the vanilla death screen. Speedrunners will be forced into spectator mode after respawning.",
             "DEFAULT: Use the global server setting for immediate respawn."
         );
     }
@@ -317,6 +331,16 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             }
         }
         return -1;
+    }
+
+    private static int livesToIndex(int current) {
+        int[] cycle = {-1, 1, 2, 3, 5};
+        for (int i = 0; i < cycle.length; i++) {
+            if (cycle[i] == current) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     private enum SeedMode {

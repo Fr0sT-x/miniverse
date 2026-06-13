@@ -72,24 +72,33 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
             this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
         } else if (this.moduleManager.isActive("rules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.modeButton = this.addButton(screen, "Mode: " + titleCase(this.mode.nbtValue()), this.layout.mainPanel().x() + 180, y, 190, () -> this.mode == ResourceSprintSettings.Mode.FIRST_TO_COMPLETE ? "Win condition: First to find all items." : "Win condition: Most items found before time runs out.", () -> {
+            this.modeButton = this.addCycleButton(screen, () -> "Mode: " + titleCase(this.mode.nbtValue()), () -> this.mode.ordinal(), this.layout.mainPanel().x() + 180, y, 190, new String[]{
+                "Win condition: First to find all items.",
+                "Win condition: Most items found before time runs out."
+            }, 2, () -> {
                 this.mode = this.mode == ResourceSprintSettings.Mode.FIRST_TO_COMPLETE ? ResourceSprintSettings.Mode.TIME_LIMITED : ResourceSprintSettings.Mode.FIRST_TO_COMPLETE;
                 this.modeButton.setMessage(Text.literal("Mode: " + titleCase(this.mode.nbtValue())));
             });
             y += 32;
             this.timeLimitField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.timeLimitSeconds, 190, "Time limit seconds", val -> "Match will end after " + val + " seconds.");
             y += 32;
-            this.tieBreakButton = this.addButton(screen, "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), this.layout.mainPanel().x() + 180, y, 190, () -> "The rule used to break ties at the end of the match.", () -> {
+            this.tieBreakButton = this.addCycleButton(screen, () -> "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), () -> this.tieBreakRule.ordinal(), this.layout.mainPanel().x() + 180, y, 190, new String[]{
+                "The rule used to break ties at the end of the match.",
+                "The rule used to break ties at the end of the match."
+            }, 2, () -> {
                 this.tieBreakRule = this.tieBreakRule == ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH ? ResourceSprintSettings.TieBreakRule.FASTEST_TOTAL_TIME : ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
                 this.tieBreakButton.setMessage(Text.literal("Tie-Break: " + titleCase(this.tieBreakRule.nbtValue())));
             });
             y += 32;
-            this.distributionButton = this.addButton(screen, "Distribution: " + shortDistribution(this.distributionMode), this.layout.mainPanel().x() + 180, y, 190, () -> "How collected resources are shared among team members.", () -> {
+            this.distributionButton = this.addCycleButton(screen, () -> "Distribution: " + shortDistribution(this.distributionMode), () -> this.distributionMode.ordinal(), this.layout.mainPanel().x() + 180, y, 190, new String[]{
+                "How collected resources are shared among team members.",
+                "How collected resources are shared among team members."
+            }, 2, () -> {
                 this.distributionMode = this.distributionMode.next();
                 this.distributionButton.setMessage(Text.literal("Distribution: " + shortDistribution(this.distributionMode)));
             });
             y += 32;
-            this.addButton(screen, "Configure Objectives", this.layout.mainPanel().x() + 180, y, 190, () -> "Select which resources teams must collect.", () -> {
+            this.addActionButton(screen, "Configure Objectives", this.layout.mainPanel().x() + 180, y, 190, "Select which resources teams must collect.", () -> {
                 this.syncStateFromWidgets();
                 RegistrySelectorContext<net.minecraft.item.Item> selectorContext = new RegistrySelectorContext<>(
                     "minecraft:item",

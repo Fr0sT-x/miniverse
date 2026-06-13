@@ -50,8 +50,7 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
                 "Infected will respawn instantly.",
                 val -> "Infected will be forced to spectate for " + val + " seconds before respawning.");
             this.friendlyFireButton = this.addToggleButton(screen, "Friendly Fire", () -> this.allowFriendlyFire, cx2, y + 96, 170,
-                "Survivors can damage other survivors.",
-                "Survivors cannot damage each other.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Survivors can damage other survivors.", "Survivors cannot damage each other."),
                 () -> this.allowFriendlyFire = !this.allowFriendlyFire);
         }
     }

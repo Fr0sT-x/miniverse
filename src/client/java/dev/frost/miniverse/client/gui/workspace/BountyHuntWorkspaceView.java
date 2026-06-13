@@ -74,12 +74,10 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
 
             // Row 3
             this.trackerToggle = this.addToggleButton(screen, "Tracker", () -> this.trackerEnabled, cx1, this.layout.mainPanel().y() + 208, 170,
-                "Players receive a tracker pointing to their target.",
-                "Tracking is disabled.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players receive a tracker pointing to their target.", "Tracking is disabled."),
                 () -> this.trackerEnabled = !this.trackerEnabled);
             this.netherToggle = this.addToggleButton(screen, "Nether Tracking", () -> this.netherTrackingEnabled, cx2, this.layout.mainPanel().y() + 208, 170,
-                "ON: Trackers work when the target is in a different dimension.",
-                "OFF: Trackers spin randomly if the target is in a different dimension.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Trackers work when the target is in a different dimension.", "OFF: Trackers spin randomly if the target is in a different dimension."),
                 () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
 
             // Row 4
@@ -90,12 +88,10 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
 
             // Row 5
             this.hvtToggle = this.addToggleButton(screen, "HVT", () -> this.highValueTargetEnabled, cx1, this.layout.mainPanel().y() + 292, 170,
-                "ON: The High Value Target system is active.",
-                "OFF: The High Value Target system is disabled.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: The High Value Target system is active.", "OFF: The High Value Target system is disabled."),
                 () -> this.highValueTargetEnabled = !this.highValueTargetEnabled);
             this.revengeToggle = this.addToggleButton(screen, "Revenge", () -> this.revengeAssignmentEnabled, cx2, this.layout.mainPanel().y() + 292, 170,
-                "ON: Players can be assigned their killer as a target.",
-                "OFF: Players will not be assigned their killer as a target.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Players can be assigned their killer as a target.", "OFF: Players will not be assigned their killer as a target."),
                 () -> this.revengeAssignmentEnabled = !this.revengeAssignmentEnabled);
         }
     }

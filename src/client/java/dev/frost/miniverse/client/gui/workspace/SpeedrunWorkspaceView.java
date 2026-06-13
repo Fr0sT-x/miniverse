@@ -52,8 +52,11 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
         } else if (this.moduleManager.isActive("rules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.seedModeButton = this.addButton(screen, "Seed Mode: " + this.seedMode.label, this.layout.mainPanel().x() + 180, y, 170, () -> this.seedMode == SeedMode.RANDOM ? "Random world seed will be used." : "Specify an exact world seed in the text field.", () -> {
-                this.seedMode = this.seedMode.next();
+            this.seedModeButton = this.addCycleButton(screen, () -> "Seed Mode: " + this.seedMode.label, () -> this.seedMode.ordinal(), this.layout.mainPanel().x() + 180, y, 170, new String[]{
+                "Random world seed will be used.",
+                "Specify an exact world seed in the text field."
+            }, 2, () -> {
+                this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
                 this.seedModeButton.setMessage(Text.literal("Seed Mode: " + this.seedMode.label));
                 if (this.seedMode == SeedMode.RANDOM) {
                     this.seedValueField.setEditable(false);
@@ -164,6 +167,12 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
                 this.status = ValidationResult.error("No players to split into solo teams.");
             }
             return true;
+        }
+        if (this.moduleManager.isActive("rules") && this.seedMode == SeedMode.RANDOM && this.seedValueField != null) {
+            if (this.seedValueField.isMouseOver(mouseX, mouseY)) {
+                this.status = ValidationResult.error("Seed mode is random, change to Fixed to enter your own world seed.");
+                return true;
+            }
         }
         return false;
     }

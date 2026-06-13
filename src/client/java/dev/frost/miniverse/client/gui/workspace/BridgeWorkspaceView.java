@@ -74,23 +74,19 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
             y += 30;
             
             this.allowBuildingBtn = this.addToggleButton(screen, "Allow Building", () -> this.allowBuilding, this.layout.mainPanel().x() + 180, y, 170,
-                "Players can place blocks.",
-                "Block placement is disabled.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can place blocks.", "Block placement is disabled."),
                 () -> this.allowBuilding = !this.allowBuilding);
             y += 30;
             this.allowBlockBreakingBtn = this.addToggleButton(screen, "Allow Block Breaking", () -> this.allowBlockBreaking, this.layout.mainPanel().x() + 180, y, 170,
-                "Players can break placed blocks.",
-                "Block breaking is disabled.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can break placed blocks.", "Block breaking is disabled."),
                 () -> this.allowBlockBreaking = !this.allowBlockBreaking);
             y += 30;
             this.enableBowBtn = this.addToggleButton(screen, "Enable Bows", () -> this.enableBow, this.layout.mainPanel().x() + 180, y, 170,
-                "Players spawn with a bow.",
-                "Bows are disabled.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a bow.", "Bows are disabled."),
                 () -> this.enableBow = !this.enableBow);
             y += 30;
             this.enablePickaxeBtn = this.addToggleButton(screen, "Enable Pickaxes", () -> this.enablePickaxe, this.layout.mainPanel().x() + 180, y, 170,
-                "Players spawn with a pickaxe.",
-                "Pickaxes are disabled.",
+                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a pickaxe.", "Pickaxes are disabled."),
                 () -> this.enablePickaxe = !this.enablePickaxe);
         }
     }

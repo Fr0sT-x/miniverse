@@ -52,7 +52,7 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
         } else if (this.moduleManager.isActive("rules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.seedModeButton = this.addButton(screen, "Seed Mode: " + this.seedMode.label, this.layout.mainPanel().x() + 180, y, 170, () -> {
+            this.seedModeButton = this.addButton(screen, "Seed Mode: " + this.seedMode.label, this.layout.mainPanel().x() + 180, y, 170, () -> this.seedMode == SeedMode.RANDOM ? "Random world seed will be used." : "Specify an exact world seed in the text field.", () -> {
                 this.seedMode = this.seedMode.next();
                 this.seedModeButton.setMessage(Text.literal("Seed Mode: " + this.seedMode.label));
                 if (this.seedMode == SeedMode.RANDOM) {
@@ -68,7 +68,7 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
                 }
             });
             y += 32;
-            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", 170, "Seed value");
+            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", 170, "Seed value", () -> "Specify an exact world seed in the text field.");
             if (this.seedMode == SeedMode.RANDOM) {
                 this.seedValueField.setEditable(false);
                 this.seedValueField.active = false;

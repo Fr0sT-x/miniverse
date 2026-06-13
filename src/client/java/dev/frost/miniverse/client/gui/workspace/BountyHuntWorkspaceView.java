@@ -10,6 +10,7 @@ import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.minigame.impl.bountyhunt.BountyHuntDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
@@ -19,14 +20,16 @@ import java.util.List;
 public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
     
-    private TextFieldWidget graceField;
-    private TextFieldWidget invincibilityField;
-    private TextFieldWidget scoreToWinField;
-    private TextFieldWidget targetSwapField;
-    private TextFieldWidget compassCooldownField;
+    private IntFieldWidget graceField;
+    private IntFieldWidget invincibilityField;
+    private IntFieldWidget scoreToWinField;
+    private IntFieldWidget targetSwapField;
+    private IntFieldWidget compassCooldownField;
     private TextFieldWidget trackerItemField;
     private ButtonWidget trackerToggle;
     private ButtonWidget netherToggle;
+    private ButtonWidget hvtToggle;
+    private ButtonWidget revengeToggle;
 
     private int graceSeconds = 300;
     private int invincibilitySeconds = 120;
@@ -35,6 +38,8 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
     private int compassCooldownSeconds = 2;
     private boolean trackerEnabled = true;
     private boolean netherTrackingEnabled = true;
+    private boolean highValueTargetEnabled = false;
+    private boolean revengeAssignmentEnabled = false;
     private String trackerItemId = "minecraft:compass";
 
     public BountyHuntWorkspaceView() {
@@ -54,26 +59,44 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
             int cx2 = this.layout.mainPanel().x() + 500;
 
             // Row 1
-            this.scoreToWinField = this.addField(screen, cx1, this.layout.mainPanel().y() + 124, Integer.toString(this.scoreToWin), "Score to win");
-            this.targetSwapField = this.addField(screen, cx2, this.layout.mainPanel().y() + 124, Integer.toString(this.targetSwapSeconds), "Target swap seconds");
+            this.scoreToWinField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 124, this.scoreToWin, "Score to win", val -> "Score needed to win the match.");
+            this.targetSwapField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 124, this.targetSwapSeconds, "Target swap seconds",
+                "Targets will not rotate.",
+                val -> "Targets will rotate every " + val + " seconds.");
 
             // Row 2
-            this.graceField = this.addField(screen, cx1, this.layout.mainPanel().y() + 156, Integer.toString(this.graceSeconds), "Grace seconds");
-            this.invincibilityField = this.addField(screen, cx2, this.layout.mainPanel().y() + 156, Integer.toString(this.invincibilitySeconds), "Invincibility seconds");
+            this.graceField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 156, this.graceSeconds, "Grace seconds",
+                "No grace period, PvP is enabled immediately.",
+                val -> "Players have " + val + " seconds of peace before PvP is enabled.");
+            this.invincibilityField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 156, this.invincibilitySeconds, "Invincibility seconds",
+                "No respawn invincibility.",
+                val -> "Players are invincible for " + val + " seconds after respawning.");
 
             // Row 3
-            this.trackerToggle = this.addButton(screen, toggleLabel("Tracker", this.trackerEnabled), cx1, this.layout.mainPanel().y() + 208, 170, () -> {
-                this.trackerEnabled = !this.trackerEnabled;
-                this.trackerToggle.setMessage(Text.literal(toggleLabel("Tracker", this.trackerEnabled)));
-            });
-            this.netherToggle = this.addButton(screen, toggleLabel("Nether Tracking", this.netherTrackingEnabled), cx2, this.layout.mainPanel().y() + 208, 170, () -> {
-                this.netherTrackingEnabled = !this.netherTrackingEnabled;
-                this.netherToggle.setMessage(Text.literal(toggleLabel("Nether Tracking", this.netherTrackingEnabled)));
-            });
+            this.trackerToggle = this.addToggleButton(screen, "Tracker", () -> this.trackerEnabled, cx1, this.layout.mainPanel().y() + 208, 170,
+                "Players receive a tracker pointing to their target.",
+                "Tracking is disabled.",
+                () -> this.trackerEnabled = !this.trackerEnabled);
+            this.netherToggle = this.addToggleButton(screen, "Nether Tracking", () -> this.netherTrackingEnabled, cx2, this.layout.mainPanel().y() + 208, 170,
+                "ON: Trackers work when the target is in a different dimension.",
+                "OFF: Trackers spin randomly if the target is in a different dimension.",
+                () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
 
             // Row 4
-            this.compassCooldownField = this.addField(screen, cx1, this.layout.mainPanel().y() + 240, Integer.toString(this.compassCooldownSeconds), "Cooldown seconds");
-            this.trackerItemField = this.addField(screen, cx2, this.layout.mainPanel().y() + 240, this.trackerItemId, "Tracker item");
+            this.compassCooldownField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 240, this.compassCooldownSeconds, "Cooldown seconds",
+                "No tracker cooldown.",
+                val -> "Players must wait " + val + " seconds between tracker uses.");
+            this.trackerItemField = this.addField(screen, cx2, this.layout.mainPanel().y() + 240, this.trackerItemId, "Tracker item", () -> "The item id used for tracking targets.");
+
+            // Row 5
+            this.hvtToggle = this.addToggleButton(screen, "HVT", () -> this.highValueTargetEnabled, cx1, this.layout.mainPanel().y() + 292, 170,
+                "ON: The High Value Target system is active.",
+                "OFF: The High Value Target system is disabled.",
+                () -> this.highValueTargetEnabled = !this.highValueTargetEnabled);
+            this.revengeToggle = this.addToggleButton(screen, "Revenge", () -> this.revengeAssignmentEnabled, cx2, this.layout.mainPanel().y() + 292, 170,
+                "ON: Players can be assigned their killer as a target.",
+                "OFF: Players will not be assigned their killer as a target.",
+                () -> this.revengeAssignmentEnabled = !this.revengeAssignmentEnabled);
         }
     }
 
@@ -110,6 +133,10 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
             context.drawText(textRenderer, Text.literal("Nether Toggle"), lx2, by + 214, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Cooldown"), lx1, by + 246, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Tracker Item"), lx2, by + 246, UiTheme.TEXT_MUTED, false);
+
+            context.drawText(textRenderer, Text.literal("Bonus Features"), lx1, by + 276, UiTheme.ACCENT_BLUE, false);
+            context.drawText(textRenderer, Text.literal("High Value Target"), lx1, by + 298, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Revenge Contracts"), lx2, by + 298, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -166,6 +193,8 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
         builder.settings().putBoolean("trackerEnabled", this.trackerEnabled);
         builder.settings().putBoolean("netherTracking", this.netherTrackingEnabled);
         builder.settings().putString("trackerItemId", this.trackerItemId);
+        builder.settings().putBoolean("highValueTargetEnabled", this.highValueTargetEnabled);
+        builder.settings().putBoolean("revengeAssignmentEnabled", this.revengeAssignmentEnabled);
     }
 
     @Override

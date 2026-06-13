@@ -58,6 +58,12 @@ public final class BountyHuntCommands {
                 .then(literal("trackerItem")
                     .then(argument("item", StringArgumentType.word())
                         .executes(BountyHuntCommands::setTrackerItem)))
+                .then(literal("highValueTarget")
+                    .then(argument("enabled", BoolArgumentType.bool())
+                        .executes(BountyHuntCommands::setHighValueTarget)))
+                .then(literal("revengeAssignment")
+                    .then(argument("enabled", BoolArgumentType.bool())
+                        .executes(BountyHuntCommands::setRevengeAssignment)))
                 .then(literal("info").executes(BountyHuntCommands::info))
         );
     }
@@ -125,185 +131,91 @@ public final class BountyHuntCommands {
 
     private static int setGrace(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         int seconds = IntegerArgumentType.getInteger(context, "seconds");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            seconds,
-            current.respawnInvincibilitySeconds(),
-            current.scoreToWin(),
-            current.targetSwapIntervalSeconds(),
-            current.trackerEnabled(),
-            current.netherTrackingEnabled(),
-            current.compassCooldownSeconds(),
-            current.trackerItemId(),
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withGracePeriodSeconds(seconds));
         context.getSource().sendFeedback(() -> Text.literal("Set grace period to " + seconds + "s."), true);
         return 1;
     }
 
     private static int setInvincibility(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         int seconds = IntegerArgumentType.getInteger(context, "seconds");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            current.gracePeriodSeconds(),
-            seconds,
-            current.scoreToWin(),
-            current.targetSwapIntervalSeconds(),
-            current.trackerEnabled(),
-            current.netherTrackingEnabled(),
-            current.compassCooldownSeconds(),
-            current.trackerItemId(),
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withRespawnInvincibilitySeconds(seconds));
         context.getSource().sendFeedback(() -> Text.literal("Set respawn invincibility to " + seconds + "s."), true);
         return 1;
     }
 
     private static int setScoreToWin(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         int score = IntegerArgumentType.getInteger(context, "score");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            current.gracePeriodSeconds(),
-            current.respawnInvincibilitySeconds(),
-            score,
-            current.targetSwapIntervalSeconds(),
-            current.trackerEnabled(),
-            current.netherTrackingEnabled(),
-            current.compassCooldownSeconds(),
-            current.trackerItemId(),
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withScoreToWin(score));
         context.getSource().sendFeedback(() -> Text.literal("Set score to win to " + score + "."), true);
         return 1;
     }
 
     private static int setTargetSwap(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         int seconds = IntegerArgumentType.getInteger(context, "seconds");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            current.gracePeriodSeconds(),
-            current.respawnInvincibilitySeconds(),
-            current.scoreToWin(),
-            seconds,
-            current.trackerEnabled(),
-            current.netherTrackingEnabled(),
-            current.compassCooldownSeconds(),
-            current.trackerItemId(),
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withTargetSwapIntervalSeconds(seconds));
         context.getSource().sendFeedback(() -> Text.literal("Set target swap interval to " + seconds + "s."), true);
         return 1;
     }
 
     private static int setTrackerEnabled(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         boolean enabled = BoolArgumentType.getBool(context, "enabled");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            current.gracePeriodSeconds(),
-            current.respawnInvincibilitySeconds(),
-            current.scoreToWin(),
-            current.targetSwapIntervalSeconds(),
-            enabled,
-            current.netherTrackingEnabled(),
-            current.compassCooldownSeconds(),
-            current.trackerItemId(),
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withTrackerEnabled(enabled));
         context.getSource().sendFeedback(() -> Text.literal("Set tracker enabled to " + enabled + "."), true);
         return 1;
     }
 
     private static int setNetherTracking(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         boolean enabled = BoolArgumentType.getBool(context, "enabled");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            current.gracePeriodSeconds(),
-            current.respawnInvincibilitySeconds(),
-            current.scoreToWin(),
-            current.targetSwapIntervalSeconds(),
-            current.trackerEnabled(),
-            enabled,
-            current.compassCooldownSeconds(),
-            current.trackerItemId(),
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withNetherTrackingEnabled(enabled));
         context.getSource().sendFeedback(() -> Text.literal("Set nether tracking to " + enabled + "."), true);
         return 1;
     }
 
     private static int setCompassCooldown(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         int seconds = IntegerArgumentType.getInteger(context, "seconds");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            current.gracePeriodSeconds(),
-            current.respawnInvincibilitySeconds(),
-            current.scoreToWin(),
-            current.targetSwapIntervalSeconds(),
-            current.trackerEnabled(),
-            current.netherTrackingEnabled(),
-            seconds,
-            current.trackerItemId(),
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withCompassCooldownSeconds(seconds));
         context.getSource().sendFeedback(() -> Text.literal("Set tracker cooldown to " + seconds + "s."), true);
         return 1;
     }
 
     private static int setTrackerItem(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) {
-            return 0;
-        }
-
+        if (bountyHunt == null) return 0;
         String item = StringArgumentType.getString(context, "item");
-        BountyHuntSettings current = bountyHunt.getSettings();
-        bountyHunt.applySettings(new BountyHuntSettings(
-            current.gracePeriodSeconds(),
-            current.respawnInvincibilitySeconds(),
-            current.scoreToWin(),
-            current.targetSwapIntervalSeconds(),
-            current.trackerEnabled(),
-            current.netherTrackingEnabled(),
-            current.compassCooldownSeconds(),
-            item,
-            current.disconnectGraceSeconds()
-        ));
+        bountyHunt.applySettings(bountyHunt.getSettings().withTrackerItemId(item));
         context.getSource().sendFeedback(() -> Text.literal("Set tracker item to " + item + "."), true);
+        return 1;
+    }
+
+    private static int setHighValueTarget(CommandContext<ServerCommandSource> context) {
+        BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
+        if (bountyHunt == null) return 0;
+        boolean enabled = BoolArgumentType.getBool(context, "enabled");
+        bountyHunt.applySettings(bountyHunt.getSettings().withHighValueTargetEnabled(enabled));
+        context.getSource().sendFeedback(() -> Text.literal("Set high value target mode to " + enabled + "."), true);
+        return 1;
+    }
+
+    private static int setRevengeAssignment(CommandContext<ServerCommandSource> context) {
+        BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
+        if (bountyHunt == null) return 0;
+        boolean enabled = BoolArgumentType.getBool(context, "enabled");
+        bountyHunt.applySettings(bountyHunt.getSettings().withRevengeAssignmentEnabled(enabled));
+        context.getSource().sendFeedback(() -> Text.literal("Set revenge assignments to " + enabled + "."), true);
         return 1;
     }
 
@@ -327,12 +239,18 @@ public final class BountyHuntCommands {
         context.getSource().sendFeedback(() -> Text.literal("- Tracker: " + settings.trackerEnabled() + " cooldown=" + settings.compassCooldownSeconds() + "s"), false);
         context.getSource().sendFeedback(() -> Text.literal("- Nether tracking: " + settings.netherTrackingEnabled()), false);
         context.getSource().sendFeedback(() -> Text.literal("- Tracker item: " + settings.trackerItemId()), false);
+        context.getSource().sendFeedback(() -> Text.literal("- High Value Target: " + settings.highValueTargetEnabled()), false);
+        context.getSource().sendFeedback(() -> Text.literal("- Revenge Assignments: " + settings.revengeAssignmentEnabled()), false);
 
         return 1;
     }
 
     private static BountyHuntMinigame getOrCreatePending(ServerCommandSource source) {
-        return PendingMinigameCommand.getOrCreate(source, BountyHuntMinigame.class, BountyHuntMinigame::new);
+        BountyHuntMinigame minigame = PendingMinigameCommand.getOrCreate(source, BountyHuntMinigame.class, BountyHuntMinigame::new);
+        if (minigame == null) {
+            source.sendError(Text.literal("Could not create or find a Bounty Hunt session."));
+        }
+        return minigame;
     }
 
     private static BountyHuntMinigame getExistingBountyHunt() {

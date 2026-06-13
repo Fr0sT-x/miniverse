@@ -36,6 +36,13 @@ public final class ProtectedItemService {
         this.rules.put(rule.type(), rule);
     }
 
+    public void removeRule(String type) {
+        if (type == null) {
+            return;
+        }
+        this.rules.remove(type);
+    }
+
     public void clearRules() {
         this.rules.clear();
         this.tickCounter = 0;

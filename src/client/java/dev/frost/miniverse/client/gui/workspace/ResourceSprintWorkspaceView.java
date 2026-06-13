@@ -19,8 +19,8 @@ import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintSettings;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
@@ -40,7 +40,7 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
     private UiLayout.Rect actionDelete;
     private UiLayout.Rect actionSolo;
 
-    private TextFieldWidget timeLimitField;
+    private IntFieldWidget timeLimitField;
     private ButtonWidget modeButton;
     private ButtonWidget distributionButton;
     private ButtonWidget tieBreakButton;
@@ -72,24 +72,24 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
             this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
         } else if (this.moduleManager.isActive("rules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.modeButton = this.addButton(screen, "Mode: " + titleCase(this.mode.nbtValue()), this.layout.mainPanel().x() + 180, y, 190, () -> {
+            this.modeButton = this.addButton(screen, "Mode: " + titleCase(this.mode.nbtValue()), this.layout.mainPanel().x() + 180, y, 190, () -> this.mode == ResourceSprintSettings.Mode.FIRST_TO_COMPLETE ? "Win condition: First to find all items." : "Win condition: Most items found before time runs out.", () -> {
                 this.mode = this.mode == ResourceSprintSettings.Mode.FIRST_TO_COMPLETE ? ResourceSprintSettings.Mode.TIME_LIMITED : ResourceSprintSettings.Mode.FIRST_TO_COMPLETE;
                 this.modeButton.setMessage(Text.literal("Mode: " + titleCase(this.mode.nbtValue())));
             });
             y += 32;
-            this.timeLimitField = this.addField(screen, this.layout.mainPanel().x() + 180, y, Integer.toString(this.timeLimitSeconds), 190, "Time limit seconds");
+            this.timeLimitField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.timeLimitSeconds, 190, "Time limit seconds", val -> "Match will end after " + val + " seconds.");
             y += 32;
-            this.tieBreakButton = this.addButton(screen, "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), this.layout.mainPanel().x() + 180, y, 190, () -> {
+            this.tieBreakButton = this.addButton(screen, "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), this.layout.mainPanel().x() + 180, y, 190, () -> "The rule used to break ties at the end of the match.", () -> {
                 this.tieBreakRule = this.tieBreakRule == ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH ? ResourceSprintSettings.TieBreakRule.FASTEST_TOTAL_TIME : ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
                 this.tieBreakButton.setMessage(Text.literal("Tie-Break: " + titleCase(this.tieBreakRule.nbtValue())));
             });
             y += 32;
-            this.distributionButton = this.addButton(screen, "Distribution: " + shortDistribution(this.distributionMode), this.layout.mainPanel().x() + 180, y, 190, () -> {
+            this.distributionButton = this.addButton(screen, "Distribution: " + shortDistribution(this.distributionMode), this.layout.mainPanel().x() + 180, y, 190, () -> "How collected resources are shared among team members.", () -> {
                 this.distributionMode = this.distributionMode.next();
                 this.distributionButton.setMessage(Text.literal("Distribution: " + shortDistribution(this.distributionMode)));
             });
             y += 32;
-            this.addButton(screen, "Configure Objectives", this.layout.mainPanel().x() + 180, y, 190, () -> {
+            this.addButton(screen, "Configure Objectives", this.layout.mainPanel().x() + 180, y, 190, () -> "Select which resources teams must collect.", () -> {
                 this.syncStateFromWidgets();
                 RegistrySelectorContext<net.minecraft.item.Item> selectorContext = new RegistrySelectorContext<>(
                     "minecraft:item",

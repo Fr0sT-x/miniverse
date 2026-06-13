@@ -26,19 +26,22 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     protected String sessionName;
     protected ValidationResult status = null;
 
+    protected record TooltipZone(int x, int y, int width, int height, java.util.function.Supplier<String> text) {}
+    protected final java.util.List<TooltipZone> activeTooltips = new java.util.ArrayList<>();
+
     private TeamSelectionGrid rosterGrid;
     private MapThumbnailGrid mapGrid;
     private String selectedMapId = "";
     private UiLayout.Rect selectAllButtonRect;
     private UiLayout.Rect clearButtonRect;
 
-    private String keepInventoryState = "DEFAULT";
-    private String pvpEnabledState = "DEFAULT";
-    private String doDaylightCycleState = "DEFAULT";
-    private String doWeatherCycleState = "DEFAULT";
-    private String fallDamageState = "DEFAULT";
-    private String naturalRegenerationState = "DEFAULT";
-    private String announceAdvancementsState = "DEFAULT";
+    private TriState keepInventoryState = TriState.DEFAULT;
+    private TriState pvpEnabledState = TriState.DEFAULT;
+    private TriState doDaylightCycleState = TriState.DEFAULT;
+    private TriState doWeatherCycleState = TriState.DEFAULT;
+    private TriState fallDamageState = TriState.DEFAULT;
+    private TriState naturalRegenerationState = TriState.DEFAULT;
+    private TriState announceAdvancementsState = TriState.DEFAULT;
 
     private ButtonWidget keepInventoryBtn;
     private ButtonWidget pvpEnabledBtn;
@@ -47,6 +50,9 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private ButtonWidget fallDamageBtn;
     private ButtonWidget naturalRegenerationBtn;
     private ButtonWidget announceAdvancementsBtn;
+    private ButtonWidget immediateRespawnBtn;
+    
+    protected TriState immediateRespawnState = TriState.DEFAULT;
 
     protected void useGameRules() {
         this.moduleManager.register("gamerules", "G", "Game Rules", "Rules", "Override default session match rules.", UiTheme.ACCENT_BLUE);
@@ -72,6 +78,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
     @Override
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
+        this.activeTooltips.clear();
         this.layout = new StandardWorkspaceLayout(workspace);
         if (this.rosterGrid != null) {
             this.rosterGrid.setBounds(this.layout.contentArea());
@@ -91,62 +98,68 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private void initGameRules(SessionScreen screen) {
         if (this.moduleManager.isActive("gamerules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.keepInventoryBtn = this.addButton(screen, "Keep Inventory: " + formatRuleState(this.keepInventoryState, defaultMatchRules().keepInventory()), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.keepInventoryState = nextTriState(this.keepInventoryState);
+            this.keepInventoryBtn = this.addButton(screen, "Keep Inventory: " + formatRuleState(this.keepInventoryState, defaultMatchRules().keepInventory()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.keepInventoryState, "FORCE ON: Players keep their inventory upon death.", "FORCE OFF: Players drop their items upon death.", "DEFAULT: Use the global server setting for keep inventory."), () -> {
+                this.keepInventoryState = this.keepInventoryState.next();
                 this.keepInventoryBtn.setMessage(Text.literal("Keep Inventory: " + formatRuleState(this.keepInventoryState, defaultMatchRules().keepInventory())));
             });
             y += 30;
-            this.pvpEnabledBtn = this.addButton(screen, "PvP Enabled: " + formatRuleState(this.pvpEnabledState, defaultMatchRules().pvpEnabled()), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.pvpEnabledState = nextTriState(this.pvpEnabledState);
+            this.pvpEnabledBtn = this.addButton(screen, "PvP Enabled: " + formatRuleState(this.pvpEnabledState, defaultMatchRules().pvpEnabled()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.pvpEnabledState, "FORCE ON: Players can damage each other.", "FORCE OFF: Players cannot damage each other.", "DEFAULT: Use the global server setting for PvP."), () -> {
+                this.pvpEnabledState = this.pvpEnabledState.next();
                 this.pvpEnabledBtn.setMessage(Text.literal("PvP Enabled: " + formatRuleState(this.pvpEnabledState, defaultMatchRules().pvpEnabled())));
             });
             y += 30;
-            this.doDaylightCycleBtn = this.addButton(screen, "Daylight Cycle: " + formatRuleState(this.doDaylightCycleState, defaultMatchRules().doDaylightCycle()), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.doDaylightCycleState = nextTriState(this.doDaylightCycleState);
+            this.doDaylightCycleBtn = this.addButton(screen, "Daylight Cycle: " + formatRuleState(this.doDaylightCycleState, defaultMatchRules().doDaylightCycle()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.doDaylightCycleState, "FORCE ON: The sun and moon progress normally.", "FORCE OFF: Time is frozen.", "DEFAULT: Use the global server setting for daylight cycle."), () -> {
+                this.doDaylightCycleState = this.doDaylightCycleState.next();
                 this.doDaylightCycleBtn.setMessage(Text.literal("Daylight Cycle: " + formatRuleState(this.doDaylightCycleState, defaultMatchRules().doDaylightCycle())));
             });
             y += 30;
-            this.doWeatherCycleBtn = this.addButton(screen, "Weather Cycle: " + formatRuleState(this.doWeatherCycleState, defaultMatchRules().doWeatherCycle()), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.doWeatherCycleState = nextTriState(this.doWeatherCycleState);
+            this.doWeatherCycleBtn = this.addButton(screen, "Weather Cycle: " + formatRuleState(this.doWeatherCycleState, defaultMatchRules().doWeatherCycle()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.doWeatherCycleState, "FORCE ON: Rain and thunder will occur naturally.", "FORCE OFF: Weather will remain clear.", "DEFAULT: Use the global server setting for weather cycle."), () -> {
+                this.doWeatherCycleState = this.doWeatherCycleState.next();
                 this.doWeatherCycleBtn.setMessage(Text.literal("Weather Cycle: " + formatRuleState(this.doWeatherCycleState, defaultMatchRules().doWeatherCycle())));
             });
             y += 30;
-            this.fallDamageBtn = this.addButton(screen, "Fall Damage: " + formatRuleState(this.fallDamageState, defaultMatchRules().fallDamage()), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.fallDamageState = nextTriState(this.fallDamageState);
+            this.fallDamageBtn = this.addButton(screen, "Fall Damage: " + formatRuleState(this.fallDamageState, defaultMatchRules().fallDamage()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.fallDamageState, "FORCE ON: Players take damage from falling.", "FORCE OFF: Players are immune to fall damage.", "DEFAULT: Use the global server setting for fall damage."), () -> {
+                this.fallDamageState = this.fallDamageState.next();
                 this.fallDamageBtn.setMessage(Text.literal("Fall Damage: " + formatRuleState(this.fallDamageState, defaultMatchRules().fallDamage())));
             });
             y += 30;
-            this.naturalRegenerationBtn = this.addButton(screen, "Natural Regen: " + formatRuleState(this.naturalRegenerationState, defaultMatchRules().naturalRegeneration()), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.naturalRegenerationState = nextTriState(this.naturalRegenerationState);
+            this.naturalRegenerationBtn = this.addButton(screen, "Natural Regen: " + formatRuleState(this.naturalRegenerationState, defaultMatchRules().naturalRegeneration()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.naturalRegenerationState, "FORCE ON: Health regenerates naturally.", "FORCE OFF: Health does not regenerate naturally.", "DEFAULT: Use the global server setting for natural regeneration."), () -> {
+                this.naturalRegenerationState = this.naturalRegenerationState.next();
                 this.naturalRegenerationBtn.setMessage(Text.literal("Natural Regen: " + formatRuleState(this.naturalRegenerationState, defaultMatchRules().naturalRegeneration())));
             });
             y += 30;
-            this.announceAdvancementsBtn = this.addButton(screen, "Advancements: " + formatRuleState(this.announceAdvancementsState, defaultMatchRules().announceAdvancements()), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.announceAdvancementsState = nextTriState(this.announceAdvancementsState);
+            this.announceAdvancementsBtn = this.addButton(screen, "Advancements: " + formatRuleState(this.announceAdvancementsState, defaultMatchRules().announceAdvancements()), this.layout.mainPanel().x() + 180, y, 200, TriStateTooltip.of(() -> this.announceAdvancementsState, "FORCE ON: Player advancements are broadcasted to chat.", "FORCE OFF: Player advancements are not broadcasted.", "DEFAULT: Use the global server setting for advancements."), () -> {
+                this.announceAdvancementsState = this.announceAdvancementsState.next();
                 this.announceAdvancementsBtn.setMessage(Text.literal("Advancements: " + formatRuleState(this.announceAdvancementsState, defaultMatchRules().announceAdvancements())));
+            });
+            y += 30;
+            this.immediateRespawnBtn = this.addButton(screen, "Immediate Respawn: " + formatRuleState(this.immediateRespawnState, defaultMatchRules().doImmediateRespawn()), this.layout.mainPanel().x() + 180, y, 200, getImmediateRespawnTooltip(), () -> {
+                this.immediateRespawnState = this.immediateRespawnState.next();
+                this.immediateRespawnBtn.setMessage(Text.literal("Immediate Respawn: " + formatRuleState(this.immediateRespawnState, defaultMatchRules().doImmediateRespawn())));
             });
         }
     }
 
-    private String nextTriState(String state) {
-        return state.equals("DEFAULT") ? "FORCE ON" : state.equals("FORCE ON") ? "FORCE OFF" : "DEFAULT";
+    protected java.util.function.Supplier<String> getImmediateRespawnTooltip() {
+        return TriStateTooltip.of(() -> this.immediateRespawnState, "FORCE ON: Players instantly respawn without the vanilla death screen.", "FORCE OFF: Players see the vanilla death screen.", "DEFAULT: Use the global server setting for immediate respawn.");
     }
+
 
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
         return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
     }
 
-    private String formatRuleState(String state, boolean defaultValue) {
-        if ("DEFAULT".equals(state)) {
-            return "DEFAULT: " + (defaultValue ? "§aON" : "§cOFF");
+    protected String formatRuleState(TriState state, boolean defaultVal) {
+        if (state == TriState.DEFAULT) {
+            return "DEFAULT (§" + (defaultVal ? "aON" : "cOFF") + "§r)";
         }
-        if ("FORCE ON".equals(state)) {
+        if (state == TriState.FORCE_ON) {
             return "FORCE §aON";
         }
-        if ("FORCE OFF".equals(state)) {
+        if (state == TriState.FORCE_OFF) {
             return "FORCE §cOFF";
         }
-        return state;
+        return state.label();
     }
 
     protected abstract void initGamemode(SessionScreen screen);
@@ -227,9 +240,20 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             context.drawText(textRenderer, Text.literal("Natural Regen"), labelX, y, UiTheme.TEXT_MUTED, false);
             y += 30;
             context.drawText(textRenderer, Text.literal("Advancements"), labelX, y, UiTheme.TEXT_MUTED, false);
+            y += 30;
+            context.drawText(textRenderer, Text.literal("Immediate Respawn"), labelX, y, UiTheme.TEXT_MUTED, false);
         }
 
         this.renderGamemodeForeground(context, textRenderer, mouseX, mouseY, delta);
+
+        if (this.moduleManager.isActive("rules") || this.moduleManager.isActive("settings") || this.moduleManager.isActive("gamerules")) {
+            for (TooltipZone zone : this.activeTooltips) {
+                if (mouseX >= zone.x() && mouseX < zone.x() + zone.width() && mouseY >= zone.y() && mouseY < zone.y() + zone.height()) {
+                    context.drawTooltip(textRenderer, Text.literal(zone.text().get()), mouseX, mouseY);
+                    break;
+                }
+            }
+        }
     }
     
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {}
@@ -331,26 +355,105 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         context.drawCenteredTextWithShadow(textRenderer, Text.literal(label), rect.x() + rect.width() / 2, rect.y() + 7, UiTheme.TEXT);
     }
 
-    protected ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, Runnable action) {
-        return screen.addWorkspaceChild(ButtonWidget.builder(Text.literal(label), ignored -> action.run())
-            .dimensions(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT)
-            .build());
-    }
-
-    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, int width, String narration) {
-        TextFieldWidget field = new TextFieldWidget(this.client.textRenderer, x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(narration));
-        field.setMaxLength(64);
-        field.setText(value);
-        return screen.addWorkspaceChild(field);
-    }
-
-    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, String narration) {
-        return this.addField(screen, x, y, value, StandardWorkspaceLayout.SETTINGS_FIELD_WIDTH, narration);
-    }
-
     protected void addStepper(SessionScreen screen, TextFieldWidget field, int x, int y, int min, int max, int step) {
-        this.addButton(screen, "-", x, y, 24, () -> this.stepField(field, min, max, -step));
-        this.addButton(screen, "+", x + 30, y, 24, () -> this.stepField(field, min, max, step));
+        screen.addWidget(ButtonWidget.builder(Text.literal("-"), btn -> {
+            try {
+                int val = Integer.parseInt(field.getText().trim());
+                field.setText(Integer.toString(Math.max(min, val - step)));
+            } catch (Exception ignored) {}
+        }).dimensions(x, y, 20, 20).build());
+        screen.addWidget(ButtonWidget.builder(Text.literal("+"), btn -> {
+            try {
+                int val = Integer.parseInt(field.getText().trim());
+                field.setText(Integer.toString(Math.min(max, val + step)));
+            } catch (Exception ignored) {}
+        }).dimensions(x + 22, y, 20, 20).build());
+    }
+
+    protected ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, java.util.function.Supplier<String> tooltip, Runnable action) {
+        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(label), b -> action.run())
+            .dimensions(x, y, width, 20)
+            .build();
+        screen.addWidget(btn);
+        if (tooltip != null) {
+            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+            int zoneW = (x + width) - zoneX;
+            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
+        }
+        return btn;
+    }
+
+    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, int width, String placeholder, java.util.function.Supplier<String> tooltip) {
+        TextFieldWidget field = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, x, y, width, 20, Text.literal(placeholder));
+        field.setMaxLength(256);
+        field.setText(value);
+        screen.addWidget(field);
+        if (tooltip != null) {
+            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+            int zoneW = (x + width) - zoneX;
+            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
+        }
+        return field;
+    }
+
+    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, String placeholder, java.util.function.Supplier<String> tooltip) {
+        return this.addField(screen, x, y, value, 120, placeholder, tooltip);
+    }
+
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, int width, String placeholder, String zeroText, java.util.function.Function<Integer, String> activeText) {
+        dev.frost.miniverse.client.gui.ui.IntFieldWidget field = new dev.frost.miniverse.client.gui.ui.IntFieldWidget(this.client.textRenderer, x, y, width, 20, Text.literal(placeholder));
+        field.setMaxLength(256);
+        field.setText(Integer.toString(value));
+        screen.addWidget(field);
+        
+        if (zeroText != null && activeText != null) {
+            java.util.function.Supplier<String> tooltip = () -> {
+                int val = field.getIntValue(0);
+                return val <= 0 ? zeroText : activeText.apply(val);
+            };
+            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+            int zoneW = (x + width) - zoneX;
+            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
+        }
+        return field;
+    }
+
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, String placeholder, String zeroText, java.util.function.Function<Integer, String> activeText) {
+        return this.addIntField(screen, x, y, value, 120, placeholder, zeroText, activeText);
+    }
+
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, int width, String placeholder, java.util.function.Function<Integer, String> tooltipFormatter) {
+        dev.frost.miniverse.client.gui.ui.IntFieldWidget field = new dev.frost.miniverse.client.gui.ui.IntFieldWidget(this.client.textRenderer, x, y, width, 20, Text.literal(placeholder));
+        field.setMaxLength(256);
+        field.setText(Integer.toString(value));
+        screen.addWidget(field);
+        
+        if (tooltipFormatter != null) {
+            java.util.function.Supplier<String> tooltip = () -> tooltipFormatter.apply(field.getIntValue(0));
+            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+            int zoneW = (x + width) - zoneX;
+            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
+        }
+        return field;
+    }
+
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, String placeholder, java.util.function.Function<Integer, String> tooltipFormatter) {
+        return this.addIntField(screen, x, y, value, 120, placeholder, tooltipFormatter);
+    }
+
+    protected ButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, String onTooltip, String offTooltip, Runnable onToggle) {
+        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")), b -> {
+            onToggle.run();
+            b.setMessage(Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")));
+        }).dimensions(x, y, width, 20).build();
+        screen.addWidget(btn);
+        
+        java.util.function.Supplier<String> tooltip = () -> stateSupplier.get() ? onTooltip : offTooltip;
+        int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
+        int zoneW = (x + width) - zoneX;
+        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
+        
+        return btn;
     }
 
     protected void drawLabel(DrawContext context, TextRenderer textRenderer, String label, int x, int y) {
@@ -377,6 +480,18 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             field.setText(Integer.toString(fallback));
             return fallback;
         }
+    }
+
+    protected int readClamped(dev.frost.miniverse.client.gui.ui.IntFieldWidget field, int fallback, int min, int max) {
+        if (field == null) return fallback;
+        int value = Math.clamp(field.getIntValue(fallback), min, max);
+        field.setText(Integer.toString(value));
+        return value;
+    }
+
+    protected void stepField(dev.frost.miniverse.client.gui.ui.IntFieldWidget field, int min, int max, int delta) {
+        int value = this.readClamped(field, min, min, max);
+        field.setText(Integer.toString(Math.clamp(value + delta, min, max)));
     }
 
     protected void stepField(TextFieldWidget field, int min, int max, int delta) {
@@ -417,13 +532,13 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     }
 
     private void buildGameRulesSettings(SessionPayloadBuilder builder) {
-        if (!"DEFAULT".equals(this.keepInventoryState)) builder.settings().putString("gamerule.keepInventory", "FORCE ON".equals(this.keepInventoryState) ? "true" : "false");
-        if (!"DEFAULT".equals(this.pvpEnabledState)) builder.settings().putString("gamerule.pvpEnabled", "FORCE ON".equals(this.pvpEnabledState) ? "true" : "false");
-        if (!"DEFAULT".equals(this.doDaylightCycleState)) builder.settings().putString("gamerule.doDaylightCycle", "FORCE ON".equals(this.doDaylightCycleState) ? "true" : "false");
-        if (!"DEFAULT".equals(this.doWeatherCycleState)) builder.settings().putString("gamerule.doWeatherCycle", "FORCE ON".equals(this.doWeatherCycleState) ? "true" : "false");
-        if (!"DEFAULT".equals(this.fallDamageState)) builder.settings().putString("gamerule.fallDamage", "FORCE ON".equals(this.fallDamageState) ? "true" : "false");
-        if (!"DEFAULT".equals(this.naturalRegenerationState)) builder.settings().putString("gamerule.naturalRegeneration", "FORCE ON".equals(this.naturalRegenerationState) ? "true" : "false");
-        if (!"DEFAULT".equals(this.announceAdvancementsState)) builder.settings().putString("gamerule.announceAdvancements", "FORCE ON".equals(this.announceAdvancementsState) ? "true" : "false");
+        if (this.keepInventoryState != TriState.DEFAULT) builder.settings().putString("gamerule.keepInventory", this.keepInventoryState == TriState.FORCE_ON ? "true" : "false");
+        if (this.pvpEnabledState != TriState.DEFAULT) builder.settings().putString("gamerule.pvpEnabled", this.pvpEnabledState == TriState.FORCE_ON ? "true" : "false");
+        if (this.doDaylightCycleState != TriState.DEFAULT) builder.settings().putString("gamerule.doDaylightCycle", this.doDaylightCycleState == TriState.FORCE_ON ? "true" : "false");
+        if (this.doWeatherCycleState != TriState.DEFAULT) builder.settings().putString("gamerule.doWeatherCycle", this.doWeatherCycleState == TriState.FORCE_ON ? "true" : "false");
+        if (this.fallDamageState != TriState.DEFAULT) builder.settings().putString("gamerule.fallDamage", this.fallDamageState == TriState.FORCE_ON ? "true" : "false");
+        if (this.naturalRegenerationState != TriState.DEFAULT) builder.settings().putString("gamerule.naturalRegeneration", this.naturalRegenerationState == TriState.FORCE_ON ? "true" : "false");
+        if (this.announceAdvancementsState != TriState.DEFAULT) builder.settings().putString("gamerule.announceAdvancements", this.announceAdvancementsState == TriState.FORCE_ON ? "true" : "false");
     }
 
     protected abstract ValidationResult validateGamemodeStart();

@@ -38,3 +38,11 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# ignored folders
+decompiled/
+config/miniverse/
+docs/
+logs/
+markdown/
+reference/

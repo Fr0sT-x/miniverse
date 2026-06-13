@@ -41,6 +41,7 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     private Boolean fallDamageOverride;
     private Boolean naturalRegenerationOverride;
     private Boolean announceAdvancementsOverride;
+    private Boolean doImmediateRespawnOverride;
 
     public void applyGameRulesOverrides(java.util.Properties properties) {
         this.keepInventoryOverride = parseOverride(properties, "gamerule.keepInventory");
@@ -50,6 +51,7 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
         this.fallDamageOverride = parseOverride(properties, "gamerule.fallDamage");
         this.naturalRegenerationOverride = parseOverride(properties, "gamerule.naturalRegeneration");
         this.announceAdvancementsOverride = parseOverride(properties, "gamerule.announceAdvancements");
+        this.doImmediateRespawnOverride = parseOverride(properties, "gamerule.doImmediateRespawn");
     }
 
     @Nullable
@@ -83,7 +85,8 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
             this.doWeatherCycleOverride != null ? this.doWeatherCycleOverride : base.doWeatherCycle(),
             this.fallDamageOverride != null ? this.fallDamageOverride : base.fallDamage(),
             this.naturalRegenerationOverride != null ? this.naturalRegenerationOverride : base.naturalRegeneration(),
-            this.announceAdvancementsOverride != null ? this.announceAdvancementsOverride : base.announceAdvancements()
+            this.announceAdvancementsOverride != null ? this.announceAdvancementsOverride : base.announceAdvancements(),
+            this.doImmediateRespawnOverride != null ? this.doImmediateRespawnOverride : base.doImmediateRespawn()
         );
 
         if (this.context.nullableServer() != null) {

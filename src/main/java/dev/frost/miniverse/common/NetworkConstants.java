@@ -59,6 +59,8 @@ public final class NetworkConstants {
 
     public static final CustomPayload.Id<SyncBuilderSelectionPayload> SYNC_BUILDER_SELECTION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_builder_selection"));
 
+    public static final CustomPayload.Id<ManhuntLateJoinPayload> MANHUNT_LATE_JOIN_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "manhunt_late_join"));
+
     public static final CustomPayload.Id<SaveLayoutPayload> SAVE_LAYOUT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "save_layout"));
     public static final CustomPayload.Id<ResetLayoutPayload> RESET_LAYOUT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "reset_layout"));
     public static final CustomPayload.Id<LayoutSupportPayload> LAYOUT_SUPPORT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "layout_support"));
@@ -120,6 +122,9 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(SYNC_BUILDER_SELECTION_ID, SyncBuilderSelectionPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(LAYOUT_SUPPORT_ID, LayoutSupportPayload.CODEC);
 
+        PayloadTypeRegistry.playC2S().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
+        
         payloadTypesRegistered = true;
     }
 
@@ -482,6 +487,25 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return MATCH_READY_STATE_ID;
+        }
+    }
+
+
+
+    public record ManhuntLateJoinPayload(java.util.Map<java.util.UUID, String> teammates) implements CustomPayload {
+        private static final PacketCodec<RegistryByteBuf, java.util.UUID> UUID_CODEC = PacketCodec.of(
+            (uuid, buffer) -> buffer.writeUuid(uuid),
+            (RegistryByteBuf buffer) -> buffer.readUuid()
+        );
+
+        public static final PacketCodec<RegistryByteBuf, ManhuntLateJoinPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.map(java.util.HashMap::new, UUID_CODEC, PacketCodecs.STRING), ManhuntLateJoinPayload::teammates,
+            ManhuntLateJoinPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return MANHUNT_LATE_JOIN_ID;
         }
     }
 

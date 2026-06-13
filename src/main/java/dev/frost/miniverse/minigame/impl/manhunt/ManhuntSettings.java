@@ -15,6 +15,7 @@ public record ManhuntSettings(
     int runnerLives,
     int hunterLives,
     int hunterRespawnDelaySeconds,
+    boolean midGameJoinTeleportEnabled,
     int disconnectGraceSeconds
 ) {
     public static final int UNLIMITED_LIVES = -1;
@@ -32,6 +33,7 @@ public record ManhuntSettings(
             Integer.getInteger("miniverse.manhunt.runnerLives", UNLIMITED_LIVES),
             Integer.getInteger("miniverse.manhunt.hunterLives", UNLIMITED_LIVES),
             Integer.getInteger("miniverse.manhunt.hunterRespawnDelaySeconds", 0),
+            Boolean.parseBoolean(System.getProperty("miniverse.manhunt.midGameJoinTeleportEnabled", "false")),
             modeGrace
         ).normalized();
     }
@@ -57,6 +59,7 @@ public record ManhuntSettings(
             getIntOrDefault(settings, "runnerLives", defaults.runnerLives()),
             getIntOrDefault(settings, "hunterLives", defaults.hunterLives()),
             getIntOrDefault(settings, "hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds()),
+            getBooleanOrDefault(settings, "midGameJoinTeleportEnabled", defaults.midGameJoinTeleportEnabled()),
             getIntOrDefault(settings, "disconnectGraceSeconds", defaults.disconnectGraceSeconds())
         ).normalized();
     }
@@ -77,6 +80,7 @@ public record ManhuntSettings(
             parseInt(properties.getProperty("manhunt.runnerLives"), defaults.runnerLives()),
             parseInt(properties.getProperty("manhunt.hunterLives"), defaults.hunterLives()),
             parseInt(properties.getProperty("manhunt.hunterRespawnDelaySeconds"), defaults.hunterRespawnDelaySeconds()),
+            parseBoolean(properties.getProperty("manhunt.midGameJoinTeleportEnabled"), defaults.midGameJoinTeleportEnabled()),
             parseInt(properties.getProperty("manhunt.disconnectGraceSeconds"), defaults.disconnectGraceSeconds())
         ).normalized();
     }
@@ -92,6 +96,7 @@ public record ManhuntSettings(
             this.runnerLives,
             this.hunterLives,
             this.hunterRespawnDelaySeconds,
+            this.midGameJoinTeleportEnabled,
             this.disconnectGraceSeconds
         ).normalized();
     }
@@ -107,6 +112,7 @@ public record ManhuntSettings(
             normalizeLives(this.runnerLives),
             normalizeLives(this.hunterLives),
             Math.clamp(this.hunterRespawnDelaySeconds, 0, 3600),
+            this.midGameJoinTeleportEnabled,
             Math.clamp(this.disconnectGraceSeconds, 0, 3600)
         );
     }

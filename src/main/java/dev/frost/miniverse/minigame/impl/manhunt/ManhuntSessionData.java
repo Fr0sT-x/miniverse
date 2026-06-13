@@ -79,6 +79,7 @@ public record ManhuntSessionData(
         object.addProperty("runnerLives", settings.runnerLives());
         object.addProperty("hunterLives", settings.hunterLives());
         object.addProperty("hunterRespawnDelaySeconds", settings.hunterRespawnDelaySeconds());
+        object.addProperty("midGameJoinTeleportEnabled", settings.midGameJoinTeleportEnabled());
         object.addProperty("disconnectGraceSeconds", settings.disconnectGraceSeconds());
         return object;
     }
@@ -98,6 +99,7 @@ public record ManhuntSessionData(
             intValue(object, "runnerLives", defaults.runnerLives()),
             intValue(object, "hunterLives", defaults.hunterLives()),
             intValue(object, "hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds()),
+            booleanValue(object, "midGameJoinTeleportEnabled", defaults.midGameJoinTeleportEnabled()),
             intValue(object, "disconnectGraceSeconds", defaults.disconnectGraceSeconds())
         );
     }

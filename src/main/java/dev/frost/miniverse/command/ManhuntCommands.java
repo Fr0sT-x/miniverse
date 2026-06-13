@@ -74,6 +74,9 @@ public final class ManhuntCommands {
                 .then(literal("hunterRespawnDelay")
                     .then(argument("seconds", IntegerArgumentType.integer(0, 3600))
                         .executes(ManhuntCommands::setHunterRespawnDelay)))
+                .then(literal("_latejoin_tp")
+                    .then(argument("target", StringArgumentType.word())
+                        .executes(ManhuntCommands::executeLateJoinTp)))
                 .then(literal("info").executes(ManhuntCommands::info))
         );
     }
@@ -205,6 +208,7 @@ public final class ManhuntCommands {
             current.runnerLives(),
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter release delay to " + seconds + " second(s)."), true);
@@ -230,6 +234,7 @@ public final class ManhuntCommands {
             current.runnerLives(),
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter compass to " + enabled + "."), true);
@@ -255,6 +260,7 @@ public final class ManhuntCommands {
             current.runnerLives(),
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt Nether tracking to " + enabled + "."), true);
@@ -280,6 +286,7 @@ public final class ManhuntCommands {
             current.runnerLives(),
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt compass cooldown to " + seconds + " second(s)."), true);
@@ -305,6 +312,7 @@ public final class ManhuntCommands {
             current.runnerLives(),
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt runner glow pulse to every " + minutes + " minute(s). 0 disables it."), true);
@@ -330,6 +338,7 @@ public final class ManhuntCommands {
             lives,
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt runner lives to " + formatLives(lives) + "."), true);
@@ -355,6 +364,7 @@ public final class ManhuntCommands {
             current.runnerLives(),
             lives,
             current.hunterRespawnDelaySeconds(),
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter lives to " + formatLives(lives) + "."), true);
@@ -380,10 +390,27 @@ public final class ManhuntCommands {
             current.runnerLives(),
             current.hunterLives(),
             seconds,
+            current.midGameJoinTeleportEnabled(),
             current.disconnectGraceSeconds()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter respawn delay to " + seconds + " second(s)."), true);
         return 1;
+    }
+
+    private static int executeLateJoinTp(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        if (!source.isExecutedByPlayer()) {
+            return 0;
+        }
+        
+        MinigameManager manager = MinigameManager.getInstance();
+        if (manager.getActiveMinigame() instanceof ManhuntMinigame manhunt) {
+            ServerPlayerEntity player = source.getPlayer();
+            String targetName = StringArgumentType.getString(context, "target");
+            manhunt.handleLateJoinTeleport(player, targetName);
+            return 1;
+        }
+        return 0;
     }
 
     private static int stop(CommandContext<ServerCommandSource> context) {

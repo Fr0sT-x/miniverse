@@ -425,6 +425,10 @@ public class SessionScreen extends Screen {
         return new SessionSnapshotData.EditorState(getStringOrDefault(root, "mapId", ""), games);
     }
 
+    public <T extends net.minecraft.client.gui.widget.ClickableWidget> T addWidget(T widget) {
+        return this.addDrawableChild(widget);
+    }
+
     @Override
     protected void init() {
         super.init();

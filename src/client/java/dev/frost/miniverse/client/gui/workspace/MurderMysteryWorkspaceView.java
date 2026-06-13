@@ -39,10 +39,10 @@ public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceV
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.durationField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.durationSeconds), "Round duration (seconds)");
-            this.detectiveCountField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.detectiveCount), "Detective count");
-            this.coinIntervalField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.coinInterval), "Coin spawn interval (seconds)");
-            this.bowPriceField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, Integer.toString(this.bowPrice), "Detective bow price (coins)");
+            this.durationField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.durationSeconds), "Round duration (seconds)", () -> "The murderer must eliminate everyone within " + this.durationField.getText() + " seconds.");
+            this.detectiveCountField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.detectiveCount), "Detective count", () -> "The match will have " + this.detectiveCountField.getText() + " detective(s).");
+            this.coinIntervalField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.coinInterval), "Coin spawn interval (seconds)", () -> "Coins will spawn on the map every " + this.coinIntervalField.getText() + " seconds.");
+            this.bowPriceField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, Integer.toString(this.bowPrice), "Detective bow price (coins)", () -> "Innocents must collect " + this.bowPriceField.getText() + " coins to receive a bow.");
         }
     }
 

@@ -10,8 +10,8 @@ import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.minigame.impl.bridge.BridgeDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
@@ -20,10 +20,10 @@ import java.util.List;
 public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid teamGrid = new StaticTeamSelectionGrid();
 
-    private TextFieldWidget targetScoreField;
-    private TextFieldWidget respawnDelayField;
-    private TextFieldWidget roundResetDelayField;
-    private TextFieldWidget voidDeathOffsetField;
+    private IntFieldWidget targetScoreField;
+    private IntFieldWidget respawnDelayField;
+    private IntFieldWidget roundResetDelayField;
+    private IntFieldWidget voidDeathOffsetField;
     private ButtonWidget allowBuildingBtn;
     private ButtonWidget allowBlockBreakingBtn;
     private ButtonWidget enableBowBtn;
@@ -40,7 +40,7 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true, true);
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true, true, false);
     }
 
     public BridgeWorkspaceView() {
@@ -60,34 +60,38 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.targetScoreField = this.addField(screen, this.layout.mainPanel().x() + 180, y, Integer.toString(this.targetScore), "Target Score");
+            this.targetScoreField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.targetScore, "Target Score", val -> "Goals needed to win the match.");
             y += 30;
-            this.respawnDelayField = this.addField(screen, this.layout.mainPanel().x() + 180, y, Integer.toString(this.respawnDelay), "Respawn delay");
+            this.respawnDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.respawnDelay, "Respawn delay",
+                "Players will respawn instantly.",
+                val -> "Players will be forced to spectate for " + val + " seconds before respawning.");
             y += 30;
-            this.roundResetDelayField = this.addField(screen, this.layout.mainPanel().x() + 180, y, Integer.toString(this.roundResetDelay), "Round reset delay");
+            this.roundResetDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.roundResetDelay, "Round reset delay",
+                "Next round starts instantly.",
+                val -> "Time in seconds before the next round starts: " + val);
             y += 30;
-            this.voidDeathOffsetField = this.addField(screen, this.layout.mainPanel().x() + 180, y, Integer.toString(this.voidDeathOffset), "Void Death Offset");
+            this.voidDeathOffsetField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.voidDeathOffset, "Void Death Offset", val -> "Y-level offset from the void point selected in map editor, to trigger a void death.");
             y += 30;
             
-            this.allowBuildingBtn = this.addButton(screen, "Allow Building: " + onOff(this.allowBuilding), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.allowBuilding = !this.allowBuilding;
-                this.allowBuildingBtn.setMessage(Text.literal("Allow Building: " + onOff(this.allowBuilding)));
-            });
+            this.allowBuildingBtn = this.addToggleButton(screen, "Allow Building", () -> this.allowBuilding, this.layout.mainPanel().x() + 180, y, 170,
+                "Players can place blocks.",
+                "Block placement is disabled.",
+                () -> this.allowBuilding = !this.allowBuilding);
             y += 30;
-            this.allowBlockBreakingBtn = this.addButton(screen, "Allow Block Breaking: " + onOff(this.allowBlockBreaking), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.allowBlockBreaking = !this.allowBlockBreaking;
-                this.allowBlockBreakingBtn.setMessage(Text.literal("Allow Block Breaking: " + onOff(this.allowBlockBreaking)));
-            });
+            this.allowBlockBreakingBtn = this.addToggleButton(screen, "Allow Block Breaking", () -> this.allowBlockBreaking, this.layout.mainPanel().x() + 180, y, 170,
+                "Players can break placed blocks.",
+                "Block breaking is disabled.",
+                () -> this.allowBlockBreaking = !this.allowBlockBreaking);
             y += 30;
-            this.enableBowBtn = this.addButton(screen, "Enable Bows: " + onOff(this.enableBow), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.enableBow = !this.enableBow;
-                this.enableBowBtn.setMessage(Text.literal("Enable Bows: " + onOff(this.enableBow)));
-            });
+            this.enableBowBtn = this.addToggleButton(screen, "Enable Bows", () -> this.enableBow, this.layout.mainPanel().x() + 180, y, 170,
+                "Players spawn with a bow.",
+                "Bows are disabled.",
+                () -> this.enableBow = !this.enableBow);
             y += 30;
-            this.enablePickaxeBtn = this.addButton(screen, "Enable Pickaxes: " + onOff(this.enablePickaxe), this.layout.mainPanel().x() + 180, y, 170, () -> {
-                this.enablePickaxe = !this.enablePickaxe;
-                this.enablePickaxeBtn.setMessage(Text.literal("Enable Pickaxes: " + onOff(this.enablePickaxe)));
-            });
+            this.enablePickaxeBtn = this.addToggleButton(screen, "Enable Pickaxes", () -> this.enablePickaxe, this.layout.mainPanel().x() + 180, y, 170,
+                "Players spawn with a pickaxe.",
+                "Pickaxes are disabled.",
+                () -> this.enablePickaxe = !this.enablePickaxe);
         }
     }
 

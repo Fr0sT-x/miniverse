@@ -166,6 +166,14 @@ public class MiniverseClient implements ClientModInitializer {
 			})
 		);
 
+
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.MANHUNT_LATE_JOIN_ID, (payload, context) -> {
+			context.client().execute(() -> {
+				context.client().setScreen(new dev.frost.miniverse.client.gui.ui.ManhuntLateJoinScreen(payload.teammates()));
+			});
+		});
+
 		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.SYNC_BUILDER_SELECTION_ID, (payload, context) ->
 			context.client().execute(() -> {
 				dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.currentBuilderSelection.clear();

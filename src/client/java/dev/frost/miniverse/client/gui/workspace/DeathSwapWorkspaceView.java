@@ -11,6 +11,7 @@ import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapDefinition;
 import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapSettings;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
@@ -20,9 +21,9 @@ import java.util.List;
 public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
-    private TextFieldWidget swapIntervalField;
-    private TextFieldWidget gracePeriodField;
-    private TextFieldWidget borderSizeField;
+    private IntFieldWidget swapIntervalField;
+    private IntFieldWidget gracePeriodField;
+    private IntFieldWidget borderSizeField;
     private TextFieldWidget seedValueField;
     private ButtonWidget seedModeButton;
     private ButtonWidget preserveVelocityButton;
@@ -36,7 +37,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true);
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true, false);
     }
 
     public DeathSwapWorkspaceView() {
@@ -52,18 +53,20 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.swapIntervalField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.swapIntervalSeconds), "Swap interval seconds");
-            this.gracePeriodField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.gracePeriodSeconds), "Grace period seconds");
-            this.borderSizeField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.borderSize), "Border size");
-            this.seedModeButton = this.addButton(screen, seedModeLabel(), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 170, () -> {
+            this.swapIntervalField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, this.swapIntervalSeconds, "Swap interval seconds", val -> "Players will swap positions every " + val + " seconds.");
+            this.gracePeriodField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.gracePeriodSeconds, "Grace period seconds",
+                "No grace period, swapping begins immediately.",
+                val -> "Players have " + val + " seconds of peace before swapping begins.");
+            this.borderSizeField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, this.borderSize, "Border size", val -> "Size of the world border in blocks.");
+            this.seedModeButton = this.addButton(screen, seedModeLabel(), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 170, () -> this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? "Random world seed will be used." : "Specify an exact world seed in the text field.", () -> {
                 this.seedMode = this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? DeathSwapSettings.SeedMode.FIXED : DeathSwapSettings.SeedMode.RANDOM;
                 this.seedModeButton.setMessage(Text.literal(seedModeLabel()));
             });
-            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, Long.toString(this.seedValue), 170, "Seed value");
-            this.preserveVelocityButton = this.addButton(screen, toggleLabel("Preserve Velocity", this.preserveVelocity), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 256, 190, () -> {
-                this.preserveVelocity = !this.preserveVelocity;
-                this.preserveVelocityButton.setMessage(Text.literal(toggleLabel("Preserve Velocity", this.preserveVelocity)));
-            });
+            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, Long.toString(this.seedValue), 170, "Seed value", () -> "The exact world seed to use.");
+            this.preserveVelocityButton = this.addToggleButton(screen, "Preserve Velocity", () -> this.preserveVelocity, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 256, 190,
+                "Players keep their momentum when teleported.",
+                "Players lose their momentum when teleported.",
+                () -> this.preserveVelocity = !this.preserveVelocity);
         }
     }
 

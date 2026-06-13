@@ -222,7 +222,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, true, true, true, true, true, true);
+        return new GlobalMatchRules(true, true, true, true, true, true, true, false);
     }
 
     @Override

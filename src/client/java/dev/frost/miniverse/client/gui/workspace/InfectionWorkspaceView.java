@@ -10,16 +10,16 @@ import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.minigame.impl.infection.InfectionDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
-    private TextFieldWidget durationField;
-    private TextFieldWidget infectedField;
-    private TextFieldWidget respawnField;
+    private IntFieldWidget durationField;
+    private IntFieldWidget infectedField;
+    private IntFieldWidget respawnField;
     private ButtonWidget friendlyFireButton;
 
     private int durationSeconds = 600;
@@ -41,13 +41,18 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.durationField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.durationSeconds), "Match duration seconds");
-            this.infectedField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.startingInfected), "Starting infected");
-            this.respawnField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, Integer.toString(this.respawnDelay), "Respawn delay");
-            this.friendlyFireButton = this.addButton(screen, this.friendlyFireLabel(), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 170, () -> {
-                this.allowFriendlyFire = !this.allowFriendlyFire;
-                this.friendlyFireButton.setMessage(Text.literal(this.friendlyFireLabel()));
-            });
+            int cx1 = this.layout.mainPanel().x() + 180;
+            int cx2 = this.layout.mainPanel().x() + 180;
+            int y = this.layout.mainPanel().y() + 96;
+            this.durationField = this.addIntField(screen, cx1, y, this.durationSeconds, "Match duration", val -> "Total match duration will be " + val + " seconds.");
+            this.infectedField = this.addIntField(screen, cx2, y + 32, this.startingInfected, "Starting infected", val -> "The match will start with " + val + " alpha infected.");
+            this.respawnField = this.addIntField(screen, cx1, y + 64, this.respawnDelay, "Respawn delay",
+                "Infected will respawn instantly.",
+                val -> "Infected will be forced to spectate for " + val + " seconds before respawning.");
+            this.friendlyFireButton = this.addToggleButton(screen, "Friendly Fire", () -> this.allowFriendlyFire, cx2, y + 96, 170,
+                "Survivors can damage other survivors.",
+                "Survivors cannot damage each other.",
+                () -> this.allowFriendlyFire = !this.allowFriendlyFire);
         }
     }
 
@@ -125,7 +130,4 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
         builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
 
-    private String friendlyFireLabel() {
-        return this.allowFriendlyFire ? "Enabled" : "Disabled";
-    }
 }

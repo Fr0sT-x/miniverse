@@ -10,6 +10,7 @@ import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
@@ -17,12 +18,13 @@ import net.minecraft.text.Text;
 public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid teamGrid = new StaticTeamSelectionGrid();
 
-    private TextFieldWidget gracePeriodField;
+    private IntFieldWidget gracePeriodField;
     private TextFieldWidget seedValueField;
-    private TextFieldWidget respawnDelayField;
-    private TextFieldWidget hunterRespawnDelayField;
-    private TextFieldWidget compassCooldownField;
-    private TextFieldWidget runnerGlowPulseField;
+    private IntFieldWidget respawnDelayField;
+    private IntFieldWidget hunterRespawnDelayField;
+    private ButtonWidget midGameJoinTeleportButton;
+    private IntFieldWidget compassCooldownField;
+    private IntFieldWidget runnerGlowPulseField;
     private ButtonWidget seedModeButton;
     private ButtonWidget huntersCompassButton;
     private ButtonWidget netherTrackingButton;
@@ -31,6 +33,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     private boolean huntersCompassEnabled = true;
     private boolean netherTrackingEnabled = true;
+    private boolean midGameJoinTeleportEnabled = false;
     private int gracePeriodSeconds = 30;
     private int respawnDelaySeconds = 300;
     private int hunterRespawnDelaySeconds = 0;
@@ -62,7 +65,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             int sx2 = cx2 + 178;
 
             // Row 1
-            this.seedModeButton = this.addButton(screen, this.seedMode.displayName, cx1, this.layout.mainPanel().y() + 124, 170, () -> {
+            this.seedModeButton = this.addButton(screen, this.seedMode.displayName, cx1, this.layout.mainPanel().y() + 124, 170, () -> this.seedMode == SeedMode.RANDOM ? "Random world seed will be used." : "Specify an exact world seed in the text field.", () -> {
                 this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
                 this.seedModeButton.setMessage(Text.literal(this.seedMode.displayName));
                 
@@ -78,7 +81,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
                     this.seedValueField.setText(this.seedValue);
                 }
             });
-            this.seedValueField = this.addField(screen, cx2, this.layout.mainPanel().y() + 124, this.seedMode == SeedMode.FIXED ? this.seedValue : "", "Fixed seed");
+            this.seedValueField = this.addField(screen, cx2, this.layout.mainPanel().y() + 124, this.seedMode == SeedMode.FIXED ? this.seedValue : "", "Fixed seed", () -> "Specify an exact world seed in the text field.");
             if (this.seedMode == SeedMode.RANDOM) {
                 this.seedValueField.setEditable(false);
                 this.seedValueField.active = false;
@@ -90,41 +93,72 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             }
 
             // Row 2
-            this.gracePeriodField = this.addField(screen, cx1, this.layout.mainPanel().y() + 156, Integer.toString(this.gracePeriodSeconds), "Hunter release seconds");
+            this.gracePeriodField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 156, this.gracePeriodSeconds, "Hunter release seconds",
+                "No hunter release delay.",
+                val -> "Hunters cannot move for the first " + val + " seconds.");
             this.addStepper(screen, this.gracePeriodField, sx1, this.layout.mainPanel().y() + 156, 0, 3600, 5);
 
             // Row 3
-            this.huntersCompassButton = this.addButton(screen, "Hunters Compass: " + onOff(this.huntersCompassEnabled), cx1, this.layout.mainPanel().y() + 208, 170, () -> {
-                this.huntersCompassEnabled = !this.huntersCompassEnabled;
-                this.huntersCompassButton.setMessage(Text.literal("Hunters Compass: " + onOff(this.huntersCompassEnabled)));
-            });
-            this.compassCooldownField = this.addField(screen, cx2, this.layout.mainPanel().y() + 208, Integer.toString(this.compassCooldownSeconds), "Compass cooldown seconds");
+            this.huntersCompassButton = this.addToggleButton(screen, "Hunters Compass", () -> this.huntersCompassEnabled, cx1, this.layout.mainPanel().y() + 208, 170,
+                "ON: Hunters receive a compass pointing to the nearest speedrunner.",
+                "OFF: Hunters will not receive any compass to track speedrunners.",
+                () -> this.huntersCompassEnabled = !this.huntersCompassEnabled);
+            this.compassCooldownField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 208, this.compassCooldownSeconds, "Compass cooldown seconds",
+                "No compass cooldown.",
+                val -> "Hunters must wait " + val + " seconds between compass uses.");
             this.addStepper(screen, this.compassCooldownField, sx2, this.layout.mainPanel().y() + 208, 0, 300, 1);
 
             // Row 4
-            this.netherTrackingButton = this.addButton(screen, "Nether Tracking: " + onOff(this.netherTrackingEnabled), cx1, this.layout.mainPanel().y() + 240, 170, () -> {
-                this.netherTrackingEnabled = !this.netherTrackingEnabled;
-                this.netherTrackingButton.setMessage(Text.literal("Nether Tracking: " + onOff(this.netherTrackingEnabled)));
-            });
-            this.runnerGlowPulseField = this.addField(screen, cx2, this.layout.mainPanel().y() + 240, Integer.toString(this.runnerGlowPulseMinutes), "Runner glow pulse minutes");
+            this.netherTrackingButton = this.addToggleButton(screen, "Nether Tracking", () -> this.netherTrackingEnabled, cx1, this.layout.mainPanel().y() + 240, 170,
+                "ON: Compasses work when target is in a different dimension.",
+                "OFF: Compasses spin randomly if target is in a different dimension.",
+                () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
+            this.runnerGlowPulseField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 240, this.runnerGlowPulseMinutes, "Runner glow pulse minutes",
+                "Speedrunners will not glow.",
+                val -> "Speedrunners will glow every " + val + " minutes to reveal their location.");
             this.addStepper(screen, this.runnerGlowPulseField, sx2, this.layout.mainPanel().y() + 240, 0, 120, 5);
 
             // Row 5
-            this.runnerLivesButton = this.addButton(screen, "Runner Lives: " + formatLives(this.runnerLives), cx1, this.layout.mainPanel().y() + 292, 170, () -> {
+            this.runnerLivesButton = this.addButton(screen, "Runner Lives: " + formatLives(this.runnerLives), cx1, this.layout.mainPanel().y() + 292, 170, () -> "Number of lives speedrunners have before elimination.", () -> {
                 this.runnerLives = nextLivesValue(this.runnerLives);
                 this.runnerLivesButton.setMessage(Text.literal("Runner Lives: " + formatLives(this.runnerLives)));
             });
-            this.respawnDelayField = this.addField(screen, cx2, this.layout.mainPanel().y() + 292, Integer.toString(this.respawnDelaySeconds), "Runner respawn seconds");
+            this.respawnDelayField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 292, this.respawnDelaySeconds, "Runner respawn seconds",
+                "Speedrunners will respawn instantly.",
+                val -> "Speedrunners will be forced to spectate for " + val + " seconds before respawning.");
             this.addStepper(screen, this.respawnDelayField, sx2, this.layout.mainPanel().y() + 292, 0, 3600, 30);
 
             // Row 6
-            this.hunterLivesButton = this.addButton(screen, "Hunter Lives: " + formatLives(this.hunterLives), cx1, this.layout.mainPanel().y() + 324, 170, () -> {
+            this.hunterLivesButton = this.addButton(screen, "Hunter Lives: " + formatLives(this.hunterLives), cx1, this.layout.mainPanel().y() + 324, 170, () -> "Number of lives hunters have before elimination.", () -> {
                 this.hunterLives = nextLivesValue(this.hunterLives);
                 this.hunterLivesButton.setMessage(Text.literal("Hunter Lives: " + formatLives(this.hunterLives)));
             });
-            this.hunterRespawnDelayField = this.addField(screen, cx2, this.layout.mainPanel().y() + 324, Integer.toString(this.hunterRespawnDelaySeconds), "Hunter respawn seconds");
+            this.hunterRespawnDelayField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 324, this.hunterRespawnDelaySeconds, "Hunter respawn seconds",
+                "Hunters will respawn instantly.",
+                val -> "Hunters will be forced to spectate for " + val + " seconds before respawning.");
             this.addStepper(screen, this.hunterRespawnDelayField, sx2, this.layout.mainPanel().y() + 324, 0, 3600, 5);
+
+            // Row 7
+            this.midGameJoinTeleportButton = this.addButton(screen, "Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled), cx1, this.layout.mainPanel().y() + 378, 170, () -> this.midGameJoinTeleportEnabled ? "Late joiners will be placed in spectator and prompted to teleport to an active teammate." : "Late joiners will spawn at world spawn.", () -> {
+                this.midGameJoinTeleportEnabled = !this.midGameJoinTeleportEnabled;
+                this.midGameJoinTeleportButton.setMessage(Text.literal("Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled)));
+            });
         }
+    }
+
+    @Override
+    protected java.util.function.Supplier<String> getImmediateRespawnTooltip() {
+        return dev.frost.miniverse.client.gui.workspace.framework.TriStateTooltip.of(
+            () -> this.immediateRespawnState, 
+            "FORCE ON: Players instantly respawn without the vanilla death screen. To provide support for our custom respawn system, leave this ON.", 
+            "FORCE OFF: Players see the vanilla death screen.", 
+            "DEFAULT: Use the global server setting for immediate respawn."
+        );
+    }
+
+    @Override
+    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(false, true, true, true, true, true, true, true);
     }
 
     @Override
@@ -169,6 +203,9 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             context.drawText(textRenderer, Text.literal("Runner Respawn"), lx2, by + 298, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Hunter Lives"), lx1, by + 330, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Hunter Respawn"), lx2, by + 330, UiTheme.TEXT_MUTED, false);
+
+            context.drawText(textRenderer, Text.literal("Advanced Options"), lx1, by + 360, UiTheme.ACCENT_BLUE, false);
+            context.drawText(textRenderer, Text.literal("Mid-Game Join TP Layout"), lx1, by + 384, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -239,6 +276,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putInt("runnerLives", this.runnerLives);
         builder.settings().putInt("hunterLives", this.hunterLives);
         builder.settings().putBoolean("netherTracking", this.netherTrackingEnabled);
+        builder.settings().putBoolean("midGameJoinTeleportEnabled", this.midGameJoinTeleportEnabled);
         builder.settings().putString("seedMode", this.seedMode.nbtValue);
         if (this.seedMode == SeedMode.FIXED) {
             long parsedSeed;

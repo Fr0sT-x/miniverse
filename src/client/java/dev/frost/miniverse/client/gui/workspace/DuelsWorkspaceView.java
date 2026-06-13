@@ -124,7 +124,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
 
         if (this.moduleManager.isActive("duel_types_config")) {
             if (!this.createTypeDialogOpen && !this.deleteWarningOpen) {
-                this.addButton(screen, "Create Type", mainPanel.x() + 14, mainPanel.y() + 40, 110, () -> {
+                this.addButton(screen, "Create Type", mainPanel.x() + 14, mainPanel.y() + 40, 110, () -> "Create a new duel type.", () -> {
                     this.isEditingType = false;
                     this.createTypeDialogOpen = true;
                     this.configKnockbackOnly = false;
@@ -137,7 +137,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
             }
 
             if (this.contextMenuOpen) {
-                this.addButton(screen, "Edit", this.contextMenuX, this.contextMenuY, 100, () -> {
+                this.addButton(screen, "Edit", this.contextMenuX, this.contextMenuY, 100, () -> "Edit this duel type.", () -> {
                     if (this.contextMenuTarget != null) {
                         this.selectedType = this.contextMenuTarget;
                         this.configKnockbackOnly = this.contextMenuTarget.knockbackOnly();
@@ -151,7 +151,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                         screen.openWorkspaceView(this);
                     }
                 });
-                ButtonWidget deleteBtn = this.addButton(screen, "Delete", this.contextMenuX, this.contextMenuY + 20, 100, () -> {
+                ButtonWidget deleteBtn = this.addButton(screen, "Delete", this.contextMenuX, this.contextMenuY + 20, 100, () -> "Delete this duel type.", () -> {
                     if (this.contextMenuTarget != null) {
                         this.deleteTarget = this.contextMenuTarget;
                         this.deleteWarningOpen = true;
@@ -163,7 +163,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
             }
         } else if (this.moduleManager.isActive("kits")) {
             if (!this.createKitDialogOpen && !this.kitDeleteWarningOpen) {
-                this.addButton(screen, "Create Kit", mainPanel.x() + 14, mainPanel.y() + 40, 110, () -> {
+                this.addButton(screen, "Create Kit", mainPanel.x() + 14, mainPanel.y() + 40, 110, () -> "Create a new custom kit.", () -> {
                     if (this.kitSelectedType != null) {
                         this.isEditingKit = false;
                         this.createKitDialogOpen = true;
@@ -173,7 +173,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                         this.kitStatusMessageTime = System.currentTimeMillis();
                     }
                 });
-                this.addButton(screen, "Open Kit Registry", mainPanel.x() + 130, mainPanel.y() + 40, 120, () -> {
+                this.addButton(screen, "Open Kit Registry", mainPanel.x() + 130, mainPanel.y() + 40, 120, () -> "Browse existing kits.", () -> {
                     RegistrySelectorContext<Kit> context = new RegistrySelectorContext<>(
                         "miniverse:kit", "Duel Kits", RegistrySelectorContext.SelectionMode.SINGLE,
                         this.kitRegistryState, result -> {}, "duel_kits", Set.of()
@@ -183,7 +183,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
             }
 
             if (this.kitContextMenuOpen) {
-                this.addButton(screen, "Rename", this.kitContextMenuX, this.kitContextMenuY, 100, () -> {
+                this.addButton(screen, "Rename", this.kitContextMenuX, this.kitContextMenuY, 100, () -> "Rename this kit.", () -> {
                     if (this.kitContextMenuTarget != null) {
                         this.isEditingKit = true;
                         this.createKitDialogOpen = true;
@@ -191,7 +191,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                         screen.openWorkspaceView(this);
                     }
                 });
-                ButtonWidget deleteBtn = this.addButton(screen, "Delete", this.kitContextMenuX, this.kitContextMenuY + 20, 100, () -> {
+                ButtonWidget deleteBtn = this.addButton(screen, "Delete", this.kitContextMenuX, this.kitContextMenuY + 20, 100, () -> "Delete this kit.", () -> {
                     if (this.kitContextMenuTarget != null) {
                         this.kitDeleteTarget = this.kitContextMenuTarget;
                         this.kitDeleteWarningOpen = true;
@@ -209,33 +209,33 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
         int dialogY = mainPanel.y() + 48;
 
         if (this.createTypeDialogOpen) {
-            this.newTypeNameField = this.addField(screen, dialogX + 14, dialogY + 48, "", "Type Name");
+            this.newTypeNameField = this.addField(screen, dialogX + 14, dialogY + 48, "", "Type Name", () -> "Name of the new duel type.");
             this.newTypeNameField.setWidth(dialogW - 28);
             if (this.isEditingType && this.selectedType != null) {
                 this.newTypeNameField.setText(this.selectedType.name());
             }
-            this.btnKnockbackOnly = this.addButton(screen, "Knockback Only: " + (this.configKnockbackOnly ? "ON" : "OFF"), dialogX + 14, dialogY + 76, dialogW - 28, () -> {
+            this.btnKnockbackOnly = this.addButton(screen, "Knockback Only: " + (this.configKnockbackOnly ? "ON" : "OFF"), dialogX + 14, dialogY + 76, dialogW - 28, () -> this.configKnockbackOnly ? "Players only take knockback, no damage." : "Players take normal damage.", () -> {
                 this.configKnockbackOnly = !this.configKnockbackOnly;
                 this.btnKnockbackOnly.setMessage(Text.literal("Knockback Only: " + (this.configKnockbackOnly ? "ON" : "OFF")));
             });
-            this.btnAllowBuilding = this.addButton(screen, "Allow Building: " + (this.configAllowBuilding ? "ON" : "OFF"), dialogX + 14, dialogY + 101, dialogW - 28, () -> {
+            this.btnAllowBuilding = this.addButton(screen, "Allow Building: " + (this.configAllowBuilding ? "ON" : "OFF"), dialogX + 14, dialogY + 101, dialogW - 28, () -> this.configAllowBuilding ? "Players can place blocks." : "Block placement is disabled.", () -> {
                 this.configAllowBuilding = !this.configAllowBuilding;
                 this.btnAllowBuilding.setMessage(Text.literal("Allow Building: " + (this.configAllowBuilding ? "ON" : "OFF")));
             });
-            this.btnAllowBreaking = this.addButton(screen, "Allow Breaking: " + (this.configAllowBreaking ? "ON" : "OFF"), dialogX + 14, dialogY + 126, dialogW - 28, () -> {
+            this.btnAllowBreaking = this.addButton(screen, "Allow Breaking: " + (this.configAllowBreaking ? "ON" : "OFF"), dialogX + 14, dialogY + 126, dialogW - 28, () -> this.configAllowBreaking ? "Players can break placed blocks." : "Block breaking is disabled.", () -> {
                 this.configAllowBreaking = !this.configAllowBreaking;
                 this.btnAllowBreaking.setMessage(Text.literal("Allow Breaking: " + (this.configAllowBreaking ? "ON" : "OFF")));
             });
-            this.btnAllowHunger = this.addButton(screen, "Allow Hunger: " + (this.configAllowHunger ? "ON" : "OFF"), dialogX + 14, dialogY + 151, dialogW - 28, () -> {
+            this.btnAllowHunger = this.addButton(screen, "Allow Hunger: " + (this.configAllowHunger ? "ON" : "OFF"), dialogX + 14, dialogY + 151, dialogW - 28, () -> this.configAllowHunger ? "Players lose hunger over time." : "Hunger is frozen.", () -> {
                 this.configAllowHunger = !this.configAllowHunger;
                 this.btnAllowHunger.setMessage(Text.literal("Allow Hunger: " + (this.configAllowHunger ? "ON" : "OFF")));
             });
-            this.btnNaturalRegen = this.addButton(screen, "Natural Regen: " + (this.configNaturalRegen ? "ON" : "OFF"), dialogX + 14, dialogY + 176, dialogW - 28, () -> {
+            this.btnNaturalRegen = this.addButton(screen, "Natural Regen: " + (this.configNaturalRegen ? "ON" : "OFF"), dialogX + 14, dialogY + 176, dialogW - 28, () -> this.configNaturalRegen ? "Players regenerate health naturally." : "Natural health regeneration is disabled.", () -> {
                 this.configNaturalRegen = !this.configNaturalRegen;
                 this.btnNaturalRegen.setMessage(Text.literal("Natural Regen: " + (this.configNaturalRegen ? "ON" : "OFF")));
             });
 
-            this.addButton(screen, this.isEditingType ? "Save Changes" : "Save Type", dialogX + 14, dialogY + 202, 145, () -> {
+            this.addButton(screen, this.isEditingType ? "Save Changes" : "Save Type", dialogX + 14, dialogY + 202, 145, () -> "Save this duel type.", () -> {
                 if (!this.newTypeNameField.getText().isBlank()) {
                     String typeName = this.newTypeNameField.getText().trim();
                     String id = this.isEditingType ? this.selectedType.id() : typeName.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9_\\-]+", "_").replaceAll("_+", "_");
@@ -256,14 +256,14 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                     screen.openWorkspaceView(this);
                 }
             });
-            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 202, 66, () -> {
+            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 202, 66, () -> "Discard changes.", () -> {
                 this.createTypeDialogOpen = false;
                 screen.openWorkspaceView(this);
             });
         }
 
         if (this.deleteWarningOpen && this.deleteTarget != null) {
-            ButtonWidget confirmDeleteBtn = this.addButton(screen, "Confirm Delete", dialogX + 14, dialogY + 120, 145, () -> {
+            ButtonWidget confirmDeleteBtn = this.addButton(screen, "Confirm Delete", dialogX + 14, dialogY + 120, 145, () -> "Permanently delete this duel type.", () -> {
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
                     new dev.frost.miniverse.common.NetworkConstants.DeleteDuelTypePayload(this.deleteTarget.id())
                 );
@@ -277,7 +277,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                 screen.openWorkspaceView(this);
             });
             confirmDeleteBtn.setMessage(Text.literal("Confirm Delete").formatted(net.minecraft.util.Formatting.RED));
-            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 120, 66, () -> {
+            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 120, 66, () -> "Cancel deletion.", () -> {
                 this.deleteWarningOpen = false;
                 this.deleteTarget = null;
                 screen.openWorkspaceView(this);
@@ -285,12 +285,12 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
         }
 
         if (this.createKitDialogOpen) {
-            this.kitNameField = this.addField(screen, dialogX + 14, dialogY + 48, "", "Kit Name");
+            this.kitNameField = this.addField(screen, dialogX + 14, dialogY + 48, "", "Kit Name", () -> "Name of the new kit.");
             this.kitNameField.setWidth(dialogW - 28);
             if (this.isEditingKit && this.kitContextMenuTarget != null) {
                 this.kitNameField.setText(this.kitContextMenuTarget.getDisplayName().getString());
             }
-            this.addButton(screen, this.isEditingKit ? "Save Changes" : "Save Kit", dialogX + 14, dialogY + 80, 145, () -> {
+            this.addButton(screen, this.isEditingKit ? "Save Changes" : "Save Kit", dialogX + 14, dialogY + 80, 145, () -> "Save this kit.", () -> {
                 if (this.kitSelectedType != null && !this.kitNameField.getText().isBlank()) {
                     String kitName = this.kitNameField.getText().trim();
                     if (this.isEditingKit && this.kitContextMenuTarget != null) {
@@ -308,14 +308,14 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                     screen.openWorkspaceView(this);
                 }
             });
-            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 80, 66, () -> {
+            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 80, 66, () -> "Discard changes.", () -> {
                 this.createKitDialogOpen = false;
                 screen.openWorkspaceView(this);
             });
         }
 
         if (this.kitDeleteWarningOpen && this.kitDeleteTarget != null) {
-            ButtonWidget confirmDeleteBtn = this.addButton(screen, "Confirm Delete", dialogX + 14, dialogY + 80, 145, () -> {
+            ButtonWidget confirmDeleteBtn = this.addButton(screen, "Confirm Delete", dialogX + 14, dialogY + 80, 145, () -> "Permanently delete this kit.", () -> {
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
                     new dev.frost.miniverse.common.NetworkConstants.DeleteKitPayload(this.kitDeleteTarget.getId().toString())
                 );
@@ -324,7 +324,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                 screen.openWorkspaceView(this);
             });
             confirmDeleteBtn.setMessage(Text.literal("Confirm Delete").formatted(net.minecraft.util.Formatting.RED));
-            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 80, 66, () -> {
+            this.addButton(screen, "Cancel", dialogX + 166, dialogY + 80, 66, () -> "Cancel deletion.", () -> {
                 this.kitDeleteWarningOpen = false;
                 this.kitDeleteTarget = null;
                 screen.openWorkspaceView(this);

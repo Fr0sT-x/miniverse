@@ -11,10 +11,15 @@ public record GlobalMatchRules(
     boolean doWeatherCycle,
     boolean fallDamage,
     boolean naturalRegeneration,
-    boolean announceAdvancements
+    boolean announceAdvancements,
+    boolean doImmediateRespawn
 ) {
     public static GlobalMatchRules defaults() {
-        return new GlobalMatchRules(false, true, true, true, true, true, true);
+        return new GlobalMatchRules(false, true, true, true, true, true, true, false);
+    }
+
+    public GlobalMatchRules withImmediateRespawn(boolean value) {
+        return new GlobalMatchRules(keepInventory, pvpEnabled, doDaylightCycle, doWeatherCycle, fallDamage, naturalRegeneration, announceAdvancements, value);
     }
 
     public void apply(MinecraftServer server) {
@@ -25,6 +30,7 @@ public record GlobalMatchRules(
             world.getGameRules().get(GameRules.FALL_DAMAGE).set(this.fallDamage, server);
             world.getGameRules().get(GameRules.NATURAL_REGENERATION).set(this.naturalRegeneration, server);
             world.getGameRules().get(GameRules.ANNOUNCE_ADVANCEMENTS).set(this.announceAdvancements, server);
+            world.getGameRules().get(GameRules.DO_IMMEDIATE_RESPAWN).set(this.doImmediateRespawn, server);
         }
         server.setPvpEnabled(this.pvpEnabled);
     }

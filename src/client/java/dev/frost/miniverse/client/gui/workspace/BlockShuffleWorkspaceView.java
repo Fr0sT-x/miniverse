@@ -17,7 +17,8 @@ import net.minecraft.block.Block;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
+import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.registry.Registries;
@@ -30,8 +31,8 @@ import java.util.stream.Collectors;
 public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
-    private TextFieldWidget roundDurationField;
-    private TextFieldWidget pointsToWinField;
+    private IntFieldWidget roundDurationField;
+    private IntFieldWidget pointsToWinField;
     private ButtonWidget perPlayerButton;
     private ButtonWidget blockPoolButton;
 
@@ -49,7 +50,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true);
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true, false);
     }
 
     public BlockShuffleWorkspaceView() {
@@ -65,15 +66,15 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.pointsToWinField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, Integer.toString(this.pointsToWin), 160, "Points to Win");
-            this.roundDurationField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, Integer.toString(this.roundDurationSeconds), 160, "Round Duration (s)");
+            this.pointsToWinField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, this.pointsToWin, 160, "Points to Win", val -> "Score needed to win the match.");
+            this.roundDurationField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.roundDurationSeconds, 160, "Round Duration (s)", val -> "Players have " + val + " seconds to find their block.");
             
-            this.perPlayerButton = this.addButton(screen, "Per-Player Blocks: " + (this.perPlayerBlocks ? "ON" : "OFF"), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, 220, () -> {
-                this.perPlayerBlocks = !this.perPlayerBlocks;
-                this.perPlayerButton.setMessage(Text.literal("Per-Player Blocks: " + (this.perPlayerBlocks ? "ON" : "OFF")));
-            });
+            this.perPlayerButton = this.addToggleButton(screen, "Per-Player Blocks", () -> this.perPlayerBlocks, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, 220,
+                "Each player gets a different block.",
+                "All players hunt the same block.",
+                () -> this.perPlayerBlocks = !this.perPlayerBlocks);
             
-            this.blockPoolButton = this.addButton(screen, "Configure Block Pool (" + this.blockPool.size() + " blocks)", this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 220, () -> {
+            this.blockPoolButton = this.addButton(screen, "Configure Block Pool (" + this.blockPool.size() + " blocks)", this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 220, () -> "Click to select which blocks can be chosen during the match.", () -> {
                 Set<Block> initialSelection = this.blockPool.stream()
                     .map(Registries.BLOCK::get)
                     .collect(Collectors.toSet());

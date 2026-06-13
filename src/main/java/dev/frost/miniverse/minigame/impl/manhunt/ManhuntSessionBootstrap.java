@@ -52,8 +52,9 @@ final class ManhuntSessionBootstrap {
                     .withDisconnectGraceHandler(new DisconnectGraceHandler() {
                         @Override
                         public boolean isCritical(dev.frost.miniverse.minigame.core.MinigameRuntime runtime, ServerPlayerEntity player) {
-                            return minigame.getState().isActive()
-                                && minigame.getPlayerRole(player) == ManhuntMinigame.ManhuntRole.SPEEDRUNNER
+                            if (!minigame.getState().isActive()) return false;
+                            if (minigame.getActiveHunters().isEmpty()) return true;
+                            return minigame.getPlayerRole(player) == ManhuntMinigame.ManhuntRole.SPEEDRUNNER
                                 && minigame.getAliveSpeedrunnerCount() <= 1;
                         }
 

@@ -77,7 +77,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, false, true, true, true, true, true);
+        return new GlobalMatchRules(true, false, true, true, true, true, true, false);
     }
 
     @Override

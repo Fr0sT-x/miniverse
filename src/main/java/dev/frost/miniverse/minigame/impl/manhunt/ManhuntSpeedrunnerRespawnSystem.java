@@ -51,8 +51,18 @@ final class ManhuntSpeedrunnerRespawnSystem {
     }
 
     void reset() {
+        for (UUID uuid : this.pendingRespawns.keySet()) {
+            ServerPlayerEntity player = this.game.getPlayerByUuid(uuid);
+            if (player != null) {
+                this.spectators.stopSpectating(player, SpectatorStopReason.MANUAL);
+            }
+        }
         this.pendingRespawns.clear();
         this.protectedUntilTicks.clear();
+    }
+
+    public boolean hasAnyPendingRespawns() {
+        return !this.pendingRespawns.isEmpty();
     }
 
     JsonObject saveRuntimeState() {
@@ -299,7 +309,7 @@ final class ManhuntSpeedrunnerRespawnSystem {
 
         this.pendingRespawns.put(player.getUuid(), pending.withTarget(replacement.getUuid()));
         this.updateSpectatorTarget(player, replacement.getUuid());
-        player.sendMessage(Text.literal("Spectating " + replacement.getName().getString() + " until respawn.").formatted(Formatting.AQUA), true);
+        player.sendMessage(Text.literal("Spectating " + replacement.getName().getString() + " until respawn.").formatted(Formatting.AQUA), false);
         return replacement;
     }
 

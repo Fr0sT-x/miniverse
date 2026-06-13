@@ -71,6 +71,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.sound.SoundEvents;
 import dev.frost.miniverse.minigame.core.tracker.PlayerTracker;
+import static dev.frost.miniverse.minigame.core.util.MinigameSerializationUtil.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
@@ -88,6 +90,17 @@ public class BountyHuntMinigame extends AbstractMinigame {
         .withOutlineColor(0xFFFFFFFF)
         .withAlpha(0.82F)
         .withIntensity(1.0F);
+
+    private static final Identifier LEADER_OVERLAY = Identifier.of("miniverse", "bountyhunt_leader");
+    private static final int LEADER_COLOR = 0xFFFFD700;
+    private static final ProtectionOverlaySettings LEADER_OVERLAY_SETTINGS = ProtectionOverlaySettings.DEFAULT
+        .withStyle(ProtectionOverlayStyle.VANILLA_GLOW)
+        .withRenderMode(ProtectionOverlayRenderMode.DEPTH_TESTED)
+        .withGlowColor(0xFFFFD700)
+        .withOutlineColor(0xFFFFD700)
+        .withAlpha(0.82F)
+        .withIntensity(1.0F);
+
     private ScoreboardTemplate scoreboard;
     private ScoreboardLine graceLine;
 
@@ -95,6 +108,8 @@ public class BountyHuntMinigame extends AbstractMinigame {
     private final Map<UUID, Integer> scores = new ConcurrentHashMap<>();
     private final Map<UUID, Long> invincibleUntilTicks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> compassCooldownUntilTicks = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> killStreaks = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> targetBountyValues = new ConcurrentHashMap<>();
     private final PlayerTracker playerTracker = new PlayerTracker();
     private final Set<Integer> announcedGraceThresholds = ConcurrentHashMap.newKeySet();
 
@@ -139,6 +154,10 @@ public class BountyHuntMinigame extends AbstractMinigame {
         this.scores.clear();
         this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
+        this.killStreaks.clear();
+        this.targetBountyValues.clear();
+        this.killStreaks.clear();
+        this.targetBountyValues.clear();
         this.playerTracker.clear();
         this.announcedGraceThresholds.clear();
         this.gameTicks = 0L;
@@ -156,6 +175,10 @@ public class BountyHuntMinigame extends AbstractMinigame {
         this.scores.clear();
         this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
+        this.killStreaks.clear();
+        this.targetBountyValues.clear();
+        this.killStreaks.clear();
+        this.targetBountyValues.clear();
         this.playerTracker.clear();
         this.announcedGraceThresholds.clear();
         this.gameTicks = 0L;
@@ -188,19 +211,18 @@ public class BountyHuntMinigame extends AbstractMinigame {
         this.clearInvincibilityStates();
         this.clearGraceProtectionStates();
         this.compassCooldownUntilTicks.clear();
+        this.killStreaks.clear();
+        this.targetBountyValues.clear();
         this.playerTracker.clear();
         this.clearScoreboard();
-    }
-
-    @Override
-    public void onPlayerDeath(ServerPlayerEntity player) {
-        this.handlePlayerDeath(player, null);
     }
 
     public void handlePlayerDeath(ServerPlayerEntity player, @Nullable DamageSource source) {
         if (!this.isParticipant(player)) {
             return;
         }
+
+        this.killStreaks.put(player.getUuid(), 0);
 
         ServerPlayerEntity killer = source != null && source.getAttacker() instanceof ServerPlayerEntity attacker
             ? attacker
@@ -210,10 +232,21 @@ public class BountyHuntMinigame extends AbstractMinigame {
         if (killer != null && this.isParticipant(killer)) {
             UUID expectedTarget = this.targetAssignments.get(killer.getUuid());
             if (expectedTarget != null && expectedTarget.equals(player.getUuid())) {
-                int newScore = this.scores.merge(killer.getUuid(), 1, Integer::sum);
+                int bountyValue = this.targetBountyValues.getOrDefault(player.getUuid(), 0);
+                int pointsEarned = 1 + bountyValue;
+                int newScore = this.scores.merge(killer.getUuid(), pointsEarned, Integer::sum);
                 scored = true;
-                killer.sendMessage(Text.literal("Target eliminated! +1 point (" + newScore + "/" + this.settings.scoreToWin() + ")")
+                this.targetBountyValues.put(player.getUuid(), 0);
+                
+                int currentStreak = this.killStreaks.merge(killer.getUuid(), 1, Integer::sum);
+                if (currentStreak >= 2) {
+                    this.broadcastMessage(Text.literal(killer.getName().getString() + " is on a " + currentStreak + "-kill streak!").formatted(Formatting.GOLD));
+                }
+
+                killer.sendMessage(Text.literal("Target eliminated! +" + pointsEarned + " point(s) (" + newScore + "/" + this.settings.scoreToWin() + ")")
                     .formatted(Formatting.GOLD), true);
+                killer.playSound(SoundEvents.ENTITY_PLAYER_LEVELUP, 1.0F, 1.0F);
+                player.sendMessage(Text.literal("You were eliminated by your hunter, " + killer.getName().getString() + "!").formatted(Formatting.RED), false);
                 if (newScore >= this.settings.scoreToWin()) {
                     this.endGameWithWinner(killer);
                     return;
@@ -222,13 +255,32 @@ public class BountyHuntMinigame extends AbstractMinigame {
                 killer.sendMessage(Text.literal("No point: that player was not your assigned target.")
                     .formatted(Formatting.RED), true);
             }
+            
+            if (this.settings.highValueTargetEnabled() && killer != player) {
+                List<ServerPlayerEntity> leaders = this.getCurrentLeaders();
+                if (leaders.size() == 1 && leaders.get(0).getUuid().equals(player.getUuid())) {
+                    int newScore = this.scores.merge(killer.getUuid(), 1, Integer::sum);
+                    this.broadcastMessage(Text.literal(killer.getName().getString() + " assassinated the High Value Target! +1 bonus point.").formatted(Formatting.YELLOW));
+                    if (newScore >= this.settings.scoreToWin()) {
+                        this.endGameWithWinner(killer);
+                        return;
+                    }
+                }
+            }
         }
 
-        this.assignNewTarget(player);
+        if (killer != null && this.isParticipant(killer)) {
+            if (this.settings.revengeAssignmentEnabled() && !player.getUuid().equals(this.targetAssignments.get(killer.getUuid()))) {
+                this.targetAssignments.put(player.getUuid(), killer.getUuid());
+                player.sendMessage(Text.literal("Revenge Assignment: Your new target is " + killer.getName().getString()).formatted(Formatting.AQUA), true);
+            } else {
+                this.assignNewTarget(player, false);
+            }
+        }
         this.grantTracker(player);
 
         if (scored && killer != null) {
-            this.assignNewTarget(killer);
+            this.assignNewTarget(killer, true);
             this.syncTrackerTarget(killer, true);
         }
 
@@ -254,6 +306,7 @@ public class BountyHuntMinigame extends AbstractMinigame {
                 this.updateTrackers();
             }
             this.updateScoreboardTick();
+            this.updateHighValueTargetOverlay();
         }
     }
 
@@ -343,6 +396,7 @@ public class BountyHuntMinigame extends AbstractMinigame {
         this.compassCooldownUntilTicks.remove(playerUuid);
         this.playerTracker.remove(playerUuid);
         ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, RESPAWN_PROTECTION_OVERLAY);
+        ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, LEADER_OVERLAY);
         if (this.state == GameState.STARTING && this.graceTicksRemaining > 0) {
             ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, GRACE_PROTECTION_OVERLAY);
         }
@@ -351,7 +405,7 @@ public class BountyHuntMinigame extends AbstractMinigame {
             if (playerUuid.equals(entry.getValue())) {
                 ServerPlayerEntity hunter = this.getPlayerByUuid(entry.getKey());
                 if (hunter != null) {
-                    this.assignNewTarget(hunter);
+                    this.assignNewTarget(hunter, false);
                     this.syncTrackerTarget(hunter, false);
                 }
             }
@@ -521,6 +575,14 @@ public class BountyHuntMinigame extends AbstractMinigame {
         }
 
         this.targetSwapTicksRemaining = this.settings.targetSwapIntervalSeconds() * 20;
+        
+        for (UUID currentTarget : this.targetAssignments.values()) {
+            int current = this.targetBountyValues.getOrDefault(currentTarget, 0);
+            if (current < 3) {
+                this.targetBountyValues.put(currentTarget, current + 1);
+            }
+        }
+        
         this.assignInitialTargets();
         this.broadcastMessage(Text.literal("Target assignments refreshed! Check your tracker.").formatted(Formatting.YELLOW));
     }
@@ -531,28 +593,71 @@ public class BountyHuntMinigame extends AbstractMinigame {
             return;
         }
 
-        List<ServerPlayerEntity> shuffled = new ArrayList<>(participants);
-        Collections.shuffle(shuffled);
-        for (int i = 0; i < shuffled.size(); i++) {
-            ServerPlayerEntity hunter = shuffled.get(i);
-            ServerPlayerEntity target = shuffled.get((i + 1) % shuffled.size());
+        ServerPlayerEntity[] original = participants.toArray(new ServerPlayerEntity[0]);
+        ServerPlayerEntity[] shuffled = participants.toArray(new ServerPlayerEntity[0]);
+        
+        for (int i = shuffled.length - 1; i > 0; i--) {
+            int j = ThreadLocalRandom.current().nextInt(i);
+            ServerPlayerEntity temp = shuffled[i];
+            shuffled[i] = shuffled[j];
+            shuffled[j] = temp;
+        }
+
+        for (int i = 0; i < original.length; i++) {
+            ServerPlayerEntity hunter = original[i];
+            ServerPlayerEntity target = shuffled[i];
             this.targetAssignments.put(hunter.getUuid(), target.getUuid());
             this.scores.putIfAbsent(hunter.getUuid(), 0);
             hunter.sendMessage(Text.literal("Your target is: " + target.getName().getString()).formatted(Formatting.AQUA), false);
         }
     }
 
-    private void assignNewTarget(ServerPlayerEntity hunter) {
+    private void assignNewTarget(ServerPlayerEntity hunter, boolean scored) {
+        UUID oldTarget = this.targetAssignments.get(hunter.getUuid());
+        if (!scored && oldTarget != null) {
+            int current = this.targetBountyValues.getOrDefault(oldTarget, 0);
+            if (current < 3) {
+                this.targetBountyValues.put(oldTarget, current + 1);
+            }
+        }
+
         List<ServerPlayerEntity> candidates = this.getParticipants().stream()
             .filter(entry -> !entry.getUuid().equals(hunter.getUuid()))
+            .filter(entry -> !this.isInvincible(entry))
             .toList();
+
         if (candidates.isEmpty()) {
+            candidates = this.getParticipants().stream()
+                .filter(entry -> !entry.getUuid().equals(hunter.getUuid()))
+                .toList();
+        }
+
+        if (candidates.isEmpty()) {
+            this.targetAssignments.remove(hunter.getUuid());
+            hunter.sendMessage(Text.literal("No valid targets remaining.").formatted(Formatting.YELLOW), true);
             return;
         }
 
-        ServerPlayerEntity target = candidates.get((int) (Math.random() * candidates.size()));
+        Map<UUID, Integer> hunterCounts = new java.util.HashMap<>();
+        for (ServerPlayerEntity candidate : candidates) {
+            hunterCounts.put(candidate.getUuid(), 0);
+        }
+        for (UUID targetId : this.targetAssignments.values()) {
+            hunterCounts.computeIfPresent(targetId, (k, v) -> v + 1);
+        }
+
+        int minHunters = hunterCounts.values().stream().min(Integer::compareTo).orElse(0);
+        List<ServerPlayerEntity> bestCandidates = candidates.stream()
+            .filter(p -> hunterCounts.get(p.getUuid()) == minHunters)
+            .toList();
+
+        ServerPlayerEntity target = bestCandidates.get(ThreadLocalRandom.current().nextInt(bestCandidates.size()));
         this.targetAssignments.put(hunter.getUuid(), target.getUuid());
         hunter.sendMessage(Text.literal("Your target is: " + target.getName().getString()).formatted(Formatting.AQUA), true);
+        if (this.isInvincible(target)) {
+            hunter.sendMessage(Text.literal("Your new target is currently invincible, hang tight.").formatted(Formatting.YELLOW), true);
+        }
+        hunter.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0F, 1.0F);
     }
 
     private void grantTrackersToParticipants() {
@@ -743,7 +848,10 @@ public class BountyHuntMinigame extends AbstractMinigame {
     }
 
     private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        if (this.context != null) this.context.participants().add(newPlayer);
+        if (this.context != null) {
+            this.context.participants().remove(oldPlayer);
+            this.context.participants().add(newPlayer);
+        }
     }
 
     private void setRuntimeState(GameState state) {
@@ -785,7 +893,9 @@ public class BountyHuntMinigame extends AbstractMinigame {
 
         for (ServerPlayerEntity player : sorted) {
             int score = this.scores.getOrDefault(player.getUuid(), 0);
-            this.scoreboard.addLine(Text.literal(player.getName().getString() + ": " + score));
+            int bounty = this.targetBountyValues.getOrDefault(player.getUuid(), 0);
+            String bountyDisplay = bounty > 0 ? " [bounty:" + bounty + "]" : "";
+            this.scoreboard.addLine(Text.literal(player.getName().getString() + ": " + score + bountyDisplay));
         }
 
         this.scoreboard.addBlankLine();
@@ -934,6 +1044,11 @@ public class BountyHuntMinigame extends AbstractMinigame {
             ProtectionOverlaySender.broadcastClearOverlay(this.server, playerId, RESPAWN_PROTECTION_OVERLAY);
         }
         this.invincibleUntilTicks.clear();
+        if (this.server != null) {
+            for (ServerPlayerEntity p : this.getParticipants()) {
+                ProtectionOverlaySender.broadcastClearOverlay(this.server, p.getUuid(), LEADER_OVERLAY);
+            }
+        }
     }
 
     private void endGameWithWinner(ServerPlayerEntity winner) {
@@ -968,6 +1083,8 @@ public class BountyHuntMinigame extends AbstractMinigame {
         root.add("participants", writeUuidArray(this.context == null ? Set.of() : this.context.participantIds()));
         root.add("targetAssignments", writeUuidUuidMap(this.targetAssignments));
         root.add("scores", writeUuidIntMap(this.scores));
+        root.add("killStreaks", writeUuidIntMap(this.killStreaks));
+        root.add("targetBountyValues", writeUuidIntMap(this.targetBountyValues));
         root.add("invincibleUntilTicks", writeUuidLongMap(this.invincibleUntilTicks));
         root.add("compassCooldownUntilTicks", writeUuidLongMap(this.compassCooldownUntilTicks));
         root.add("trackingData", this.playerTracker.writeTrackingData());
@@ -981,6 +1098,8 @@ public class BountyHuntMinigame extends AbstractMinigame {
         }
         this.targetAssignments.clear();
         this.scores.clear();
+        this.killStreaks.clear();
+        this.targetBountyValues.clear();
         this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
         this.playerTracker.clear();
@@ -1002,6 +1121,8 @@ public class BountyHuntMinigame extends AbstractMinigame {
         }
         this.targetAssignments.putAll(readUuidUuidMap(root, "targetAssignments"));
         this.scores.putAll(readUuidIntMap(root, "scores"));
+        this.killStreaks.putAll(readUuidIntMap(root, "killStreaks"));
+        this.targetBountyValues.putAll(readUuidIntMap(root, "targetBountyValues"));
         this.invincibleUntilTicks.putAll(readUuidLongMap(root, "invincibleUntilTicks"));
         this.compassCooldownUntilTicks.putAll(readUuidLongMap(root, "compassCooldownUntilTicks"));
         if (root.has("trackingData") && root.get("trackingData").isJsonArray()) {
@@ -1010,6 +1131,30 @@ public class BountyHuntMinigame extends AbstractMinigame {
         this.registerProtectedItems();
         this.syncVanillaTeams();
         this.rebuildScoreboard();
+    }
+
+    private List<ServerPlayerEntity> getCurrentLeaders() {
+        if (this.scores.isEmpty()) return List.of();
+        int maxScore = this.scores.values().stream().max(Integer::compareTo).orElse(0);
+        return this.getParticipants().stream()
+            .filter(p -> this.scores.getOrDefault(p.getUuid(), 0) == maxScore)
+            .toList();
+    }
+
+    private void updateHighValueTargetOverlay() {
+        if (!this.settings.highValueTargetEnabled() || this.server == null) {
+            return;
+        }
+        List<ServerPlayerEntity> leaders = this.getCurrentLeaders();
+        Set<UUID> leaderUuids = leaders.size() == 1 ? Set.of(leaders.get(0).getUuid()) : Set.of();
+        
+        for (ServerPlayerEntity p : this.getParticipants()) {
+            if (leaderUuids.contains(p.getUuid())) {
+                ProtectionOverlaySender.broadcast(this.server, p.getUuid(), LEADER_OVERLAY, 20, true, LEADER_COLOR, LEADER_OVERLAY_SETTINGS);
+            } else {
+                ProtectionOverlaySender.broadcastClearOverlay(this.server, p.getUuid(), LEADER_OVERLAY);
+            }
+        }
     }
 
     private JsonObject writeSettings() {
@@ -1023,6 +1168,8 @@ public class BountyHuntMinigame extends AbstractMinigame {
         settingsJson.addProperty("compassCooldownSeconds", this.settings.compassCooldownSeconds());
         settingsJson.addProperty("trackerItemId", this.settings.trackerItemId());
         settingsJson.addProperty("disconnectGraceSeconds", this.settings.disconnectGraceSeconds());
+        settingsJson.addProperty("highValueTargetEnabled", this.settings.highValueTargetEnabled());
+        settingsJson.addProperty("revengeAssignmentEnabled", this.settings.revengeAssignmentEnabled());
         return settingsJson;
     }
 
@@ -1037,93 +1184,15 @@ public class BountyHuntMinigame extends AbstractMinigame {
             booleanValue(root, "netherTrackingEnabled", base.netherTrackingEnabled()),
             intValue(root, "compassCooldownSeconds", base.compassCooldownSeconds()),
             stringValue(root, "trackerItemId", base.trackerItemId()),
-            intValue(root, "disconnectGraceSeconds", base.disconnectGraceSeconds())
+            intValue(root, "disconnectGraceSeconds", base.disconnectGraceSeconds()),
+            booleanValue(root, "highValueTargetEnabled", base.highValueTargetEnabled()),
+            booleanValue(root, "revengeAssignmentEnabled", base.revengeAssignmentEnabled())
         );
     }
 
 
 
-    private static JsonArray writeUuidArray(Collection<UUID> uuids) {
-        JsonArray array = new JsonArray();
-        for (UUID uuid : uuids) {
-            array.add(uuid.toString());
-        }
-        return array;
-    }
 
-    private static List<UUID> readUuidArray(JsonObject root, String key) {
-        List<UUID> uuids = new ArrayList<>();
-        if (!root.has(key) || !root.get(key).isJsonArray()) {
-            return uuids;
-        }
-        for (var element : root.getAsJsonArray(key)) {
-            try {
-                uuids.add(UUID.fromString(element.getAsString()));
-            } catch (RuntimeException ignored) {
-            }
-        }
-        return uuids;
-    }
-
-    private static JsonObject writeUuidUuidMap(Map<UUID, UUID> map) {
-        JsonObject object = new JsonObject();
-        map.forEach((key, value) -> object.addProperty(key.toString(), value.toString()));
-        return object;
-    }
-
-    private static Map<UUID, UUID> readUuidUuidMap(JsonObject root, String key) {
-        Map<UUID, UUID> map = new ConcurrentHashMap<>();
-        if (!root.has(key) || !root.get(key).isJsonObject()) {
-            return map;
-        }
-        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
-            try {
-                map.put(UUID.fromString(entry.getKey()), UUID.fromString(entry.getValue().getAsString()));
-            } catch (RuntimeException ignored) {
-            }
-        }
-        return map;
-    }
-
-    private static JsonObject writeUuidIntMap(Map<UUID, Integer> map) {
-        JsonObject object = new JsonObject();
-        map.forEach((key, value) -> object.addProperty(key.toString(), value));
-        return object;
-    }
-
-    private static Map<UUID, Integer> readUuidIntMap(JsonObject root, String key) {
-        Map<UUID, Integer> map = new ConcurrentHashMap<>();
-        if (!root.has(key) || !root.get(key).isJsonObject()) {
-            return map;
-        }
-        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
-            try {
-                map.put(UUID.fromString(entry.getKey()), entry.getValue().getAsInt());
-            } catch (RuntimeException ignored) {
-            }
-        }
-        return map;
-    }
-
-    private static JsonObject writeUuidLongMap(Map<UUID, Long> map) {
-        JsonObject object = new JsonObject();
-        map.forEach((key, value) -> object.addProperty(key.toString(), value));
-        return object;
-    }
-
-    private static Map<UUID, Long> readUuidLongMap(JsonObject root, String key) {
-        Map<UUID, Long> map = new ConcurrentHashMap<>();
-        if (!root.has(key) || !root.get(key).isJsonObject()) {
-            return map;
-        }
-        for (Map.Entry<String, com.google.gson.JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
-            try {
-                map.put(UUID.fromString(entry.getKey()), entry.getValue().getAsLong());
-            } catch (RuntimeException ignored) {
-            }
-        }
-        return map;
-    }
 
     private static void putBlockPos(JsonObject object, String key, @Nullable BlockPos pos) {
         if (pos == null) {

@@ -43,30 +43,27 @@ public final class BountyHuntDefinition implements MinigameDefinition {
 
     @Override
     public void writeSessionProperties(NbtCompound settingsNbt, Properties properties) {
-        BountyHuntSettings settings = BountyHuntSettings.fromNbt(settingsNbt);
-        properties.setProperty("bountyhunt.gracePeriodSeconds", Integer.toString(settings.gracePeriodSeconds()));
-        properties.setProperty("bountyhunt.respawnInvincibilitySeconds", Integer.toString(settings.respawnInvincibilitySeconds()));
-        properties.setProperty("bountyhunt.scoreToWin", Integer.toString(settings.scoreToWin()));
-        properties.setProperty("bountyhunt.targetSwapIntervalSeconds", Integer.toString(settings.targetSwapIntervalSeconds()));
-        properties.setProperty("bountyhunt.trackerEnabled", Boolean.toString(settings.trackerEnabled()));
-        properties.setProperty("bountyhunt.netherTracking", Boolean.toString(settings.netherTrackingEnabled()));
-        properties.setProperty("bountyhunt.compassCooldownSeconds", Integer.toString(settings.compassCooldownSeconds()));
-        properties.setProperty("bountyhunt.trackerItemId", settings.trackerItemId());
-        properties.setProperty("bountyhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
+        fillSettingsMap(settingsNbt, properties::setProperty);
     }
 
     @Override
     public void writeLaunchProperties(NbtCompound settingsNbt, Map<String, String> properties) {
+        fillSettingsMap(settingsNbt, (k, v) -> properties.put("miniverse." + k, v));
+    }
+
+    private void fillSettingsMap(NbtCompound settingsNbt, java.util.function.BiConsumer<String, String> put) {
         BountyHuntSettings settings = BountyHuntSettings.fromNbt(settingsNbt);
-        properties.put("miniverse.bountyhunt.gracePeriodSeconds", Integer.toString(settings.gracePeriodSeconds()));
-        properties.put("miniverse.bountyhunt.respawnInvincibilitySeconds", Integer.toString(settings.respawnInvincibilitySeconds()));
-        properties.put("miniverse.bountyhunt.scoreToWin", Integer.toString(settings.scoreToWin()));
-        properties.put("miniverse.bountyhunt.targetSwapIntervalSeconds", Integer.toString(settings.targetSwapIntervalSeconds()));
-        properties.put("miniverse.bountyhunt.trackerEnabled", Boolean.toString(settings.trackerEnabled()));
-        properties.put("miniverse.bountyhunt.netherTracking", Boolean.toString(settings.netherTrackingEnabled()));
-        properties.put("miniverse.bountyhunt.compassCooldownSeconds", Integer.toString(settings.compassCooldownSeconds()));
-        properties.put("miniverse.bountyhunt.trackerItemId", settings.trackerItemId());
-        properties.put("miniverse.bountyhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
+        put.accept("bountyhunt.gracePeriodSeconds", Integer.toString(settings.gracePeriodSeconds()));
+        put.accept("bountyhunt.respawnInvincibilitySeconds", Integer.toString(settings.respawnInvincibilitySeconds()));
+        put.accept("bountyhunt.scoreToWin", Integer.toString(settings.scoreToWin()));
+        put.accept("bountyhunt.targetSwapIntervalSeconds", Integer.toString(settings.targetSwapIntervalSeconds()));
+        put.accept("bountyhunt.trackerEnabled", Boolean.toString(settings.trackerEnabled()));
+        put.accept("bountyhunt.netherTracking", Boolean.toString(settings.netherTrackingEnabled()));
+        put.accept("bountyhunt.compassCooldownSeconds", Integer.toString(settings.compassCooldownSeconds()));
+        put.accept("bountyhunt.trackerItemId", settings.trackerItemId());
+        put.accept("bountyhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
+        put.accept("bountyhunt.highValueTargetEnabled", Boolean.toString(settings.highValueTargetEnabled()));
+        put.accept("bountyhunt.revengeAssignmentEnabled", Boolean.toString(settings.revengeAssignmentEnabled()));
     }
 
     @Override

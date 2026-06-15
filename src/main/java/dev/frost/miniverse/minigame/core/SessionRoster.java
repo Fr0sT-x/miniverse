@@ -12,9 +12,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Stores participant identity by UUID and resolves live player entities only when needed.
+ * Stores participant identity by UUID and resolves online and offline players.
  */
-public final class ParticipantSet {
+public final class SessionRoster {
     private final Set<UUID> participantIds = ConcurrentHashMap.newKeySet();
 
     public void add(UUID playerId) {
@@ -57,6 +57,10 @@ public final class ParticipantSet {
         return Collections.unmodifiableSet(Set.copyOf(this.participantIds));
     }
 
+    public Set<UUID> allParticipants() {
+        return this.ids();
+    }
+
     @Nullable
     public ServerPlayerEntity resolve(MinecraftServer server, UUID playerId) {
         if (!this.contains(playerId)) {
@@ -65,7 +69,7 @@ public final class ParticipantSet {
         return server.getPlayerManager().getPlayer(playerId);
     }
 
-    public List<ServerPlayerEntity> livePlayers(@Nullable MinecraftServer server) {
+    public List<ServerPlayerEntity> onlinePlayers(@Nullable MinecraftServer server) {
         if (server == null) {
             return List.of();
         }
@@ -73,10 +77,29 @@ public final class ParticipantSet {
         List<ServerPlayerEntity> players = new ArrayList<>();
         for (UUID playerId : this.participantIds) {
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerId);
-            if (player != null) {
+            if (player != null && !player.isDisconnected()) {
                 players.add(player);
             }
         }
         return players;
+    }
+
+    public List<ServerPlayerEntity> livePlayers(@Nullable MinecraftServer server) {
+        return this.onlinePlayers(server);
+    }
+
+    public List<UUID> offlinePlayers(@Nullable MinecraftServer server) {
+        if (server == null) {
+            return List.copyOf(this.participantIds);
+        }
+
+        List<UUID> offline = new ArrayList<>();
+        for (UUID playerId : this.participantIds) {
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerId);
+            if (player == null || player.isDisconnected()) {
+                offline.add(playerId);
+            }
+        }
+        return offline;
     }
 }

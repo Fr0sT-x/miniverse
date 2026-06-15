@@ -1,6 +1,5 @@
 package dev.frost.miniverse.minigame.core.lifecycle;
 
-import dev.frost.miniverse.minigame.core.lifecycle.DisconnectGraceHandler;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;

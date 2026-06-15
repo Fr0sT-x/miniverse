@@ -170,12 +170,12 @@ public class MinigameManager {
             return;
         }
         this.bindPlayerServer(player);
-        this.runtime.context().participants().add(player);
+        this.runtime.context().roster().add(player);
     }
 
     public void addParticipant(UUID playerId) {
         if (this.runtime != null) {
-            this.runtime.context().participants().add(playerId);
+            this.runtime.context().roster().add(playerId);
         }
     }
 
@@ -190,7 +190,7 @@ public class MinigameManager {
 
     public void removeParticipant(UUID playerId) {
         if (this.runtime != null) {
-            this.runtime.context().participants().remove(playerId);
+            this.runtime.context().roster().remove(playerId);
         }
     }
 
@@ -206,7 +206,7 @@ public class MinigameManager {
             return;
         }
         this.bindPlayerServer(newPlayer);
-        this.runtime.context().participants().add(newPlayer);
+        this.runtime.context().roster().add(newPlayer);
     }
 
     /**
@@ -228,7 +228,7 @@ public class MinigameManager {
      * @return the number of participants
      */
     public int getParticipantCount() {
-        return this.runtime == null ? 0 : this.runtime.context().participants().size();
+        return this.runtime == null ? 0 : this.runtime.context().roster().size();
     }
 
     /**
@@ -242,7 +242,7 @@ public class MinigameManager {
     }
 
     public boolean isParticipant(UUID playerId) {
-        return this.runtime != null && this.runtime.context().participants().contains(playerId);
+        return this.runtime != null && this.runtime.context().roster().contains(playerId);
     }
 
     /**
@@ -250,7 +250,7 @@ public class MinigameManager {
      */
     public void clearParticipants() {
         if (this.runtime != null) {
-            this.runtime.context().participants().clear();
+            this.runtime.context().roster().clear();
         }
     }
 

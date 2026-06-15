@@ -97,7 +97,7 @@ public final class InventoryLayoutService {
         }
 
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
-        if (runtime == null || !runtime.context().participants().contains(player.getUuid())) {
+        if (runtime == null || !runtime.context().roster().contains(player.getUuid())) {
             return false;
         }
 

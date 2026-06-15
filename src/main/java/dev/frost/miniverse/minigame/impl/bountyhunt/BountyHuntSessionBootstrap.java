@@ -1,7 +1,6 @@
 package dev.frost.miniverse.minigame.impl.bountyhunt;
 
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
-import dev.frost.miniverse.minigame.core.lifecycle.DisconnectGraceHandler;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;

@@ -12,7 +12,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 public final class MinigameContext {
-    private final ParticipantSet participants = new ParticipantSet();
+    private final SessionRoster roster = new SessionRoster();
     private final GameClock clock = new GameClock();
     private final MapProtectionTracker protectionTracker = new MapProtectionTracker();
 
@@ -34,8 +34,8 @@ public final class MinigameContext {
         return this.server;
     }
 
-    public ParticipantSet participants() {
-        return this.participants;
+    public SessionRoster roster() {
+        return this.roster;
     }
 
     public GameClock clock() {
@@ -58,14 +58,14 @@ public final class MinigameContext {
         if (this.server == null) {
             return Optional.empty();
         }
-        return Optional.ofNullable(this.participants.resolve(this.server, playerId));
+        return Optional.ofNullable(this.roster.resolve(this.server, playerId));
     }
 
     public List<ServerPlayerEntity> liveParticipants() {
-        return this.participants.livePlayers(this.server);
+        return this.roster.onlinePlayers(this.server);
     }
 
     public Set<UUID> participantIds() {
-        return this.participants.ids();
+        return this.roster.allParticipants();
     }
 }

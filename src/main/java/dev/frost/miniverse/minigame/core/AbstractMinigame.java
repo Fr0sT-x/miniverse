@@ -261,7 +261,7 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
 
     @Override
     public final void onPlayerJoin(ServerPlayerEntity player, MinecraftServer server) {
-        if (this.context != null && this.context.participants().contains(player)) {
+        if (this.context != null && this.context.roster().contains(player)) {
             this.onPlayerReconnect(player);
         } else {
             this.onPlayerJoinGame(player, server);
@@ -304,8 +304,8 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     }
 
     protected void clearParticipants() {
-        if (this.context != null && this.context.participants() != null) {
-            this.context.participants().clear();
+        if (this.context != null && this.context.roster() != null) {
+            this.context.roster().clear();
         }
     }
 

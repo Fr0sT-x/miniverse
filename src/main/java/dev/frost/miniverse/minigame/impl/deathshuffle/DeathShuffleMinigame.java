@@ -402,7 +402,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
         if (this.state == GameState.WAITING_FOR_PLAYERS) {
-            if (this.context != null) this.context.participants().remove(player);
+            if (this.context != null) this.context.roster().remove(player);
             this.activePlayers.remove(player.getUuid());
         } else {
             this.rebuildScoreboards();
@@ -412,10 +412,10 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         if (this.state == GameState.WAITING_FOR_PLAYERS) {
-            if (this.context != null) this.context.participants().add(player);
+            if (this.context != null) this.context.roster().add(player);
             this.activePlayers.add(player.getUuid());
         } else if (this.state == GameState.IN_PROGRESS) {
-            if (this.context != null) this.context.participants().add(player);
+            if (this.context != null) this.context.roster().add(player);
             this.activePlayers.add(player.getUuid());
             this.points.putIfAbsent(player.getUuid(), 0);
             player.sendMessage(Text.literal("You joined the game late. Wait for your next objective!").formatted(Formatting.YELLOW), false);
@@ -425,7 +425,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
 
     @Override
     public void removeParticipantMidGame(ServerPlayerEntity player) {
-        if (this.context != null) this.context.participants().remove(player);
+        if (this.context != null) this.context.roster().remove(player);
         this.activePlayers.remove(player.getUuid());
     }
 

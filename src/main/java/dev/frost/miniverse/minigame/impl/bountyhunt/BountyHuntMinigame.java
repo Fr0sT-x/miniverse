@@ -365,7 +365,7 @@ public class BountyHuntMinigame extends AbstractMinigame {
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         if (!this.isParticipant(player) && this.context != null) {
-            this.context.participants().add(player);
+            this.context.roster().add(player);
         }
         this.scores.putIfAbsent(player.getUuid(), 0);
         if (this.state == GameState.IN_PROGRESS || this.state == GameState.STARTING) {
@@ -442,7 +442,7 @@ public class BountyHuntMinigame extends AbstractMinigame {
     }
 
     boolean isActiveParticipant(ServerPlayerEntity player) {
-        return this.context != null && this.context.participants().contains(player);
+        return this.context != null && this.context.roster().contains(player);
     }
 
     public boolean shouldCancelDamage(ServerPlayerEntity player, DamageSource source) {
@@ -840,17 +840,17 @@ public class BountyHuntMinigame extends AbstractMinigame {
     }
 
     private boolean isParticipant(ServerPlayerEntity player) {
-        return this.context != null && this.context.participants().contains(player);
+        return this.context != null && this.context.roster().contains(player);
     }
 
     private void removeParticipant(ServerPlayerEntity player) {
-        if (this.context != null) this.context.participants().remove(player);
+        if (this.context != null) this.context.roster().remove(player);
     }
 
     private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
         if (this.context != null) {
-            this.context.participants().remove(oldPlayer);
-            this.context.participants().add(newPlayer);
+            this.context.roster().remove(oldPlayer);
+            this.context.roster().add(newPlayer);
         }
     }
 
@@ -1116,7 +1116,7 @@ public class BountyHuntMinigame extends AbstractMinigame {
         this.targetSwapTicksRemaining = intValue(root, "targetSwapTicksRemaining", this.settings.targetSwapIntervalSeconds() * 20);
         if (this.context != null) {
             for (UUID playerId : readUuidArray(root, "participants")) {
-                this.context.participants().add(playerId);
+                this.context.roster().add(playerId);
             }
         }
         this.targetAssignments.putAll(readUuidUuidMap(root, "targetAssignments"));

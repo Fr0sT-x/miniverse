@@ -128,7 +128,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     }
 
     public boolean canStartMatch() {
-        if (this.participants().size() < 2) return false;
+        if (this.roster().size() < 2) return false;
         MapValidationResult validation = this.mapConfig.validate();
         if (!validation.valid()) {
             dev.frost.miniverse.Miniverse.LOGGER.warn("Bridge canStartMatch failed validation: {}", validation.errors());
@@ -139,7 +139,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
     public MapValidationResult startValidation() {
         MapValidationResult.Builder builder = MapValidationResult.builder();
-        if (this.participants().size() < 2) {
+        if (this.roster().size() < 2) {
             builder.error("Need at least two players to start The Bridge.");
         }
 
@@ -236,7 +236,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             this.doStartGame();
             
             dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload payload = new dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload(BridgeDefinition.ID, "default");
-            for (ServerPlayerEntity player : this.participants()) {
+            for (ServerPlayerEntity player : this.roster()) {
                 net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, payload);
             }
         } catch (Exception e) {
@@ -246,7 +246,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     }
 
     private void doStartGame() {
-        List<ServerPlayerEntity> participants = this.participants();
+        List<ServerPlayerEntity> participants = this.roster();
         if (participants.size() < 2) {
             this.broadcast(Text.literal("Need at least two players to start The Bridge.").formatted(Formatting.RED));
             return;
@@ -286,7 +286,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         this.acceptingGoals = true;
         this.stateTicks = 0;
 
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             player.getInventory().clear();
             this.applyKit(player);
             player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 3 * 20, 255, false, false, true));
@@ -298,7 +298,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     @Override
     protected void onMatchEnd() {
         dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload clearPayload = new dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload("", "");
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, clearPayload);
         }
 
@@ -329,7 +329,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
                     .append(Text.literal(this.lastScorerName != null ? this.lastScorerName : "Someone").formatted(this.lastScorerColor))
                     .append(Text.literal(" Scored!").formatted(Formatting.WHITE));
                 
-                for (ServerPlayerEntity p : this.participants()) {
+                for (ServerPlayerEntity p : this.roster()) {
                     p.networkHandler.sendPacket(new TitleS2CPacket(title));
                     p.networkHandler.sendPacket(new SubtitleS2CPacket(subtitle));
                     p.playSound(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 1.0f, 1.0f);
@@ -337,7 +337,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             }
 
             if (elapsed >= 100) {
-                for (ServerPlayerEntity p : this.participants()) {
+                for (ServerPlayerEntity p : this.roster()) {
                     FreezeService.getInstance().unfreeze(p, FreezeReason.ROUND_RESET);
                     p.networkHandler.sendPacket(new TitleS2CPacket(Text.empty()));
                     p.networkHandler.sendPacket(new SubtitleS2CPacket(Text.empty()));
@@ -351,7 +351,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             return;
         }
 
-        for (ServerPlayerEntity p : this.participants()) {
+        for (ServerPlayerEntity p : this.roster()) {
             if (p.getInventory().count(Items.ARROW) > 0) {
                 this.arrowTimers.remove(p.getUuid());
                 p.networkHandler.sendPacket(new ExperienceBarUpdateS2CPacket(0.0f, 0, 0));
@@ -387,7 +387,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             }
         }
 
-        for (ServerPlayerEntity p : this.participants()) {
+        for (ServerPlayerEntity p : this.roster()) {
             net.minecraft.util.math.Box bounds = p.getBoundingBox().expand(20.0);
             for (net.minecraft.entity.ItemEntity itemEntity : p.getServerWorld().getEntitiesByClass(net.minecraft.entity.ItemEntity.class, bounds, e -> true)) {
                 ItemStack stack = itemEntity.getStack();
@@ -410,7 +410,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
         if (this.mapConfig.voidLevelRef() != null) {
             int voidY = this.mapConfig.voidLevelRef() - this.settings.voidDeathOffset();
-            for (ServerPlayerEntity p : this.participants()) {
+            for (ServerPlayerEntity p : this.roster()) {
                 if (p.getY() <= voidY && p.getHealth() > 0 && !this.respawnTimers.containsKey(p.getUuid())) {
                     this.dieToVoid(p);
                 }
@@ -507,7 +507,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         FireworkRocketEntity entity = new FireworkRocketEntity(scorer.getServerWorld(), cx, cy + 5, cz, firework);
         scorer.getServerWorld().spawnEntity(entity);
 
-        for (ServerPlayerEntity p : this.participants()) {
+        for (ServerPlayerEntity p : this.roster()) {
             this.teleportToTeamSpawnSafe(p);
             
             p.playSound(SoundEvents.ENTITY_FIREWORK_ROCKET_BLAST, 1.0f, 1.0f);
@@ -548,7 +548,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             this.endMatch(BLUE_TEAM);
         } else {
             BridgeStatsEvents.MATCH_DRAW.invoker().onMatchDraw(this.redScore);
-            this.startEndSequence(this.participants(), Text.literal("Draw").formatted(Formatting.YELLOW));
+            this.startEndSequence(this.roster(), Text.literal("Draw").formatted(Formatting.YELLOW));
         }
     }
 
@@ -686,7 +686,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         this.state = state == null ? GameState.WAITING_FOR_PLAYERS : state;
         
         if (oldState != GameState.FROZEN && this.getState() == GameState.FROZEN) {
-            for (ServerPlayerEntity player : this.participants()) {
+            for (ServerPlayerEntity player : this.roster()) {
                 this.teleportToTeamSpawn(player);
                 player.changeGameMode(GameMode.SURVIVAL);
             }
@@ -847,7 +847,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     private void rebuildScoreboard() {
         if (this.scoreboard == null) {
             this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("The Bridge").formatted(Formatting.AQUA, Formatting.BOLD)));
-            this.scoreboard.show(this.participants());
+            this.scoreboard.show(this.roster());
         }
 
         this.scoreboard.clearLines();
@@ -901,13 +901,13 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     }
 
     protected boolean isParticipant(ServerPlayerEntity player) {
-        return this.context != null && this.context.participants().contains(player);
+        return this.context != null && this.context.roster().contains(player);
     }
 
     protected void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
         if (this.context != null) {
-            this.context.participants().remove(oldPlayer);
-            this.context.participants().add(newPlayer);
+            this.context.roster().remove(oldPlayer);
+            this.context.roster().add(newPlayer);
         }
     }
 
@@ -923,7 +923,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     }
 
     private void broadcast(Text message) {
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             player.sendMessage(message, false);
         }
     }

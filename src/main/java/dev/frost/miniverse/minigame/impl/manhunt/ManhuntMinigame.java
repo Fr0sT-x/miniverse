@@ -823,7 +823,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         if (!this.isParticipant(player) && this.context != null) {
-            this.context.participants().add(player);
+            this.context.roster().add(player);
         }
 
         ManhuntRole resolvedRole = parseLateJoinRole(role, teamId);
@@ -1024,11 +1024,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     }
 
     private boolean isParticipant(ServerPlayerEntity player) {
-        return this.context != null && this.context.participants().contains(player);
+        return this.context != null && this.context.roster().contains(player);
     }
 
     private void removeParticipant(ServerPlayerEntity player) {
-        if (this.context != null) this.context.participants().remove(player);
+        if (this.context != null) this.context.roster().remove(player);
     }
 
     public void handleLateJoinTeleport(ServerPlayerEntity player, String targetName) {
@@ -1072,7 +1072,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     }
 
     private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        if (this.context != null) this.context.participants().add(newPlayer);
+        if (this.context != null) this.context.roster().add(newPlayer);
     }
 
     private void setRuntimeState(GameState state) {
@@ -1348,7 +1348,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
             this.loadRuntimeState(this.runtimeForRestore(manhuntData));
             for (UUID participantId : manhuntData.participantIds()) {
                 if (this.context != null) {
-                    this.context.participants().add(participantId);
+                    this.context.roster().add(participantId);
                 }
             }
             return;
@@ -1612,7 +1612,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
                 String name = stringValue(member, "name", uuid.toString());
                 this.teams.assign(uuid, name, teamId, label, role);
                 if (this.context != null) {
-                    this.context.participants().add(uuid);
+                    this.context.roster().add(uuid);
                 }
             }
         }

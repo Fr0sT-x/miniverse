@@ -267,7 +267,7 @@ public class MurderMysteryMinigame extends AbstractMinigame {
         SpectatorService.getInstance().startSpectating(
             player, 
             SpectatorPolicies.unrestricted(), 
-            SpectatorTargetProviders.participants(), 
+            SpectatorTargetProviders.roster(), 
             SpectatorMode.ELIMINATED, 
             null, 
             null, 
@@ -305,20 +305,20 @@ public class MurderMysteryMinigame extends AbstractMinigame {
             GameMessenger.broadcast(context.liveParticipants(), Text.literal("Detective disconnected! The Detective's Bow has dropped.").formatted(Formatting.RED));
         }
         roleManager.removeRole(player);
-        context.participants().remove(player);
+        context.roster().remove(player);
         visibilityManager.sync(server);
         checkWinConditions();
     }
 
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
-        context.participants().add(player);
+        context.roster().add(player);
         if (state == GameState.IN_PROGRESS || state == GameState.ENDING) {
             roleManager.assignRole(player, new SpectatorRole());
             SpectatorService.getInstance().startSpectating(
                 player, 
                 SpectatorPolicies.unrestricted(), 
-                SpectatorTargetProviders.participants(), 
+                SpectatorTargetProviders.roster(), 
                 dev.frost.miniverse.minigame.core.spectator.SpectatorMode.STANDARD, 
                 null, 
                 null, 

@@ -326,7 +326,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
                 SpectatorService.getInstance().startSpectating(
                     player,
                     SpectatorPolicies.unrestricted(),
-                    SpectatorTargetProviders.participants(),
+                    SpectatorTargetProviders.roster(),
                     null, null, null, null
                 );
             }
@@ -394,9 +394,9 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
-        if (!this.context.participants().contains(player)) return;
+        if (!this.context.roster().contains(player)) return;
         
-        this.context.participants().remove(player);
+        this.context.roster().remove(player);
         this.activePlayers.remove(player.getUuid());
         if (this.scoreboard != null) {
             this.scoreboard.remove(player);
@@ -411,7 +411,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
 
     private void broadcast(Text text) {
-        GameMessenger.broadcast(this.context.participants().livePlayers(this.context.nullableServer()), text);
+        GameMessenger.broadcast(this.context.roster().livePlayers(this.context.nullableServer()), text);
     }
 
     private List<ServerPlayerEntity> getAliveParticipants() {
@@ -525,7 +525,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
             return;
         }
         
-        this.context.participants().add(player);
+        this.context.roster().add(player);
         this.activePlayers.add(uuid);
         this.points.putIfAbsent(uuid, 0);
         

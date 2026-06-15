@@ -179,7 +179,7 @@ public final class MinigameEventRouter {
         }
         MatchLifecycleController.getInstance().onParticipantJoin(handler.player);
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
-        if (runtime != null && runtime.context().participants().contains(handler.player)) {
+        if (runtime != null && runtime.context().roster().contains(handler.player)) {
             if (MinigameSessionStore.restorePlayerState(runtime, handler.player)) {
                 MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
             }

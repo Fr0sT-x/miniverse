@@ -187,7 +187,7 @@ public final class MatchLifecycleController {
 
     public synchronized void onParticipantJoin(ServerPlayerEntity player) {
         if (this.phase == Phase.START_FREEZE && this.runtime != null) {
-            if (this.runtime.context().participants().contains(player)) {
+            if (this.runtime.context().roster().contains(player)) {
                 this.addStartFreezeParticipant(player);
             }
         }
@@ -198,7 +198,7 @@ public final class MatchLifecycleController {
         if (this.phase != Phase.RUNNING || this.runtime == null) {
             return false;
         }
-        if (!this.runtime.context().participants().contains(player)) {
+        if (!this.runtime.context().roster().contains(player)) {
             return false;
         }
         if (this.options.disconnectGraceSeconds() <= 0) {
@@ -349,7 +349,7 @@ public final class MatchLifecycleController {
         this.runtimeState(GameState.RUNNING);
         this.clearDisconnectGrace();
         if (this.options.startSound() != null) {
-            this.participants().forEach(player -> player.playSound(this.options.startSound(), 1.0F, 1.0F));
+            this.roster().forEach(player -> player.playSound(this.options.startSound(), 1.0F, 1.0F));
         }
         Runnable callback = this.startCallback;
         this.startCallback = null;
@@ -364,7 +364,7 @@ public final class MatchLifecycleController {
         }
         this.startOverlayReleased = true;
         String sessionId = SessionRuntimeConfig.getSessionId().orElse("");
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             if (ServerPlayNetworking.canSend(player, NetworkConstants.MATCH_START_ID)) {
                 ServerPlayNetworking.send(player, new NetworkConstants.MatchStartPayload(sessionId));
             }
@@ -376,7 +376,7 @@ public final class MatchLifecycleController {
         this.runtimeState(GameState.FINISHED);
         String host = SessionRuntimeConfig.getReturnHost();
         int port = SessionRuntimeConfig.getReturnPort();
-        List<ServerPlayerEntity> players = this.participants();
+        List<ServerPlayerEntity> players = this.roster();
         if (players.isEmpty()) {
             SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markReturnComplete);
             this.completeLifecycle();
@@ -433,7 +433,7 @@ public final class MatchLifecycleController {
     }
 
     private void freezeParticipants(boolean prepareInventory) {
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             if (prepareInventory) {
                 player.getInventory().clear();
                 player.getHungerManager().setFoodLevel(20);
@@ -471,13 +471,13 @@ public final class MatchLifecycleController {
     }
 
     private void setParticipantsGameMode(GameMode mode) {
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             player.changeGameMode(mode);
         }
     }
 
     private void unfreezeParticipants() {
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             this.freezeService.unfreeze(player, FreezeReason.MATCH_START);
         }
     }
@@ -499,7 +499,7 @@ public final class MatchLifecycleController {
 
     private void showEndTitles() {
         MatchEndResult result = this.endResult;
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             boolean winner = result != null && result.isWinner(player);
             Text title = winner ? this.options.winTitle() : this.options.loseTitle();
             if (result != null) {
@@ -525,7 +525,7 @@ public final class MatchLifecycleController {
         Text text = this.phase == Phase.END_RETURN
             ? Text.literal("Returning in " + secondsRemaining + "s").formatted(Formatting.YELLOW)
             : Text.literal("Starting in " + secondsRemaining + "s").formatted(Formatting.YELLOW);
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             player.sendMessage(text, true);
             if (this.options.countdownSound() != null && secondsRemaining <= 5 && secondsRemaining > 0) {
                 player.playSound(this.options.countdownSound(), 1.0F, 1.0F);
@@ -533,7 +533,7 @@ public final class MatchLifecycleController {
         }
         // Show team chat notice when start freeze countdown reaches 5 seconds
         if (this.phase == Phase.START_FREEZE && secondsRemaining == 5) {
-            ChatRouter.sendTeamChatNotice(this.participants());
+            ChatRouter.sendTeamChatNotice(this.roster());
         }
     }
 
@@ -545,7 +545,7 @@ public final class MatchLifecycleController {
         String pendingNames = String.join(", ", this.disconnectGracePlayers.values().stream().map(PendingDisconnect::playerName).toList());
         String label = pendingNames.isBlank() ? "Waiting for reconnect" : "Waiting for " + pendingNames + " to reconnect";
         Text text = Text.literal(label + " (" + secondsRemaining + "s)").formatted(Formatting.YELLOW);
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             player.sendMessage(text, true);
         }
     }
@@ -553,7 +553,7 @@ public final class MatchLifecycleController {
     private void broadcastDisconnectGraceStart(String playerName) {
         Text message = Text.literal(playerName + " disconnected. Waiting for reconnect before ending the match.")
             .formatted(Formatting.YELLOW);
-        this.participants().forEach(player -> player.sendMessage(message, false));
+        this.roster().forEach(player -> player.sendMessage(message, false));
     }
 
     private void resolveDisconnectGrace(ServerPlayerEntity player) {
@@ -580,7 +580,7 @@ public final class MatchLifecycleController {
         this.disconnectGraceLastAnnouncedSecond = -1;
         Text message = Text.literal(player.getName().getString() + " reconnected. Match continues.")
             .formatted(Formatting.GREEN);
-        this.participants().forEach(target -> target.sendMessage(message, false));
+        this.roster().forEach(target -> target.sendMessage(message, false));
     }
 
     private void clearDisconnectGrace() {
@@ -714,7 +714,7 @@ public final class MatchLifecycleController {
         this.lastAnnouncedSecond = -1;
         this.runtimeState(GameState.ENDING);
         Text message = this.options.returnCancelledMessage();
-        this.participants().forEach(player -> player.sendMessage(message, false));
+        this.roster().forEach(player -> player.sendMessage(message, false));
         return true;
     }
 

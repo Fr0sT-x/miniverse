@@ -1,7 +1,6 @@
 package dev.frost.miniverse.minigame.impl.manhunt;
 
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
-import dev.frost.miniverse.minigame.core.lifecycle.DisconnectGraceHandler;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame.ManhuntRole;
 import net.minecraft.server.network.ServerPlayerEntity;

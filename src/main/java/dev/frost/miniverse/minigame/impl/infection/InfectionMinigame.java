@@ -76,7 +76,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
     }
 
     public boolean canStartMatch() {
-        return this.context != null && this.context.participants().size() >= 2 && this.mapConfig.validate().valid();
+        return this.context != null && this.context.roster().size() >= 2 && this.mapConfig.validate().valid();
     }
 
     @Override
@@ -101,7 +101,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
 
     @Override
     protected void onMatchStart() {
-        List<ServerPlayerEntity> participants = this.participants();
+        List<ServerPlayerEntity> participants = this.roster();
         if (participants.size() < 2) {
             this.broadcast(Text.literal("Need at least two players to start Infection.").formatted(Formatting.RED));
             return;
@@ -144,7 +144,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         this.setState(GameState.ENDING);
         if (this.context != null) {
             this.context.setState(GameState.ENDING);
-            this.context.participants().clear();
+            this.context.roster().clear();
         }
         if (this.server != null) {
             if (this.scoreboard != null) {
@@ -194,11 +194,11 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
 
     @Override
     public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
-        if (!this.context().participants().contains(oldPlayer.getUuid())) {
+        if (!this.context().roster().contains(oldPlayer.getUuid())) {
             return;
         }
-        this.context().participants().remove(oldPlayer.getUuid());
-        this.context().participants().add(newPlayer);
+        this.context().roster().remove(oldPlayer.getUuid());
+        this.context().roster().add(newPlayer);
         if (this.infected.contains(oldPlayer.getUuid())) {
             this.infected.remove(oldPlayer.getUuid());
             this.markInfected(newPlayer);
@@ -382,7 +382,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         }
         if (this.scoreboard == null) {
             this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Infection").formatted(Formatting.DARK_GREEN, Formatting.BOLD)));
-            this.scoreboard.show(this.participants());
+            this.scoreboard.show(this.roster());
         }
 
         this.scoreboard.clearLines();
@@ -421,11 +421,11 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
     }
 
     private boolean isParticipant(ServerPlayerEntity player) {
-        return this.context != null && this.context.participants().contains(player);
+        return this.context != null && this.context.roster().contains(player);
     }
 
     private void broadcast(Text message) {
-        for (ServerPlayerEntity player : this.participants()) {
+        for (ServerPlayerEntity player : this.roster()) {
             player.sendMessage(message, false);
         }
     }

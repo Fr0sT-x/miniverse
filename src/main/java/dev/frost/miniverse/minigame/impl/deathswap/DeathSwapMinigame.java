@@ -226,10 +226,10 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
     @Override
     public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
-        if (!this.context().participants().contains(oldPlayer.getUuid())) {
+        if (!this.context().roster().contains(oldPlayer.getUuid())) {
             return;
         }
-        this.context().participants().add(newPlayer);
+        this.context().roster().add(newPlayer);
         this.respawns.handleRespawn(newPlayer);
         this.syncVanillaTeams();
     }
@@ -240,7 +240,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
             return;
         }
         UUID playerId = player.getUuid();
-        this.context().participants().remove(playerId);
+        this.context().roster().remove(playerId);
         this.aliveParticipants.remove(playerId);
         this.deathAttributions.remove(playerId);
         if (this.state == GameState.RUNNING) {
@@ -269,13 +269,13 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     }
 
     public boolean canStartMatch() {
-        return this.context().participants().size() >= 2;
+        return this.context().roster().size() >= 2;
     }
 
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         if (!this.isParticipant(player)) {
-            this.context().participants().add(player);
+            this.context().roster().add(player);
         }
         if (this.state == GameState.RUNNING) {
             this.aliveParticipants.add(player.getUuid());
@@ -420,7 +420,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
             return;
         }
         UUID scorerId = attribution.scorerId();
-        if (scorerId.equals(deadPlayerId) || !this.context().participants().contains(scorerId)) {
+        if (scorerId.equals(deadPlayerId) || !this.context().roster().contains(scorerId)) {
             return;
         }
         int score = this.points.merge(scorerId, 1, Integer::sum);
@@ -599,7 +599,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     }
 
     private boolean isParticipant(ServerPlayerEntity player) {
-        return this.context().participants().contains(player);
+        return this.context().roster().contains(player);
     }
 
     private List<ServerPlayerEntity> getParticipants() {
@@ -678,7 +678,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         this.swapCount = intValue(root, "swapCount", 0);
         this.warnedCurrentSwap = booleanValue(root, "warnedCurrentSwap", false);
         for (UUID playerId : readUuidArray(root, "participants")) {
-            this.context().participants().add(playerId);
+            this.context().roster().add(playerId);
         }
         this.aliveParticipants.addAll(readUuidArray(root, "aliveParticipants"));
         this.points.putAll(readUuidIntMap(root, "points"));

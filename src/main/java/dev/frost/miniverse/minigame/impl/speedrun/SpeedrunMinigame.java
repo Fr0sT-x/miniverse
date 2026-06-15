@@ -151,7 +151,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.server = null;
 
         if (this.context != null) {
-            this.context.participants().clear();
+            this.context.roster().clear();
         }
     }
 
@@ -388,23 +388,23 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     private int getParticipantCount() {
-        return this.context != null ? this.context.participants().size() : 0;
+        return this.context != null ? this.context.roster().size() : 0;
     }
 
     private boolean isParticipant(ServerPlayerEntity player) {
-        return this.context != null && this.context.participants().contains(player);
+        return this.context != null && this.context.roster().contains(player);
     }
 
     private void addParticipant(ServerPlayerEntity player) {
-        if (this.context != null) this.context.participants().add(player);
+        if (this.context != null) this.context.roster().add(player);
     }
 
     private void removeParticipant(ServerPlayerEntity player) {
-        if (this.context != null) this.context.participants().remove(player);
+        if (this.context != null) this.context.roster().remove(player);
     }
 
     private void replaceParticipant(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
-        if (this.context != null) this.context.participants().add(newPlayer);
+        if (this.context != null) this.context.roster().add(newPlayer);
     }
 
     private void setRuntimeState(GameState state) {

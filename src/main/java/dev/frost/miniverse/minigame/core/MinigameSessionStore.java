@@ -112,7 +112,7 @@ public final class MinigameSessionStore {
         if (runtime.minigame() instanceof PersistentMinigame persistent) {
             SessionData data = MinigameSessionManager.getInstance().deserialize(root);
             runtime.context().clock().setTicks(data.gameTicks());
-            data.participantIds().forEach(runtime.context().participants()::add);
+            data.participantIds().forEach(runtime.context().roster()::add);
             persistent.loadSessionData(data);
             runtime.setState(data.gameState());
             MinigameSessionManager.getInstance().create(data, runtime);
@@ -331,7 +331,7 @@ public final class MinigameSessionStore {
                 continue;
             }
             try {
-                runtime.context().participants().add(java.util.UUID.fromString(element.getAsString()));
+                runtime.context().roster().add(java.util.UUID.fromString(element.getAsString()));
             } catch (IllegalArgumentException ignored) {
             }
         }

@@ -18,7 +18,7 @@ public final class SessionGroup {
     private final SessionGameDescriptor gameType;
     private SeedPlan seedPlan;
     private final PlannedTeam plannedTeam;
-    private final BackendInstance backendInstance = new BackendInstance();
+    private final BackendInstance backendInstance;
 
     public SessionGroup(UUID playerUuid, String playerName, String sessionId, SessionGameDescriptor gameType, SeedPlan seedPlan) {
         this(sessionId, gameType, seedPlan, "Team 1", List.of(playerUuid), List.of(playerName));
@@ -29,8 +29,15 @@ public final class SessionGroup {
     }
 
     public SessionGroup(String sessionId, SessionGameDescriptor gameType, SeedPlan seedPlan, PlannedTeam plannedTeam) {
+        this(sessionId, gameType, seedPlan, plannedTeam, new BackendInstance());
+    }
+
+    SessionGroup(String sessionId, SessionGameDescriptor gameType, SeedPlan seedPlan, PlannedTeam plannedTeam, BackendInstance backendInstance) {
         if (plannedTeam == null || plannedTeam.members().isEmpty()) {
             throw new IllegalArgumentException("Session groups require a non-empty planned team.");
+        }
+        if (backendInstance == null) {
+            throw new IllegalArgumentException("Backend instance cannot be null.");
         }
 
         this.primaryPlayerUuid = plannedTeam.members().getFirst().playerUuid();
@@ -39,6 +46,7 @@ public final class SessionGroup {
         this.gameType = gameType;
         this.seedPlan = seedPlan;
         this.plannedTeam = plannedTeam;
+        this.backendInstance = backendInstance;
     }
 
     public UUID getPrimaryPlayerUuid() {
@@ -126,6 +134,10 @@ public final class SessionGroup {
 
     public boolean containsPlayer(UUID playerUuid) {
         return this.plannedTeam.containsPlayer(playerUuid);
+    }
+
+    public SessionGroup withPlannedTeam(PlannedTeam plannedTeam) {
+        return new SessionGroup(this.sessionId, this.gameType, this.seedPlan, plannedTeam, this.backendInstance);
     }
 
     public void attachBackend(BackendInstance backendInstance) {

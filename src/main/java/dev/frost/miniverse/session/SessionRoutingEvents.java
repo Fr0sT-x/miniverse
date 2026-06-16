@@ -16,6 +16,8 @@ import dev.frost.miniverse.minigame.core.GameState;
 
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -29,12 +31,15 @@ public final class SessionRoutingEvents {
     private static final long RETURN_RETRY_DELAY_MS = 2000L;
     private static final long BACKEND_NOTICE_POLL_MS = 2000L;
     private static final long RETURN_CONFIRM_TIMEOUT_MS = 20000L;
+    private static final long MISSED_TRANSFER_GRACE_MS = 6000L;
+    private static final long MISSED_TRANSFER_RETRY_MS = 10000L;
     private static volatile long nextReturnAttemptMs;
     private static volatile long nextBackendNoticePollMs;
     private static final Set<String> announcedSeedChanges = ConcurrentHashMap.newKeySet();
     private static final Set<String> completedSeedChangeTransfers = ConcurrentHashMap.newKeySet();
     private static final Map<String, ReturnTransferState> pendingReturnTransfers = new ConcurrentHashMap<>();
     private static final Map<UUID, Set<String>> deliveredPendingJoinNotices = new HashMap<>();
+    private static final Map<TransferRetryKey, Long> lastMissedTransferAttemptMs = new ConcurrentHashMap<>();
 
     private SessionRoutingEvents() {
     }
@@ -253,6 +258,7 @@ public final class SessionRoutingEvents {
     private static void handleMainServerStop(MinecraftServer server) {
         SessionManager sessionManager = SessionManager.getInstance();
         sessionManager.reapDeadBackends(server);
+        handleMissedSessionTransfers(server, sessionManager);
         handleMidGameAssignmentRequests(server, sessionManager);
 
         List<SessionRegistry.StopState> stopStates = SessionRegistry.loadStopStates();
@@ -298,6 +304,60 @@ public final class SessionRoutingEvents {
                 sessionManager.archiveSession(stopState.sessionId());
             }
         }
+    }
+
+    private static void handleMissedSessionTransfers(MinecraftServer server, SessionManager sessionManager) {
+        long now = System.currentTimeMillis();
+        for (GameSession session : sessionManager.getSessions()) {
+            if (session.getState() != SessionState.RUNNING) {
+                continue;
+            }
+            if (SessionRegistry.isStopRequested(session.getSessionId())
+                || SessionRegistry.isReturnComplete(session.getSessionId())) {
+                clearRetryStateForSession(session.getSessionId());
+                continue;
+            }
+
+            Instant launchedAt = session.getLaunchedAt();
+            if (launchedAt == null || Duration.between(launchedAt, Instant.now()).toMillis() < MISSED_TRANSFER_GRACE_MS) {
+                continue;
+            }
+
+            for (SessionGroup group : session.snapshotGroups()) {
+                if (group.getState() != SessionState.RUNNING || group.getPort() == null) {
+                    continue;
+                }
+
+                for (UUID playerUuid : group.getPlayerUuids()) {
+                    ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerUuid);
+                    TransferRetryKey key = new TransferRetryKey(session.getSessionId(), group.getGroupLabel(), playerUuid);
+                    if (player == null || player.isDisconnected()) {
+                        lastMissedTransferAttemptMs.remove(key);
+                        continue;
+                    }
+
+                    Long lastAttempt = lastMissedTransferAttemptMs.get(key);
+                    if (lastAttempt != null && now - lastAttempt < MISSED_TRANSFER_RETRY_MS) {
+                        continue;
+                    }
+
+                    lastMissedTransferAttemptMs.put(key, now);
+                    Miniverse.LOGGER.warn(
+                        "Player {} ({}) is still on the lobby server {}s after session {} group {} became RUNNING; retrying transfer.",
+                        player.getName().getString(),
+                        playerUuid,
+                        Duration.between(launchedAt, Instant.now()).toSeconds(),
+                        session.getSessionId(),
+                        group.getGroupLabel()
+                    );
+                    new dev.frost.miniverse.session.PlayerTransferService().transferPlayer(player, group);
+                }
+            }
+        }
+    }
+
+    private static void clearRetryStateForSession(String sessionId) {
+        lastMissedTransferAttemptMs.keySet().removeIf(key -> key.sessionId().equals(sessionId));
     }
 
     private static void notifyBackendAdminsOfPendingJoiners(MinecraftServer server, String sessionId) {
@@ -381,5 +441,8 @@ public final class SessionRoutingEvents {
         private final Set<UUID> pending = ConcurrentHashMap.newKeySet();
         private long startedAt;
         private boolean transfersSent;
+    }
+
+    private record TransferRetryKey(String sessionId, String groupLabel, UUID playerUuid) {
     }
 }

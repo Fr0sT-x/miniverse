@@ -11,7 +11,7 @@ public final class BlockShuffleSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<BlockShuffleMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<BlockShuffleMinigame>() {
             @Override
             public String gameId() {
                 return BlockShuffleDefinition.ID;

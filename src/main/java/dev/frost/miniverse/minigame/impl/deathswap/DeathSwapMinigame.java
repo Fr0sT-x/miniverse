@@ -465,7 +465,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         Text winnerLabel = Text.literal(this.winnerLabel(winnerSet));
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
-            MatchLifecycleController.getInstance().endMatch(
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(
                 runtime,
                 new MatchEndResult(winnerSet, winnerLabel),
                 MatchLifecycleOptions.defaults(NAME).withReturnSeconds(10)

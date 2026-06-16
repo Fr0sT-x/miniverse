@@ -38,7 +38,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class MatchLifecycleController {
-    private static final MatchLifecycleController INSTANCE = new MatchLifecycleController();
     private static final int TICKS_PER_SECOND = 20;
     private static final int START_OVERLAY_REVEAL_SECONDS = 10;
     private static final int RETURN_COMPLETION_TIMEOUT_TICKS = 15 * TICKS_PER_SECOND;
@@ -60,11 +59,7 @@ public final class MatchLifecycleController {
     private final Set<UUID> pendingReturnPlayerIds = new HashSet<>();
     private int returnCompletionTicksRemaining;
 
-    private MatchLifecycleController() {
-    }
-
-    public static MatchLifecycleController getInstance() {
-        return INSTANCE;
+    public MatchLifecycleController() {
     }
 
     public synchronized boolean beginMatch(MinigameRuntime runtime, MatchLifecycleOptions options, Runnable onStart) {

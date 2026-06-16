@@ -333,7 +333,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         if (runtime == null) {
             return;
         }
-        MatchLifecycleController.getInstance().endMatch(
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(
             runtime,
             MatchEndResult.winners(winners, winnerLabel),
             MatchLifecycleOptions.defaults(NAME)

@@ -1053,7 +1053,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     private void startStandardEndSequence(MatchEndResult result) {
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
-            MatchLifecycleController.getInstance().endMatch(runtime, result, MatchLifecycleOptions.defaults(NAME));
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(runtime, result, MatchLifecycleOptions.defaults(NAME));
         }
     }
 

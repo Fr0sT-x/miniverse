@@ -27,26 +27,29 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class MinigameSessionStore {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final String FILE_NAME = "miniverse-game-session.json";
-    private static final String BACKUP_FILE_NAME = FILE_NAME + ".bak";
-    private static final int AUTOSAVE_INTERVAL_TICKS = 30 * 20;
-    private static long lastAutosaveTick = -AUTOSAVE_INTERVAL_TICKS;
-    private static final Map<UUID, Integer> LAST_PLAYER_RESTORE_TICK = new ConcurrentHashMap<>();
+    private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private final String FILE_NAME = "miniverse-game-session.json";
+    private final String BACKUP_FILE_NAME = FILE_NAME + ".bak";
+    private final int AUTOSAVE_INTERVAL_TICKS = 30 * 20;
+    private long lastAutosaveTick = -AUTOSAVE_INTERVAL_TICKS;
+    private final Map<UUID, Integer> LAST_PLAYER_RESTORE_TICK = new ConcurrentHashMap<>();
 
-    private MinigameSessionStore() {
+    private final MatchLifecycleController matchLifecycleController;
+
+    public MinigameSessionStore(MatchLifecycleController matchLifecycleController) {
+        this.matchLifecycleController = matchLifecycleController;
     }
 
-    public static boolean saveActiveRuntime() {
+    public boolean saveActiveRuntime() {
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         return runtime != null && save(runtime);
     }
 
-    public static boolean save(MinigameRuntime runtime) {
+    public boolean save(MinigameRuntime runtime) {
         return save(runtime, SaveReason.MANUAL);
     }
 
-    public static synchronized boolean save(MinigameRuntime runtime, SaveReason reason) {
+    public synchronized boolean save(MinigameRuntime runtime, SaveReason reason) {
         if (runtime == null) {
             return false;
         }
@@ -66,7 +69,7 @@ public final class MinigameSessionStore {
         Path path = savePath();
         Optional<JsonObject> previous = readFrom(path, false);
         root.add("metadata", metadata(runtime, reason));
-        root.add("lifecycle", MatchLifecycleController.getInstance().saveState(runtime));
+        root.add("lifecycle", this.matchLifecycleController.saveState(runtime));
         root.add("playerStates", PlayerStateStore.capture(runtime, previous
             .filter(object -> object.has("playerStates") && object.get("playerStates").isJsonArray())
             .map(object -> object.getAsJsonArray("playerStates"))
@@ -93,11 +96,11 @@ public final class MinigameSessionStore {
         }
     }
 
-    public static boolean loadInto(MinigameRuntime runtime) {
+    public boolean loadInto(MinigameRuntime runtime) {
         return loadInto(runtime, MatchLifecycleOptions.defaults(runtime == null ? "Minigame" : runtime.minigame().getName()), null);
     }
 
-    public static boolean loadInto(MinigameRuntime runtime, MatchLifecycleOptions lifecycleOptions, Runnable startCallback) {
+    public boolean loadInto(MinigameRuntime runtime, MatchLifecycleOptions lifecycleOptions, Runnable startCallback) {
         if (runtime == null) {
             return false;
         }
@@ -122,7 +125,7 @@ public final class MinigameSessionStore {
             restoreParticipantIds(root, runtime);
         }
         if (root.has("lifecycle") && root.get("lifecycle").isJsonObject()) {
-            MatchLifecycleController.getInstance().restoreState(runtime, lifecycleOptions, root.getAsJsonObject("lifecycle"), startCallback);
+            this.matchLifecycleController.restoreState(runtime, lifecycleOptions, root.getAsJsonObject("lifecycle"), startCallback);
         }
         if (root.has("playerStates") && root.get("playerStates").isJsonArray()) {
             int restored = PlayerStateStore.restore(runtime, root.getAsJsonArray("playerStates"));
@@ -133,7 +136,7 @@ public final class MinigameSessionStore {
         return true;
     }
 
-    public static boolean restorePlayerState(MinigameRuntime runtime, ServerPlayerEntity player) {
+    public boolean restorePlayerState(MinigameRuntime runtime, ServerPlayerEntity player) {
         if (runtime == null || player == null) {
             return false;
         }
@@ -163,11 +166,11 @@ public final class MinigameSessionStore {
         return restored;
     }
 
-    public static boolean restorePlayerStateIfPresent(MinigameRuntime runtime, ServerPlayerEntity player) {
+    public boolean restorePlayerStateIfPresent(MinigameRuntime runtime, ServerPlayerEntity player) {
         return restorePlayerState(runtime, player);
     }
 
-    public static Optional<GameState> restoredGameState() {
+    public Optional<GameState> restoredGameState() {
         Optional<JsonObject> saved = read();
         if (saved.isEmpty()) {
             return Optional.empty();
@@ -177,7 +180,7 @@ public final class MinigameSessionStore {
         return restoredGameState(root);
     }
 
-    public static boolean hasRestoredActiveOrPausedState() {
+    public boolean hasRestoredActiveOrPausedState() {
         Optional<JsonObject> saved = read();
         if (saved.isEmpty()) {
             return false;
@@ -192,7 +195,7 @@ public final class MinigameSessionStore {
             .orElse(false);
     }
 
-    public static void tick(MinecraftServer server) {
+    public void tick(MinecraftServer server) {
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime == null) {
             return;
@@ -205,18 +208,18 @@ public final class MinigameSessionStore {
         save(runtime, SaveReason.AUTOSAVE);
     }
 
-    public static void saveOnShutdown() {
+    public void saveOnShutdown() {
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
             save(runtime, SaveReason.SHUTDOWN);
         }
     }
 
-    public static Optional<JsonObject> read() {
+    public Optional<JsonObject> read() {
         return readFrom(savePath(), true);
     }
 
-    public static Optional<JsonObject> readFrom(Path path, boolean quarantineInvalid) {
+    public Optional<JsonObject> readFrom(Path path, boolean quarantineInvalid) {
         if (path == null || !Files.exists(path)) {
             return Optional.empty();
         }
@@ -237,7 +240,7 @@ public final class MinigameSessionStore {
         return Optional.empty();
     }
 
-    public static Path savePath() {
+    public Path savePath() {
         String configPath = System.getProperty("miniverse.session.config", "");
         if (!configPath.isBlank()) {
             Path config = Paths.get(configPath).toAbsolutePath().normalize();
@@ -249,7 +252,7 @@ public final class MinigameSessionStore {
         return Paths.get("").toAbsolutePath().normalize().resolve(FILE_NAME);
     }
 
-    private static void normalizeRestoredState(JsonObject root) {
+    private void normalizeRestoredState(JsonObject root) {
         if (root == null || !hasSavedPlayerStates(root)) {
             return;
         }
@@ -271,22 +274,22 @@ public final class MinigameSessionStore {
         Miniverse.LOGGER.info("Normalized retained session save from {} to RUNNING because it contains persisted player state.", state);
     }
 
-    private static boolean hasSavedPlayerStates(JsonObject root) {
+    private boolean hasSavedPlayerStates(JsonObject root) {
         return root.has("playerStates") && root.get("playerStates").isJsonArray() && !root.getAsJsonArray("playerStates").isEmpty();
     }
 
-    private static boolean hasParticipantRoster(JsonObject root) {
+    private boolean hasParticipantRoster(JsonObject root) {
         if (root.has("participantIds") && root.get("participantIds").isJsonArray() && !root.getAsJsonArray("participantIds").isEmpty()) {
             return true;
         }
         return root.has("participants") && root.get("participants").isJsonArray() && !root.getAsJsonArray("participants").isEmpty();
     }
 
-    private static String stringValue(JsonObject root, String key, String fallback) {
+    private String stringValue(JsonObject root, String key, String fallback) {
         return root.has(key) && root.get(key).isJsonPrimitive() ? root.get(key).getAsString() : fallback;
     }
 
-    private static Optional<GameState> restoredGameState(JsonObject root) {
+    private Optional<GameState> restoredGameState(JsonObject root) {
         String stateName = stringValue(root, "gameState", stringValue(root, "state", ""));
         if (root.has("runtime") && root.get("runtime").isJsonObject()) {
             stateName = stringValue(root.getAsJsonObject("runtime"), "state", stateName);
@@ -298,7 +301,7 @@ public final class MinigameSessionStore {
         }
     }
 
-    private static Optional<Long> restoredClockTicks(JsonObject root) {
+    private Optional<Long> restoredClockTicks(JsonObject root) {
         if (root.has("gameTicks") && root.get("gameTicks").isJsonPrimitive()) {
             return Optional.of(root.get("gameTicks").getAsLong());
         }
@@ -312,7 +315,7 @@ public final class MinigameSessionStore {
         return Optional.empty();
     }
 
-    private static void restoreParticipantIds(JsonObject root, MinigameRuntime runtime) {
+    private void restoreParticipantIds(JsonObject root, MinigameRuntime runtime) {
         if (runtime == null) {
             return;
         }
@@ -325,7 +328,7 @@ public final class MinigameSessionStore {
         }
     }
 
-    private static void restoreParticipantIds(com.google.gson.JsonArray participantIds, MinigameRuntime runtime) {
+    private void restoreParticipantIds(com.google.gson.JsonArray participantIds, MinigameRuntime runtime) {
         for (var element : participantIds) {
             if (!element.isJsonPrimitive()) {
                 continue;
@@ -337,15 +340,15 @@ public final class MinigameSessionStore {
         }
     }
 
-    public static String fileName() {
+    public String fileName() {
         return FILE_NAME;
     }
 
-    public static String backupFileName() {
+    public String backupFileName() {
         return BACKUP_FILE_NAME;
     }
 
-    private static void quarantineCorruptSave(Path path) {
+    private void quarantineCorruptSave(Path path) {
         try {
             String fileName = path.getFileName().toString();
             Path corrupt = path.resolveSibling(fileName + ".corrupt-" + System.currentTimeMillis());
@@ -356,7 +359,7 @@ public final class MinigameSessionStore {
         }
     }
 
-    private static JsonObject metadata(MinigameRuntime runtime, SaveReason reason) {
+    private JsonObject metadata(MinigameRuntime runtime, SaveReason reason) {
         JsonObject metadata = new JsonObject();
         metadata.addProperty("formatVersion", 3);
         metadata.addProperty("saveReason", reason.name());

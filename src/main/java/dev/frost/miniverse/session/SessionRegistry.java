@@ -1041,7 +1041,7 @@ public final class SessionRegistry {
             return Optional.empty();
         }
         try (var stream = Files.walk(sessionRoot, 4)) {
-            return stream.filter(path -> path.getFileName().toString().equals(MinigameSessionStore.fileName()))
+            return stream.filter(path -> path.getFileName().toString().equals(dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().fileName()))
                 .map(SessionRegistry::loadSaveMetadata)
                 .flatMap(Optional::stream)
                 .max(Comparator.comparingLong(SessionRegistry::saveTimestamp));
@@ -1052,7 +1052,7 @@ public final class SessionRegistry {
     }
 
     private static Optional<SaveMetadata> loadSaveMetadata(Path savePath) {
-        Optional<JsonObject> root = MinigameSessionStore.readFrom(savePath, false);
+        Optional<JsonObject> root = dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().readFrom(savePath, false);
         if (root.isEmpty()) {
             return Optional.empty();
         }

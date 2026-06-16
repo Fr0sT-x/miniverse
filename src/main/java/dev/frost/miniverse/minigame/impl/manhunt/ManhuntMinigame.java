@@ -369,7 +369,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     private void startStandardEndSequence(Collection<ServerPlayerEntity> winners, Text winnerLabel) {
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
-            MatchLifecycleController.getInstance().endMatch(
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(
                 runtime,
                 MatchEndResult.winners(winners, winnerLabel),
                 MatchLifecycleOptions.defaults(NAME)

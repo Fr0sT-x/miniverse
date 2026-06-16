@@ -13,7 +13,7 @@ final class BridgeSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<BridgeMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<BridgeMinigame>() {
             @Override
             public String gameId() {
                 return BridgeDefinition.ID;

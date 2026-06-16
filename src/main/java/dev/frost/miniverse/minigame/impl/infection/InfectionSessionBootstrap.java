@@ -11,7 +11,7 @@ final class InfectionSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<InfectionMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<InfectionMinigame>() {
             @Override
             public String gameId() {
                 return InfectionDefinition.ID;

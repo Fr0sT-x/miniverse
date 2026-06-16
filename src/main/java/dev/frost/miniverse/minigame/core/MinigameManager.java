@@ -25,6 +25,11 @@ public class MinigameManager {
     @Nullable
     private MinigameRuntime runtime;
     private final Map<UUID, GameMode> gameModesBeforePause = new ConcurrentHashMap<>();
+    private final MatchLifecycleController matchLifecycleController = new MatchLifecycleController();
+    private final dev.frost.miniverse.minigame.core.event.MinigameEventRouter minigameEventRouter = new dev.frost.miniverse.minigame.core.event.MinigameEventRouter(this.matchLifecycleController);
+    private final SessionBootstrapper sessionBootstrapper = new SessionBootstrapper(this.matchLifecycleController);
+    private final dev.frost.miniverse.minigame.core.util.StandardEndSequence standardEndSequence = new dev.frost.miniverse.minigame.core.util.StandardEndSequence(this.matchLifecycleController);
+    private final MinigameSessionStore minigameSessionStore = new MinigameSessionStore(this.matchLifecycleController);
 
     private MinigameManager() {
     }
@@ -38,6 +43,26 @@ public class MinigameManager {
         return INSTANCE;
     }
 
+    public MatchLifecycleController getMatchLifecycleController() {
+        return this.matchLifecycleController;
+    }
+
+    public dev.frost.miniverse.minigame.core.event.MinigameEventRouter getMinigameEventRouter() {
+        return this.minigameEventRouter;
+    }
+
+    public SessionBootstrapper getSessionBootstrapper() {
+        return this.sessionBootstrapper;
+    }
+
+    public dev.frost.miniverse.minigame.core.util.StandardEndSequence getStandardEndSequence() {
+        return this.standardEndSequence;
+    }
+
+    public MinigameSessionStore getMinigameSessionStore() {
+        return this.minigameSessionStore;
+    }
+
     /**
      * Sets the active minigame and initializes it.
      *
@@ -46,7 +71,7 @@ public class MinigameManager {
     public void setActiveMinigame(@Nullable Minigame minigame) {
         if (this.runtime != null) {
             this.runtime.stop();
-            MatchLifecycleController.getInstance().reset();
+            this.matchLifecycleController.reset();
             FreezeService.getInstance().clearAll();
             SpectatorService.getInstance().clearAll();
         }
@@ -105,7 +130,7 @@ public class MinigameManager {
             this.applyPauseGameMode(player);
             FreezeService.getInstance().freeze(player, FreezeReason.ADMIN_PAUSE);
         }
-        MinigameSessionStore.save(this.runtime, MinigameSessionStore.SaveReason.PAUSE);
+        this.minigameSessionStore.save(this.runtime, MinigameSessionStore.SaveReason.PAUSE);
         return true;
     }
 
@@ -118,7 +143,7 @@ public class MinigameManager {
             FreezeService.getInstance().unfreeze(player, FreezeReason.ADMIN_PAUSE);
         }
         this.gameModesBeforePause.clear();
-        MinigameSessionStore.save(this.runtime, MinigameSessionStore.SaveReason.RESUME);
+        this.minigameSessionStore.save(this.runtime, MinigameSessionStore.SaveReason.RESUME);
         return true;
     }
 
@@ -261,7 +286,7 @@ public class MinigameManager {
         if (this.runtime != null) {
             this.runtime.stop();
         }
-        MatchLifecycleController.getInstance().reset();
+        this.matchLifecycleController.reset();
         FreezeService.getInstance().clearAll();
         SpectatorService.getInstance().clearAll();
         this.gameModesBeforePause.clear();

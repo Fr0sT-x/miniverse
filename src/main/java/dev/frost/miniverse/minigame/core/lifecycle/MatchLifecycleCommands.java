@@ -25,7 +25,7 @@ public final class MatchLifecycleCommands {
                 if (!SessionPermissions.checkCanManageSessions(player, "cancel match return teleport")) {
                     return 0;
                 }
-                boolean cancelled = MatchLifecycleController.getInstance().cancelReturn(player);
+                boolean cancelled = MinigameManager.getInstance().getMatchLifecycleController().cancelReturn(player);
                 if (!cancelled) {
                     context.getSource().sendFeedback(() -> Text.literal("No active return countdown.").formatted(Formatting.YELLOW), false);
                     return 0;
@@ -70,12 +70,12 @@ public final class MatchLifecycleCommands {
                     if (!SessionPermissions.checkCanManageSessions(player, "save the active match")) {
                         return 0;
                     }
-                    boolean saved = MinigameSessionStore.saveActiveRuntime();
+                    boolean saved = MinigameManager.getInstance().getMinigameSessionStore().saveActiveRuntime();
                     if (!saved) {
                         context.getSource().sendFeedback(() -> Text.literal("Active match does not support runtime persistence.").formatted(Formatting.YELLOW), false);
                         return 0;
                     }
-                    context.getSource().sendFeedback(() -> Text.literal("Saved match state to " + MinigameSessionStore.savePath() + ".").formatted(Formatting.GREEN), false);
+                    context.getSource().sendFeedback(() -> Text.literal("Saved match state to " + MinigameManager.getInstance().getMinigameSessionStore().savePath() + ".").formatted(Formatting.GREEN), false);
                     return 1;
                 }))
             .then(literal("load")
@@ -85,12 +85,12 @@ public final class MatchLifecycleCommands {
                         return 0;
                     }
                     MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
-                    boolean loaded = MinigameSessionStore.loadInto(runtime);
+                    boolean loaded = MinigameManager.getInstance().getMinigameSessionStore().loadInto(runtime);
                     if (!loaded) {
                         context.getSource().sendFeedback(() -> Text.literal("No compatible saved match state was found.").formatted(Formatting.YELLOW), false);
                         return 0;
                     }
-                    context.getSource().sendFeedback(() -> Text.literal("Loaded match state from " + MinigameSessionStore.savePath() + ".").formatted(Formatting.GREEN), true);
+                    context.getSource().sendFeedback(() -> Text.literal("Loaded match state from " + MinigameManager.getInstance().getMinigameSessionStore().savePath() + ".").formatted(Formatting.GREEN), true);
                     return 1;
                 })));
     }

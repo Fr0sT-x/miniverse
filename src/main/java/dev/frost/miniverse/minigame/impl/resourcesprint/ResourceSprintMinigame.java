@@ -610,7 +610,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
             .filter(player -> this.teamFor(player).equals(winningTeam))
             .map(ServerPlayerEntity::getUuid)
             .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        MatchLifecycleController.getInstance().endMatch(
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(
             runtime,
             new MatchEndResult(winners, Text.literal(winningTeam)),
             MatchLifecycleOptions.defaults(NAME)

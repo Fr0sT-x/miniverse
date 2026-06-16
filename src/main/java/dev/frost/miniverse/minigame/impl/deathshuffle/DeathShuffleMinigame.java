@@ -329,7 +329,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         if (runtime == null) return;
 
         if (winners.isEmpty()) {
-            MatchLifecycleController.getInstance().endMatch(runtime, new MatchEndResult(Set.of(), Text.empty()), MatchLifecycleOptions.defaults(DeathShuffleDefinition.DISPLAY_NAME));
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(runtime, new MatchEndResult(Set.of(), Text.empty()), MatchLifecycleOptions.defaults(DeathShuffleDefinition.DISPLAY_NAME));
             return;
         }
 
@@ -337,11 +337,11 @@ public class DeathShuffleMinigame extends AbstractMinigame {
             ServerPlayerEntity winner = this.server.getPlayerManager().getPlayer(winners.get(0));
             Text winnerName = winner != null ? winner.getName() : Text.literal("Unknown");
             this.broadcast(Text.literal("🎉 ").append(winnerName).append(" won the match!").formatted(Formatting.GREEN, Formatting.BOLD));
-            MatchLifecycleController.getInstance().endMatch(runtime, new MatchEndResult(Set.of(winners.get(0)), winnerName), MatchLifecycleOptions.defaults(DeathShuffleDefinition.DISPLAY_NAME));
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(runtime, new MatchEndResult(Set.of(winners.get(0)), winnerName), MatchLifecycleOptions.defaults(DeathShuffleDefinition.DISPLAY_NAME));
         } else {
             this.broadcast(Text.literal("🎉 It's a tie between multiple players!").formatted(Formatting.GREEN, Formatting.BOLD));
             Text label = Text.literal("Tie!");
-            MatchLifecycleController.getInstance().endMatch(runtime, new MatchEndResult(new HashSet<>(winners), label), MatchLifecycleOptions.defaults(DeathShuffleDefinition.DISPLAY_NAME));
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(runtime, new MatchEndResult(new HashSet<>(winners), label), MatchLifecycleOptions.defaults(DeathShuffleDefinition.DISPLAY_NAME));
         }
     }
 

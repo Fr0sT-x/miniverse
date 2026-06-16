@@ -7,7 +7,7 @@ import java.util.Properties;
 
 public class MurderMysterySessionBootstrap {
     public static void bootstrap() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<MurderMysteryMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<MurderMysteryMinigame>() {
             @Override
             public String gameId() {
                 return MurderMysteryDefinition.ID;

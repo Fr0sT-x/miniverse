@@ -12,7 +12,7 @@ final class ResourceSprintSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<ResourceSprintMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<ResourceSprintMinigame>() {
             @Override
             public String gameId() {
                 return ResourceSprintDefinition.ID;

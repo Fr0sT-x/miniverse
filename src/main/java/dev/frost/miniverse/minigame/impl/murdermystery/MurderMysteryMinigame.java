@@ -377,7 +377,7 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
-            dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController.getInstance().endMatch(
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(
                 runtime, 
                 dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult.winners(winners, Text.literal("Winners")), 
                 dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions.defaults(NAME)

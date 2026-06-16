@@ -12,7 +12,7 @@ final class BountyHuntSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<BountyHuntMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<BountyHuntMinigame>() {
             @Override
             public String gameId() {
                 return BountyHuntDefinition.ID;

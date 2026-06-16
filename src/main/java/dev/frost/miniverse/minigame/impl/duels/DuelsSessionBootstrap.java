@@ -13,7 +13,7 @@ final class DuelsSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<DuelsMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<DuelsMinigame>() {
             @Override
             public String gameId() {
                 return DuelsDefinition.ID;

@@ -33,7 +33,7 @@ public final class SessionRecoveryService {
 
         Map<String, Candidate> newestBySession = new LinkedHashMap<>();
         try (var stream = Files.walk(sessionsRoot, 4)) {
-            stream.filter(path -> path.getFileName().toString().equals(MinigameSessionStore.fileName()))
+            stream.filter(path -> path.getFileName().toString().equals(dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().fileName()))
                 .sorted(Comparator.comparing(Path::toString))
                 .forEach(path -> candidateFrom(sessionsRoot, path).ifPresent(candidate -> {
                     Candidate previous = newestBySession.get(candidate.sessionId());
@@ -96,7 +96,7 @@ public final class SessionRecoveryService {
     }
 
     private static Optional<Candidate> candidateFrom(Path sessionsRoot, Path savePath) {
-        Optional<JsonObject> root = MinigameSessionStore.readFrom(savePath, true);
+        Optional<JsonObject> root = dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().readFrom(savePath, true);
         if (root.isEmpty()) {
             return Optional.empty();
         }

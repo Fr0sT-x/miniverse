@@ -343,7 +343,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
-            MatchLifecycleController.getInstance().endMatch(
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(
                 runtime,
                 new MatchEndResult(Set.of(winnerId), Text.literal(name)),
                 MatchLifecycleOptions.defaults("Block Shuffle")

@@ -8,12 +8,16 @@ import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 
 public class StandardEndSequence {
 
-    private StandardEndSequence() {}
+    private final MatchLifecycleController matchLifecycleController;
 
-    public static void start(String minigameName, MatchEndResult result) {
+    public StandardEndSequence(MatchLifecycleController matchLifecycleController) {
+        this.matchLifecycleController = matchLifecycleController;
+    }
+
+    public void start(String minigameName, MatchEndResult result) {
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
-            MatchLifecycleController.getInstance().endMatch(runtime, result, MatchLifecycleOptions.defaults(minigameName));
+            this.matchLifecycleController.endMatch(runtime, result, MatchLifecycleOptions.defaults(minigameName));
         }
     }
 }

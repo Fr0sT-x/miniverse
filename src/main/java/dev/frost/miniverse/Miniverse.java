@@ -48,7 +48,7 @@ public class Miniverse implements ModInitializer {
 				MapEditorCommands.register(dispatcher);
 			}
 		);
-		MinigameEventRouter.register();
+		dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameEventRouter().register();
 		MinigameRegistry.registerEvents();
 		SessionRoutingEvents.register();
 		MapEditorEvents.register();

@@ -786,7 +786,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         if (runtime == null) {
             return;
         }
-        MatchLifecycleController.getInstance().endMatch(
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().endMatch(
             runtime,
             MatchEndResult.winners(winners, winnerLabel),
             MatchLifecycleOptions.defaults(BridgeDefinition.DISPLAY_NAME)

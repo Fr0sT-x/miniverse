@@ -32,7 +32,7 @@ public final class SessionNetwork {
             ClientConnectionHosts.remember(context.player(), payload.host())
         );
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLIENT_MATCH_READY_ID, (payload, context) ->
-            SessionBootstrapper.markClientReady(context.player(), payload.sessionId())
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().markClientReady(context.player(), payload.sessionId())
         );
 
         registered = true;

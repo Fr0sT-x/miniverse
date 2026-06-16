@@ -28,7 +28,7 @@ public final class ChatRouter {
     }
 
     public static boolean handleChatMessage(SignedMessage message, ServerPlayerEntity sender, MessageType.Parameters parameters) {
-        if (!MatchLifecycleController.getInstance().isMatchActive()) {
+        if (!dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().isMatchActive()) {
             return false;
         }
         if (!MinigameManager.getInstance().isParticipant(sender)) {
@@ -58,7 +58,7 @@ public final class ChatRouter {
     }
 
     public static void notifyPlayerIfMatchActive(ServerPlayerEntity player) {
-        if (!MatchLifecycleController.getInstance().isMatchActive()) {
+        if (!dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().isMatchActive()) {
             return;
         }
         if (!MinigameManager.getInstance().isParticipant(player)) {

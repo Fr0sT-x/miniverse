@@ -369,7 +369,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
 
         ServerPlayerEntity runner = this.getRunner();
-        StandardEndSequence.start(NAME, runner == null
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getStandardEndSequence().start(NAME, runner == null
             ? new MatchEndResult(Set.of(), Text.literal("No winner"))
             : MatchEndResult.winner(runner));
         if (this.server != null && this.scoreboard != null) {

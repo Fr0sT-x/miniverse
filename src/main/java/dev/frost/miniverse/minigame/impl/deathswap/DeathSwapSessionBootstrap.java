@@ -11,7 +11,7 @@ public final class DeathSwapSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<DeathSwapMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<DeathSwapMinigame>() {
             @Override
             public String gameId() {
                 return DeathSwapDefinition.ID;

@@ -21,36 +21,39 @@ public final class SessionBootstrapper {
     private static final Set<String> REGISTERED_GAME_IDS = new HashSet<>();
     private static final Map<String, State<?>> STATES = new HashMap<>();
 
-    private SessionBootstrapper() {
+    private final MatchLifecycleController matchLifecycleController;
+
+    public SessionBootstrapper(MatchLifecycleController matchLifecycleController) {
+        this.matchLifecycleController = matchLifecycleController;
     }
 
-    public static synchronized <T extends Minigame> void register(Handler<T> handler) {
+    public synchronized <T extends Minigame> void register(Handler<T> handler) {
         String gameId = handler.gameId();
         if (!REGISTERED_GAME_IDS.add(gameId)) {
             return;
         }
 
-        State<T> state = new State<>(handler);
+        State<T> state = new State<>(handler, this);
         STATES.put(gameId.toLowerCase(), state);
         ServerPlayConnectionEvents.JOIN.register((connectionHandler, sender, server) -> state.onJoin(connectionHandler.player));
     }
 
-    public static void tick(MinecraftServer server) {
-        State<?> state = stateForConfig();
+    public void tick(MinecraftServer server) {
+        State<?> state = this.stateForConfig();
         if (state == null) {
             return;
         }
         state.onTick(server);
     }
 
-    public static void markClientReady(ServerPlayerEntity player, String sessionId) {
-        State<?> state = stateForConfig();
+    public void markClientReady(ServerPlayerEntity player, String sessionId) {
+        State<?> state = this.stateForConfig();
         if (state != null) {
             state.markClientReady(player, sessionId);
         }
     }
 
-    private static State<?> stateForConfig() {
+    private State<?> stateForConfig() {
         String configGame = System.getProperty("miniverse.session.game", "").trim().toLowerCase();
         if (configGame.isBlank()) {
             return null;
@@ -84,6 +87,7 @@ public final class SessionBootstrapper {
 
     private static final class State<T extends Minigame> {
         private final Handler<T> handler;
+        private final SessionBootstrapper bootstrapper;
         private final SessionConfigParser configParser;
         private final ClientReadinessCoordinator readinessCoordinator;
         private final SessionRuntimeInitializer<T> runtimeInitializer;
@@ -94,8 +98,9 @@ public final class SessionBootstrapper {
         private boolean loggedWaitingRoles;
         private boolean loggedWaitingClientReady;
 
-        private State(Handler<T> handler) {
+        private State(Handler<T> handler, SessionBootstrapper bootstrapper) {
             this.handler = handler;
+            this.bootstrapper = bootstrapper;
             this.configParser = new SessionConfigParser();
             this.readinessCoordinator = new ClientReadinessCoordinator(this.configParser, handler.gameId());
             this.runtimeInitializer = new SessionRuntimeInitializer<>(handler);
@@ -144,7 +149,7 @@ public final class SessionBootstrapper {
             }
 
             if (admittedParticipant) {
-                MatchLifecycleController.getInstance().onParticipantJoin(player);
+                this.bootstrapper.matchLifecycleController.onParticipantJoin(player);
                 this.handler.onPlayerJoin(minigame, player, effectiveProperties);
                 if (assignedLatePlayer && minigame instanceof DynamicParticipantMinigame dynamic) {
                     String team = effectiveProperties.getProperty("player." + player.getUuid() + ".team", effectiveProperties.getProperty("groupLabel", ""));
@@ -156,7 +161,7 @@ public final class SessionBootstrapper {
             if (reconnectingActivePlayer) {
                 MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
                 if (SessionRestoreCoordinator.restorePlayerStateIfPresent(runtime, player)) {
-                    MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
+                    dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
                 }
                 MinigameManager.getInstance().applyPauseStateToParticipant(player);
                 this.readinessCoordinator.releaseLoadedPlayer(player, effectiveProperties);
@@ -279,7 +284,7 @@ public final class SessionBootstrapper {
                 MinecraftServer server = MinigameManager.getInstance().getContext() == null ? null : MinigameManager.getInstance().getContext().nullableServer();
                 this.readinessCoordinator.unfreezeLoadingPlayers(server, properties);
                 MatchLifecycleOptions options = this.handler.lifecycleOptions(minigame, properties);
-                MatchLifecycleController.getInstance().beginMatch(runtime, options, minigame::startGame);
+                this.bootstrapper.matchLifecycleController.beginMatch(runtime, options, minigame::startGame);
             }
         }
 

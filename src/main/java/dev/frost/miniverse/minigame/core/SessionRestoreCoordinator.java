@@ -18,7 +18,7 @@ public final class SessionRestoreCoordinator {
         if (configured == BackendLaunchMode.RESTORE_SESSION || configured == BackendLaunchMode.INSPECTION_SESSION) {
             return configured;
         }
-        return MinigameSessionStore.read().isPresent() ? BackendLaunchMode.RESTORE_SESSION : BackendLaunchMode.NEW_SESSION;
+        return dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().read().isPresent() ? BackendLaunchMode.RESTORE_SESSION : BackendLaunchMode.NEW_SESSION;
     }
 
     public static boolean isRestoreSession() {
@@ -29,24 +29,24 @@ public final class SessionRestoreCoordinator {
         if (runtime == null || !isRestoreSession()) {
             return false;
         }
-        boolean restored = MinigameSessionStore.loadInto(runtime, options, startCallback);
+        boolean restored = dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().loadInto(runtime, options, startCallback);
         if (restored) {
-            Miniverse.LOGGER.info("Loaded saved runtime state for {} from {}.", runtime.minigame().getName(), MinigameSessionStore.savePath());
+            Miniverse.LOGGER.info("Loaded saved runtime state for {} from {}.", runtime.minigame().getName(), dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().savePath());
             logDiagnostics();
         }
         return restored;
     }
 
     public static boolean hasRestoredActiveOrPausedState() {
-        return isRestoreSession() && MinigameSessionStore.hasRestoredActiveOrPausedState();
+        return isRestoreSession() && dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().hasRestoredActiveOrPausedState();
     }
 
     public static boolean restorePlayerStateIfPresent(MinigameRuntime runtime, ServerPlayerEntity player) {
-        return isRestoreSession() && MinigameSessionStore.restorePlayerStateIfPresent(runtime, player);
+        return isRestoreSession() && dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().restorePlayerStateIfPresent(runtime, player);
     }
 
     private static void logDiagnostics() {
-        Optional<JsonObject> saved = MinigameSessionStore.read();
+        Optional<JsonObject> saved = dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().read();
         if (saved.isEmpty()) {
             return;
         }
@@ -64,7 +64,7 @@ public final class SessionRestoreCoordinator {
         }
         Miniverse.LOGGER.info(
             "Restore diagnostics: save={}, game={}, state={}, lifecyclePhase={}, participants={}, playerSnapshots={}.",
-            MinigameSessionStore.savePath(),
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().savePath(),
             game,
             state,
             lifecyclePhase,

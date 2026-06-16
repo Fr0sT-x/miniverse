@@ -44,22 +44,24 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
 public final class MinigameEventRouter {
-    private static boolean registered;
+    private final MatchLifecycleController matchLifecycleController;
+    private boolean registered;
 
-    private MinigameEventRouter() {
+    public MinigameEventRouter(MatchLifecycleController matchLifecycleController) {
+        this.matchLifecycleController = matchLifecycleController;
     }
 
-    public static synchronized void register() {
+    public synchronized void register() {
         if (registered) {
             return;
         }
         registered = true;
 
-        UseItemCallback.EVENT.register(MinigameEventRouter::onUseItem);
+        UseItemCallback.EVENT.register(this::onUseItem);
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (pausedFor(player)) return ActionResult.FAIL;
+            if (this.pausedFor(player)) return ActionResult.FAIL;
             if (player instanceof ServerPlayerEntity serverPlayer) {
-                Minigame active = activeMinigame();
+                Minigame active = this.activeMinigame();
                 if (active != null && !active.canBuild() && player.getStackInHand(hand).getItem() instanceof net.minecraft.item.BlockItem) {
                     serverPlayer.sendMessage(net.minecraft.text.Text.literal("Building is disabled in this match.").formatted(net.minecraft.util.Formatting.RED), true);
                     return ActionResult.FAIL;
@@ -75,13 +77,13 @@ public final class MinigameEventRouter {
             }
             return ActionResult.PASS;
         });
-        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
-        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
-        AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
-            if (pausedFor(player)) return false;
+            if (this.pausedFor(player)) return false;
             if (player instanceof ServerPlayerEntity serverPlayer) {
-                Minigame active = activeMinigame();
+                Minigame active = this.activeMinigame();
                 if (active != null && !active.canBreakBlocks()) {
                     serverPlayer.sendMessage(net.minecraft.text.Text.literal("Block breaking is disabled in this match.").formatted(net.minecraft.util.Formatting.RED), true);
                     return false;
@@ -98,43 +100,43 @@ public final class MinigameEventRouter {
         PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
             MapProtectionManager.onBlockBroken(pos);
         });
-        ServerTickEvents.END_SERVER_TICK.register(MinigameEventRouter::onServerTick);
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> MinigameSessionStore.saveOnShutdown());
-        ServerLivingEntityEvents.ALLOW_DAMAGE.register(MinigameEventRouter::onAllowDamage);
-        ServerLivingEntityEvents.AFTER_DEATH.register(MinigameEventRouter::onAfterDeath);
-        ServerPlayConnectionEvents.JOIN.register(MinigameEventRouter::onPlayerJoin);
-        ServerPlayerEvents.AFTER_RESPAWN.register(MinigameEventRouter::onAfterRespawn);
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> onPlayerLeave(handler.player));
-        ServerMessageEvents.ALLOW_CHAT_MESSAGE.register(MinigameEventRouter::onAllowChatMessage);
+        ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().saveOnShutdown());
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register(this::onAllowDamage);
+        ServerLivingEntityEvents.AFTER_DEATH.register(this::onAfterDeath);
+        ServerPlayConnectionEvents.JOIN.register(this::onPlayerJoin);
+        ServerPlayerEvents.AFTER_RESPAWN.register(this::onAfterRespawn);
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> this.onPlayerLeave(handler.player));
+        ServerMessageEvents.ALLOW_CHAT_MESSAGE.register(this::onAllowChatMessage);
     }
 
-    private static void onServerTick(MinecraftServer server) {
+    private void onServerTick(MinecraftServer server) {
         MinigameManager.getInstance().tickRuntimeClock(server);
-        SessionBootstrapper.tick(server);
-        MatchLifecycleController.getInstance().tick(server);
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().tick(server);
+        this.matchLifecycleController.tick(server);
         SpectatorService.getInstance().tick(server);
         ProtectedItemService.getInstance().tick(server);
-        MinigameSessionStore.tick(server);
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().tick(server);
         RegionTriggerService.getInstance().tick(server);
         if (MinigameManager.getInstance().getCurrentState() == GameState.PAUSED) {
             return;
         }
-        Minigame active = activeMinigame();
+        Minigame active = this.activeMinigame();
         if (active instanceof ServerTickAware tickAware) {
             tickAware.onServerTick(server);
         }
     }
 
-    private static TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
+    private TypedActionResult<ItemStack> onUseItem(PlayerEntity player, World world, Hand hand) {
         if (!(world instanceof ServerWorld) || !(player instanceof ServerPlayerEntity serverPlayer)) {
             return TypedActionResult.pass(player.getStackInHand(hand));
         }
 
-        if (pausedFor(serverPlayer)) {
+        if (this.pausedFor(serverPlayer)) {
             return TypedActionResult.fail(player.getStackInHand(hand));
         }
 
-        Minigame active = activeMinigame();
+        Minigame active = this.activeMinigame();
         if (active instanceof ItemUseAware itemUseAware) {
             ActionResult result = itemUseAware.onUseItem(serverPlayer, world, hand);
             return new TypedActionResult<>(result, player.getStackInHand(hand));
@@ -143,16 +145,16 @@ public final class MinigameEventRouter {
         return TypedActionResult.pass(player.getStackInHand(hand));
     }
 
-    private static boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
+    private boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
         if (!(entity instanceof ServerPlayerEntity player)) {
             return true;
         }
 
-        if (pausedFor(player)) {
+        if (this.pausedFor(player)) {
             return false;
         }
 
-        Minigame active = activeMinigame();
+        Minigame active = this.activeMinigame();
         if (active instanceof PlayerDamageAware damageAware) {
             return damageAware.allowDamage(player, source, amount);
         }
@@ -160,28 +162,28 @@ public final class MinigameEventRouter {
         return true;
     }
 
-    private static void onAfterDeath(LivingEntity entity, DamageSource source) {
+    private void onAfterDeath(LivingEntity entity, DamageSource source) {
         SpectatorService.getInstance().onEntityDeath(entity);
-        if (entity instanceof ServerPlayerEntity player && pausedFor(player)) {
+        if (entity instanceof ServerPlayerEntity player && this.pausedFor(player)) {
             return;
         }
-        Minigame active = activeMinigame();
+        Minigame active = this.activeMinigame();
         if (active instanceof EntityDeathAware deathAware) {
             deathAware.onEntityDeath(entity, source);
         }
     }
 
-    private static void onPlayerJoin(ServerPlayNetworkHandler handler, PacketSender sender, MinecraftServer server) {
+    private void onPlayerJoin(ServerPlayNetworkHandler handler, PacketSender sender, MinecraftServer server) {
         MinigameManager.getInstance().bindServer(server);
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
-        Minigame active = activeMinigame();
+        Minigame active = this.activeMinigame();
         if (active instanceof PlayerJoinAware joinAware) {
             joinAware.onPlayerJoin(handler.player, server);
         }
-        MatchLifecycleController.getInstance().onParticipantJoin(handler.player);
+        this.matchLifecycleController.onParticipantJoin(handler.player);
         if (runtime != null && runtime.context().roster().contains(handler.player)) {
-            if (MinigameSessionStore.restorePlayerState(runtime, handler.player)) {
-                MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
+            if (dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().restorePlayerState(runtime, handler.player)) {
+                dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
             }
             if (active instanceof RosterAware rosterAware) {
                 rosterAware.onRosterChanged(runtime.context().roster());
@@ -192,51 +194,51 @@ public final class MinigameEventRouter {
         ChatRouter.notifyPlayerIfMatchActive(handler.player);
     }
 
-    private static void onAfterRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
+    private void onAfterRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
         SpectatorService.getInstance().onPlayerRespawn(oldPlayer, newPlayer, alive);
         ProtectedItemService.getInstance().onPlayerRespawn(oldPlayer, newPlayer, alive);
-        if (pausedFor(newPlayer)) {
+        if (this.pausedFor(newPlayer)) {
             return;
         }
-        Minigame active = activeMinigame();
+        Minigame active = this.activeMinigame();
         if (active instanceof PlayerRespawnAware respawnAware) {
             respawnAware.onPlayerRespawn(oldPlayer, newPlayer, alive);
         }
     }
 
-    private static void onPlayerLeave(ServerPlayerEntity player) {
+    private void onPlayerLeave(ServerPlayerEntity player) {
         SpectatorService.getInstance().onPlayerLeave(player);
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {
-            MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.DISCONNECT);
+            dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().save(runtime, MinigameSessionStore.SaveReason.DISCONNECT);
         }
         if (runtime != null && runtime.context().roster().contains(player)) {
-            MatchLifecycleController.getInstance().onParticipantLeave(player);
-            Minigame active = activeMinigame();
+            this.matchLifecycleController.onParticipantLeave(player);
+            Minigame active = this.activeMinigame();
             if (active instanceof RosterAware rosterAware) {
                 rosterAware.onRosterChanged(runtime.context().roster());
             }
             return;
         }
-        if (pausedFor(player)) {
+        if (this.pausedFor(player)) {
             return;
         }
-        Minigame active = activeMinigame();
+        Minigame active = this.activeMinigame();
         if (active instanceof PlayerLeaveAware leaveAware) {
             leaveAware.onPlayerLeave(player);
         }
     }
 
-    private static boolean onAllowChatMessage(SignedMessage message, ServerPlayerEntity player, MessageType.Parameters parameters) {
+    private boolean onAllowChatMessage(SignedMessage message, ServerPlayerEntity player, MessageType.Parameters parameters) {
         return !ChatRouter.handleChatMessage(message, player, parameters);
     }
 
     @Nullable
-    private static Minigame activeMinigame() {
+    private Minigame activeMinigame() {
         return MinigameManager.getInstance().getActiveMinigame();
     }
 
-    private static boolean pausedFor(PlayerEntity player) {
+    private boolean pausedFor(PlayerEntity player) {
         return player instanceof ServerPlayerEntity serverPlayer
             && MinigameManager.getInstance().getCurrentState() == GameState.PAUSED
             && MinigameManager.getInstance().isParticipant(serverPlayer);

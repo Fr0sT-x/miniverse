@@ -13,7 +13,7 @@ final class SpeedrunSessionBootstrap {
     }
 
     static void register() {
-        SessionBootstrapper.register(new SessionBootstrapper.Handler<SpeedrunMinigame>() {
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSessionBootstrapper().register(new SessionBootstrapper.Handler<SpeedrunMinigame>() {
             @Override
             public String gameId() {
                 return SpeedrunDefinition.ID;

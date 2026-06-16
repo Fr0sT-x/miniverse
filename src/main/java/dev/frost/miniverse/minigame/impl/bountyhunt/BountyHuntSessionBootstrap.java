@@ -37,20 +37,6 @@ final class BountyHuntSessionBootstrap {
             public MatchLifecycleOptions lifecycleOptions(BountyHuntMinigame minigame, Properties properties) {
                 BountyHuntSettings settings = minigame.getSettings();
                 return MatchLifecycleOptions.defaults(minigame.getName())
-                    .withDisconnectGraceSeconds(settings.disconnectGraceSeconds())
-                    .withDisconnectGraceHandler(new DisconnectGraceHandler() {
-                        @Override
-                        public boolean isCritical(dev.frost.miniverse.minigame.core.MinigameRuntime runtime, ServerPlayerEntity player) {
-                            return minigame.getState().isActive()
-                                && minigame.isActiveParticipant(player)
-                                && minigame.getActiveParticipantCount() <= 2;
-                        }
-
-                        @Override
-                        public void onGraceExpired(dev.frost.miniverse.minigame.core.MinigameRuntime runtime, java.util.List<java.util.UUID> pendingPlayers) {
-                            minigame.handleDisconnectGraceExpired(pendingPlayers);
-                        }
-                    })
                     .withStartTitle(
                         Text.literal(minigame.getName()),
                         Text.literal("Eliminate your assigned targets. First to " + settings.scoreToWin() + " points wins.")

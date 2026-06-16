@@ -318,7 +318,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     private void tickSwapTimer() {
         this.refreshAliveParticipants();
         if (this.settings.respawnMode() == RespawnMode.ELIMINATION && this.aliveParticipants.size() <= 1) {
-            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+            if (this.checkProgression(this.context.roster()).blocked()) {
                 return;
             }
             this.endMatch(this.aliveParticipants);
@@ -347,13 +347,19 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     }
 
     private Map<UUID, UUID> buildAssignment() {
-        return this.assignmentBuilder.assign(this.aliveParticipants, this.recentTargets);
+        Set<UUID> onlineAlive = this.aliveParticipants.stream()
+            .filter(uuid -> {
+                ServerPlayerEntity p = this.getPlayerByUuid(uuid);
+                return p != null && !p.isDisconnected();
+            })
+            .collect(java.util.stream.Collectors.toSet());
+        return this.assignmentBuilder.assign(onlineAlive, this.recentTargets);
     }
 
     private void executeSwap() {
         this.refreshAliveParticipants();
         if (this.aliveParticipants.size() < 2) {
-            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+            if (this.checkProgression(this.context.roster()).blocked()) {
                 this.resetSwapTimer();
                 return;
             }
@@ -438,7 +444,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         }
         this.refreshAliveParticipants();
         if (this.aliveParticipants.size() <= 1) {
-            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+            if (this.checkProgression(this.context.roster()).blocked()) {
                 return;
             }
             this.endMatch(this.aliveParticipants);
@@ -573,7 +579,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     private void refreshAliveParticipants() {
         this.aliveParticipants.removeIf(playerId -> {
             ServerPlayerEntity player = this.getPlayerByUuid(playerId);
-            if ((player == null || player.isDisconnected()) && MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(playerId)) {
+            if ((player == null || player.isDisconnected()) && this.checkProgression(this.context.roster()).blocked()) {
                 return false;
             }
             return player == null || player.isDisconnected() || (this.settings.respawnMode() == RespawnMode.ELIMINATION && player.isSpectator());
@@ -893,5 +899,14 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         } catch (RuntimeException ignored) {
             return fallback;
         }
+    }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        int onlineCount = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).size();
+        if (onlineCount < 2) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for more players to reconnect to resume swapping...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
     }
 }

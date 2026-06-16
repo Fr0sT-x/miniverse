@@ -147,7 +147,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         if (this.getState() != GameState.IN_PROGRESS) return;
 
         if (this.activePlayers.isEmpty()) {
-            if (!MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+            if (!this.checkProgression(this.context.roster()).blocked()) {
                 this.stopGame();
             }
             return;
@@ -550,5 +550,14 @@ public class BlockShuffleMinigame extends AbstractMinigame {
     @Override
     public void removeParticipantMidGame(ServerPlayerEntity player) {
         this.onPlayerLeave(player);
+    }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        int onlineCount = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).size();
+        if (onlineCount < 1) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Match paused! Waiting for a player to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
     }
 }

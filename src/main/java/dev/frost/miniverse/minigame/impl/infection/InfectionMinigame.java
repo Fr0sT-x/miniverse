@@ -408,7 +408,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         }
     }
 
-    private List<ServerPlayerEntity> participants() {
+    private List<ServerPlayerEntity> roster() {
         return this.context().liveParticipants();
     }
 
@@ -439,5 +439,20 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
 
     private static String formatTime(int seconds) {
         return "%02d:%02d".formatted(seconds / 60, seconds % 60);
+    }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        long onlineInfected = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).stream()
+            .filter(p -> this.infected.contains(p.getUuid())).count();
+        long onlineSurvivors = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).stream()
+            .filter(p -> this.survivors.contains(p.getUuid())).count();
+        if (onlineInfected == 0) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for an Infected to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        if (onlineSurvivors == 0) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for a Survivor to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
     }
 }

@@ -232,7 +232,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         }
 
         if (this.getParticipants().isEmpty()) {
-            if (MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+            if (this.checkProgression(this.context.roster()).blocked()) {
                 return;
             }
             this.onMatchEnd();
@@ -835,5 +835,14 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
     @Override
     public void onResume(GameState resumedState) {
         this.paused = false;
+    }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        int onlineCount = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).size();
+        if (onlineCount < 1) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Match paused! Waiting for a player to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
     }
 }

@@ -173,15 +173,18 @@ public final class MinigameEventRouter {
 
     private static void onPlayerJoin(ServerPlayNetworkHandler handler, PacketSender sender, MinecraftServer server) {
         MinigameManager.getInstance().bindServer(server);
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         Minigame active = activeMinigame();
         if (active instanceof PlayerJoinAware joinAware) {
             joinAware.onPlayerJoin(handler.player, server);
         }
         MatchLifecycleController.getInstance().onParticipantJoin(handler.player);
-        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null && runtime.context().roster().contains(handler.player)) {
             if (MinigameSessionStore.restorePlayerState(runtime, handler.player)) {
                 MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.RECONNECT);
+            }
+            if (active instanceof RosterAware rosterAware) {
+                rosterAware.onRosterChanged(runtime.context().roster());
             }
         }
         MinigameManager.getInstance().applyPauseStateToParticipant(handler.player);
@@ -202,23 +205,20 @@ public final class MinigameEventRouter {
     }
 
     private static void onPlayerLeave(ServerPlayerEntity player) {
-        if (!pausedFor(player)) {
-            boolean reconnectGraceStarted = MatchLifecycleController.getInstance().beginDisconnectGrace(player);
-            MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
-            if (runtime != null) {
-                MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.DISCONNECT);
-            }
-            if (reconnectGraceStarted) {
-                SpectatorService.getInstance().onPlayerLeave(player);
-                return;
-            }
-        }
         SpectatorService.getInstance().onPlayerLeave(player);
-        if (pausedFor(player)) {
-            MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
-            if (runtime != null) {
-                MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.DISCONNECT);
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime != null) {
+            MinigameSessionStore.save(runtime, MinigameSessionStore.SaveReason.DISCONNECT);
+        }
+        if (runtime != null && runtime.context().roster().contains(player)) {
+            MatchLifecycleController.getInstance().onParticipantLeave(player);
+            Minigame active = activeMinigame();
+            if (active instanceof RosterAware rosterAware) {
+                rosterAware.onRosterChanged(runtime.context().roster());
             }
+            return;
+        }
+        if (pausedFor(player)) {
             return;
         }
         Minigame active = activeMinigame();

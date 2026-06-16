@@ -77,7 +77,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
-public class BountyHuntMinigame extends AbstractMinigame {
+public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.miniverse.minigame.core.event.RosterAware {
     private static final String NAME = "Bounty Hunt";
     private static final String TRACKER_TYPE = ProtectedItemTypes.TRACKER_COMPASS;
     private static final Identifier RESPAWN_PROTECTION_OVERLAY = ProtectionOverlayPresets.RESPAWN_PROTECTION.overlayId();
@@ -390,8 +390,6 @@ public class BountyHuntMinigame extends AbstractMinigame {
 
     public void handlePlayerLeave(ServerPlayerEntity player) {
         UUID playerUuid = player.getUuid();
-        this.targetAssignments.remove(playerUuid);
-        this.scores.remove(playerUuid);
         this.invincibleUntilTicks.remove(playerUuid);
         this.compassCooldownUntilTicks.remove(playerUuid);
         this.playerTracker.remove(playerUuid);
@@ -401,18 +399,8 @@ public class BountyHuntMinigame extends AbstractMinigame {
             ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, GRACE_PROTECTION_OVERLAY);
         }
 
-        for (Map.Entry<UUID, UUID> entry : new ArrayList<>(this.targetAssignments.entrySet())) {
-            if (playerUuid.equals(entry.getValue())) {
-                ServerPlayerEntity hunter = this.getPlayerByUuid(entry.getKey());
-                if (hunter != null) {
-                    this.assignNewTarget(hunter, false);
-                    this.syncTrackerTarget(hunter, false);
-                }
-            }
-        }
-
         if (this.getParticipants().size() <= 1 && this.state != GameState.ENDING) {
-            if (!MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(player.getUuid())) {
+            if (this.checkProgression(this.context.roster()).blocked()) {
                 ServerPlayerEntity remaining = this.getParticipants().stream().findFirst().orElse(null);
                 if (remaining != null) {
                     this.endGameWithWinner(remaining);
@@ -1260,6 +1248,33 @@ public class BountyHuntMinigame extends AbstractMinigame {
             return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsLong() : fallback;
         } catch (RuntimeException ignored) {
             return fallback;
+        }
+    }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        int onlineCount = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).size();
+        if (onlineCount < 2) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Match paused! Not enough players.").formatted(net.minecraft.util.Formatting.RED));
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+    }
+
+    @Override
+    public void onRosterChanged(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        if (this.state != GameState.IN_PROGRESS && this.state != GameState.STARTING) {
+            return;
+        }
+        List<ServerPlayerEntity> online = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null);
+        for (Map.Entry<UUID, UUID> entry : new ArrayList<>(this.targetAssignments.entrySet())) {
+            ServerPlayerEntity target = this.getPlayerByUuid(entry.getValue());
+            if (target == null || target.isDisconnected() || !online.contains(target)) {
+                ServerPlayerEntity hunter = this.getPlayerByUuid(entry.getKey());
+                if (hunter != null && !hunter.isDisconnected()) {
+                    this.assignNewTarget(hunter, false);
+                    this.syncTrackerTarget(hunter, false);
+                }
+            }
         }
     }
 }

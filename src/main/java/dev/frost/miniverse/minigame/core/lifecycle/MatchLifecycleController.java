@@ -59,9 +59,6 @@ public final class MatchLifecycleController {
     private boolean startOverlayReleased;
     private final Set<UUID> pendingReturnPlayerIds = new HashSet<>();
     private int returnCompletionTicksRemaining;
-    private final Map<UUID, PendingDisconnect> disconnectGracePlayers = new HashMap<>();
-    private int disconnectGraceTicksRemaining;
-    private int disconnectGraceLastAnnouncedSecond = -1;
 
     private MatchLifecycleController() {
     }
@@ -82,7 +79,6 @@ public final class MatchLifecycleController {
         this.startOverlayReleased = false;
         this.pendingReturnPlayerIds.clear();
         this.returnCompletionTicksRemaining = 0;
-        this.clearDisconnectGrace();
         this.sequence++;
         this.snapshotParticipants();
         runtime.setState(GameState.STARTING);
@@ -110,7 +106,6 @@ public final class MatchLifecycleController {
         this.options = options == null ? MatchLifecycleOptions.defaults(runtime.minigame().getName()) : options;
         this.endResult = result;
         this.startCallback = null;
-        this.clearDisconnectGrace();
         this.sequence++;
         this.snapshotParticipants();
         this.phase = this.options.returnTeleportEnabled() ? Phase.END_RETURN : Phase.ENDED;
@@ -177,90 +172,36 @@ public final class MatchLifecycleController {
         }
 
         if (this.phase == Phase.RUNNING) {
-            this.tickDisconnectGrace();
+            dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState state = this.runtime.minigame().checkProgression(this.runtime.context().roster());
+            if (state.blocked() && state.actionBarMessage() != null) {
+                for (ServerPlayerEntity player : this.roster()) {
+                    player.sendMessage(state.actionBarMessage(), true);
+                }
+            }
         }
     }
 
     public synchronized void onParticipantLeave(ServerPlayerEntity player) {
-        this.beginDisconnectGrace(player);
+        if (this.runtime == null || !this.runtime.context().roster().contains(player)) {
+            return;
+        }
+        this.lifecyclePlayers.putIfAbsent(player.getUuid(), player);
     }
 
     public synchronized void onParticipantJoin(ServerPlayerEntity player) {
-        if (this.phase == Phase.START_FREEZE && this.runtime != null) {
-            if (this.runtime.context().roster().contains(player)) {
-                this.addStartFreezeParticipant(player);
-            }
-        }
-        this.resolveDisconnectGrace(player);
-    }
-
-    public synchronized boolean beginDisconnectGrace(ServerPlayerEntity player) {
-        if (this.phase != Phase.RUNNING || this.runtime == null) {
-            return false;
-        }
-        if (!this.runtime.context().roster().contains(player)) {
-            return false;
-        }
-        if (this.options.disconnectGraceSeconds() <= 0) {
-            return false;
-        }
-        DisconnectGraceHandler handler = this.options.disconnectGraceHandler();
-        boolean critical = handler != null && handler.isCritical(this.runtime, player);
-
-        boolean added = this.disconnectGracePlayers.put(player.getUuid(), new PendingDisconnect(player.getUuid(), player.getName().getString(), player, critical)) == null;
-        if (added) {
-            this.disconnectGraceTicksRemaining = this.options.disconnectGraceSeconds() * TICKS_PER_SECOND;
-            this.disconnectGraceLastAnnouncedSecond = -1;
-            if (handler != null && critical) {
-                handler.onGraceStarted(this.runtime, this.criticalDisconnectIds(), this.options.disconnectGraceSeconds());
-            }
-            this.broadcastDisconnectGraceStart(player.getName().getString());
-        } else {
-            this.disconnectGraceTicksRemaining = Math.max(this.disconnectGraceTicksRemaining, this.options.disconnectGraceSeconds() * TICKS_PER_SECOND);
-        }
-        return true;
-    }
-
-    public synchronized boolean isDisconnectGraceActive() {
-        return !this.disconnectGracePlayers.isEmpty();
-    }
-
-    public synchronized boolean isDisconnectGraceActiveFor(UUID playerId) {
-        return this.disconnectGracePlayers.containsKey(playerId);
-    }
-
-    public synchronized void tickDisconnectGrace() {
-        if (this.disconnectGracePlayers.isEmpty()) {
+        if (this.runtime == null || !this.runtime.context().roster().contains(player)) {
             return;
         }
-
-        this.disconnectGraceTicksRemaining = Math.max(0, this.disconnectGraceTicksRemaining - 1);
-        int secondsRemaining = (this.disconnectGraceTicksRemaining + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
-        this.announceDisconnectGrace(secondsRemaining);
-        if (this.disconnectGraceTicksRemaining > 0) {
-            return;
+        this.lifecyclePlayers.put(player.getUuid(), player);
+        if (this.phase == Phase.START_FREEZE) {
+            this.addStartFreezeParticipant(player);
         }
-
-        List<PendingDisconnect> pending = List.copyOf(this.disconnectGracePlayers.values());
-        List<UUID> criticalPending = pending.stream()
-            .filter(PendingDisconnect::critical)
-            .map(PendingDisconnect::playerId)
-            .toList();
-        this.disconnectGracePlayers.clear();
-        this.disconnectGraceLastAnnouncedSecond = -1;
-        DisconnectGraceHandler handler = this.options.disconnectGraceHandler();
-        if (handler != null && this.runtime != null && !criticalPending.isEmpty()) {
-            handler.onGraceExpired(this.runtime, criticalPending);
-        }
-        this.dispatchExpiredDisconnects(pending);
     }
 
-    public synchronized int reconnectGraceSecondsRemaining() {
-        if (this.disconnectGracePlayers.isEmpty()) {
-            return 0;
-        }
-        return (this.disconnectGraceTicksRemaining + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
-    }
+
+
+
+
 
     public synchronized JsonObject saveState(MinigameRuntime runtime) {
         JsonObject lifecycle = new JsonObject();
@@ -277,20 +218,7 @@ public final class MatchLifecycleController {
         }
         lifecycle.add("pendingReturnPlayers", pendingReturns);
 
-        JsonObject disconnectGrace = new JsonObject();
-        disconnectGrace.addProperty("ticksRemaining", this.runtime == runtime ? this.disconnectGraceTicksRemaining : 0);
-        JsonArray players = new JsonArray();
-        if (this.runtime == runtime) {
-            for (PendingDisconnect pending : this.disconnectGracePlayers.values()) {
-                JsonObject player = new JsonObject();
-                player.addProperty("uuid", pending.playerId().toString());
-                player.addProperty("name", pending.playerName());
-                player.addProperty("critical", pending.critical());
-                players.add(player);
-            }
-        }
-        disconnectGrace.add("players", players);
-        lifecycle.add("disconnectGrace", disconnectGrace);
+
         return lifecycle;
     }
 
@@ -321,7 +249,6 @@ public final class MatchLifecycleController {
         this.restorePendingReturns(lifecycle);
         this.sequence++;
         this.lifecyclePlayers.clear();
-        this.restoreDisconnectGrace(lifecycle);
 
         runtime.setState(restoredState);
         if (restoredPhase == Phase.RUNNING) {
@@ -347,7 +274,6 @@ public final class MatchLifecycleController {
         this.unfreezeParticipants();
         this.phase = Phase.RUNNING;
         this.runtimeState(GameState.RUNNING);
-        this.clearDisconnectGrace();
         if (this.options.startSound() != null) {
             this.roster().forEach(player -> player.playSound(this.options.startSound(), 1.0F, 1.0F));
         }
@@ -537,90 +463,10 @@ public final class MatchLifecycleController {
         }
     }
 
-    private void announceDisconnectGrace(int secondsRemaining) {
-        if (secondsRemaining < 0 || secondsRemaining == this.disconnectGraceLastAnnouncedSecond) {
-            return;
-        }
-        this.disconnectGraceLastAnnouncedSecond = secondsRemaining;
-        String pendingNames = String.join(", ", this.disconnectGracePlayers.values().stream().map(PendingDisconnect::playerName).toList());
-        String label = pendingNames.isBlank() ? "Waiting for reconnect" : "Waiting for " + pendingNames + " to reconnect";
-        Text text = Text.literal(label + " (" + secondsRemaining + "s)").formatted(Formatting.YELLOW);
-        for (ServerPlayerEntity player : this.roster()) {
-            player.sendMessage(text, true);
-        }
-    }
 
-    private void broadcastDisconnectGraceStart(String playerName) {
-        Text message = Text.literal(playerName + " disconnected. Waiting for reconnect before ending the match.")
-            .formatted(Formatting.YELLOW);
-        this.roster().forEach(player -> player.sendMessage(message, false));
-    }
 
-    private void resolveDisconnectGrace(ServerPlayerEntity player) {
-        if (this.disconnectGracePlayers.isEmpty()) {
-            return;
-        }
 
-        PendingDisconnect pending = this.disconnectGracePlayers.remove(player.getUuid());
-        if (pending == null) {
-            return;
-        }
 
-        DisconnectGraceHandler handler = this.options.disconnectGraceHandler();
-        if (handler != null && this.runtime != null && pending.critical() && this.criticalDisconnectIds().isEmpty()) {
-            handler.onGraceCancelled(this.runtime);
-        }
-
-        if (!this.disconnectGracePlayers.isEmpty()) {
-            this.disconnectGraceLastAnnouncedSecond = -1;
-            return;
-        }
-
-        this.disconnectGraceTicksRemaining = 0;
-        this.disconnectGraceLastAnnouncedSecond = -1;
-        Text message = Text.literal(player.getName().getString() + " reconnected. Match continues.")
-            .formatted(Formatting.GREEN);
-        this.roster().forEach(target -> target.sendMessage(message, false));
-    }
-
-    private void clearDisconnectGrace() {
-        this.disconnectGracePlayers.clear();
-        this.disconnectGraceTicksRemaining = 0;
-        this.disconnectGraceLastAnnouncedSecond = -1;
-    }
-
-    private void restoreDisconnectGrace(JsonObject lifecycle) {
-        this.disconnectGracePlayers.clear();
-        this.disconnectGraceTicksRemaining = 0;
-        this.disconnectGraceLastAnnouncedSecond = -1;
-        if (!lifecycle.has("disconnectGrace") || !lifecycle.get("disconnectGrace").isJsonObject()) {
-            return;
-        }
-        JsonObject disconnectGrace = lifecycle.getAsJsonObject("disconnectGrace");
-        this.disconnectGraceTicksRemaining = Math.max(0, intValue(disconnectGrace, "ticksRemaining", 0));
-        if (!disconnectGrace.has("players") || !disconnectGrace.get("players").isJsonArray()) {
-            return;
-        }
-        for (var element : disconnectGrace.getAsJsonArray("players")) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            JsonObject player = element.getAsJsonObject();
-            try {
-                UUID playerId = UUID.fromString(stringValue(player, "uuid", ""));
-                this.disconnectGracePlayers.put(playerId, new PendingDisconnect(
-                    playerId,
-                    stringValue(player, "name", playerId.toString()),
-                    null,
-                    booleanValue(player, "critical", false)
-                ));
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        if (this.disconnectGracePlayers.isEmpty()) {
-            this.disconnectGraceTicksRemaining = 0;
-        }
-    }
 
     private void restorePendingReturns(JsonObject lifecycle) {
         this.pendingReturnPlayerIds.clear();
@@ -638,29 +484,7 @@ public final class MatchLifecycleController {
         }
     }
 
-    private List<UUID> criticalDisconnectIds() {
-        return this.disconnectGracePlayers.values().stream()
-            .filter(PendingDisconnect::critical)
-            .map(PendingDisconnect::playerId)
-            .toList();
-    }
 
-    private void dispatchExpiredDisconnects(List<PendingDisconnect> pending) {
-        Minigame active = this.runtime == null ? null : this.runtime.minigame();
-        if (!(active instanceof PlayerLeaveAware leaveAware)) {
-            return;
-        }
-        MinecraftServer server = this.runtime.context().nullableServer();
-        for (PendingDisconnect disconnect : pending) {
-            if (server != null && server.getPlayerManager().getPlayer(disconnect.playerId()) != null) {
-                continue;
-            }
-            if (disconnect.player() == null) {
-                continue;
-            }
-            leaveAware.onPlayerLeave(disconnect.player());
-        }
-    }
 
     private void sendAdminCancelMessage() {
         Text message = Text.literal("[CANCEL RETURN TELEPORT]")
@@ -671,7 +495,7 @@ public final class MatchLifecycleController {
         this.admins().forEach(player -> player.sendMessage(message, false));
     }
 
-    private List<ServerPlayerEntity> participants() {
+    private List<ServerPlayerEntity> roster() {
         MinecraftServer server = this.runtime == null ? null : this.runtime.context().nullableServer();
         if (server != null && !this.lifecyclePlayers.isEmpty()) {
             return this.lifecyclePlayers.keySet().stream()
@@ -730,7 +554,6 @@ public final class MatchLifecycleController {
         this.startOverlayReleased = false;
         this.pendingReturnPlayerIds.clear();
         this.returnCompletionTicksRemaining = 0;
-        this.clearDisconnectGrace();
         this.unfreezeParticipants();
         this.lifecyclePlayers.clear();
         this.startCallback = null;
@@ -744,7 +567,6 @@ public final class MatchLifecycleController {
         this.ticksRemaining = 0;
         this.lastAnnouncedSecond = -1;
         this.startOverlayReleased = false;
-        this.clearDisconnectGrace();
         this.unfreezeParticipants();
         this.lifecyclePlayers.clear();
         this.startCallback = null;

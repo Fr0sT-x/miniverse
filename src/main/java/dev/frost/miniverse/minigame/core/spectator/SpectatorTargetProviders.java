@@ -15,7 +15,7 @@ public final class SpectatorTargetProviders {
         return context -> List.of();
     }
 
-    public static SpectatorTargetProvider participants() {
+    public static SpectatorTargetProvider roster() {
         return context -> new ArrayList<>(context.liveParticipants());
     }
 

@@ -896,7 +896,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         return null;
     }
 
-    protected List<ServerPlayerEntity> participants() {
+    protected List<ServerPlayerEntity> roster() {
         return this.context != null ? this.context.liveParticipants() : List.of();
     }
 
@@ -926,5 +926,24 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         for (ServerPlayerEntity player : this.roster()) {
             player.sendMessage(message, false);
         }
+    }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        net.minecraft.server.MinecraftServer server = this.context != null ? this.context.nullableServer() : null;
+        if (server == null) return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+        for (dev.frost.miniverse.team.TeamSnapshot team : this.teams.snapshots()) {
+            boolean hasOnline = false;
+            for (dev.frost.miniverse.team.TeamMembership member : team.members()) {
+                if (roster.onlinePlayers(server).stream().anyMatch(p -> p.getUuid().equals(member.playerUuid()))) {
+                    hasOnline = true;
+                    break;
+                }
+            }
+            if (!hasOnline && !team.members().isEmpty()) {
+                return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for " + team.label() + " to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+            }
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
     }
 }

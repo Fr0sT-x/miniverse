@@ -1,12 +1,13 @@
 package dev.frost.miniverse.minigame.core;
 
 import net.minecraft.server.network.ServerPlayerEntity;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator;
 
 /**
  * Core interface for all minigame implementations.
  * Defines the contract that all minigames must follow.
  */
-public interface Minigame {
+public interface Minigame extends MatchProgressionValidator {
 
     /**
      * Called when the minigame is being set up.

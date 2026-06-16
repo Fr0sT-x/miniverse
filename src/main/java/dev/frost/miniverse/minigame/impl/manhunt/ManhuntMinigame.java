@@ -77,7 +77,7 @@ import dev.frost.miniverse.minigame.core.tracker.PlayerTracker;
  * In this game, Speedrunners try to reach the End while Hunters try to stop them.
  * If a Speedrunner dies, the Hunters win. Hunters can respawn upon death.
  */
-public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractMinigame implements TeamManagerProvider {
+public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractMinigame implements TeamManagerProvider, dev.frost.miniverse.minigame.core.event.RosterAware {
     private static final String NAME = "Manhunt";
 
     private GameState state;
@@ -312,7 +312,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
             this.broadcastMessage(
                 Text.literal(hunter.getName().getString() + " (Hunter) is out of lives!").formatted(Formatting.RED)
             );
-            if (this.getActiveHunters().isEmpty()) {
+            if (!this.hasHunterInReconnectGrace()) {
                 this.endGameWithRunnerVictory(Text.literal("All hunters have been eliminated."));
             }
             return;
@@ -529,7 +529,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
         this.pruneDisconnectedSpeedrunners();
         if (this.aliveSpeedrunners.isEmpty() && !this.speedrunnerRespawns.hasAnyPendingRespawns()) {
-            if (!MatchLifecycleController.getInstance().isDisconnectGraceActive()) {
+            if (!this.checkProgression(this.context.roster()).blocked()) {
                 this.endGameWithHunterVictory();
             }
             return;
@@ -1180,10 +1180,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         this.hunterTrackingIndexes.remove(player.getUuid());
 
         if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive() && this.getAliveSpeedrunnerCount() <= 0) {
-            if (!MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(player.getUuid())) {
-                this.broadcastMessage(
-                    Text.literal(player.getName().getString() + " (Speedrunner) left the game.").formatted(Formatting.RED)
-                );
+            if (!this.checkProgression(this.context.roster()).blocked()) {
                 this.endGameWithHunterVictory();
             }
         }
@@ -1201,11 +1198,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         this.endGameWithHunterVictory();
     }
 
-    int getAliveSpeedrunnerCount() {
+    public int getAliveSpeedrunnerCount() {
         int count = 0;
         for (UUID speedrunnerUuid : this.aliveSpeedrunners) {
             ServerPlayerEntity player = this.getPlayerByUuid(speedrunnerUuid);
-            if ((player == null || player.isDisconnected()) && MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(speedrunnerUuid)) {
+            if (player == null || player.isDisconnected()) {
                 count++;
                 continue;
             }
@@ -1218,7 +1215,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     private boolean hasHunterInReconnectGrace() {
         for (UUID hunterUuid : this.teams.playerUuidsWithRole(TeamRole.HUNTER)) {
-            if (!this.eliminatedHunters.contains(hunterUuid) && MatchLifecycleController.getInstance().isDisconnectGraceActiveFor(hunterUuid)) {
+            if (!this.eliminatedHunters.contains(hunterUuid)) {
                 return true;
             }
         }
@@ -1811,5 +1808,27 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
             player.getEntityWorld().spawnEntity(item);
         }
         player.getInventory().markDirty();
+    }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        long onlineSpeedrunners = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).stream()
+            .filter(p -> this.getPlayerRole(p) == ManhuntRole.SPEEDRUNNER).count();
+        long onlineHunters = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).stream()
+            .filter(p -> this.getPlayerRole(p) == ManhuntRole.HUNTER).count();
+        if (onlineSpeedrunners == 0) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for a Speedrunner to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        if (onlineHunters == 0) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for a Hunter to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+    }
+
+    @Override
+    public void onRosterChanged(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        if (this.state == GameState.RUNNING && this.huntStarted) {
+            this.updateHunterCompasses();
+        }
     }
 }

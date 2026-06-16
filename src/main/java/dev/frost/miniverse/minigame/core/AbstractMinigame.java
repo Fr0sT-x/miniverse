@@ -17,7 +17,9 @@ import net.minecraft.util.Hand;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -151,11 +153,36 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
         // but this ensures the scoreboard is prepared.
     }
 
+    private final java.util.Map<ServerPlayerEntity, Integer> pendingScoreboardPlayers = new java.util.WeakHashMap<>();
+
     // --- Ticking and Pause logic ---
 
     @Override
     public final void onServerTick(MinecraftServer server) {
+        if (!this.pendingScoreboardPlayers.isEmpty()) {
+            java.util.Iterator<java.util.Map.Entry<ServerPlayerEntity, Integer>> iterator = this.pendingScoreboardPlayers.entrySet().iterator();
+            while (iterator.hasNext()) {
+                java.util.Map.Entry<ServerPlayerEntity, Integer> entry = iterator.next();
+                int ticks = entry.getValue() - 1;
+                if (ticks <= 0) {
+                    ServerPlayerEntity player = entry.getKey();
+                    for (FrameworkModule module : this.activeModules) {
+                        if (module instanceof dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate scoreboard) {
+                            scoreboard.remove(player);
+                            scoreboard.show(player);
+                        }
+                    }
+                    iterator.remove();
+                } else {
+                    entry.setValue(ticks);
+                }
+            }
+        }
+        
         if (this.context != null && this.getState() == GameState.PAUSED) {
+            return;
+        }
+        if (this.context != null && this.checkProgression(this.context.roster()).blocked()) {
             return;
         }
         // tick mandatory modules if needed here
@@ -210,6 +237,7 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
         if (this.isTeamBased() && this.vanillaTeamAdapter != null) {
             this.syncVanillaTeams();
         }
+        this.pendingScoreboardPlayers.put(player, 60);
         this.onPlayerReconnectGame(player);
     }
 

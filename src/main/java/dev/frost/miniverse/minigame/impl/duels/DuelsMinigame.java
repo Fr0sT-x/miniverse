@@ -310,4 +310,13 @@ public class DuelsMinigame extends AbstractMinigame {
         // Cannot restore team1 and team2 directly since ServerPlayerEntity isn't available at load time,
         // it must be resolved later or during attachContext/reconnect. We will save them for potential future use.
     }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        int onlineCount = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).size();
+        if (onlineCount < 2) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for your opponent to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+    }
 }

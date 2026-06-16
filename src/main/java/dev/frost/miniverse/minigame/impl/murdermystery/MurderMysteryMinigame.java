@@ -492,4 +492,31 @@ public class MurderMysteryMinigame extends AbstractMinigame {
     public ShopManager getShopManager() {
         return shopManager;
     }
+
+    @Override
+    public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        net.minecraft.server.MinecraftServer server = this.context != null ? this.context.nullableServer() : null;
+        if (server == null) return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+        
+        boolean hasOnlineMurderer = false;
+        boolean hasOnlineTarget = false;
+        
+        for (net.minecraft.server.network.ServerPlayerEntity player : roster.onlinePlayers(server)) {
+            if (this.roleManager.hasRole(player, dev.frost.miniverse.minigame.impl.murdermystery.role.MurdererRole.class)) {
+                hasOnlineMurderer = true;
+            } else if (this.roleManager.hasRole(player, dev.frost.miniverse.minigame.impl.murdermystery.role.InnocentRole.class) || 
+                       this.roleManager.hasRole(player, dev.frost.miniverse.minigame.impl.murdermystery.role.DetectiveRole.class)) {
+                hasOnlineTarget = true;
+            }
+        }
+        
+        if (!hasOnlineMurderer) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for the Murderer to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        if (!hasOnlineTarget) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for targets to reconnect...").formatted(net.minecraft.util.Formatting.RED));
+        }
+        
+        return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+    }
 }

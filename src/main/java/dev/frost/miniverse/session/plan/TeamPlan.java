@@ -17,7 +17,13 @@ public record TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> r
     }
 
     public static TeamPlan fromNbt(NbtCompound nbt, String fallbackLabel) {
-        String label = nbt.contains("label", NbtElement.STRING_TYPE) ? nbt.getString("label") : fallbackLabel;
+        String label = fallbackLabel;
+        if (nbt.contains("id", NbtElement.STRING_TYPE)) {
+            label = nbt.getString("id");
+        } else if (nbt.contains("label", NbtElement.STRING_TYPE)) {
+            label = nbt.getString("label");
+        }
+        
         List<PlayerRef> members = new ArrayList<>();
         NbtList memberList = nbt.getList("members", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < memberList.size(); i++) {

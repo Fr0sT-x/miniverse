@@ -177,7 +177,7 @@ public final class MapEditorPlacementController {
                     } else {
                         if (this.regionCorner1 == null) {
                             this.regionCorner1 = position;
-                            player.sendMessage(Text.literal("Position 1 set. Left click another block to set Position 2.").formatted(Formatting.YELLOW), true);
+                            this.sendSummary(player, "Position 1 set");
                         } else {
                             MapPosition a = this.regionCorner1;
                             MapPosition b = position;
@@ -195,6 +195,7 @@ public final class MapEditorPlacementController {
             }
 
             this.selectedPoints.add(position);
+            this.sendPointSummary(player);
             this.savePointLike(player, position);
             // SESSIONS.remove(player.getUuid()); // Allow continuous placing!
             return true;
@@ -288,9 +289,35 @@ public final class MapEditorPlacementController {
             }
         }
 
+        private void sendPointSummary(ServerPlayerEntity player) {
+            net.minecraft.nbt.NbtList pointList = new net.minecraft.nbt.NbtList();
+            for (MapPosition p : this.selectedPoints) {
+                net.minecraft.nbt.NbtCompound pt = new net.minecraft.nbt.NbtCompound();
+                pt.putDouble("x", p.x());
+                pt.putDouble("y", p.y());
+                pt.putDouble("z", p.z());
+                pt.putFloat("yaw", p.yaw());
+                pt.putFloat("pitch", p.pitch());
+                pointList.add(pt);
+            }
+            net.minecraft.nbt.NbtCompound payloadNbt = new net.minecraft.nbt.NbtCompound();
+            payloadNbt.put("regions", new net.minecraft.nbt.NbtList());
+            payloadNbt.put("points", pointList);
+            if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.SYNC_BUILDER_SELECTION_ID)) {
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.SyncBuilderSelectionPayload(payloadNbt));
+            }
+        }
+
         private void cancel(ServerPlayerEntity player) {
             this.restoreInventory(player);
             SESSIONS.remove(player.getUuid());
+            // Send an empty payload to clear the client's placement preview
+            net.minecraft.nbt.NbtCompound emptyPayload = new net.minecraft.nbt.NbtCompound();
+            emptyPayload.put("regions", new net.minecraft.nbt.NbtList());
+            emptyPayload.put("points", new net.minecraft.nbt.NbtList());
+            if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.SYNC_BUILDER_SELECTION_ID)) {
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.SyncBuilderSelectionPayload(emptyPayload));
+            }
             player.sendMessage(Text.literal("Finished marker placement.").formatted(Formatting.YELLOW), false);
         }
 
@@ -320,7 +347,7 @@ public final class MapEditorPlacementController {
                 markers.removeLast();
             }
             String name = this.definition.single() ? this.definition.displayName() : this.definition.displayName() + " #" + (markers.size() + 1);
-            markers.add(new MapMarker(null, this.definition.key(), name, MarkerType.REGION, List.of(), new ArrayList<>(this.regionParts), new com.google.gson.JsonObject()));
+            markers.add(new MapMarker(UUID.randomUUID().toString(), this.definition.key(), name, MarkerType.REGION, List.of(), new ArrayList<>(this.regionParts), new com.google.gson.JsonObject()));
             this.save(player, markers, "Created " + this.definition.displayName() + " with " + this.regionParts.size() + " parts.");
         }
 
@@ -328,6 +355,9 @@ public final class MapEditorPlacementController {
             try {
                 MapEditorMarkerStore.save(this.mapId, this.extension, this.definition, markers);
                 player.sendMessage(Text.literal(success).formatted(Formatting.GREEN), false);
+                if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.HIDE_MAP_EDITOR_OVERLAY_ID)) {
+                    net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.HideMapEditorOverlayPayload(this.extension.gameId(), this.definition.key()));
+                }
             } catch (IOException e) {
                 player.sendMessage(Text.literal("Failed to save marker: " + e.getMessage()).formatted(Formatting.RED), false);
             }

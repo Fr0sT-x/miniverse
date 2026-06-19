@@ -123,11 +123,19 @@ public class RegionTriggerService {
     private boolean hasTrigger(MapMarker marker, TriggerType type) {
         java.util.Optional<com.google.gson.JsonObject> sessionJson = dev.frost.miniverse.session.SessionRuntimeConfig.getSessionJson();
         if (sessionJson.isEmpty()) return false;
-        String gameId = dev.frost.miniverse.session.SessionConfigJson.string(sessionJson.get(), "gameId", dev.frost.miniverse.session.SessionConfigJson.string(sessionJson.get(), "game", ""));
         
-        MapEditorExtension extension = MapEditorExtensionRegistry.get(gameId).orElse(null);
+        com.google.gson.JsonObject root = sessionJson.get();
+        String gameId = dev.frost.miniverse.session.SessionConfigJson.string(root, "gameId", "");
+        if (gameId.isBlank()) {
+            gameId = dev.frost.miniverse.session.SessionConfigJson.string(root, "game", "");
+        }
+        if (gameId.isBlank()) {
+            gameId = System.getProperty("miniverse.session.game", "");
+        }
+        
+        MapEditorExtension extension = dev.frost.miniverse.map.editor.MapEditorExtensionRegistry.get(gameId).orElse(null);
         if (extension == null) return false;
-        for (MarkerDefinition def : extension.markers()) {
+        for (dev.frost.miniverse.map.editor.MarkerDefinition def : extension.markers()) {
             if (def.key().equals(marker.definitionKey())) {
                 return def.triggers().contains(type);
             }

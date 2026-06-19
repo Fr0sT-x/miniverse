@@ -69,6 +69,7 @@ public final class DuelsDefinition implements MinigameDefinition {
         String mapId = settingsNbt.contains("mapId") ? settingsNbt.getString("mapId").trim() : "";
         String duelType = settingsNbt.contains("duelType") ? settingsNbt.getString("duelType").trim() : "";
         String kitId = settingsNbt.contains("kitId") ? settingsNbt.getString("kitId").trim() : "";
+        String rounds = settingsNbt.contains("rounds") ? settingsNbt.getString("rounds").trim() : "1";
         if (!mapId.isBlank()) {
             properties.setProperty("duels.mapId", mapId);
             dev.frost.miniverse.map.MapStore.readGamemodeConfig(mapId, ID)
@@ -79,6 +80,9 @@ public final class DuelsDefinition implements MinigameDefinition {
         }
         if (!kitId.isBlank()) {
             properties.setProperty("duels.kitId", kitId);
+        }
+        if (!rounds.isBlank()) {
+            properties.setProperty("duels.rounds", rounds);
         }
     }
 
@@ -92,6 +96,9 @@ public final class DuelsDefinition implements MinigameDefinition {
         }
         if (settingsNbt.contains("kitId")) {
             properties.put("miniverse.duels.kitId", settingsNbt.getString("kitId"));
+        }
+        if (settingsNbt.contains("rounds")) {
+            properties.put("miniverse.duels.rounds", settingsNbt.getString("rounds"));
         }
     }
 

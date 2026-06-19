@@ -20,6 +20,7 @@ import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRegionAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
@@ -79,7 +80,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
-public final class BridgeMinigame extends AbstractMinigame implements PlayerDamageAware, PlayerRegionAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware {
+public final class BridgeMinigame extends AbstractMinigame implements PlayerDamageAware, PlayerRegionAware, SpawnPointAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware {
 
     public static final String RED_TEAM = "red";
     public static final String BLUE_TEAM = "blue";
@@ -111,9 +112,9 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     private final Map<UUID, Integer> arrowTimers = new java.util.HashMap<>();
 
     @Override
-    protected void onPlayerJoinGame(ServerPlayerEntity player, MinecraftServer server) {
-        if (this.getTeamId(player) != null && !this.mapConfig.redSpawns().isEmpty()) {
-            this.teleportToTeamSpawn(player);
+    public void teleportToSpawn(ServerPlayerEntity player) {
+        if (this.getTeamId(player) != null) {
+            this.teleportToTeamSpawnSafe(player);
         }
     }
 
@@ -408,6 +409,8 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             }
         }
 
+        this.checkGoalRegions();
+
         if (this.mapConfig.voidLevelRef() != null) {
             int voidY = this.mapConfig.voidLevelRef() - this.settings.voidDeathOffset();
             for (ServerPlayerEntity p : this.roster()) {
@@ -434,6 +437,38 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
                 }
             }
         }
+    }
+
+    private void checkGoalRegions() {
+        if (!this.acceptingGoals || this.getState() != GameState.PLAYING) {
+            return;
+        }
+
+        dev.frost.miniverse.map.runtime.RuntimeMarkerCache markerCache = dev.frost.miniverse.map.runtime.RuntimeMarkerCache.getInstance();
+        for (ServerPlayerEntity player : this.roster()) {
+            if (!this.acceptingGoals) {
+                return;
+            }
+            if (!this.isParticipant(player) || player.isSpectator() || !player.isAlive()) {
+                continue;
+            }
+
+            List<MapMarker> regions = markerCache.getRegionsIntersecting(player.getBoundingBox());
+            for (MapMarker region : regions) {
+                if (this.isGoalRegion(region)) {
+                    this.onPlayerEnterRegion(player, region);
+                    if (!this.acceptingGoals) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean isGoalRegion(MapMarker region) {
+        return region != null
+            && (BridgeDefinition.RED_TEAM_GOAL.equals(region.definitionKey())
+                || BridgeDefinition.BLUE_TEAM_GOAL.equals(region.definitionKey()));
     }
 
     @Override

@@ -44,7 +44,8 @@ public class FixedCameraSpectatorPolicy implements DeathSpectatorPolicy {
             SpectatorMode.STANDARD,
             context.spectatorTargetAtDeath(),
             null,
-            null
+            null,
+            this.noTargetPolicy
         );
     }
 

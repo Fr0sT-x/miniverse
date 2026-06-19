@@ -44,10 +44,16 @@ public final class MapEditorNbt {
         NbtCompound root = new NbtCompound();
         root.putString("mapId", mapId == null ? "" : mapId);
         NbtList games = new NbtList();
+
+        java.util.Optional<dev.frost.miniverse.map.MapDescriptor> mapOpt = dev.frost.miniverse.map.MapStore.find(mapId);
+
         for (MapEditorExtension extension : MapEditorExtensionRegistry.all()) {
             NbtCompound game = new NbtCompound();
             game.putString("gameId", extension.gameId());
-            Map<String, List<MapMarker>> markersByDefinition = MapEditorMarkerStore.loadAll(mapId, extension);
+
+            com.google.gson.JsonObject config = mapOpt.flatMap(m -> dev.frost.miniverse.map.MapStore.readGamemodeConfig(m, extension.gameId())).orElseGet(com.google.gson.JsonObject::new);
+            Map<String, List<MapMarker>> markersByDefinition = MapEditorMarkerStore.loadAll(config, extension);
+
             NbtList markerGroups = new NbtList();
             for (MarkerDefinition definition : extension.markers()) {
                 NbtCompound group = new NbtCompound();
@@ -62,7 +68,7 @@ public final class MapEditorNbt {
             game.put("markerGroups", markerGroups);
 
             NbtCompound validationNbt = new NbtCompound();
-            dev.frost.miniverse.map.MapValidationResult result = dev.frost.miniverse.map.MapStore.validate(mapId, extension.gameId());
+            dev.frost.miniverse.map.MapValidationResult result = mapOpt.map(m -> dev.frost.miniverse.map.MapStore.validate(m, extension.gameId())).orElseGet(() -> dev.frost.miniverse.map.MapStore.validate(mapId, extension.gameId()));
             validationNbt.putBoolean("valid", result.valid());
             NbtList errors = new NbtList();
             for (String error : result.errors()) {

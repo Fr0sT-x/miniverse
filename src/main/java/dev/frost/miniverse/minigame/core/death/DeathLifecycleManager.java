@@ -8,7 +8,6 @@ import dev.frost.miniverse.minigame.core.death.state.PlayerDeathStateMachine;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorSession;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.world.GameMode;
 import org.jetbrains.annotations.Nullable;
@@ -92,14 +91,15 @@ public class DeathLifecycleManager {
         if (this.config.getDeathPolicy().interceptsRespawn()) {
             victim.changeGameMode(GameMode.SPECTATOR);
 
-            victim.networkHandler.sendPacket(new PlayerRespawnS2CPacket(
-                victim.createCommonPlayerSpawnInfo(victim.getServerWorld()),
-                PlayerRespawnS2CPacket.KEEP_ALL
-            ));
+            // Do NOT send PlayerRespawnS2CPacket here — that triggers a full client-side
+            // terrain reload ("Loading terrain" screen for ~30s). A simple game mode change
+            // + teleport is sufficient; the client handles SPECTATOR mode without respawning.
 
             SpectatorSession liveSession = this.spectatorService.isSpectating(victimId) ? this.spectatorService.session(victimId) : null;
             RespawnStrategy.RespawnLocation location = this.config.getRespawnStrategy().resolve(context, liveSession);
-            victim.teleport(location.world(), location.pos().x, location.pos().y, location.pos().z, java.util.Set.of(), location.yaw(), location.pitch());
+            if (location != null && location.world() != null) {
+                victim.teleport(location.world(), location.pos().x, location.pos().y, location.pos().z, java.util.Set.of(), location.yaw(), location.pitch());
+            }
 
             if (transitionState(victim, context, DeathState.SPECTATING)) {
                 if (callbacks != null) {

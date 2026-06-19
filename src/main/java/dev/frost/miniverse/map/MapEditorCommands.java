@@ -74,6 +74,11 @@ public final class MapEditorCommands {
             return 0;
         }
 
+        // Tell the client to hide all map editor overlays immediately, before the transfer starts.
+        if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.MAP_EDITOR_HIDE_ID)) {
+            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.MapEditorHidePayload());
+        }
+
         TransitionTransferCoordinator.transfer(
             player,
             SessionRuntimeConfig.getReturnHost(),

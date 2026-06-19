@@ -56,6 +56,8 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
     private int contextMenuX = 0;
     private int contextMenuY = 0;
     
+    private int selectedRounds = 1;
+    
     private String kitStatusMessage = null;
     private long kitStatusMessageTime = 0;
 
@@ -114,6 +116,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.moduleManager.register("duel_types_config", "D", "Duel Types", "Kits & Duel Types", "Create and manage Duel Types.", 0xFF6600CC);
         
         this.useGameRules();
+        this.moduleManager.register("match_rules", "M", "Match Rules", "Rules", "Configure match-specific rules like total rounds.", UiTheme.ACCENT_GREEN);
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
     }
 
@@ -201,6 +204,15 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                 });
                 deleteBtn.setMessage(Text.literal("Delete").formatted(net.minecraft.util.Formatting.RED));
             }
+        } else if (this.moduleManager.isActive("match_rules")) {
+            this.addActionButton(screen, "-", mainPanel.x() + 14, mainPanel.y() + 64, 20, "Decrease rounds", () -> {
+                if (this.selectedRounds > 1) {
+                    this.selectedRounds -= 2;
+                }
+            });
+            this.addActionButton(screen, "+", mainPanel.x() + 64, mainPanel.y() + 64, 20, "Increase rounds", () -> {
+                this.selectedRounds += 2;
+            });
         }
 
         // Dialogs
@@ -441,6 +453,9 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                 this.renderCustomColumn(context, textRenderer, rect2, "Kits", 0xFFFFAA00, 0, 0, mouseX, mouseY, row -> {});
                 context.drawText(textRenderer, Text.literal("Select a type first"), rect2.x() + 12, rect2.y() + COLUMN_HEADER_HEIGHT + 10, UiTheme.TEXT_MUTED, false);
             }
+        } else if (this.moduleManager.isActive("match_rules")) {
+            context.drawText(textRenderer, Text.literal("Total Rounds (Best of N)"), mainPanel.x() + 14, mainPanel.y() + 45, UiTheme.TEXT, false);
+            context.drawText(textRenderer, Text.literal(String.valueOf(this.selectedRounds)), mainPanel.x() + 46, mainPanel.y() + 70, UiTheme.TEXT, false);
         }
         
         if (this.moduleManager.isActive("kits") && this.kitStatusMessage != null) {
@@ -799,6 +814,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putString("mapId", this.selectedMap.id());
         builder.settings().putString("duelType", this.selectedType.id());
         builder.settings().putString("kitId", this.selectedKit.getId().toString());
+        builder.settings().putInt("rounds", this.selectedRounds);
     }
 
     @Override
@@ -815,6 +831,7 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
             Text.literal("Mode: " + (this.selectedType != null ? this.selectedType.name() : "None selected")),
             Text.literal("Map: " + (this.selectedMap != null ? this.selectedMap.id() : "None selected")),
             Text.literal("Kit: " + (this.selectedKit != null ? this.selectedKit.getDisplayName().getString() : "None selected")),
+            Text.literal("Rounds: Best of " + this.selectedRounds),
             Text.literal("Players: " + t1 + " vs " + t2)
         );
     }

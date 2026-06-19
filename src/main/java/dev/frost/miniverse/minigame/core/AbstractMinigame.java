@@ -36,24 +36,20 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     private VanillaTeamAdapter vanillaTeamAdapter;
     protected GlobalMatchRules gameRules;
 
-    private Boolean keepInventoryOverride;
     private Boolean pvpEnabledOverride;
     private Boolean doDaylightCycleOverride;
     private Boolean doWeatherCycleOverride;
     private Boolean fallDamageOverride;
     private Boolean naturalRegenerationOverride;
     private Boolean announceAdvancementsOverride;
-    private Boolean doImmediateRespawnOverride;
 
     public void applyGameRulesOverrides(java.util.Properties properties) {
-        this.keepInventoryOverride = parseOverride(properties, "gamerule.keepInventory");
         this.pvpEnabledOverride = parseOverride(properties, "gamerule.pvpEnabled");
         this.doDaylightCycleOverride = parseOverride(properties, "gamerule.doDaylightCycle");
         this.doWeatherCycleOverride = parseOverride(properties, "gamerule.doWeatherCycle");
         this.fallDamageOverride = parseOverride(properties, "gamerule.fallDamage");
         this.naturalRegenerationOverride = parseOverride(properties, "gamerule.naturalRegeneration");
         this.announceAdvancementsOverride = parseOverride(properties, "gamerule.announceAdvancements");
-        this.doImmediateRespawnOverride = parseOverride(properties, "gamerule.doImmediateRespawn");
     }
 
     @Nullable
@@ -77,18 +73,18 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
 
     @Override
     public final void startGame() {
-        GlobalMatchRules base = configureGameRules();
-        if (base == null) base = GlobalMatchRules.defaults();
+        GlobalMatchRules base = this.configureGameRules();
+        if (base == null) base = GlobalMatchRules.defaults(false, false);
 
         this.gameRules = new GlobalMatchRules(
-            this.keepInventoryOverride != null ? this.keepInventoryOverride : base.keepInventory(),
+            base.keepInventory(),
+            base.doImmediateRespawn(),
             this.pvpEnabledOverride != null ? this.pvpEnabledOverride : base.pvpEnabled(),
             this.doDaylightCycleOverride != null ? this.doDaylightCycleOverride : base.doDaylightCycle(),
             this.doWeatherCycleOverride != null ? this.doWeatherCycleOverride : base.doWeatherCycle(),
             this.fallDamageOverride != null ? this.fallDamageOverride : base.fallDamage(),
             this.naturalRegenerationOverride != null ? this.naturalRegenerationOverride : base.naturalRegeneration(),
-            this.announceAdvancementsOverride != null ? this.announceAdvancementsOverride : base.announceAdvancements(),
-            this.doImmediateRespawnOverride != null ? this.doImmediateRespawnOverride : base.doImmediateRespawn()
+            this.announceAdvancementsOverride != null ? this.announceAdvancementsOverride : base.announceAdvancements()
         );
 
         if (this.context.nullableServer() != null) {
@@ -137,7 +133,7 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     protected abstract GlobalMatchRules configureGameRules();
 
     private void resetGameRules() {
-        GlobalMatchRules.defaults().apply(this.context.nullableServer());
+        GlobalMatchRules.defaults(false, false).apply(this.context.nullableServer());
     }
 
     protected boolean isTeamBased() {

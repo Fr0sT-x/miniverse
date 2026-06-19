@@ -122,6 +122,12 @@ public final class MinigameEventRouter {
             return;
         }
         Minigame active = this.activeMinigame();
+        if (active instanceof dev.frost.miniverse.minigame.core.death.DeathAwareMinigame deathAware) {
+            dev.frost.miniverse.minigame.core.death.DeathLifecycleManager manager = deathAware.getDeathLifecycleManager();
+            if (manager != null) {
+                manager.tick(server);
+            }
+        }
         if (active instanceof ServerTickAware tickAware) {
             tickAware.onServerTick(server);
         }
@@ -164,10 +170,26 @@ public final class MinigameEventRouter {
 
     private void onAfterDeath(LivingEntity entity, DamageSource source) {
         SpectatorService.getInstance().onEntityDeath(entity);
-        if (entity instanceof ServerPlayerEntity player && this.pausedFor(player)) {
+        if (!(entity instanceof ServerPlayerEntity player)) {
+            Minigame active = this.activeMinigame();
+            if (active instanceof EntityDeathAware deathAware) {
+                deathAware.onEntityDeath(entity, source);
+            }
+            return;
+        }
+        if (this.pausedFor(player)) {
             return;
         }
         Minigame active = this.activeMinigame();
+        
+        if (active instanceof dev.frost.miniverse.minigame.core.death.DeathAwareMinigame deathAware) {
+            dev.frost.miniverse.minigame.core.death.DeathLifecycleManager manager = deathAware.getDeathLifecycleManager();
+            if (manager != null) {
+                manager.handleFatalDamage(player, source);
+                return;
+            }
+        }
+
         if (active instanceof EntityDeathAware deathAware) {
             deathAware.onEntityDeath(entity, source);
         }

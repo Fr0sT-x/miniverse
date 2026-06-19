@@ -2,6 +2,9 @@ package dev.frost.miniverse.minigame.core.spectator;
 
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.death.NoTargetPolicy;
+import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
+import dev.frost.miniverse.minigame.core.freeze.FreezeService;
 import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -53,6 +56,17 @@ public final class SpectatorService {
                                             @Nullable UUID preferredTargetId,
                                             @Nullable GameMode returnMode,
                                             @Nullable Text startMessage) {
+        return startSpectating(spectator, policy, targetProvider, mode, preferredTargetId, returnMode, startMessage, null);
+    }
+
+    public SpectatorSession startSpectating(ServerPlayerEntity spectator,
+                                            @Nullable SpectatorPolicy policy,
+                                            @Nullable SpectatorTargetProvider targetProvider,
+                                            @Nullable SpectatorMode mode,
+                                            @Nullable UUID preferredTargetId,
+                                            @Nullable GameMode returnMode,
+                                            @Nullable Text startMessage,
+                                            @Nullable NoTargetPolicy noTargetPolicy) {
         if (spectator == null) {
             throw new IllegalArgumentException("spectator is required");
         }
@@ -67,7 +81,8 @@ public final class SpectatorService {
             resolvedMode,
             resolvedReturnMode,
             this.tickCounter,
-            preferredTargetId
+            preferredTargetId,
+            noTargetPolicy
         );
         this.sessions.put(spectator.getUuid(), session);
         this.applySession(spectator, session, true);
@@ -140,6 +155,7 @@ public final class SpectatorService {
             return;
         }
         this.invalidateTarget(player.getUuid());
+        this.stopSpectating(player.getUuid(), SpectatorStopReason.DISCONNECT, false, player.getServer());
     }
 
     public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
@@ -254,6 +270,9 @@ public final class SpectatorService {
         this.cameraController.ensureSpectatorMode(spectator);
         SpectatorRestrictions restrictions = session.policy().restrictions();
         List<Entity> allowedTargets = resolveAllowedTargets(context, session);
+        if (allowedTargets.isEmpty() && session.noTargetPolicy() == NoTargetPolicy.SPECTATE_ANY_PLAYER) {
+            allowedTargets = SpectatorTargetProviders.onlinePlayers().findTargets(context);
+        }
         session.setAllowedTargetIds(allowedTargets.stream().map(Entity::getUuid).toList());
 
         Entity currentCamera = this.cameraController.currentCameraTarget(spectator);
@@ -265,9 +284,19 @@ public final class SpectatorService {
                 session.setTargetId(selectedTarget.getUuid());
                 if (force || !this.cameraController.isAttachedTo(spectator, selectedTarget)) {
                     this.cameraController.attach(spectator, selectedTarget);
+                    FreezeService.getInstance().unfreeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
                 }
             } else {
                 session.setTargetId(null);
+                if (restrictions.lockCamera()) {
+                    if (session.noTargetPolicy() == NoTargetPolicy.FREEZE) {
+                        FreezeService.getInstance().freeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
+                        return;
+                    } else if (session.noTargetPolicy() == NoTargetPolicy.REQUEST_ELIMINATION) {
+                        this.events.notifyNoTargetElimination(session);
+                        return;
+                    }
+                }
                 if (force || !restrictions.allowFreecam()) {
                     this.cameraController.detach(spectator);
                 }

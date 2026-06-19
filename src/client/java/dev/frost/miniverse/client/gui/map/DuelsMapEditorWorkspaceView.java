@@ -311,7 +311,12 @@ public final class DuelsMapEditorWorkspaceView implements WorkspaceView {
         context.drawText(textRenderer, Text.literal("Restrictions:"), arenaRow.x() + 10, arenaRow.y() + 40, UiTheme.TEXT_DIM, false);
         int cx = arenaRow.x() + 80;
         for (dev.frost.miniverse.minigame.core.region.RegionRestriction res : dev.frost.miniverse.minigame.core.region.RegionRestriction.values()) {
-            boolean active = arena.properties() != null && arena.properties().has("restrictions") && arena.properties().getAsJsonArray("restrictions").contains(new com.google.gson.JsonPrimitive(res.name()));
+            boolean active = false;
+            if (arena.properties() != null && arena.properties().has("restrictions") && arena.properties().get("restrictions").isJsonArray()) {
+                for (com.google.gson.JsonElement e : arena.properties().getAsJsonArray("restrictions")) {
+                    if (e.getAsString().equals(res.name())) active = true;
+                }
+            }
             String label = (active ? "[X] " : "[ ] ") + res.name();
             context.drawText(textRenderer, Text.literal(label), cx, arenaRow.y() + 40, active ? UiTheme.TEXT : UiTheme.TEXT_DIM, false);
             cx += textRenderer.getWidth(label) + 12;
@@ -320,7 +325,12 @@ public final class DuelsMapEditorWorkspaceView implements WorkspaceView {
         context.drawText(textRenderer, Text.literal("Supports Types:"), arenaRow.x() + 10, arenaRow.y() + 58, UiTheme.TEXT_DIM, false);
         int dx = arenaRow.x() + 90;
         for (dev.frost.miniverse.minigame.impl.duels.DuelType type : SessionSnapshotData.duelTypes()) {
-            boolean active = arena.properties() != null && arena.properties().has("supported_duel_types") && arena.properties().getAsJsonArray("supported_duel_types").contains(new com.google.gson.JsonPrimitive(type.id()));
+            boolean active = false;
+            if (arena.properties() != null && arena.properties().has("supported_duel_types") && arena.properties().get("supported_duel_types").isJsonArray()) {
+                for (com.google.gson.JsonElement e : arena.properties().getAsJsonArray("supported_duel_types")) {
+                    if (e.getAsString().equals(type.id())) active = true;
+                }
+            }
             String label = (active ? "[X] " : "[ ] ") + type.name();
             context.drawText(textRenderer, Text.literal(label), dx, arenaRow.y() + 58, active ? UiTheme.TEXT : UiTheme.TEXT_DIM, false);
             dx += textRenderer.getWidth(label) + 12;

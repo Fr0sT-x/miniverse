@@ -53,6 +53,15 @@ public final class FreezeService {
         this.reasonsByPlayer.clear();
     }
 
+    public synchronized void clear(ServerPlayerEntity player) {
+        if (player == null) {
+            return;
+        }
+        if (this.reasonsByPlayer.remove(player.getUuid()) != null) {
+            this.sendFreezeState(player, false);
+        }
+    }
+
     public synchronized boolean isFrozen(ServerPlayerEntity player) {
         return player != null && this.reasonsByPlayer.containsKey(player.getUuid());
     }
@@ -62,6 +71,12 @@ public final class FreezeService {
             return;
         }
         ServerPlayNetworking.send(player, new NetworkConstants.FreezeStatePayload(frozen));
+    }
+
+    public synchronized void onPlayerLeave(ServerPlayerEntity player) {
+        if (player != null) {
+            this.reasonsByPlayer.remove(player.getUuid());
+        }
     }
 }
 

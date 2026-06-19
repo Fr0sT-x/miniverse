@@ -70,6 +70,16 @@ public final class MapEditorMarkerStore {
         return result;
     }
 
+    /** Load all markers from an already-parsed JSON object (e.g. from session properties). */
+    public static Map<String, List<MapMarker>> loadAll(JsonObject config, MapEditorExtension extension) {
+        Map<String, List<MapMarker>> result = new LinkedHashMap<>();
+        if (config == null) config = new JsonObject();
+        for (MarkerDefinition definition : extension.markers()) {
+            result.put(definition.key(), load(config, definition));
+        }
+        return result;
+    }
+
     public static void save(String mapId, MapEditorExtension extension, MarkerDefinition definition, List<MapMarker> markers) throws IOException {
         JsonObject config = MapStore.readGamemodeConfig(mapId, extension.gameId()).orElseGet(JsonObject::new);
         write(config, definition, markers == null ? List.of() : markers);
@@ -149,7 +159,9 @@ public final class MapEditorMarkerStore {
             points.add(MapPosition.fromJson(json, MapPosition.of(0.0D, 100.0D, 0.0D)));
         }
         String name = json.has("name") ? json.get("name").getAsString() : fallbackName;
-        String id = json.has("id") ? json.get("id").getAsString() : null;
+        String id = json.has("id") && !json.get("id").getAsString().isBlank()
+            ? json.get("id").getAsString()
+            : java.util.UUID.nameUUIDFromBytes((definition.key() + ":" + json.toString()).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
         JsonObject properties = json.has("properties") && json.get("properties").isJsonObject() ? json.getAsJsonObject("properties").deepCopy() : new JsonObject();
         return new MapMarker(id, definition.key(), name, definition.type(), points, List.of(), properties);
     }
@@ -185,7 +197,9 @@ public final class MapEditorMarkerStore {
             return Optional.empty();
         }
         String name = json.has("name") ? json.get("name").getAsString() : definition.displayName();
-        String id = json.has("id") ? json.get("id").getAsString() : null;
+        String id = json.has("id") && !json.get("id").getAsString().isBlank()
+            ? json.get("id").getAsString()
+            : java.util.UUID.nameUUIDFromBytes((definition.key() + ":" + json.toString()).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
         JsonObject properties = json.has("properties") && json.get("properties").isJsonObject() ? json.getAsJsonObject("properties").deepCopy() : new JsonObject();
         return Optional.of(new MapMarker(id, definition.key(), name, definition.type(), List.of(), parts, properties));
     }

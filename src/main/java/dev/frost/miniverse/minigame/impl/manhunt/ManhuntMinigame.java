@@ -156,7 +156,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules configureGameRules() {
-        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults().withImmediateRespawn(true);
+        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults(false, true);
     }
 
     @Override

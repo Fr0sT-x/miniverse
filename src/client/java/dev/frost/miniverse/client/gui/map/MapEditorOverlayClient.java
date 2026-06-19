@@ -28,6 +28,10 @@ public final class MapEditorOverlayClient {
 
     public static void register() {
         WorldRenderEvents.LAST.register(context -> {
+            // Capture matrices for HUD point projection
+            lastProjMatrix = new org.joml.Matrix4f(context.projectionMatrix());
+            lastModelViewMatrix = new org.joml.Matrix4f(context.positionMatrix());
+
             MapEditorState state = MapEditorState.INSTANCE;
 
             // Only render when map editor is active (on a map editor server)
@@ -108,7 +112,56 @@ public final class MapEditorOverlayClient {
                 matrices.pop();
             }
         });
+
+        // 2D HUD indicator for active point placements (no particles - screen-space only)
+        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register((drawContext, tickDeltaManager) -> {
+            MapEditorState state = MapEditorState.INSTANCE;
+            if (!state.editorActive || state.placementPoints.isEmpty()) {
+                return;
+            }
+            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+            if (client.world == null || client.player == null || client.getWindow() == null
+                    || lastProjMatrix == null || lastModelViewMatrix == null) {
+                return;
+            }
+            int screenW = client.getWindow().getScaledWidth();
+            int screenH = client.getWindow().getScaledHeight();
+            net.minecraft.client.render.Camera camera = client.gameRenderer.getCamera();
+            net.minecraft.util.math.Vec3d camPos = camera.getPos();
+            int index = 1;
+            for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint p : state.placementPoints) {
+                double wx = p.x() - camPos.x;
+                double wy = p.y() - camPos.y;
+                double wz = p.z() - camPos.z;
+                org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
+                // Apply model-view then projection
+                lastModelViewMatrix.transform(clip);
+                lastProjMatrix.transform(clip);
+                if (clip.w <= 0.0f) { index++; continue; }
+                float ndcX = clip.x / clip.w;
+                float ndcY = clip.y / clip.w;
+                if (Math.abs(ndcX) > 1.5f || Math.abs(ndcY) > 1.5f) { index++; continue; }
+                int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
+                int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
+                sx = Math.max(20, Math.min(screenW - 20, sx));
+                sy = Math.max(20, Math.min(screenH - 20, sy));
+                // Outer ring (purple border), inner fill
+                int dotColor = 0xFFB46AFF;
+                drawContext.fill(sx - 4, sy - 4, sx + 4, sy + 4, dotColor);
+                drawContext.fill(sx - 3, sy - 3, sx + 3, sy + 3, 0xFF6622AA);
+                // Index and coordinate labels
+                String label = "#" + index;
+                String coords = "(" + Math.round(p.x()) + ", " + Math.round(p.y()) + ", " + Math.round(p.z()) + ")";
+                drawContext.drawText(client.textRenderer, net.minecraft.text.Text.literal(label), sx + 7, sy - 9, dotColor, true);
+                drawContext.drawText(client.textRenderer, net.minecraft.text.Text.literal(coords), sx + 7, sy + 1, 0xFFCCCCCC, true);
+                index++;
+            }
+        });
     }
+
+    /** Captured each frame from WorldRenderContext for use in the HUD projection. */
+    private static org.joml.Matrix4f lastProjMatrix = null;
+    private static org.joml.Matrix4f lastModelViewMatrix = null;
 
     private static void drawSpawnPoint(MatrixStack matrices, Tessellator tessellator, SessionSnapshotData.EditorMarker marker) {
         SessionSnapshotData.EditorPoint p = marker.points().get(0);

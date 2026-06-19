@@ -18,6 +18,7 @@ import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
 import dev.frost.miniverse.minigame.core.event.PlayerJoinAware;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
@@ -52,15 +53,29 @@ import java.util.List;
 import java.util.Set;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleConfig;
+import dev.frost.miniverse.minigame.core.death.policy.impl.SpectateForeverPolicy;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryDeathCallbacks;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryDeathPolicy;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryRespawnStrategy;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysterySpectatorPolicy;
 
-public class MurderMysteryMinigame extends AbstractMinigame {
+public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwareMinigame, SpawnPointAware {
 
     private static final String NAME = MurderMysteryDefinition.ID;
     private ScoreboardTemplate scoreboard;
     private ScoreboardLine timeLine;
     private ScoreboardLine innocentsLine;
     
-    private MinigameContext context;
+    private DeathLifecycleManager deathLifecycleManager;
+
+    @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
+    }
+    
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private boolean paused = false;
     
@@ -83,15 +98,19 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
 
     public void applySettings(MurderMysterySettings settings) {
+        applySettings(settings, null);
+    }
+
+    public void applySettings(MurderMysterySettings settings, String preSerializedMapConfig) {
         this.settings = settings;
-        this.mapConfig = MurderMysteryMapConfig.load(settings.mapId());
+        this.mapConfig = MurderMysteryMapConfig.load(settings.mapId(), preSerializedMapConfig);
         this.coinManager = new CoinManager(economyManager, mapConfig.coinSpawns(), settings.coinSpawnIntervalTicks());
         this.shopManager = new ShopManager(economyManager, weaponManager, roleManager, settings);
     }
 
     @Override
     public void initialize() {
-        this.setState(GameState.WAITING_FOR_PLAYERS);
+        if (this.context != null) this.context.setState(GameState.WAITING_FOR_PLAYERS);
         this.paused = false;
         this.elapsedTicks = 0;
         if (server != null) {
@@ -104,11 +123,54 @@ public class MurderMysteryMinigame extends AbstractMinigame {
         if (coinManager != null) coinManager.clear();
         if (shopManager != null) shopManager.clear();
         nextSpawnIndex = 0;
+        
+        DeathLifecycleConfig config = new DeathLifecycleConfig() {
+            @Override
+            public dev.frost.miniverse.minigame.core.death.policy.DeathPolicy getDeathPolicy() {
+                return new MurderMysteryDeathPolicy();
+            }
+
+            @Override
+            public dev.frost.miniverse.minigame.core.death.policy.DeathSpectatorPolicy getSpectatorPolicy() {
+                return new MurderMysterySpectatorPolicy(SpectatorService.getInstance());
+            }
+
+            @Override
+            public dev.frost.miniverse.minigame.core.death.policy.PostDeathPolicy createPostDeathPolicy() {
+                return new SpectateForeverPolicy();
+            }
+
+            @Override
+            public dev.frost.miniverse.minigame.core.death.policy.RespawnStrategy getRespawnStrategy() {
+                return new MurderMysteryRespawnStrategy(MurderMysteryMinigame.this);
+            }
+
+            @Override
+            public GameMode resolveRespawnGameMode() {
+                return GameMode.SPECTATOR;
+            }
+
+            @Override
+            public dev.frost.miniverse.minigame.core.death.config.DeathLifecycleCallbacks getCallbacks() {
+                return new MurderMysteryDeathCallbacks(MurderMysteryMinigame.this);
+            }
+
+            @Override
+            public String resolveTeamId(java.util.UUID playerId) {
+                return null;
+            }
+
+            @Override
+            public String resolveMatchIdentifier() {
+                return getName();
+            }
+        };
+        this.deathLifecycleManager = new DeathLifecycleManager(config, SpectatorService.getInstance());
     }
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
+        return GlobalMatchRules.defaults(true, true);
     }
 
     @Override
@@ -119,9 +181,13 @@ public class MurderMysteryMinigame extends AbstractMinigame {
     @Override
     protected void onMatchStart() {
         if (this.getState() == GameState.IN_PROGRESS) return;
-        this.setState(GameState.IN_PROGRESS);
         if (this.context != null) {
             this.context.setState(GameState.IN_PROGRESS);
+            if (this.server == null) {
+                this.server = this.context.nullableServer();
+            }
+        } else {
+            return;
         }
         
         List<ServerPlayerEntity> players = new ArrayList<>(this.context.liveParticipants());
@@ -162,7 +228,6 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
     @Override
     protected void onMatchEnd() {
-        this.setState(GameState.ENDING);
         if (this.context != null) {
             this.context.setState(GameState.ENDING);
         }
@@ -205,7 +270,9 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
         for (ServerPlayerEntity p : activePlayers) {
             if (p.getY() < -64) {
-                onPlayerDeath(p);
+                if (this.deathLifecycleManager != null) {
+                    this.deathLifecycleManager.handleFatalDamage(p, p.getDamageSources().outOfWorld());
+                }
                 teleportToRandomSpawn(p);
             }
             int coins = economyManager.getBalance(p);
@@ -215,7 +282,7 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
     @Override
     public boolean allowDamage(ServerPlayerEntity player, DamageSource source, float amount) {
-        if (state != GameState.IN_PROGRESS) {
+        if (this.getState() != GameState.IN_PROGRESS) {
             return false;
         }
         if (!context.liveParticipants().contains(player)) {
@@ -233,50 +300,30 @@ public class MurderMysteryMinigame extends AbstractMinigame {
                 arrow.discard();
                 if (!roleManager.hasRole(player, MurdererRole.class)) {
                     attacker.sendMessage(Text.literal("You shot an innocent!").formatted(Formatting.RED), false);
-                    onPlayerDeath(attacker);
+                    if (this.deathLifecycleManager != null) {
+                        this.deathLifecycleManager.handleFatalDamage(attacker, source); // Accidentally killing innocent kills the attacker
+                    }
                 }
-                onPlayerDeath(player);
+                if (this.deathLifecycleManager != null) {
+                    this.deathLifecycleManager.handleFatalDamage(player, source);
+                }
                 return false;
             } else if (roleManager.hasRole(attacker, MurdererRole.class)) {
                 player.getServerWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, net.minecraft.sound.SoundCategory.PLAYERS, 0.65f, 1.0f);
                 player.getServerWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_ARROW_HIT_PLAYER, net.minecraft.sound.SoundCategory.PLAYERS, 0.65f, 0.7f);
-                onPlayerDeath(player);
+                if (this.deathLifecycleManager != null) {
+                    this.deathLifecycleManager.handleFatalDamage(player, source);
+                }
                 return false;
             }
         }
         return false;
     }
 
+    // TODO: Migrate EntityDeathAware.onEntityDeath override if needed
     @Override
     public void onPlayerDeath(ServerPlayerEntity player) {
-        if (roleManager.hasRole(player, SpectatorRole.class)) return;
-
-        player.setHealth(20.0f);
-        player.clearStatusEffects();
-        player.getInventory().clear();
-        player.changeGameMode(GameMode.SPECTATOR);
-
-        if (roleManager.hasRole(player, DetectiveRole.class)) {
-            weaponManager.dropDetectiveWeapon(player.getServerWorld(), player.getPos());
-            GameMessenger.broadcast(context.liveParticipants(), Text.literal("Detective eliminated! The Detective's Bow has dropped.").formatted(Formatting.RED));
-        }
-
-        corpseManager.spawnCorpse(player);
-        roleManager.assignRole(player, new SpectatorRole());
-        
-        SpectatorService.getInstance().startSpectating(
-            player, 
-            SpectatorPolicies.unrestricted(), 
-            SpectatorTargetProviders.roster(), 
-            SpectatorMode.ELIMINATED, 
-            null, 
-            null, 
-            Text.literal("You died. Right-click to cycle targets, sneak to free-fly.").formatted(Formatting.GRAY)
-        );
-        visibilityManager.sync(server);
-        updateScoreboardTick();
-
-        checkWinConditions();
+        // Obsolete, replaced by DeathLifecycleManager
     }
 
     private void teleportToMapSpawns(List<ServerPlayerEntity> players) {
@@ -291,6 +338,15 @@ public class MurderMysteryMinigame extends AbstractMinigame {
         if (mapConfig == null || mapConfig.spawnPoints().isEmpty()) return;
         List<dev.frost.miniverse.map.MapPosition> spawns = mapConfig.spawnPoints();
         teleport(player, spawns.get((nextSpawnIndex++) % spawns.size()));
+    }
+
+    /** SpawnPointAware — called by the framework after applySettings() completes during player join. */
+    @Override
+    public void teleportToSpawn(ServerPlayerEntity player) {
+        GameState state = this.getState();
+        if (state == GameState.WAITING_FOR_PLAYERS || state == GameState.FROZEN || state == GameState.STARTING) {
+            teleportToRandomSpawn(player);
+        }
     }
 
     private void teleport(ServerPlayerEntity player, dev.frost.miniverse.map.MapPosition spawn) {
@@ -313,7 +369,7 @@ public class MurderMysteryMinigame extends AbstractMinigame {
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         context.roster().add(player);
-        if (state == GameState.IN_PROGRESS || state == GameState.ENDING) {
+        if (this.getState() == GameState.IN_PROGRESS || this.getState() == GameState.ENDING) {
             roleManager.assignRole(player, new SpectatorRole());
             SpectatorService.getInstance().startSpectating(
                 player, 
@@ -335,13 +391,13 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
     @Override
     protected void onPlayerJoinGame(ServerPlayerEntity player, MinecraftServer server) {
-        if (state == GameState.WAITING_FOR_PLAYERS || state == GameState.FROZEN || state == GameState.STARTING) {
-            teleportToRandomSpawn(player);
-        }
+        // Spawn teleport is handled by MurderMysterySessionBootstrap.Handler.onPlayerJoin,
+        // which fires after applySettings (guaranteeing mapConfig is populated).
+        // Do not attempt teleport here — mapConfig may not yet be set.
     }
 
-    private void checkWinConditions() {
-        if (state != GameState.IN_PROGRESS) return;
+    public void checkWinConditions() {
+        if (this.getState() != GameState.IN_PROGRESS) return;
         List<ServerPlayerEntity> active = new ArrayList<>();
         for (ServerPlayerEntity p : context.liveParticipants()) {
             if (!roleManager.hasRole(p, SpectatorRole.class)) active.add(p);
@@ -354,9 +410,8 @@ public class MurderMysteryMinigame extends AbstractMinigame {
     }
 
     private void endMatch(MurderMysteryWinConditionManager.WinResult result) {
-        if (state == GameState.ENDING || state == GameState.FINISHED) return;
-        state = GameState.ENDING;
-        context.setState(GameState.ENDING);
+        if (this.getState() == GameState.ENDING || this.getState() == GameState.FINISHED) return;
+        this.context.setState(GameState.ENDING);
         
         Set<ServerPlayerEntity> winners = new java.util.HashSet<>();
         Text message = Text.literal("Game Over!");
@@ -400,7 +455,7 @@ public class MurderMysteryMinigame extends AbstractMinigame {
         this.updateScoreboardTick();
     }
 
-    private void updateScoreboardTick() {
+    public void updateScoreboardTick() {
         if (server == null) return;
         int timeRemaining = Math.max(0, (settings.roundDurationTicks() - elapsedTicks) / 20);
         
@@ -433,14 +488,14 @@ public class MurderMysteryMinigame extends AbstractMinigame {
     public JsonObject saveRuntimeState() {
         JsonObject json = new JsonObject();
         json.addProperty("elapsedTicks", elapsedTicks);
-        json.addProperty("state", state.name());
+        json.addProperty("state", this.getState().name());
         return json;
     }
 
     @Override
     public void loadRuntimeState(JsonObject json) {
         if (json.has("elapsedTicks")) elapsedTicks = json.get("elapsedTicks").getAsInt();
-        if (json.has("state")) state = GameState.valueOf(json.get("state").getAsString());
+        if (json.has("state") && this.context != null) this.context.setState(GameState.valueOf(json.get("state").getAsString()));
     }
 
     @Override
@@ -470,7 +525,7 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
     @Override
     public ActionResult onUseItem(ServerPlayerEntity player, World world, Hand hand) {
-        if (state != GameState.IN_PROGRESS) return ActionResult.PASS;
+        if (this.getState() != GameState.IN_PROGRESS) return ActionResult.PASS;
         if (roleManager.hasRole(player, SpectatorRole.class)) {
             if (SpectatorService.getInstance().cycleTarget(player, true)) {
                 ServerPlayerEntity target = null;
@@ -491,6 +546,23 @@ public class MurderMysteryMinigame extends AbstractMinigame {
 
     public ShopManager getShopManager() {
         return shopManager;
+    }
+
+    public RoleManager getRoleManager() { return roleManager; }
+    public MurderMysteryWeaponManager getWeaponManager() { return weaponManager; }
+    public MinigameContext getContext() { return context; }
+    public CorpseManager getCorpseManager() { return corpseManager; }
+    public VisibilityManager getVisibilityManager() { return visibilityManager; }
+    
+    @Override
+    public ServerPlayerEntity getPlayerByUuid(java.util.UUID uuid) {
+        return super.getPlayerByUuid(uuid);
+    }
+    
+    public dev.frost.miniverse.map.MapPosition getNextRandomSpawn() {
+        if (mapConfig == null || mapConfig.spawnPoints().isEmpty()) return null;
+        List<dev.frost.miniverse.map.MapPosition> spawns = mapConfig.spawnPoints();
+        return spawns.get((nextSpawnIndex++) % spawns.size());
     }
 
     @Override

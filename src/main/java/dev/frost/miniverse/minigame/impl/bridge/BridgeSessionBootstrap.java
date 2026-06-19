@@ -52,8 +52,6 @@ final class BridgeSessionBootstrap {
                 } else if (BridgeMinigame.BLUE_TEAM.equalsIgnoreCase(team)) {
                     minigame.ensureTeamAssignment(player, BridgeMinigame.BLUE_TEAM);
                 }
-                // Teleport immediately to team spawn for void safety
-                minigame.teleportToTeamSpawnSafe(player);
             }
 
             @Override

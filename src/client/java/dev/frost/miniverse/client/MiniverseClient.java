@@ -192,11 +192,39 @@ public class MiniverseClient implements ClientModInitializer {
 						new dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart(min, max)
 					);
 				}
+				// Parse placed point positions for the 2D HUD indicator
+				dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.placementPoints.clear();
+				if (payload.selection().contains("points", net.minecraft.nbt.NbtElement.LIST_TYPE)) {
+					net.minecraft.nbt.NbtList ptList = payload.selection().getList("points", net.minecraft.nbt.NbtElement.COMPOUND_TYPE);
+					for (int i = 0; i < ptList.size(); i++) {
+						net.minecraft.nbt.NbtCompound pt = ptList.getCompound(i);
+						dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.placementPoints.add(
+							new dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint(
+								pt.getDouble("x"), pt.getDouble("y"), pt.getDouble("z"),
+								pt.getFloat("yaw"), pt.getFloat("pitch")
+							)
+						);
+					}
+				}
 			})
 		);
 
 		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.FREEZE_STATE_ID, (payload, context) ->
 			context.client().execute(() -> ClientFreezeState.setFrozen(payload.frozen()))
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.MAP_EDITOR_HIDE_ID, (payload, context) ->
+			context.client().execute(() -> {
+				dev.frost.miniverse.client.gui.map.MapEditorState state = dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE;
+				state.editorActive = false;
+				state.currentBuilderSelection.clear();
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.HIDE_MAP_EDITOR_OVERLAY_ID, (payload, context) ->
+			context.client().execute(() -> {
+				dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.enabledOverlays.remove(payload.gameId() + ":" + payload.definitionKey());
+			})
 		);
 
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {

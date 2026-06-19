@@ -20,6 +20,7 @@ import net.minecraft.world.GameMode;
  * Singleton holder for the active backend runtime.
  */
 public class MinigameManager {
+    // TODO: Migrate — remove MinigameManager singleton, convert to injected instance
     private static final MinigameManager INSTANCE = new MinigameManager();
 
     @Nullable
@@ -57,6 +58,14 @@ public class MinigameManager {
 
     public dev.frost.miniverse.minigame.core.util.StandardEndSequence getStandardEndSequence() {
         return this.standardEndSequence;
+    }
+
+    public FreezeService getFreezeService() {
+        return FreezeService.getInstance();
+    }
+
+    public SpectatorService getSpectatorService() {
+        return SpectatorService.getInstance();
     }
 
     public MinigameSessionStore getMinigameSessionStore() {

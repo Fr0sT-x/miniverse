@@ -26,12 +26,19 @@ public class MurderMysterySessionBootstrap {
             @Override
             public void applySettings(MurderMysteryMinigame minigame, Properties properties) {
                 MurderMysterySettings settings = MurderMysterySettings.fromProperties(properties);
-                minigame.applySettings(settings);
+                String preSerializedMapConfig = properties.getProperty("murdermystery.mapConfig", "");
+                minigame.applySettings(settings, preSerializedMapConfig);
             }
 
             @Override
             public MatchLifecycleOptions lifecycleOptions(MurderMysteryMinigame minigame, Properties properties) {
-                return MatchLifecycleOptions.defaults(MurderMysteryDefinition.DISPLAY_NAME);
+                return MatchLifecycleOptions.defaults(MurderMysteryDefinition.DISPLAY_NAME)
+                    .withFreezeEnabled(true)
+                    .withReturnSeconds(10)
+                    .withStartTitle(
+                        net.minecraft.text.Text.literal(MurderMysteryDefinition.DISPLAY_NAME),
+                        net.minecraft.text.Text.literal("Roles have been assigned.")
+                    );
             }
 
             @Override

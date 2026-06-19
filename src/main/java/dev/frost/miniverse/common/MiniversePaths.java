@@ -78,7 +78,7 @@ public final class MiniversePaths {
     public static Path mapsRoot() {
         Path mainSessionsRoot = dev.frost.miniverse.session.SessionRuntimeConfig.getMainSessionsRoot().orElse(null);
         if (mainSessionsRoot != null && mainSessionsRoot.getParent() != null) {
-            return mainSessionsRoot.getParent().resolve("miniverse").resolve("maps").toAbsolutePath().normalize();
+            return mainSessionsRoot.getParent().resolve("maps").toAbsolutePath().normalize();
         }
         return runRoot().resolve("miniverse").resolve("maps");
     }
@@ -86,7 +86,7 @@ public final class MiniversePaths {
     public static Path profilesRoot() {
         Path mainSessionsRoot = dev.frost.miniverse.session.SessionRuntimeConfig.getMainSessionsRoot().orElse(null);
         if (mainSessionsRoot != null && mainSessionsRoot.getParent() != null) {
-            return mainSessionsRoot.getParent().resolve("miniverse").resolve("profiles").toAbsolutePath().normalize();
+            return mainSessionsRoot.getParent().resolve("profiles").toAbsolutePath().normalize();
         }
         return runRoot().resolve("miniverse").resolve("profiles");
     }

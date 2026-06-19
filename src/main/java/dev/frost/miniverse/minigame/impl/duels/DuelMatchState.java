@@ -5,5 +5,6 @@ public enum DuelMatchState {
     TELEPORTED,
     COUNTDOWN,
     ACTIVE,
+    BETWEEN_ROUNDS,
     ENDING
 }

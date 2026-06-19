@@ -22,9 +22,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class MapStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final AtomicReference<List<MapDescriptor>> cachedMaps = new AtomicReference<>(null);
 
     private MapStore() {
     }
@@ -34,21 +36,32 @@ public final class MapStore {
     }
 
     public static List<MapDescriptor> scan() {
+        List<MapDescriptor> cached = cachedMaps.get();
+        if (cached != null) {
+            return cached;
+        }
+
         Path root = mapsRoot();
         try {
             Files.createDirectories(root);
             try (var stream = Files.list(root)) {
-                return stream
+                List<MapDescriptor> list = stream
                     .filter(Files::isDirectory)
                     .map(MapStore::readDescriptor)
                     .flatMap(Optional::stream)
                     .sorted(Comparator.comparing(descriptor -> descriptor.metadata().name(), String.CASE_INSENSITIVE_ORDER))
                     .toList();
+                cachedMaps.set(list);
+                return list;
             }
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to scan Miniverse maps at {}", root, e);
             return List.of();
         }
+    }
+
+    public static void clearCache() {
+        cachedMaps.set(null);
     }
 
     public static Optional<MapDescriptor> find(String mapId) {
@@ -74,6 +87,7 @@ public final class MapStore {
         if (!Files.exists(metadataPath)) {
             writeJson(metadataPath, MapMetadata.defaults(finalId, displayName).toJson());
         }
+        clearCache();
         return readDescriptor(folder).orElseThrow(() -> new IOException("Failed to create map structure for " + name));
     }
 
@@ -82,6 +96,7 @@ public final class MapStore {
         if (map.isEmpty()) return false;
         try {
             org.apache.commons.io.FileUtils.deleteDirectory(map.get().folder().toFile());
+            clearCache();
             return true;
         } catch (IOException e) {
             Miniverse.LOGGER.error("Failed to delete map " + mapId, e);
@@ -113,6 +128,7 @@ public final class MapStore {
             json.addProperty("id", newFolder.getFileName().toString());
             Files.writeString(newFolder.resolve("map.json"), json.toString());
 
+            clearCache();
             return true;
         } catch (IOException e) {
             Miniverse.LOGGER.error("Failed to rename map " + mapId, e);
@@ -121,7 +137,11 @@ public final class MapStore {
     }
 
     public static Optional<JsonObject> readGamemodeConfig(String mapId, String gameId) {
-        return find(mapId).flatMap(map -> readJson(map.folder().resolve("gamemodes").resolve(normalizeGameId(gameId) + ".json")));
+        return find(mapId).flatMap(map -> readGamemodeConfig(map, gameId));
+    }
+
+    public static Optional<JsonObject> readGamemodeConfig(MapDescriptor map, String gameId) {
+        return readJson(map.folder().resolve("gamemodes").resolve(normalizeGameId(gameId) + ".json"));
     }
 
     public static void writeGamemodeConfig(String mapId, String gameId, JsonObject config) throws IOException {
@@ -131,6 +151,7 @@ public final class MapStore {
         try (Writer writer = Files.newBufferedWriter(path)) {
             GSON.toJson(config == null ? new JsonObject() : config, writer);
         }
+        clearCache();
     }
 
     public static void saveEditorWorld(String mapId, Path editedWorld) throws IOException {
@@ -146,6 +167,7 @@ public final class MapStore {
             Files.move(world, backup, StandardCopyOption.REPLACE_EXISTING);
         }
         copyDirectory(editedWorld, world);
+        clearCache();
     }
 
     public static MapValidationResult validate(String mapId, String gameId) {
@@ -153,21 +175,25 @@ public final class MapStore {
         if (map.isEmpty()) {
             return MapValidationResult.builder().error("Unknown map '" + mapId + "'.").build();
         }
-        Optional<JsonObject> config = readGamemodeConfig(mapId, gameId);
+        return validate(map.get(), gameId);
+    }
+
+    public static MapValidationResult validate(MapDescriptor map, String gameId) {
+        Optional<JsonObject> config = readGamemodeConfig(map, gameId);
         if (config.isEmpty()) {
             return MapValidationResult.builder().error("Map is not configured for " + gameId + ".").build();
         }
         return MapGamemodeRegistry.get(gameId)
-            .map(type -> type.validator().validate(map.get(), config.get()))
+            .map(type -> type.validator().validate(map, config.get()))
             .or(() -> dev.frost.miniverse.map.editor.MapEditorExtensionRegistry.get(gameId)
-                .map(extension -> dev.frost.miniverse.map.editor.MapEditorMarkerStore.validate(map.get(), config.get(), extension)))
+                .map(extension -> dev.frost.miniverse.map.editor.MapEditorMarkerStore.validate(map, config.get(), extension)))
             .orElse(MapValidationResult.ok());
     }
 
     public static List<MapDescriptor> compatibleMaps(String gameId) {
         return scan().stream()
             .filter(map -> map.supports(gameId))
-            .filter(map -> validate(map.metadata().id(), gameId).valid())
+            .filter(map -> validate(map, gameId).valid())
             .toList();
     }
 
@@ -178,7 +204,7 @@ public final class MapStore {
             NbtList validations = new NbtList();
             for (String gameId : descriptor.supportedGamemodes()) {
                 NbtCompound entry = new NbtCompound();
-                MapValidationResult result = validate(descriptor.metadata().id(), gameId);
+                MapValidationResult result = validate(descriptor, gameId);
                 entry.putString("game", gameId);
                 entry.putBoolean("valid", result.valid());
                 NbtList errors = new NbtList();
@@ -192,7 +218,7 @@ public final class MapStore {
 
             NbtList tags = new NbtList();
             if (descriptor.supportedGamemodes().stream().anyMatch(g -> g.equalsIgnoreCase("duels"))) {
-                Optional<JsonObject> config = readGamemodeConfig(descriptor.metadata().id(), "duels");
+                Optional<JsonObject> config = readGamemodeConfig(descriptor, "duels");
                 if (config.isPresent()) {
                     JsonObject cfg = config.get();
                     if (cfg.has("arenas") && cfg.get("arenas").isJsonArray()) {
@@ -230,6 +256,7 @@ public final class MapStore {
             MiniverseFileUtils.deleteRecursively(runtimeWorld);
         }
         copyDirectory(map.worldFolder(), runtimeWorld);
+        clearCache();
     }
 
     private static Optional<MapDescriptor> readDescriptor(Path folder) {

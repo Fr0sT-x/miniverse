@@ -295,6 +295,7 @@ public final class MatchLifecycleController {
     private void returnPlayers() {
         this.unfreezeParticipants();
         this.runtimeState(GameState.FINISHED);
+        SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markStopRequested);
         String host = SessionRuntimeConfig.getReturnHost();
         int port = SessionRuntimeConfig.getReturnPort();
         List<ServerPlayerEntity> players = this.roster();
@@ -399,7 +400,7 @@ public final class MatchLifecycleController {
 
     private void unfreezeParticipants() {
         for (ServerPlayerEntity player : this.roster()) {
-            this.freezeService.unfreeze(player, FreezeReason.MATCH_START);
+            this.freezeService.clear(player);
         }
     }
 

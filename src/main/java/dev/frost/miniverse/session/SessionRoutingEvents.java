@@ -110,6 +110,11 @@ public final class SessionRoutingEvents {
             }
 
             MinigameManager minigameManager = MinigameManager.getInstance();
+            if (minigameManager.getCurrentState() == GameState.RETURNING || minigameManager.getCurrentState() == GameState.FINISHED) {
+                // MatchLifecycleController is already handling the return sequence
+                return;
+            }
+
             SessionManager sessionManager = SessionManager.getInstance();
             ReturnTransferState returnState = pendingReturnTransfers.computeIfAbsent(sessionId, ignored -> new ReturnTransferState());
             if (!returnState.transfersSent) {

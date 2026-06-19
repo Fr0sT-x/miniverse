@@ -90,7 +90,11 @@ public class SessionListSerializer {
             games.add(definition.metadata().toNbt());
         }
         root.put("games", games);
-        root.put("maps", MapStore.mapsToNbt());
+        if (!Boolean.getBoolean("miniverse.mapEditor")) {
+            root.put("maps", MapStore.mapsToNbt());
+        } else {
+            root.put("maps", new NbtList());
+        }
 
         NbtList duelTypes = new NbtList();
         for (dev.frost.miniverse.minigame.impl.duels.DuelType dt : dev.frost.miniverse.minigame.impl.duels.DuelTypeRegistry.getAll()) {

@@ -45,6 +45,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<DeleteMapPayload> DELETE_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "delete_map"));
     public static final CustomPayload.Id<RenameMapPayload> RENAME_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "rename_map"));
     public static final CustomPayload.Id<UpdateMapTagsPayload> UPDATE_MAP_TAGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "update_map_tags"));
+    public static final CustomPayload.Id<HideMapEditorOverlayPayload> HIDE_MAP_EDITOR_OVERLAY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "hide_map_editor_overlay"));
 
     public static final CustomPayload.Id<CreateDuelTypePayload> CREATE_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_duel_type"));
     public static final CustomPayload.Id<EditDuelTypePayload> EDIT_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "edit_duel_type"));
@@ -58,6 +59,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<SyncKitsPayload> SYNC_KITS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_kits"));
 
     public static final CustomPayload.Id<SyncBuilderSelectionPayload> SYNC_BUILDER_SELECTION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_builder_selection"));
+    public static final CustomPayload.Id<MapEditorHidePayload> MAP_EDITOR_HIDE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_editor_hide"));
 
     public static final CustomPayload.Id<ManhuntLateJoinPayload> MANHUNT_LATE_JOIN_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "manhunt_late_join"));
 
@@ -81,6 +83,8 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(STOP_SESSION_ID, StopSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DELETE_MAP_ID, DeleteMapPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RENAME_MAP_ID, RenameMapPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(UPDATE_MAP_TAGS_ID, UpdateMapTagsPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(HIDE_MAP_EDITOR_OVERLAY_ID, HideMapEditorOverlayPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(PAUSE_SESSION_ID, PauseSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ASSIGN_MID_GAME_PLAYER_ID, AssignMidGamePlayerPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(INSPECT_SESSION_ID, InspectSessionPayload.CODEC);
@@ -120,6 +124,7 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(LOAD_KIT_INTO_INVENTORY_ID, LoadKitIntoInventoryPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SYNC_KITS_ID, SyncKitsPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SYNC_BUILDER_SELECTION_ID, SyncBuilderSelectionPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(MAP_EDITOR_HIDE_ID, MapEditorHidePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(LAYOUT_SUPPORT_ID, LayoutSupportPayload.CODEC);
 
         PayloadTypeRegistry.playC2S().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
@@ -672,6 +677,19 @@ public final class NetworkConstants {
         }
     }
 
+    public record HideMapEditorOverlayPayload(String gameId, String definitionKey) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, HideMapEditorOverlayPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING, HideMapEditorOverlayPayload::gameId,
+            PacketCodecs.STRING, HideMapEditorOverlayPayload::definitionKey,
+            HideMapEditorOverlayPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return HIDE_MAP_EDITOR_OVERLAY_ID;
+        }
+    }
+
     public record UpdateMapTagsPayload(String mapId, java.util.List<String> tags) implements CustomPayload {
         public static final PacketCodec<RegistryByteBuf, UpdateMapTagsPayload> CODEC = PacketCodec.tuple(
             PacketCodecs.STRING, UpdateMapTagsPayload::mapId,
@@ -773,6 +791,16 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return SYNC_BUILDER_SELECTION_ID;
+        }
+    }
+
+    /** Sent server→client immediately before a map editor quit/transfer to hide all overlays without waiting for DISCONNECT. */
+    public record MapEditorHidePayload() implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, MapEditorHidePayload> CODEC = PacketCodec.unit(new MapEditorHidePayload());
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return MAP_EDITOR_HIDE_ID;
         }
     }
 

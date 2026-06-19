@@ -15,7 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class DuelMatchManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(DuelMatchManager.class);
-    
+
     private final ArenaManager arenaManager;
     private final List<DuelMatch> activeMatches = new CopyOnWriteArrayList<>();
 
@@ -58,7 +58,7 @@ public class DuelMatchManager {
         UUID matchId = UUID.randomUUID();
         DuelMatchContext context = new DuelMatchContext(matchId, compatibleArena.get(), kit, rules, team1, team2);
         DuelMatch match = new DuelMatch(context);
-        
+
         activeMatches.add(match);
         return MatchCreationResult.success(match);
     }
@@ -66,7 +66,7 @@ public class DuelMatchManager {
     public void tick() {
         for (DuelMatch match : activeMatches) {
             match.tick();
-            
+
             if (match.getState() == DuelMatchState.ENDING && match.getContext().getArena().getState() == dev.frost.miniverse.minigame.arena.ArenaState.IDLE) {
                 activeMatches.remove(match);
             }
@@ -79,9 +79,36 @@ public class DuelMatchManager {
             .findFirst();
     }
 
+    /**
+     * Returns true if every member of team 1 across ALL active matches is online.
+     * Used by DuelsMinigame.checkProgression to block ticking when a whole team is absent.
+     */
+    public boolean isTeam1FullyAbsent(net.minecraft.server.MinecraftServer server) {
+        for (DuelMatch match : activeMatches) {
+            if (match.getState() == DuelMatchState.ACTIVE || match.getState() == DuelMatchState.BETWEEN_ROUNDS) {
+                boolean anyOnline = match.getContext().getTeam1().stream()
+                    .anyMatch(p -> server.getPlayerManager().getPlayer(p.getUuid()) != null);
+                if (!anyOnline) return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isTeam2FullyAbsent(net.minecraft.server.MinecraftServer server) {
+        for (DuelMatch match : activeMatches) {
+            if (match.getState() == DuelMatchState.ACTIVE || match.getState() == DuelMatchState.BETWEEN_ROUNDS) {
+                boolean anyOnline = match.getContext().getTeam2().stream()
+                    .anyMatch(p -> server.getPlayerManager().getPlayer(p.getUuid()) != null);
+                if (!anyOnline) return true;
+            }
+        }
+        return false;
+    }
+
     public void handleDisconnect(ServerPlayerEntity player) {
         getMatchForPlayer(player).ifPresent(match -> {
-            if (match.getState() != DuelMatchState.ENDING) {
+            // Only count disconnects during an active round — not between rounds or during countdown
+            if (match.getState() == DuelMatchState.ACTIVE) {
                 match.getContext().getMetadata().putBoolean("dead_" + player.getUuidAsString(), true);
                 checkWinCondition(match);
             }
@@ -90,7 +117,8 @@ public class DuelMatchManager {
 
     public void handleDeath(ServerPlayerEntity victim) {
         getMatchForPlayer(victim).ifPresent(match -> {
-            if (match.getState() != DuelMatchState.ENDING) {
+            // Only count deaths that happen while the round is actually running
+            if (match.getState() == DuelMatchState.ACTIVE) {
                 match.getContext().getMetadata().putBoolean("dead_" + victim.getUuidAsString(), true);
                 checkWinCondition(match);
             }
@@ -114,11 +142,12 @@ public class DuelMatchManager {
         }
 
         if (!t1Alive && !t2Alive) {
-            match.endMatchDraw();
+            // Simultaneous elimination — replay the round (draw)
+            match.endRound(0);
         } else if (!t1Alive) {
-            match.endMatch(2);
+            match.endRound(2);
         } else if (!t2Alive) {
-            match.endMatch(1);
+            match.endRound(1);
         }
     }
 }

@@ -34,6 +34,8 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     private double scrollY = 0;
     private double maxScrollY = 0;
     private int pendingRefreshTicks = -1;
+    /** Markers removed optimistically — filtered from the list immediately on delete. */
+    private final Set<String> localDeletedMarkerIds = new HashSet<>();
     
     private UiLayout.Rect listArea = new UiLayout.Rect(0, 0, 0, 0);
     private SessionScreen screen;
@@ -61,9 +63,6 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     public static MapEditorWorkspaceView forMarker(MapEditorState state, Runnable refreshAction, String gameId, String definitionKey) {
         state.selectedGameId = gameId == null ? "" : gameId;
         state.selectedDefinitionKey = definitionKey == null ? "" : definitionKey;
-        if (!state.selectedGameId.isBlank() && !state.selectedDefinitionKey.isBlank()) {
-            state.enableOverlay(state.selectedGameId, state.selectedDefinitionKey);
-        }
         return new MapEditorWorkspaceView(state, refreshAction, state.selectedGameId, state.selectedDefinitionKey, false);
     }
 
@@ -81,7 +80,8 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         this.screen = screen;
         UiLayout.Rect panel = workspace.inset(4);
         this.components.clear();
-        this.listArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 86, panel.width() - 24, panel.height() - 98);
+        // Header has 2 rows: row 1 = breadcrumb (y+4..y+16), row 2 = buttons (y+20..y+42)
+        this.listArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 122, panel.width() - 24, panel.height() - 134);
         
         int rightX = panel.x() + panel.width() - 12;
         
@@ -92,7 +92,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             }, Text.literal("Quit without saving?"), Text.literal("All unsaved changes to this map will be lost.")));
         }).accent(UiTheme.ACCENT_RED);
         rightX -= 110;
-        quitNoSave.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 110, 20));
+        quitNoSave.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 110, 20));
         this.components.add(quitNoSave);
         
         rightX -= 104;
@@ -102,7 +102,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 net.minecraft.client.MinecraftClient.getInstance().setScreen(this.screen);
             }, Text.literal("Save and Quit?"), Text.literal("This will save all changes and exit the map editor.")));
         });
-        saveQuit.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 100, 20));
+        saveQuit.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 100, 20));
         this.components.add(saveQuit);
         
         rightX -= 96;
@@ -112,12 +112,12 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 net.minecraft.client.MinecraftClient.getInstance().setScreen(this.screen);
             }, Text.literal("Save Map?"), Text.literal("This will overwrite the current map data with your changes.")));
         });
-        saveWorld.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 92, 20));
+        saveWorld.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 92, 20));
         this.components.add(saveWorld);
         
         rightX -= 84;
         UiButton refresh = new UiButton("Refresh", this.refreshAction);
-        refresh.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 80, 20));
+        refresh.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 80, 20));
         this.components.add(refresh);
 
         rightX -= 110;
@@ -125,21 +125,21 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             this.sendCommand("miniverse_map_thumbnail");
             this.status = "Requested thumbnail capture. Look around to capture the best view.";
         }).accent(UiTheme.ACCENT_BLUE);
-        thumbnailBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 106, 20));
+        thumbnailBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 106, 20));
         this.components.add(thumbnailBtn);
 
-        boolean overlaysVisible = this.state.disabledOverlays.isEmpty();
+        boolean overlaysVisible = !this.state.enabledOverlays.isEmpty();
         String globalOverlayLabel = overlaysVisible ? "Hide Overlays" : "Show Overlays";
         rightX -= 100;
         UiButton toggleOverlays = new UiButton(globalOverlayLabel, () -> {
             if (overlaysVisible) {
+                this.state.enabledOverlays.clear();
+            } else {
                 for (SessionSnapshotData.EditorExtension ext : SessionSnapshotData.editorExtensions()) {
                     for (SessionSnapshotData.EditorMarkerDefinition def : ext.markers()) {
-                        this.state.disableOverlay(ext.gameId(), def.key());
+                        this.state.enableOverlay(ext.gameId(), def.key());
                     }
                 }
-            } else {
-                this.state.disabledOverlays.clear();
             }
             if (this.screen != null) {
                 // Keep the current view but refresh the UI
@@ -152,7 +152,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 }
             }
         });
-        toggleOverlays.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 96, 20));
+        toggleOverlays.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 96, 20));
         this.components.add(toggleOverlays);
 
         Selected selected = this.selected();
@@ -162,14 +162,14 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 this.refreshAction.run();
                 this.status = "Validation updated.";
             }).accent(UiTheme.ACCENT_BLUE);
-            validateBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 110, 20));
+            validateBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 110, 20));
             this.components.add(validateBtn);
 
             rightX -= 90;
             UiButton expandAllBtn = new UiButton("Expand All", () -> {
                 selected.extension.markers().forEach(m -> this.state.expandedMarkers.add(m.key()));
             });
-            expandAllBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 86, 20));
+            expandAllBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 86, 20));
             this.components.add(expandAllBtn);
 
             rightX -= 90;
@@ -178,7 +178,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 this.editingMarkerId = "";
                 this.renameField.setX(-1000);
             });
-            collapseAllBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 86, 20));
+            collapseAllBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 86, 20));
             this.components.add(collapseAllBtn);
         }
 
@@ -194,7 +194,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 default -> "Add " + selected.definition.displayName();
             };
             UiButton addBtn = new UiButton(addLabel, () -> this.startAdd(selected.extension, selected.definition));
-            addBtn.setBounds(new UiLayout.Rect(panel.x() + 12, panel.y() + 48, 130, 20));
+            addBtn.setBounds(new UiLayout.Rect(panel.x() + 12, panel.y() + 78, 130, 20));
             this.components.add(addBtn);
 
             // Toggle overlay button for this specific marker definition
@@ -204,7 +204,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 this.state.toggleOverlay(selected.extension.gameId(), selected.definition.key());
                 if (this.screen != null) this.screen.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.state, this.refreshAction, selected.extension.gameId(), selected.definition.key()));
             });
-            toggleOverlay.setBounds(new UiLayout.Rect(panel.x() + panel.width() - 132, panel.y() + 48, 120, 20));
+            toggleOverlay.setBounds(new UiLayout.Rect(panel.x() + panel.width() - 132, panel.y() + 78, 120, 20));
             this.components.add(toggleOverlay);
         } else if (selected.extension != null) {
             // Auto-expand validation failures
@@ -229,6 +229,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             this.pendingRefreshTicks--;
         } else if (this.pendingRefreshTicks == 0) {
             this.pendingRefreshTicks = -1;
+            this.localDeletedMarkerIds.clear(); // Server confirmed — local set no longer needed
             this.refreshAction.run();
         }
 
@@ -430,8 +431,6 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                             if (toggle.contains(mouseX, adjustedMouseY)) {
                                 if (!this.state.hiddenIndividualMarkers.remove(placed.id())) {
                                     this.state.hiddenIndividualMarkers.add(placed.id());
-                                } else {
-                                    this.state.enableOverlay(selected.extension.gameId(), marker.key());
                                 }
                                 return true;
                             }
@@ -461,20 +460,21 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                                     this.editingMarkerId = "";
                                     this.renameField.setX(-1000);
                                 }
-                                this.pendingRefreshTicks = 5;
+                                this.localDeletedMarkerIds.add(placed.id());
+                                this.pendingRefreshTicks = 2;
                                 return true;
                             }
                             if (isRegion) {
-                                int cx = row.x() + 80;
+                                int cx = row.x() + 10;
+                                int pillY = row.y() + 36;
                                 for (dev.frost.miniverse.minigame.core.region.RegionRestriction res : dev.frost.miniverse.minigame.core.region.RegionRestriction.values()) {
-                                    String label = "[X] " + res.name();
-                                    int w = net.minecraft.client.MinecraftClient.getInstance().textRenderer.getWidth(label);
-                                    UiLayout.Rect cb = new UiLayout.Rect(cx, row.y() + 40 - 2, w, 12);
-                                    if (cb.contains(mouseX, adjustedMouseY)) {
+                                    int pillW = net.minecraft.client.MinecraftClient.getInstance().textRenderer.getWidth(res.name()) + 16;
+                                    UiLayout.Rect pill = new UiLayout.Rect(cx, pillY, pillW, 16);
+                                    if (pill.contains(mouseX, adjustedMouseY)) {
                                         this.toggleRestriction(selected.extension.gameId(), marker.key(), placed, res);
                                         return true;
                                     }
-                                    cx += w + 12;
+                                    cx += pillW + 6;
                                 }
                             }
                             rowY += rowHeight + 4;
@@ -508,8 +508,6 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             if (toggle.contains(mouseX, adjustedMouseY)) {
                 if (!this.state.hiddenIndividualMarkers.remove(marker.id())) {
                     this.state.hiddenIndividualMarkers.add(marker.id());
-                } else {
-                    this.state.enableOverlay(selected.extension.gameId(), selected.definition.key());
                 }
                 return true;
             }
@@ -539,20 +537,21 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                     this.editingMarkerId = "";
                     this.renameField.setX(-1000);
                 }
-                this.pendingRefreshTicks = 5;
+                this.localDeletedMarkerIds.add(marker.id());
+                this.pendingRefreshTicks = 2;
                 return true;
             }
             if (isRegion) {
-                int cx = row.x() + 80;
+                int cx = row.x() + 10;
+                int pillY = row.y() + 36;
                 for (dev.frost.miniverse.minigame.core.region.RegionRestriction res : dev.frost.miniverse.minigame.core.region.RegionRestriction.values()) {
-                    String label = "[X] " + res.name();
-                    int w = net.minecraft.client.MinecraftClient.getInstance().textRenderer.getWidth(label);
-                    UiLayout.Rect cb = new UiLayout.Rect(cx, row.y() + 40 - 2, w, 12);
-                    if (cb.contains(mouseX, adjustedMouseY)) {
+                    int pillW = net.minecraft.client.MinecraftClient.getInstance().textRenderer.getWidth(res.name()) + 16;
+                    UiLayout.Rect pill = new UiLayout.Rect(cx, pillY, pillW, 16);
+                    if (pill.contains(mouseX, adjustedMouseY)) {
                         this.toggleRestriction(selected.extension.gameId(), selected.definition.key(), marker, res);
                         return true;
                     }
-                    cx += w + 12;
+                    cx += pillW + 6;
                 }
             }
             rowY += rowHeight + 4;
@@ -581,7 +580,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         nbt.putString("markerId", marker.id());
         nbt.putString("properties", properties.toString());
         ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
-        this.refreshAction.run();
+        this.pendingRefreshTicks = 2;
     }
 
     @Override
@@ -704,16 +703,22 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         int indentX = this.listArea.x() + 20;
         int innerWidth = this.listArea.width() - 20;
         
-        if (markers.isEmpty()) {
+        // Filter out optimistically-deleted markers
+        List<SessionSnapshotData.EditorMarker> visibleMarkers = markers.stream()
+            .filter(m -> !this.localDeletedMarkerIds.contains(m.id()))
+            .toList();
+        
+        if (visibleMarkers.isEmpty()) {
             UiRenderer.panel(context, indentX, rowY, innerWidth, 40, UiTheme.CARD, UiTheme.BORDER_SUBTLE);
             context.drawText(textRenderer, Text.literal("No markers placed."), indentX + 10, rowY + 16, UiTheme.TEXT_DIM, false);
             return rowY + 40;
         }
         
         int index = 1;
-        for (SessionSnapshotData.EditorMarker marker : markers) {
+        for (SessionSnapshotData.EditorMarker marker : visibleMarkers) {
             boolean isRegion = "REGION".equalsIgnoreCase(definition.type());
-            int rowHeight = isRegion ? 60 : 40;
+            // Region rows are taller to accommodate restriction pills below the action buttons
+            int rowHeight = isRegion ? 66 : 40;
             UiLayout.Rect row = new UiLayout.Rect(indentX, rowY, innerWidth, rowHeight);
             UiRenderer.panel(context, row.x(), row.y(), row.width(), row.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
             
@@ -730,17 +735,26 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             if (this.editingMarkerId.equals(marker.id())) {
                 this.renameField.setX(row.x() + row.width() - 226);
                 this.renameField.setY(row.y() + 10);
-                this.renameField.render(context, 0, 0, 0); // Render explicitly if needed, but it's added to screen. We just reposition it.
             }
             
             if (isRegion) {
-                context.drawText(textRenderer, Text.literal("Restrictions:"), row.x() + 10, row.y() + 40, UiTheme.TEXT_DIM, false);
-                int cx = row.x() + 80;
+                // Restriction pills row
+                int cx = row.x() + 10;
+                int pillY = row.y() + 36;
                 for (dev.frost.miniverse.minigame.core.region.RegionRestriction res : dev.frost.miniverse.minigame.core.region.RegionRestriction.values()) {
-                    boolean active = marker.properties() != null && marker.properties().has("restrictions") && marker.properties().getAsJsonArray("restrictions").contains(new com.google.gson.JsonPrimitive(res.name()));
-                    String label = (active ? "[X] " : "[ ] ") + res.name();
-                    context.drawText(textRenderer, Text.literal(label), cx, row.y() + 40, active ? UiTheme.TEXT : UiTheme.TEXT_DIM, false);
-                    cx += textRenderer.getWidth(label) + 12;
+                    boolean active = false;
+                    if (marker.properties() != null && marker.properties().has("restrictions") && marker.properties().get("restrictions").isJsonArray()) {
+                        for (com.google.gson.JsonElement e : marker.properties().getAsJsonArray("restrictions")) {
+                            if (e.getAsString().equals(res.name())) active = true;
+                        }
+                    }
+                    int pillW = textRenderer.getWidth(res.name()) + 16;
+                    int pillColor = active ? 0xFF1A3A1A : 0xFF1A1A2E;
+                    int pillBorder = active ? 0xFF33AA33 : 0xFF555577;
+                    int textColor = active ? 0xFF66FF66 : UiTheme.TEXT_MUTED;
+                    UiRenderer.panel(context, cx, pillY, pillW, 16, pillColor, pillBorder);
+                    context.drawText(textRenderer, Text.literal(res.name()), cx + 8, pillY + 4, textColor, false);
+                    cx += pillW + 6;
                 }
             }
             
@@ -762,8 +776,14 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     }
 
     private static String locationText(SessionSnapshotData.EditorMarker marker) {
+        if ("REGION".equalsIgnoreCase(marker.type())) {
+            if (marker.regions() == null || marker.regions().isEmpty()) return "Bounds: Not Set";
+            var part = marker.regions().getFirst();
+            return "Bounds: " + format(part.min()) + " \u2192 " + format(part.max())
+                + (marker.regions().size() > 1 ? " (+" + (marker.regions().size() - 1) + " more)" : "");
+        }
         if (marker.points().isEmpty()) {
-            return "Location: not set";
+            return "Location: Not Set";
         }
         if (marker.points().size() == 1) {
             SessionSnapshotData.EditorPoint point = marker.points().getFirst();

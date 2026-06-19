@@ -30,6 +30,10 @@ public final class SpectatorTargetProviders {
         };
     }
 
+    public static SpectatorTargetProvider killer(UUID killerId) {
+        return fixed(killerId);
+    }
+
     public static SpectatorTargetProvider filtered(SpectatorTargetProvider base, Predicate<Entity> predicate) {
         return context -> {
             List<Entity> targets = base == null ? List.of() : base.findTargets(context);

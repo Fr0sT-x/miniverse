@@ -1,5 +1,6 @@
 package dev.frost.miniverse.minigame.core.spectator;
 
+import dev.frost.miniverse.minigame.core.death.NoTargetPolicy;
 import net.minecraft.world.GameMode;
 import org.jetbrains.annotations.Nullable;
 
@@ -15,6 +16,8 @@ public final class SpectatorSession {
     private final long startTick;
     @Nullable
     private UUID targetId;
+    @Nullable
+    private final NoTargetPolicy noTargetPolicy;
     private List<UUID> allowedTargetIds = List.of();
     private long lastValidatedTick;
 
@@ -24,7 +27,8 @@ public final class SpectatorSession {
                             SpectatorMode mode,
                             GameMode returnMode,
                             long startTick,
-                            @Nullable UUID targetId) {
+                            @Nullable UUID targetId,
+                            @Nullable NoTargetPolicy noTargetPolicy) {
         this.spectatorId = spectatorId;
         this.policy = policy;
         this.targetProvider = targetProvider;
@@ -32,6 +36,7 @@ public final class SpectatorSession {
         this.returnMode = returnMode;
         this.startTick = startTick;
         this.targetId = targetId;
+        this.noTargetPolicy = noTargetPolicy;
     }
 
     public UUID spectatorId() {
@@ -61,6 +66,11 @@ public final class SpectatorSession {
     @Nullable
     public UUID targetId() {
         return this.targetId;
+    }
+
+    @Nullable
+    public NoTargetPolicy noTargetPolicy() {
+        return this.noTargetPolicy;
     }
 
     public void setTargetId(@Nullable UUID targetId) {

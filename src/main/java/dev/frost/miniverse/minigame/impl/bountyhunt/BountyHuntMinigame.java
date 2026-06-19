@@ -128,7 +128,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
+        return GlobalMatchRules.defaults(false, false);
     }
 
     // Context is attached in AbstractMinigame

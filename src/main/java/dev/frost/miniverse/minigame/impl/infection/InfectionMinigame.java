@@ -17,6 +17,7 @@ import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
@@ -47,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
-public final class InfectionMinigame extends AbstractMinigame implements PlayerRespawnAware, PlayerDamageAware, TeamManagerProvider {
+public final class InfectionMinigame extends AbstractMinigame implements PlayerRespawnAware, PlayerDamageAware, SpawnPointAware, TeamManagerProvider {
     private static final String NAME = "Infection";
     private static final String SURVIVOR_TEAM = "survivor";
     private static final String INFECTED_TEAM = "infected";
@@ -91,7 +92,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
+        return GlobalMatchRules.defaults(false, false);
     }
 
     @Override
@@ -356,6 +357,12 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
             return;
         }
         this.teleport(player, spawns.get(Math.floorMod(player.getUuid().hashCode(), spawns.size())));
+    }
+
+    @Override
+    public void teleportToSpawn(ServerPlayerEntity player) {
+        // Framework hook: teleport players to their map spawn during WAITING_FOR_PLAYERS or FROZEN transition
+        this.teleportToRandomSpawn(player);
     }
 
     private void teleport(ServerPlayerEntity player, MapPosition spawn) {

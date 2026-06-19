@@ -37,12 +37,20 @@ public final class SpectatorEvents {
         }
     }
 
+    void notifyNoTargetElimination(SpectatorSession session) {
+        for (SpectatorListener listener : this.listeners) {
+            listener.onSpectatorNoTargetElimination(session);
+        }
+    }
+
     public interface SpectatorListener {
         void onSpectatorStart(SpectatorSession session);
 
         void onSpectatorStop(SpectatorSession session, SpectatorStopReason reason);
 
         void onSpectatorTargetChanged(SpectatorSession session, @Nullable UUID previousTargetId, @Nullable UUID targetId);
+
+        void onSpectatorNoTargetElimination(SpectatorSession session);
     }
 }
 

@@ -100,7 +100,9 @@ public class RuntimeMarkerCache {
             return;
         }
 
-        Map<String, List<MapMarker>> loadedMarkers = MapEditorMarkerStore.loadAll(mapId, extension);
+        Map<String, List<MapMarker>> loadedMarkers = this.resolveEmbeddedMapConfig(gameId)
+            .map(configJson -> MapEditorMarkerStore.loadAll(configJson, extension))
+            .orElseGet(() -> MapEditorMarkerStore.loadAll(mapId, extension));
 
         for (MarkerDefinition def : extension.markers()) {
             List<MapMarker> instances = loadedMarkers.getOrDefault(def.key(), List.of());
@@ -149,6 +151,30 @@ public class RuntimeMarkerCache {
             return Optional.empty();
         }
         return Optional.of(new IndexConfig(sessionId, gameId, mapId));
+    }
+
+    private Optional<com.google.gson.JsonObject> resolveEmbeddedMapConfig(String gameId) {
+        Optional<com.google.gson.JsonObject> sessionJson = SessionRuntimeConfig.getSessionJson();
+        if (sessionJson.isEmpty() || gameId == null || gameId.isBlank()) {
+            return Optional.empty();
+        }
+
+        com.google.gson.JsonObject root = sessionJson.get();
+        if (!root.has("settings") || !root.get("settings").isJsonObject()) {
+            return Optional.empty();
+        }
+
+        String mapConfig = nestedString(root.getAsJsonObject("settings"), gameId, "mapConfig");
+        if (mapConfig.isBlank()) {
+            return Optional.empty();
+        }
+
+        try {
+            com.google.gson.JsonElement parsed = com.google.gson.JsonParser.parseString(mapConfig);
+            return parsed != null && parsed.isJsonObject() ? Optional.of(parsed.getAsJsonObject()) : Optional.empty();
+        } catch (com.google.gson.JsonParseException | IllegalStateException ignored) {
+            return Optional.empty();
+        }
     }
 
     private static String firstNonBlank(String... values) {

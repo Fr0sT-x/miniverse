@@ -1,18 +1,20 @@
-package dev.frost.miniverse.minigame.core.death.policy.impl;
+package dev.frost.miniverse.minigame.impl.murdermystery.death;
 
 import dev.frost.miniverse.minigame.core.death.DeathContext;
-import dev.frost.miniverse.minigame.core.death.policy.DeathSpectatorPolicy;
 import dev.frost.miniverse.minigame.core.death.NoTargetPolicy;
+import dev.frost.miniverse.minigame.core.death.policy.DeathSpectatorPolicy;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorMode;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
-import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorTargetProviders;
+import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
-public class FreeFlySpectatorPolicy implements DeathSpectatorPolicy {
+public class MurderMysterySpectatorPolicy implements DeathSpectatorPolicy {
     private final SpectatorService spectatorService;
 
-    public FreeFlySpectatorPolicy(SpectatorService spectatorService) {
+    public MurderMysterySpectatorPolicy(SpectatorService spectatorService) {
         this.spectatorService = spectatorService;
     }
 
@@ -21,22 +23,22 @@ public class FreeFlySpectatorPolicy implements DeathSpectatorPolicy {
         this.spectatorService.startSpectating(
             victim,
             SpectatorPolicies.unrestricted(),
-            SpectatorTargetProviders.none(),
-            SpectatorMode.STANDARD,
+            SpectatorTargetProviders.roster(),
+            SpectatorMode.ELIMINATED,
+            null, 
             null,
-            null,
-            null,
+            Text.literal("You died. Right-click to cycle targets, sneak to free-fly.").formatted(Formatting.GRAY),
             this.noTargetPolicy()
         );
     }
 
     @Override
-    public boolean requiresFixedCamera() {
-        return false;
+    public boolean requiresFixedCamera() { 
+        return false; 
     }
 
     @Override
-    public NoTargetPolicy noTargetPolicy() {
-        return NoTargetPolicy.FREE_FLY;
+    public NoTargetPolicy noTargetPolicy() { 
+        return NoTargetPolicy.FREE_FLY; 
     }
 }

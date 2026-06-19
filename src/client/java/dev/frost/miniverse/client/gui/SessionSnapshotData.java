@@ -223,9 +223,8 @@ public final class SessionSnapshotData {
         editorExtensions = List.copyOf(newEditorExtensions == null ? List.of() : newEditorExtensions);
         editorState = newEditorState == null ? new EditorState("", List.of()) : newEditorState;
         dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.editorActive = newMapEditor;
-        if (!dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.editorActive) {
-            dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.disabledOverlays.clear();
-        }
+        // NOTE: We intentionally do NOT clear enabledOverlays here.
+        // Overlay prefs are only reset in MapEditorState.clear() on full DISCONNECT.
     }
 
     public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity) {

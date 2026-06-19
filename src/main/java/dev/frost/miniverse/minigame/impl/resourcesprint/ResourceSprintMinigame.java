@@ -107,7 +107,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
+        return GlobalMatchRules.defaults(false, false);
     }
 
     @Override

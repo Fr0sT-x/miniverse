@@ -71,6 +71,7 @@ public final class MapEditorNetwork {
         }
         try {
             MapEditorMarkerStore.save(mapId, extension, definition, markers);
+            dev.frost.miniverse.session.SessionListSerializer.sendSessionList(player.server, player);
             player.sendMessage(Text.literal("Deleted marker.").formatted(Formatting.GREEN), false);
         } catch (IOException e) {
             player.sendMessage(Text.literal("Failed to delete marker: " + e.getMessage()).formatted(Formatting.RED), false);
@@ -99,6 +100,7 @@ public final class MapEditorNetwork {
                 markers.set(i, new MapMarker(marker.id(), marker.definitionKey(), name.trim(), marker.type(), marker.points(), marker.regions(), marker.properties()));
                 try {
                     MapEditorMarkerStore.save(mapId, extension, definition, markers);
+                    dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
                     player.sendMessage(Text.literal("Renamed marker.").formatted(Formatting.GREEN), false);
                 } catch (IOException e) {
                     player.sendMessage(Text.literal("Failed to rename marker: " + e.getMessage()).formatted(Formatting.RED), false);
@@ -125,6 +127,7 @@ public final class MapEditorNetwork {
                 markers.set(i, new MapMarker(marker.id(), marker.definitionKey(), marker.name(), marker.type(), marker.points(), marker.regions(), properties));
                 try {
                     MapEditorMarkerStore.save(mapId, extension, definition, markers);
+                    dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
                     player.sendMessage(Text.literal("Updated marker properties.").formatted(Formatting.GREEN), false);
                 } catch (IOException e) {
                     player.sendMessage(Text.literal("Failed to update marker properties: " + e.getMessage()).formatted(Formatting.RED), false);

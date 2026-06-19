@@ -151,6 +151,12 @@ public final class SessionBootstrapper {
             if (admittedParticipant) {
                 this.bootstrapper.matchLifecycleController.onParticipantJoin(player);
                 this.handler.onPlayerJoin(minigame, player, effectiveProperties);
+                // Framework-level spawn teleport: if the minigame declares spawn points,
+                // place the player at one now. applySettings() has already run above so
+                // any map-config-derived spawn lists are guaranteed to be populated.
+                if (minigame instanceof dev.frost.miniverse.minigame.core.event.SpawnPointAware spawnAware) {
+                    spawnAware.teleportToSpawn(player);
+                }
                 if (assignedLatePlayer && minigame instanceof DynamicParticipantMinigame dynamic) {
                     String team = effectiveProperties.getProperty("player." + player.getUuid() + ".team", effectiveProperties.getProperty("groupLabel", ""));
                     String role = effectiveProperties.getProperty(effectiveProperties.getProperty("game", this.handler.gameId()) + ".role." + player.getUuid(), "");

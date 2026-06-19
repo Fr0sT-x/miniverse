@@ -6,20 +6,16 @@ import net.minecraft.world.GameRules;
 
 public record GlobalMatchRules(
     boolean keepInventory,
+    boolean doImmediateRespawn,
     boolean pvpEnabled,
     boolean doDaylightCycle,
     boolean doWeatherCycle,
     boolean fallDamage,
     boolean naturalRegeneration,
-    boolean announceAdvancements,
-    boolean doImmediateRespawn
+    boolean announceAdvancements
 ) {
-    public static GlobalMatchRules defaults() {
-        return new GlobalMatchRules(false, true, true, true, true, true, true, false);
-    }
-
-    public GlobalMatchRules withImmediateRespawn(boolean value) {
-        return new GlobalMatchRules(keepInventory, pvpEnabled, doDaylightCycle, doWeatherCycle, fallDamage, naturalRegeneration, announceAdvancements, value);
+    public static GlobalMatchRules defaults(boolean keepInventory, boolean doImmediateRespawn) {
+        return new GlobalMatchRules(keepInventory, doImmediateRespawn, true, true, true, true, true, true);
     }
 
     public void apply(MinecraftServer server) {

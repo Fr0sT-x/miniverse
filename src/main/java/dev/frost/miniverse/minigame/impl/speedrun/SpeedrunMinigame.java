@@ -96,7 +96,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
+        return GlobalMatchRules.defaults(true, false);
     }
 
     @Override

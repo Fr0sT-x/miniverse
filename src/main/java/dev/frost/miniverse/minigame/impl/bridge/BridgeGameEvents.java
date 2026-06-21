@@ -21,7 +21,7 @@ public final class BridgeGameEvents {
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (player instanceof ServerPlayerEntity serverPlayer) {
                 Minigame active = MinigameManager.getInstance().getActiveMinigame();
-                if (active instanceof BridgeMinigame bridge && bridge.getState() == GameState.PLAYING) {
+                if (active instanceof BridgeMinigame bridge && bridge.getState() == GameState.RUNNING) {
                     if (player.getStackInHand(hand).getItem() instanceof BlockItem) {
                         BlockPos placePos = hitResult.getBlockPos().offset(hitResult.getSide());
                         if (bridge.isAboveHeightLimit(placePos)) {

@@ -29,7 +29,7 @@ public class DuelsSpectatorPolicy implements DeathSpectatorPolicy {
             victim,
             SpectatorPolicies.unrestricted(),
             SpectatorTargetProviders.roster(),
-            SpectatorMode.FREE_FLY,
+            SpectatorMode.ELIMINATED,
             null,
             null,
             Text.literal("You were eliminated. Spectating until the round ends.").formatted(Formatting.GRAY),

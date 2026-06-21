@@ -115,7 +115,7 @@ public final class MatchLifecycleController {
             return true;
         }
 
-        runtime.setState(GameState.RETURNING);
+        runtime.setState(GameState.STOPPED);
         this.sendAdminCancelMessage();
         this.announceCountdown(this.options.returnSeconds());
         return true;
@@ -255,7 +255,7 @@ public final class MatchLifecycleController {
             return;
         }
         if (restoredPhase == Phase.END_RETURN) {
-            runtime.setState(GameState.RETURNING);
+            runtime.setState(GameState.STOPPED);
             return;
         }
         if (restoredPhase == Phase.ENDED) {
@@ -294,7 +294,7 @@ public final class MatchLifecycleController {
 
     private void returnPlayers() {
         this.unfreezeParticipants();
-        this.runtimeState(GameState.FINISHED);
+        this.runtimeState(GameState.STOPPED);
         SessionRuntimeConfig.getSessionId().ifPresent(SessionRegistry::markStopRequested);
         String host = SessionRuntimeConfig.getReturnHost();
         int port = SessionRuntimeConfig.getReturnPort();
@@ -593,13 +593,13 @@ public final class MatchLifecycleController {
         if (state == GameState.STARTING || state == GameState.FROZEN) {
             return Phase.START_FREEZE;
         }
-        if (state == GameState.RUNNING || state == GameState.IN_PROGRESS || state == GameState.PAUSED) {
+        if (state == GameState.RUNNING || state == GameState.RUNNING || state == GameState.PAUSED) {
             return Phase.RUNNING;
         }
-        if (state == GameState.RETURNING) {
+        if (state == GameState.STOPPED) {
             return Phase.END_RETURN;
         }
-        if (state == GameState.ENDING || state == GameState.FINISHED) {
+        if (state == GameState.ENDING || state == GameState.STOPPED) {
             return Phase.ENDED;
         }
         return Phase.IDLE;

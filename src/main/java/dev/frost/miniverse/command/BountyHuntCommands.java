@@ -99,7 +99,7 @@ public final class BountyHuntCommands {
             return 0;
         }
 
-        if (bountyHunt.getState() == GameState.IN_PROGRESS) {
+        if (bountyHunt.getState() == GameState.RUNNING) {
             context.getSource().sendError(Text.literal("Bounty Hunt is already running."));
             return 0;
         }

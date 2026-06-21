@@ -105,7 +105,9 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults(true, true);
+        // doImmediateRespawn=false required: framework calls changeGameMode(SPECTATOR) on fatal damage; 
+        // client must not auto-respawn before the framework transition completes. See DECISIONS.md D04.
+        return GlobalMatchRules.defaults(true, false);
     }
 
     @Override
@@ -166,7 +168,7 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         }
         
         this.activeMatch.start();
-        setState(GameState.PLAYING);
+        setState(GameState.RUNNING);
     }
 
     @Override

@@ -106,7 +106,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     @Override
     protected void onMatchStart() {
-        if (this.getState() == GameState.IN_PROGRESS) {
+        if (this.getState() == GameState.RUNNING) {
             return;
         }
 
@@ -122,8 +122,8 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             return;
         }
 
-        this.setState(GameState.IN_PROGRESS);
-        this.setRuntimeState(GameState.IN_PROGRESS);
+        this.setState(GameState.RUNNING);
+        this.setRuntimeState(GameState.RUNNING);
         this.elapsedTicks = 0;
         this.tickCounter = 0;
 
@@ -161,7 +161,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     public void handleDragonDeath() {
-        if (this.getState() != GameState.IN_PROGRESS) {
+        if (this.getState() != GameState.RUNNING) {
             return;
         }
 
@@ -175,7 +175,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             return;
         }
 
-        if (this.getState() == GameState.IN_PROGRESS && !this.paused) {
+        if (this.getState() == GameState.RUNNING && !this.paused) {
             this.elapsedTicks++;
             this.tickCounter++;
 
@@ -216,7 +216,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.addParticipant(player);
         this.runnerUuid = player.getUuid();
 
-        if (this.getState() == GameState.IN_PROGRESS) {
+        if (this.getState() == GameState.RUNNING) {
             this.prepareRunnerForRun(player);
         }
         this.syncVanillaTeams();
@@ -226,7 +226,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     public void syncLateParticipant(ServerPlayerEntity player) {
         this.addParticipant(player);
-        if (this.getState() == GameState.IN_PROGRESS) {
+        if (this.getState() == GameState.RUNNING) {
             this.prepareRunnerForRun(player);
         }
         this.syncVanillaTeams();
@@ -242,13 +242,13 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         }
         if (normalizedRole.equals("runner") || normalizedRole.equals("speedrunner")) {
             this.addRunnerParticipant(player);
-            if (this.getState() == GameState.IN_PROGRESS) {
+            if (this.getState() == GameState.RUNNING) {
                 player.sendMessage(Text.literal("Joined Speedrun in progress as a runner.").formatted(Formatting.GREEN), false);
             }
             return;
         }
         this.syncLateParticipant(player);
-        if (this.getState() == GameState.IN_PROGRESS) {
+        if (this.getState() == GameState.RUNNING) {
             player.sendMessage(Text.literal("Joined Speedrun in progress as a runner.").formatted(Formatting.GREEN), false);
         }
     }
@@ -298,7 +298,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             this.runnerUuid = newPlayer.getUuid();
         }
 
-        if (this.getState() == GameState.IN_PROGRESS) {
+        if (this.getState() == GameState.RUNNING) {
             this.syncParticipantModes();
         }
     }
@@ -342,7 +342,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     private void addRunnerParticipant(ServerPlayerEntity player) {
         this.addParticipant(player);
-        if (this.getState() == GameState.IN_PROGRESS) {
+        if (this.getState() == GameState.RUNNING) {
             this.prepareRunnerForRun(player);
         }
         this.syncVanillaTeams();
@@ -440,7 +440,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             this.runnerLine.updateAll();
         }
         if (this.timeLine != null) {
-            this.timeLine.setText(Text.literal("Time: " + (this.getState() == GameState.IN_PROGRESS ? this.elapsedTicks / 20 : 0)));
+            this.timeLine.setText(Text.literal("Time: " + (this.getState() == GameState.RUNNING ? this.elapsedTicks / 20 : 0)));
             this.timeLine.updateAll();
         }
     }

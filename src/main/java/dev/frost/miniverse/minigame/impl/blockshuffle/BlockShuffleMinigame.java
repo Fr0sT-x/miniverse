@@ -100,7 +100,6 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         this.points.clear();
         this.assignedBlocks.clear();
         this.timeWarningsShown.clear();
-        SpectatorService.getInstance().clearAll();
     }
 
     @Override
@@ -112,9 +111,9 @@ public class BlockShuffleMinigame extends AbstractMinigame {
             return;
         }
 
-        this.setState(GameState.IN_PROGRESS);
+        this.setState(GameState.RUNNING);
         if (this.context != null) {
-            this.context.setState(GameState.IN_PROGRESS);
+            this.context.setState(GameState.RUNNING);
             this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
         }
         
@@ -144,7 +143,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
     @Override
     protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.getState() != GameState.IN_PROGRESS) return;
+        if (this.getState() != GameState.RUNNING) return;
 
         if (this.activePlayers.isEmpty()) {
             if (!this.checkProgression(this.context.roster()).blocked()) {
@@ -271,7 +270,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         }
 
         this.checkWinCondition();
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             this.startIntermission();
         }
     }
@@ -285,6 +284,15 @@ public class BlockShuffleMinigame extends AbstractMinigame {
     }
 
     private void checkWinCondition() {
+        if (this.activePlayers.size() <= 1) {
+            if (!this.activePlayers.isEmpty()) {
+                this.declareWinner(this.activePlayers.iterator().next());
+            } else {
+                this.stopGame();
+            }
+            return;
+        }
+
         List<UUID> winners = new ArrayList<>();
         int highestScore = 0;
         
@@ -403,8 +411,8 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         }
         SpectatorService.getInstance().stopSpectating(player, SpectatorStopReason.MANUAL);
 
-        if (this.state == GameState.IN_PROGRESS && this.activePlayers.isEmpty()) {
-            this.stopGame();
+        if (this.state == GameState.RUNNING) {
+            this.checkWinCondition();
         }
     }
 
@@ -517,7 +525,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
-        if (this.state != GameState.IN_PROGRESS && this.state != GameState.PAUSED) {
+        if (this.state != GameState.RUNNING && this.state != GameState.PAUSED) {
             return;
         }
         UUID uuid = player.getUuid();

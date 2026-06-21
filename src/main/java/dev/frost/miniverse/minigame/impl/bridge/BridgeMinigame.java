@@ -277,13 +277,13 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         this.syncVanillaTeams();
         
         this.ticksRemaining = 15 * 60 * 20; // 15 minutes match timer
-        this.setState(GameState.PLAYING);
+        this.setState(GameState.RUNNING);
         this.broadcast(Text.literal("The Bridge has started! First to " + this.settings.targetScore() + " wins.").formatted(Formatting.YELLOW));
     }
 
     private void startRound() {
-        this.setState(GameState.PLAYING);
-        this.setRuntimeState(GameState.PLAYING);
+        this.setState(GameState.RUNNING);
+        this.setRuntimeState(GameState.RUNNING);
         this.acceptingGoals = true;
         this.stateTicks = 0;
 
@@ -348,7 +348,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             return;
         }
 
-        if (this.getState() != GameState.PLAYING) {
+        if (this.getState() != GameState.RUNNING) {
             return;
         }
 
@@ -426,7 +426,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
                 if (remaining <= 0) {
                     this.respawnTimers.remove(entry.getKey());
                     ServerPlayerEntity p = this.server.getPlayerManager().getPlayer(entry.getKey());
-                    if (p != null && this.isParticipant(p) && this.getState() == GameState.PLAYING) {
+                    if (p != null && this.isParticipant(p) && this.getState() == GameState.RUNNING) {
                         p.changeGameMode(GameMode.SURVIVAL);
                         this.applyKit(p);
                         this.teleportToTeamSpawn(p);
@@ -440,7 +440,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     }
 
     private void checkGoalRegions() {
-        if (!this.acceptingGoals || this.getState() != GameState.PLAYING) {
+        if (!this.acceptingGoals || this.getState() != GameState.RUNNING) {
             return;
         }
 
@@ -473,7 +473,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
     @Override
     public void onPlayerEnterRegion(ServerPlayerEntity player, MapMarker region) {
-        if (!this.acceptingGoals || this.getState() != GameState.PLAYING) {
+        if (!this.acceptingGoals || this.getState() != GameState.RUNNING) {
             return;
         }
         if (!this.isParticipant(player) || player.isDead()) {
@@ -623,7 +623,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
         // Always teleport to team spawn on respawn (handles freeze, playing, etc.)
         this.teleportToTeamSpawn(newPlayer);
-        if (this.getState() == GameState.PLAYING) {
+        if (this.getState() == GameState.RUNNING) {
             this.applyKit(newPlayer);
             newPlayer.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 3 * 20, 255, false, false, true));
         }
@@ -643,7 +643,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
         // During non-playing states (FROZEN, WAITING, STARTING), block ALL damage
         // This prevents void deaths during the freeze countdown on void maps
-        if (this.getState() != GameState.PLAYING && this.getState() != GameState.ROUND_RESET) {
+        if (this.getState() != GameState.RUNNING && this.getState() != GameState.ROUND_RESET) {
             // If player is somehow falling into the void during freeze, teleport them back
             if (player.getY() < -64) {
                 this.teleportToTeamSpawn(player);
@@ -815,8 +815,8 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     }
 
     private void startEndSequence(List<ServerPlayerEntity> winners, Text winnerLabel) {
-        this.setState(GameState.MATCH_OVER);
-        this.setRuntimeState(GameState.MATCH_OVER);
+        this.setState(GameState.ENDING);
+        this.setRuntimeState(GameState.ENDING);
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime == null) {
             return;

@@ -142,7 +142,7 @@ public final class ManhuntCommands {
             return 0;
         }
 
-        if (manhunt.getState() == GameState.IN_PROGRESS) {
+        if (manhunt.getState() == GameState.RUNNING) {
             source.sendError(Text.literal("Manhunt is already running."));
             return 0;
         }

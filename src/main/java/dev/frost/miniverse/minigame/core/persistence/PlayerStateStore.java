@@ -136,8 +136,8 @@ public final class PlayerStateStore {
             || state == GameState.STARTING
             || state == GameState.FROZEN
             || state == GameState.RUNNING
-            || state == GameState.IN_PROGRESS
+            || state == GameState.RUNNING
             || state == GameState.ENDING
-            || state == GameState.RETURNING;
+            || state == GameState.STOPPED;
     }
 }

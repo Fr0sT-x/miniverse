@@ -40,7 +40,7 @@ public class MinigameUsageExamples {
         // Start the game
         manhunt.startGame();
         manager.setCurrentState(GameState.STARTING);
-        manager.setCurrentState(GameState.IN_PROGRESS);
+        manager.setCurrentState(GameState.RUNNING);
     }
 
     /**

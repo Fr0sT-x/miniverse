@@ -110,7 +110,7 @@ public final class SessionRoutingEvents {
             }
 
             MinigameManager minigameManager = MinigameManager.getInstance();
-            if (minigameManager.getCurrentState() == GameState.RETURNING || minigameManager.getCurrentState() == GameState.FINISHED) {
+            if (minigameManager.getCurrentState() == GameState.STOPPED || minigameManager.getCurrentState() == GameState.STOPPED) {
                 // MatchLifecycleController is already handling the return sequence
                 return;
             }

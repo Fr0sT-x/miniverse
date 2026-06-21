@@ -111,9 +111,9 @@ public class DeathShuffleMinigame extends AbstractMinigame {
             return;
         }
 
-        this.setState(GameState.IN_PROGRESS);
+        this.setState(GameState.RUNNING);
         if (this.context != null) {
-            this.context.setState(GameState.IN_PROGRESS);
+            this.context.setState(GameState.RUNNING);
             this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
         }
         
@@ -145,7 +145,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     @Override
     protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.getState() != GameState.IN_PROGRESS) return;
+        if (this.getState() != GameState.RUNNING) return;
 
         if (this.activePlayers.isEmpty()) {
             if (!this.checkProgression(this.context.roster()).blocked()) {
@@ -286,7 +286,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         }
 
         this.checkWinCondition();
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             this.startIntermission();
         } else {
             this.rebuildScoreboards();
@@ -301,6 +301,15 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     }
 
     private void checkWinCondition() {
+        if (this.activePlayers.size() <= 1) {
+            if (!this.activePlayers.isEmpty()) {
+                this.declareWinners(new ArrayList<>(this.activePlayers));
+            } else {
+                this.declareWinners(List.of());
+            }
+            return;
+        }
+
         List<UUID> winners = new ArrayList<>();
         int highestScore = 0;
         
@@ -348,7 +357,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     @Override
     public void onEntityDeath(LivingEntity entity, DamageSource source) {
         if (!(entity instanceof ServerPlayerEntity player)) return;
-        if (this.state != GameState.IN_PROGRESS || this.roundState != RoundState.ACTIVE) {
+        if (this.state != GameState.RUNNING || this.roundState != RoundState.ACTIVE) {
             // Instantly respawn if in minigame
             if (this.isParticipant(player.getUuid())) {
                 this.instantRespawn(player);
@@ -401,12 +410,13 @@ public class DeathShuffleMinigame extends AbstractMinigame {
 
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
-        if (this.state == GameState.WAITING_FOR_PLAYERS) {
-            if (this.context != null) this.context.roster().remove(player);
-            this.activePlayers.remove(player.getUuid());
-        } else {
-            this.rebuildScoreboards();
+        if (this.context != null) this.context.roster().remove(player);
+        this.activePlayers.remove(player.getUuid());
+        
+        if (this.state == GameState.RUNNING) {
+            this.checkWinCondition();
         }
+        this.rebuildScoreboards();
     }
 
     @Override
@@ -414,7 +424,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         if (this.state == GameState.WAITING_FOR_PLAYERS) {
             if (this.context != null) this.context.roster().add(player);
             this.activePlayers.add(player.getUuid());
-        } else if (this.state == GameState.IN_PROGRESS) {
+        } else if (this.state == GameState.RUNNING) {
             if (this.context != null) this.context.roster().add(player);
             this.activePlayers.add(player.getUuid());
             this.points.putIfAbsent(player.getUuid(), 0);

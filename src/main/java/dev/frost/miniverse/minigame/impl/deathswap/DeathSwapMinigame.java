@@ -452,7 +452,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     }
 
     private void endMatch(Collection<UUID> winners) {
-        if (this.state == GameState.ENDING || this.state == GameState.RETURNING || this.state == GameState.FINISHED) {
+        if (this.state == GameState.ENDING || this.state == GameState.STOPPED || this.state == GameState.STOPPED) {
             return;
         }
         this.state = GameState.ENDING;

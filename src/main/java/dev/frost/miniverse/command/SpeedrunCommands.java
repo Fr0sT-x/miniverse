@@ -54,7 +54,7 @@ public final class SpeedrunCommands {
             speedrun.setRunner(player);
             source.sendFeedback(() -> Text.literal("You joined Speedrun as the runner."), false);
         } else {
-            if (speedrun.getState() == GameState.IN_PROGRESS) {
+            if (speedrun.getState() == GameState.RUNNING) {
                 player.changeGameMode(GameMode.SPECTATOR);
             }
             source.sendFeedback(() -> Text.literal("You joined Speedrun as a spectator."), false);
@@ -79,7 +79,7 @@ public final class SpeedrunCommands {
             speedrun.setRunner(target);
             source.sendFeedback(() -> Text.literal("Added " + target.getName().getString() + " as the runner."), true);
         } else {
-            if (speedrun.getState() == GameState.IN_PROGRESS) {
+            if (speedrun.getState() == GameState.RUNNING) {
                 target.changeGameMode(GameMode.SPECTATOR);
             }
             source.sendFeedback(() -> Text.literal("Added " + target.getName().getString() + " as a spectator."), true);
@@ -113,7 +113,7 @@ public final class SpeedrunCommands {
             return 0;
         }
 
-        if (speedrun.getState() == GameState.IN_PROGRESS) {
+        if (speedrun.getState() == GameState.RUNNING) {
             source.sendError(Text.literal("Speedrun is already running."));
             return 0;
         }

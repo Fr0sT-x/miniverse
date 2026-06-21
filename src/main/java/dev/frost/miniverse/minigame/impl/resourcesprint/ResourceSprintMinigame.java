@@ -143,7 +143,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         }
         String resolvedTeam = this.normalizeTeamLabel(teamId);
         this.setPlayerTeam(player, resolvedTeam);
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             TeamProgress progress = this.teamProgress.computeIfAbsent(resolvedTeam, ignored -> new TeamProgress());
             player.sendMessage(Text.literal("Joined Resource Sprint in progress for " + resolvedTeam + ".").formatted(Formatting.GREEN), false);
             this.broadcastCurrentObjective(resolvedTeam, progress);
@@ -168,7 +168,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
 
     @Override
     protected void onMatchStart() {
-        if (this.getState() == GameState.IN_PROGRESS) {
+        if (this.getState() == GameState.RUNNING) {
             return;
         }
 
@@ -177,8 +177,8 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
             return;
         }
 
-        this.setState(GameState.IN_PROGRESS);
-        this.setRuntimeState(GameState.IN_PROGRESS);
+        this.setState(GameState.RUNNING);
+        this.setRuntimeState(GameState.RUNNING);
         this.elapsedTicks = 0;
         this.suddenDeathActive = false;
         this.suddenDeathTeams.clear();
@@ -227,7 +227,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
     @Override
     protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.getState() != GameState.IN_PROGRESS) {
+        if (this.getState() != GameState.RUNNING) {
             return;
         }
 
@@ -272,7 +272,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
             }
 
             this.checkCurrentObjective(entry.getKey(), progress);
-            if (this.getState() != GameState.IN_PROGRESS) {
+            if (this.getState() != GameState.RUNNING) {
                 return;
             }
         }
@@ -307,7 +307,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         this.teams.remove(player);
         this.syncVanillaTeams();
 
-        if (wasTracked && this.getState() == GameState.IN_PROGRESS && this.getParticipants().isEmpty()) {
+        if (wasTracked && this.getState() == GameState.RUNNING && this.getParticipants().isEmpty()) {
             this.onMatchEnd();
         }
     }

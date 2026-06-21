@@ -302,7 +302,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             this.tickGracePeriod();
             this.tickTargetSwap();
             this.tickInvincibilityWindows();
-            if (this.state == GameState.IN_PROGRESS && this.settings.trackerEnabled()) {
+            if (this.state == GameState.RUNNING && this.settings.trackerEnabled()) {
                 this.updateTrackers();
             }
             this.updateScoreboardTick();
@@ -368,7 +368,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             this.context.roster().add(player);
         }
         this.scores.putIfAbsent(player.getUuid(), 0);
-        if (this.state == GameState.IN_PROGRESS || this.state == GameState.STARTING) {
+        if (this.state == GameState.RUNNING || this.state == GameState.STARTING) {
             this.registerProtectedItems();
             this.grantTracker(player);
             this.assignInitialTargets();
@@ -530,11 +530,11 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     }
 
     private void beginHunt() {
-        if (this.state == GameState.IN_PROGRESS) {
+        if (this.state == GameState.RUNNING) {
             return;
         }
-        this.state = GameState.IN_PROGRESS;
-        this.setRuntimeState(GameState.IN_PROGRESS);
+        this.state = GameState.RUNNING;
+        this.setRuntimeState(GameState.RUNNING);
         this.broadcastMessage(Text.literal("Hunt is live!").formatted(Formatting.GREEN));
     }
 
@@ -553,7 +553,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     }
 
     private void tickTargetSwap() {
-        if (this.settings.targetSwapIntervalSeconds() <= 0 || this.state != GameState.IN_PROGRESS) {
+        if (this.settings.targetSwapIntervalSeconds() <= 0 || this.state != GameState.RUNNING) {
             return;
         }
 
@@ -1262,7 +1262,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
     @Override
     public void onRosterChanged(dev.frost.miniverse.minigame.core.SessionRoster roster) {
-        if (this.state != GameState.IN_PROGRESS && this.state != GameState.STARTING) {
+        if (this.state != GameState.RUNNING && this.state != GameState.STARTING) {
             return;
         }
         List<ServerPlayerEntity> online = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null);

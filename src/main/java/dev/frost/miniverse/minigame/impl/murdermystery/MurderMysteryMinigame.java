@@ -170,7 +170,9 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults(true, true);
+        // doImmediateRespawn=false required: framework calls changeGameMode(SPECTATOR) on fatal damage; 
+        // client must not auto-respawn before the framework transition completes. See DECISIONS.md D04.
+        return GlobalMatchRules.defaults(true, false);
     }
 
     @Override
@@ -180,9 +182,9 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
 
     @Override
     protected void onMatchStart() {
-        if (this.getState() == GameState.IN_PROGRESS) return;
+        if (this.getState() == GameState.RUNNING) return;
         if (this.context != null) {
-            this.context.setState(GameState.IN_PROGRESS);
+            this.context.setState(GameState.RUNNING);
             if (this.server == null) {
                 this.server = this.context.nullableServer();
             }
@@ -228,6 +230,9 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
 
     @Override
     protected void onMatchEnd() {
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(this::getPlayerByUuid);
+        }
         if (this.context != null) {
             this.context.setState(GameState.ENDING);
         }
@@ -240,7 +245,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     @Override
     protected void onGameTick(MinecraftServer server) {
         this.server = server;
-        if (this.getState() != GameState.IN_PROGRESS || paused) return;
+        if (this.getState() != GameState.RUNNING || paused) return;
 
         this.elapsedTicks++;
         List<ServerPlayerEntity> activePlayers = new ArrayList<>();
@@ -282,7 +287,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
 
     @Override
     public boolean allowDamage(ServerPlayerEntity player, DamageSource source, float amount) {
-        if (this.getState() != GameState.IN_PROGRESS) {
+        if (this.getState() != GameState.RUNNING) {
             return false;
         }
         if (!context.liveParticipants().contains(player)) {
@@ -323,7 +328,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     // TODO: Migrate EntityDeathAware.onEntityDeath override if needed
     @Override
     public void onPlayerDeath(ServerPlayerEntity player) {
-        // Obsolete, replaced by DeathLifecycleManager
+        // Handled by DeathLifecycleManager via allowDamage()
     }
 
     private void teleportToMapSpawns(List<ServerPlayerEntity> players) {
@@ -356,6 +361,9 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
 
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleDisconnect(player);
+        }
         if (roleManager.hasRole(player, DetectiveRole.class)) {
             weaponManager.dropDetectiveWeapon(player.getServerWorld(), player.getPos());
             GameMessenger.broadcast(context.liveParticipants(), Text.literal("Detective disconnected! The Detective's Bow has dropped.").formatted(Formatting.RED));
@@ -369,7 +377,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         context.roster().add(player);
-        if (this.getState() == GameState.IN_PROGRESS || this.getState() == GameState.ENDING) {
+        if (this.getState() == GameState.RUNNING || this.getState() == GameState.ENDING) {
             roleManager.assignRole(player, new SpectatorRole());
             SpectatorService.getInstance().startSpectating(
                 player, 
@@ -397,7 +405,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     }
 
     public void checkWinConditions() {
-        if (this.getState() != GameState.IN_PROGRESS) return;
+        if (this.getState() != GameState.RUNNING) return;
         List<ServerPlayerEntity> active = new ArrayList<>();
         for (ServerPlayerEntity p : context.liveParticipants()) {
             if (!roleManager.hasRole(p, SpectatorRole.class)) active.add(p);
@@ -410,7 +418,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     }
 
     private void endMatch(MurderMysteryWinConditionManager.WinResult result) {
-        if (this.getState() == GameState.ENDING || this.getState() == GameState.FINISHED) return;
+        if (this.getState() == GameState.ENDING || this.getState() == GameState.STOPPED) return;
         this.context.setState(GameState.ENDING);
         
         Set<ServerPlayerEntity> winners = new java.util.HashSet<>();
@@ -525,7 +533,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
 
     @Override
     public ActionResult onUseItem(ServerPlayerEntity player, World world, Hand hand) {
-        if (this.getState() != GameState.IN_PROGRESS) return ActionResult.PASS;
+        if (this.getState() != GameState.RUNNING) return ActionResult.PASS;
         if (roleManager.hasRole(player, SpectatorRole.class)) {
             if (SpectatorService.getInstance().cycleTarget(player, true)) {
                 ServerPlayerEntity target = null;

@@ -5,8 +5,6 @@ package dev.frost.miniverse.minigame.core;
  * This enum defines the transitions a minigame can go through.
  */
 public enum GameState {
-    WAITING,
-
     COUNTDOWN,
 
     /**
@@ -26,10 +24,6 @@ public enum GameState {
      */
     RUNNING,
 
-    PLAYING,
-
-    IN_PROGRESS,
-
     /**
      * The game is temporarily paused by an administrator.
      */
@@ -40,26 +34,25 @@ public enum GameState {
      */
     ENDING,
 
-    RETURNING,
-
     ROUND_RESET,
 
-    MATCH_OVER,
-
-    FINISHED;
+    /**
+     * The game is completely stopped and session is over.
+     */
+    STOPPED;
 
     /**
      * Checks if the game is currently active (in progress).
      */
     public boolean isActive() {
-        return this == RUNNING || this == IN_PROGRESS || this == PLAYING;
+        return this == RUNNING;
     }
 
     /**
      * Checks if the game is in a terminal state.
      */
     public boolean isTerminal() {
-        return this == ENDING || this == RETURNING || this == FINISHED || this == MATCH_OVER;
+        return this == ENDING || this == STOPPED;
     }
 }
 

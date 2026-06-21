@@ -42,7 +42,9 @@ replay_*.log
 # ignored folders
 decompiled/
 config/miniverse/
-docs/
+docs/*
+!docs/status/
+old_docs/
 logs/
 markdown/
 reference/

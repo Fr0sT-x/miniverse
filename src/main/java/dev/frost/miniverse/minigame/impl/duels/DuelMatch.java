@@ -322,4 +322,34 @@ public class DuelMatch {
             player.sendMessage(text);
         }
     }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.add("context", context.saveRuntimeState());
+        json.addProperty("state", state.name());
+        json.addProperty("countdownSeconds", countdownSeconds);
+        json.addProperty("currentRound", currentRound);
+        json.addProperty("team1RoundWins", team1RoundWins);
+        json.addProperty("team2RoundWins", team2RoundWins);
+        json.addProperty("betweenRoundsSeconds", betweenRoundsSeconds);
+        return json;
+    }
+
+    public static DuelMatch loadRuntimeState(com.google.gson.JsonObject json, dev.frost.miniverse.minigame.arena.ArenaManager arenaManager, net.minecraft.server.MinecraftServer server) {
+        DuelMatchContext ctx = DuelMatchContext.loadRuntimeState(json.getAsJsonObject("context"), arenaManager, server);
+        dev.frost.miniverse.minigame.arena.ArenaState oldArenaState = ctx.getArena() != null ? ctx.getArena().getState() : null;
+        DuelMatch match = new DuelMatch(ctx);
+        if (oldArenaState != null) {
+            ctx.getArena().setState(oldArenaState);
+        }
+        
+        if (json.has("state")) match.state = DuelMatchState.valueOf(json.get("state").getAsString());
+        if (json.has("countdownSeconds")) match.countdownSeconds = json.get("countdownSeconds").getAsInt();
+        if (json.has("currentRound")) match.currentRound = json.get("currentRound").getAsInt();
+        if (json.has("team1RoundWins")) match.team1RoundWins = json.get("team1RoundWins").getAsInt();
+        if (json.has("team2RoundWins")) match.team2RoundWins = json.get("team2RoundWins").getAsInt();
+        if (json.has("betweenRoundsSeconds")) match.betweenRoundsSeconds = json.get("betweenRoundsSeconds").getAsInt();
+        match.lastTickTime = System.currentTimeMillis();
+        return match;
+    }
 }

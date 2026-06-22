@@ -25,7 +25,7 @@ public record ManhuntSettings(
         int modeGrace = Integer.getInteger("miniverse.manhunt.disconnectGraceSeconds", globalGrace);
         return new ManhuntSettings(
             Integer.getInteger("miniverse.manhunt.hunterReleaseDelaySeconds", 10),
-            Integer.getInteger("miniverse.manhunt.respawnDelaySeconds", ManhuntSpeedrunnerRespawnSystem.DEFAULT_RESPAWN_DELAY_SECONDS),
+            Integer.getInteger("miniverse.manhunt.respawnDelaySeconds", 5),
             Boolean.parseBoolean(System.getProperty("miniverse.manhunt.huntersCompass", "true")),
             Boolean.parseBoolean(System.getProperty("miniverse.manhunt.netherTracking", "true")),
             Integer.getInteger("miniverse.manhunt.compassCooldownSeconds", 2),

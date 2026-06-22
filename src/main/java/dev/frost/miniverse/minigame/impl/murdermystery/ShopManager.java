@@ -23,7 +23,7 @@ public class ShopManager {
     private final MurderMysteryWeaponManager weaponManager;
     private final RoleManager roleManager;
     private final MurderMysterySettings settings;
-    private final List<VillagerEntity> shopNpcs = new ArrayList<>();
+    private final List<java.util.UUID> shopNpcIds = new ArrayList<>();
 
     public ShopManager(VirtualEconomyManager economy, MurderMysteryWeaponManager weaponManager, RoleManager roleManager, MurderMysterySettings settings) {
         this.economy = economy;
@@ -42,12 +42,12 @@ public class ShopManager {
             npc.setInvulnerable(true);
             npc.setSilent(true);
             world.spawnEntity(npc);
-            shopNpcs.add(npc);
+            shopNpcIds.add(npc.getUuid());
         }
     }
 
     public boolean handleInteract(ServerPlayerEntity player, net.minecraft.entity.Entity entity) {
-        if (shopNpcs.contains(entity)) {
+        if (shopNpcIds.contains(entity.getUuid())) {
             openShopGui(player);
             return true;
         }
@@ -110,12 +110,36 @@ public class ShopManager {
         return false;
     }
 
-    public void clear() {
-        for (VillagerEntity npc : shopNpcs) {
-            if (npc != null && !npc.isRemoved()) {
-                npc.discard();
+    public void clear(net.minecraft.server.MinecraftServer server) {
+        if (server != null) {
+            for (java.util.UUID uuid : shopNpcIds) {
+                for (ServerWorld world : server.getWorlds()) {
+                    net.minecraft.entity.Entity e = world.getEntity(uuid);
+                    if (e != null && !e.isRemoved()) {
+                        e.discard();
+                    }
+                }
             }
         }
-        shopNpcs.clear();
+        shopNpcIds.clear();
+    }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        com.google.gson.JsonArray array = new com.google.gson.JsonArray();
+        for (java.util.UUID uuid : shopNpcIds) {
+            array.add(uuid.toString());
+        }
+        json.add("shopNpcIds", array);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        shopNpcIds.clear();
+        if (json.has("shopNpcIds")) {
+            for (com.google.gson.JsonElement elem : json.getAsJsonArray("shopNpcIds")) {
+                shopNpcIds.add(java.util.UUID.fromString(elem.getAsString()));
+            }
+        }
     }
 }

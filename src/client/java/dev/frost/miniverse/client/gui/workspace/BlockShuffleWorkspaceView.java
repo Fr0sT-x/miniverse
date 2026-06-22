@@ -33,16 +33,19 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
 
     private IntFieldWidget roundDurationField;
     private IntFieldWidget pointsToWinField;
+    private IntFieldWidget respawnDelayField;
     private ButtonWidget perPlayerButton;
     private ButtonWidget blockPoolButton;
 
     private static int lastRoundDurationSeconds = 300;
     private static int lastPointsToWin = 5;
+    private static int lastRespawnDelaySeconds = 5;
     private static boolean lastPerPlayerBlocks = true;
     private static Set<Identifier> lastBlockPool = new java.util.HashSet<>(BlockShuffleWeights.STANDARD_POOL);
 
     private int roundDurationSeconds = lastRoundDurationSeconds;
     private int pointsToWin = lastPointsToWin;
+    private int respawnDelaySeconds = lastRespawnDelaySeconds;
     private boolean perPlayerBlocks = lastPerPlayerBlocks;
     private Set<Identifier> blockPool = new java.util.HashSet<>(lastBlockPool);
     private RegistrySelectorState selectorState = new RegistrySelectorState();
@@ -95,6 +98,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
                 
                 this.client.setScreen(new RegistrySelectorScreen<>(context, new BlockRegistryProvider()));
             });
+            this.respawnDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, this.respawnDelaySeconds, 160, "Respawn Delay (s)", val -> "Delay before players respawn.");
         }
     }
 
@@ -111,6 +115,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
             Text.literal("Points to Win: " + this.pointsToWin),
             Text.literal("Round Duration: " + this.roundDurationSeconds + "s"),
             Text.literal("Per-Player Blocks: " + (this.perPlayerBlocks ? "Yes" : "No")),
+            Text.literal("Respawn Delay: " + this.respawnDelaySeconds + "s"),
             Text.literal("Block Pool Size: " + this.blockPool.size() + " blocks")
         );
     }
@@ -124,6 +129,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
             context.drawText(textRenderer, Text.literal("Round Duration"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Player Assignment"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Block Pool"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Respawn Delay"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -137,8 +143,10 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         if (this.moduleManager.isActive("rules")) {
             this.pointsToWin = readClamped(this.pointsToWinField, this.pointsToWin, 1, 100);
             this.roundDurationSeconds = readClamped(this.roundDurationField, this.roundDurationSeconds, 10, 3600);
+            this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 1, 60);
             lastRoundDurationSeconds = this.roundDurationSeconds;
             lastPointsToWin = this.pointsToWin;
+            lastRespawnDelaySeconds = this.respawnDelaySeconds;
             lastPerPlayerBlocks = this.perPlayerBlocks;
             lastBlockPool = new java.util.HashSet<>(this.blockPool);
         }
@@ -170,6 +178,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         builder.settings().putInt("roundDurationSeconds", this.roundDurationSeconds);
         builder.settings().putInt("pointsToWin", this.pointsToWin);
         builder.settings().putBoolean("perPlayerBlocks", this.perPlayerBlocks);
+        builder.settings().putInt("respawnDelaySeconds", this.respawnDelaySeconds);
         NbtList blockList = new NbtList();
         for (Identifier id : this.blockPool) {
             blockList.add(NbtString.of(id.toString()));

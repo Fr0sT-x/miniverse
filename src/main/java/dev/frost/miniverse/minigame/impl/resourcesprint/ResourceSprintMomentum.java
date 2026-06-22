@@ -37,5 +37,29 @@ public final class ResourceSprintMomentum {
         streaks.clear();
         lastClaimer = null;
     }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        if (lastClaimer != null) {
+            json.addProperty("lastClaimer", lastClaimer.toString());
+        }
+        com.google.gson.JsonObject streaksObj = new com.google.gson.JsonObject();
+        streaks.forEach((uuid, streak) -> streaksObj.addProperty(uuid.toString(), streak));
+        json.add("streaks", streaksObj);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        reset();
+        if (json.has("lastClaimer")) {
+            lastClaimer = UUID.fromString(json.get("lastClaimer").getAsString());
+        }
+        if (json.has("streaks")) {
+            com.google.gson.JsonObject streaksObj = json.getAsJsonObject("streaks");
+            for (String key : streaksObj.keySet()) {
+                streaks.put(UUID.fromString(key), streaksObj.get(key).getAsInt());
+            }
+        }
+    }
 }
 

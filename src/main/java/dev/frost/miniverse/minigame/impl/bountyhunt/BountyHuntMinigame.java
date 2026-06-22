@@ -82,7 +82,7 @@ import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
 import dev.frost.miniverse.minigame.core.death.ImmediateRespawnNotifier;
 
-public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.miniverse.minigame.core.event.RosterAware, DeathAwareMinigame, ImmediateRespawnNotifier {
+public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.miniverse.minigame.core.event.RosterAware, DeathAwareMinigame, ImmediateRespawnNotifier, dev.frost.miniverse.team.TeamManagerProvider {
     private static final String NAME = "Bounty Hunt";
     private static final String TRACKER_TYPE = ProtectedItemTypes.TRACKER_COMPASS;
     private static final Identifier GRACE_PROTECTION_OVERLAY = ProtectionOverlayPresets.GRACE_PERIOD.overlayId();
@@ -108,13 +108,15 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     private ScoreboardTemplate scoreboard;
     private ScoreboardLine graceLine;
 
+    private final dev.frost.miniverse.team.TeamManager teamManager = new dev.frost.miniverse.team.TeamManager();
+
     private final Map<UUID, UUID> targetAssignments = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> scores = new ConcurrentHashMap<>();
     private final Map<UUID, Long> compassCooldownUntilTicks = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> killStreaks = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> targetBountyValues = new ConcurrentHashMap<>();
     private final PlayerTracker playerTracker = new PlayerTracker();
-    private final Set<Integer> announcedGraceThresholds = ConcurrentHashMap.newKeySet();
+    private final dev.frost.miniverse.minigame.core.countdown.CountdownService graceCountdowns = new dev.frost.miniverse.minigame.core.countdown.CountdownService();
 
     private GameState state;
     private BountyHuntSettings settings;
@@ -134,6 +136,11 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     @Override
     public DeathLifecycleManager getDeathLifecycleManager() {
         return this.deathLifecycleManager;
+    }
+
+    @Override
+    public dev.frost.miniverse.team.TeamManager teamManager() {
+        return this.teamManager;
     }
 
     @Override
@@ -174,7 +181,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.killStreaks.clear();
         this.targetBountyValues.clear();
         this.playerTracker.clear();
-        this.announcedGraceThresholds.clear();
+        this.graceCountdowns.reset();
         this.gameTicks = 0L;
         this.tickCounter = 0;
         this.graceTicksRemaining = 0;
@@ -194,7 +201,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.killStreaks.clear();
         this.targetBountyValues.clear();
         this.playerTracker.clear();
-        this.announcedGraceThresholds.clear();
+        this.graceCountdowns.reset();
         this.gameTicks = 0L;
         this.tickCounter = 0;
         this.graceTicksRemaining = this.settings.gracePeriodSeconds() * 20;
@@ -202,6 +209,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
         this.deathLifecycleManager = new DeathLifecycleManager(new dev.frost.miniverse.minigame.impl.bountyhunt.death.BountyHuntDeathLifecycleConfig(this), dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSpectatorService());
 
+        this.rebuildSoloTeams(this.getParticipants());
         this.assignInitialTargets();
         this.grantTrackersToParticipants();
 
@@ -395,7 +403,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             this.sendGraceProtectionStatesTo(player);
             player.sendMessage(Text.literal("Joined Bounty Hunt in progress.").formatted(Formatting.GREEN), false);
         }
-        this.syncVanillaTeams();
+        this.rebuildSoloTeams(this.getParticipants());
         this.rebuildScoreboard();
     }
 
@@ -427,7 +435,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
                 }
             }
         }
-        this.syncVanillaTeams();
+        this.rebuildSoloTeams(this.getParticipants());
         this.rebuildScoreboard();
     }
 
@@ -775,7 +783,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             return;
         }
 
-        if (this.announcedGraceThresholds.add(secondsLeft)) {
+        if (this.graceCountdowns.announceOnce(this.getParticipants(), secondsLeft, Text.empty())) {
             this.broadcastMessage(Text.literal("Grace period active: PvP enabled in " + this.formatDuration(secondsLeft) + ".")
                 .formatted(Formatting.YELLOW));
         }
@@ -878,24 +886,30 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.clearVanillaTeams();
     }
 
+    private void rebuildSoloTeams(List<ServerPlayerEntity> participants) {
+        this.teamManager.clear();
+        for (ServerPlayerEntity player : participants) {
+            String teamId = "solo_" + player.getUuidAsString();
+            this.teamManager.assign(player, teamId, player.getName().getString(), dev.frost.miniverse.team.TeamRole.MEMBER);
+        }
+        this.syncVanillaTeams();
+    }
+
     @Override
     protected void syncVanillaTeams() {
         if (this.server == null) {
             return;
         }
 
-        List<TeamSnapshot> snapshots = new ArrayList<>();
-        for (ServerPlayerEntity player : this.getParticipants()) {
-            TeamRole role = this.targetAssignments.containsValue(player.getUuid()) ? TeamRole.TARGET : TeamRole.HUNTER;
-            snapshots.add(new TeamSnapshot("player_" + player.getUuidAsString(), player.getName().getString(), List.of(TeamMembership.of(player, role))));
-        }
         VanillaTeamAdapter adapter = this.getVanillaTeams();
         if (adapter == null) return;
-        adapter.syncSnapshots(this.server, snapshots, snapshot -> {
-            TeamRole role = snapshot.members().isEmpty() ? TeamRole.MEMBER : snapshot.members().get(0).role();
-            Formatting color = role == TeamRole.TARGET ? Formatting.YELLOW : adapter.colorFor(snapshot.id());
-            String prefix = role == TeamRole.TARGET ? "TARGET" : "HUNTER";
-            return dev.frost.miniverse.minigame.core.util.VanillaTeamSync.roleOptions(prefix, color, true);
+        adapter.syncSnapshots(this.server, this.teamManager.snapshots(), snapshot -> {
+            Formatting color = adapter.colorFor(snapshot.id());
+            return VanillaTeamOptions.defaults()
+                .withColor(color)
+                .withPrefix(Text.literal("[" + dev.frost.miniverse.team.TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
+                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
+                .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
         });
     }
 
@@ -1012,7 +1026,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.targetBountyValues.clear();
         this.compassCooldownUntilTicks.clear();
         this.playerTracker.clear();
-        this.announcedGraceThresholds.clear();
+        this.graceCountdowns.reset();
 
         if (root.has("settings") && root.get("settings").isJsonObject()) {
             this.settings = readSettings(root.getAsJsonObject("settings"), this.settings);

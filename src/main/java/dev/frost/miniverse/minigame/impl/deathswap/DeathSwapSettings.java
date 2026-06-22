@@ -3,7 +3,6 @@ package dev.frost.miniverse.minigame.impl.deathswap;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
-import dev.frost.miniverse.minigame.core.respawn.RespawnMode;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -20,6 +19,7 @@ public record DeathSwapSettings(
     SeedMode seedMode,
     long seed,
     RespawnMode respawnMode,
+    int respawnDelaySeconds,
     int pointsToWin,
     boolean preserveVelocity,
     List<TeamConfig> teams
@@ -27,6 +27,7 @@ public record DeathSwapSettings(
     private static final int DEFAULT_SWAP_INTERVAL_SECONDS = 300;
     private static final int DEFAULT_INITIAL_GRACE_PERIOD_SECONDS = 30;
     private static final int DEFAULT_BORDER_SIZE = 3000;
+    private static final int DEFAULT_RESPAWN_DELAY_SECONDS = 5;
     private static final int DEFAULT_POINTS_TO_WIN = 5;
 
     public DeathSwapSettings {
@@ -41,6 +42,7 @@ public record DeathSwapSettings(
             SeedMode.RANDOM,
             ThreadLocalRandom.current().nextLong(),
             RespawnMode.POINTS,
+            DEFAULT_RESPAWN_DELAY_SECONDS,
             DEFAULT_POINTS_TO_WIN,
             true,
             List.of()
@@ -60,6 +62,7 @@ public record DeathSwapSettings(
             parseSeedMode(getStringOrDefault(nbt, "seedMode", defaults.seedMode().nbtValue())),
             getLongOrDefault(nbt, "seed", defaults.seed()),
             RespawnMode.parse(getStringOrDefault(nbt, "respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
+            clamp(getIntOrDefault(nbt, "respawnDelaySeconds", defaults.respawnDelaySeconds()), 0, 3600),
             clamp(getIntOrDefault(nbt, "pointsToWin", defaults.pointsToWin()), 1, 100),
             getBooleanOrDefault(nbt, "preserveVelocity", defaults.preserveVelocity()),
             readTeams(getListOrEmpty(nbt, "teams", NbtElement.COMPOUND_TYPE))
@@ -79,6 +82,7 @@ public record DeathSwapSettings(
             parseSeedMode(properties.getProperty("deathswap.seedMode", defaults.seedMode().nbtValue())),
             parseLong(properties.getProperty("deathswap.seed"), defaults.seed()),
             RespawnMode.parse(properties.getProperty("deathswap.respawnMode", defaults.respawnMode().configValue()), defaults.respawnMode()),
+            clamp(parseInt(properties.getProperty("deathswap.respawnDelaySeconds"), defaults.respawnDelaySeconds()), 0, 3600),
             clamp(parseInt(properties.getProperty("deathswap.pointsToWin"), defaults.pointsToWin()), 1, 100),
             parseBoolean(properties.getProperty("deathswap.preserveVelocity"), defaults.preserveVelocity()),
             readTeams(properties)
@@ -92,6 +96,7 @@ public record DeathSwapSettings(
         properties.setProperty("deathswap.seedMode", this.seedMode.nbtValue());
         properties.setProperty("deathswap.seed", Long.toString(this.seed));
         properties.setProperty("deathswap.respawnMode", this.respawnMode.configValue());
+        properties.setProperty("deathswap.respawnDelaySeconds", Integer.toString(this.respawnDelaySeconds));
         properties.setProperty("deathswap.pointsToWin", Integer.toString(this.pointsToWin));
         properties.setProperty("deathswap.preserveVelocity", Boolean.toString(this.preserveVelocity));
         properties.setProperty("deathswap.teams.count", Integer.toString(this.teams.size()));
@@ -116,6 +121,7 @@ public record DeathSwapSettings(
         nbt.putString("seedMode", this.seedMode.nbtValue());
         nbt.putLong("seed", this.seed);
         nbt.putString("respawnMode", this.respawnMode.configValue());
+        nbt.putInt("respawnDelaySeconds", this.respawnDelaySeconds);
         nbt.putInt("pointsToWin", this.pointsToWin);
         nbt.putBoolean("preserveVelocity", this.preserveVelocity);
 

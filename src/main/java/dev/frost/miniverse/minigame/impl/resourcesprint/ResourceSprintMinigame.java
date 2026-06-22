@@ -12,6 +12,7 @@ import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
+import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
 import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
@@ -48,7 +49,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
-public class ResourceSprintMinigame extends AbstractMinigame implements TeamManagerProvider, PauseAwareMinigame {
+public class ResourceSprintMinigame extends AbstractMinigame implements TeamManagerProvider, PauseAwareMinigame, PersistentMinigame {
     private static final int TICKS_PER_SECOND = 20;
     private static final String NAME = "Resource Sprint";
 
@@ -66,7 +67,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
     // Scoreboard and time-warning helpers
     private ScoreboardTemplate baseScoreboard;
     private final Map<UUID, ScoreboardLine> timeLines = new HashMap<>();
-    private final Set<Integer> timeWarningsShown = new HashSet<>();
+    private final dev.frost.miniverse.minigame.core.countdown.CountdownService countdowns = new dev.frost.miniverse.minigame.core.countdown.CountdownService();
     private final ResourceSprintEventMessenger eventMessenger = new ResourceSprintEventMessenger(this::getParticipants);
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("resourcesprint");
 
@@ -84,6 +85,42 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
             this.objectiveScore.clear();
             this.lastCompletionTick.clear();
             this.momentum.reset();
+        }
+
+        public com.google.gson.JsonObject saveRuntimeState() {
+            com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+            json.addProperty("currentObjectiveIndex", currentObjectiveIndex);
+            if (lastObjectiveClaimedBy != null) json.addProperty("lastObjectiveClaimedBy", lastObjectiveClaimedBy.toString());
+            
+            com.google.gson.JsonObject scores = new com.google.gson.JsonObject();
+            objectiveScore.forEach((k, v) -> scores.addProperty(k.toString(), v));
+            json.add("objectiveScore", scores);
+            
+            com.google.gson.JsonObject ticks = new com.google.gson.JsonObject();
+            lastCompletionTick.forEach((k, v) -> ticks.addProperty(k.toString(), v));
+            json.add("lastCompletionTick", ticks);
+            
+            json.add("momentum", momentum.saveRuntimeState());
+            json.add("statistics", statistics.saveRuntimeState());
+            return json;
+        }
+
+        public void loadRuntimeState(com.google.gson.JsonObject json) {
+            if (json.has("currentObjectiveIndex")) currentObjectiveIndex = json.get("currentObjectiveIndex").getAsInt();
+            if (json.has("lastObjectiveClaimedBy")) lastObjectiveClaimedBy = UUID.fromString(json.get("lastObjectiveClaimedBy").getAsString());
+            
+            if (json.has("objectiveScore")) {
+                com.google.gson.JsonObject scores = json.getAsJsonObject("objectiveScore");
+                scores.keySet().forEach(k -> objectiveScore.put(UUID.fromString(k), scores.get(k).getAsInt()));
+            }
+            
+            if (json.has("lastCompletionTick")) {
+                com.google.gson.JsonObject ticks = json.getAsJsonObject("lastCompletionTick");
+                ticks.keySet().forEach(k -> lastCompletionTick.put(UUID.fromString(k), ticks.get(k).getAsInt()));
+            }
+            
+            if (json.has("momentum")) momentum.loadRuntimeState(json.getAsJsonObject("momentum"));
+            if (json.has("statistics")) statistics.loadRuntimeState(json.getAsJsonObject("statistics"));
         }
     }
 
@@ -162,7 +199,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         this.paused = false;
         this.suddenDeathActive = false;
         this.suddenDeathTeams.clear();
-        this.timeWarningsShown.clear();
+        this.countdowns.reset();
         this.activeObjectives.clear();
         this.teamProgress.clear();
         this.teams.clear();
@@ -184,7 +221,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         this.elapsedTicks = 0;
         this.suddenDeathActive = false;
         this.suddenDeathTeams.clear();
-        this.timeWarningsShown.clear();
+        this.countdowns.reset();
         this.activeObjectives.clear();
         this.activeObjectives.addAll(this.resolveActiveObjectives());
         this.teamProgress.values().forEach(TeamProgress::reset);
@@ -209,7 +246,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         this.elapsedTicks = 0;
         this.suddenDeathActive = false;
         this.suddenDeathTeams.clear();
-        this.timeWarningsShown.clear();
+        this.countdowns.reset();
         this.teamProgress.values().forEach(TeamProgress::reset);
         if (this.server != null && this.baseScoreboard != null) {
             this.baseScoreboard.cleanup(this.server);
@@ -501,19 +538,14 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         int timeRemaining = Math.max(0, timeLimitTicks - this.elapsedTicks);
         int secondsRemaining = timeRemaining / TICKS_PER_SECOND;
 
-        if (secondsRemaining == 300 && !this.timeWarningsShown.contains(300)) {
+        if (secondsRemaining == 300 && this.countdowns.announceOnce(this.getParticipants(), 300, Text.empty())) {
             this.showTimeWarning("5 minutes remaining!", Formatting.YELLOW);
-            this.timeWarningsShown.add(300);
-        } else if (secondsRemaining == 60 && !this.timeWarningsShown.contains(60)) {
+        } else if (secondsRemaining == 60 && this.countdowns.announceOnce(this.getParticipants(), 60, Text.empty())) {
             this.showTimeWarning("1 minute remaining!", Formatting.RED);
-            this.timeWarningsShown.add(60);
-        } else if (secondsRemaining == 30 && !this.timeWarningsShown.contains(30)) {
+        } else if (secondsRemaining == 30 && this.countdowns.announceOnce(this.getParticipants(), 30, Text.empty())) {
             this.showTimeWarning("30 SECONDS REMAINING!", Formatting.DARK_RED);
-            this.timeWarningsShown.add(30);
-        } else if (secondsRemaining <= 10 && secondsRemaining > 0 && !this.timeWarningsShown.contains(secondsRemaining)) {
-            // final 10 seconds announce every second if desired (mark each shown to avoid repeats)
+        } else if (secondsRemaining <= 10 && secondsRemaining > 0 && this.countdowns.announceOnce(this.getParticipants(), secondsRemaining, Text.empty())) {
             this.showTimeWarning(secondsRemaining + " seconds remaining", Formatting.DARK_RED);
-            this.timeWarningsShown.add(secondsRemaining);
         }
     }
 
@@ -846,5 +878,79 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
             return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Match paused! Waiting for a player to reconnect...").formatted(net.minecraft.util.Formatting.RED));
         }
         return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+    }
+
+    @Override
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("elapsedTicks", elapsedTicks);
+        json.addProperty("state", this.getState().name());
+        json.addProperty("paused", paused);
+        json.addProperty("suddenDeathActive", suddenDeathActive);
+        json.addProperty("teamLabel", teamLabel);
+        
+        com.google.gson.JsonArray suddenDeathArr = new com.google.gson.JsonArray();
+        for (String t : suddenDeathTeams) suddenDeathArr.add(t);
+        json.add("suddenDeathTeams", suddenDeathArr);
+        
+        com.google.gson.JsonArray objectivesArr = new com.google.gson.JsonArray();
+        for (ResourceSprintSettings.ObjectiveEntry entry : activeObjectives) {
+            com.google.gson.JsonObject obj = new com.google.gson.JsonObject();
+            obj.addProperty("id", entry.id());
+            obj.addProperty("difficulty", entry.difficulty().name());
+            obj.addProperty("probability", entry.probability());
+            objectivesArr.add(obj);
+        }
+        json.add("activeObjectives", objectivesArr);
+        
+        com.google.gson.JsonObject progressObj = new com.google.gson.JsonObject();
+        teamProgress.forEach((team, progress) -> progressObj.add(team, progress.saveRuntimeState()));
+        json.add("teamProgress", progressObj);
+        
+        return json;
+    }
+
+    @Override
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        if (json.has("elapsedTicks")) elapsedTicks = json.get("elapsedTicks").getAsInt();
+        if (json.has("state") && this.context != null) {
+            try {
+                this.context.setState(GameState.valueOf(json.get("state").getAsString()));
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (json.has("paused")) paused = json.get("paused").getAsBoolean();
+        if (json.has("suddenDeathActive")) suddenDeathActive = json.get("suddenDeathActive").getAsBoolean();
+        if (json.has("teamLabel")) teamLabel = json.get("teamLabel").getAsString();
+        
+        suddenDeathTeams.clear();
+        if (json.has("suddenDeathTeams")) {
+            for (com.google.gson.JsonElement el : json.getAsJsonArray("suddenDeathTeams")) {
+                suddenDeathTeams.add(el.getAsString());
+            }
+        }
+        
+        this.countdowns.reset();
+        
+        activeObjectives.clear();
+        if (json.has("activeObjectives")) {
+            for (com.google.gson.JsonElement el : json.getAsJsonArray("activeObjectives")) {
+                com.google.gson.JsonObject obj = el.getAsJsonObject();
+                activeObjectives.add(new ResourceSprintSettings.ObjectiveEntry(
+                    obj.get("id").getAsString(),
+                    ResourceSprintSettings.ObjectiveDifficulty.fromString(obj.get("difficulty").getAsString()),
+                    obj.get("probability").getAsDouble()
+                ));
+            }
+        }
+        
+        teamProgress.clear();
+        if (json.has("teamProgress")) {
+            com.google.gson.JsonObject progressObj = json.getAsJsonObject("teamProgress");
+            for (String team : progressObj.keySet()) {
+                TeamProgress progress = new TeamProgress();
+                progress.loadRuntimeState(progressObj.getAsJsonObject(team));
+                teamProgress.put(team, progress);
+            }
+        }
     }
 }

@@ -35,8 +35,12 @@ import java.util.Properties;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import java.util.UUID;
 
-public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigame, SpawnPointAware {
+public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigame, SpawnPointAware, TeamManagerProvider {
 
     private ServerWorld world;
     private DuelsMetadata metadata = new DuelsMetadata(List.of(), List.of());
@@ -47,13 +51,19 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
     private String kitId = "";
     private DuelType duelType;
     private Boolean previousNaturalRegen;
-    private final List<ServerPlayerEntity> team1 = new ArrayList<>();
-    private final List<ServerPlayerEntity> team2 = new ArrayList<>();
+    private final TeamManager teamManager = new TeamManager();
+    private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("duels");
+    private final List<UUID> loadedTeam1 = new ArrayList<>();
+    private final List<UUID> loadedTeam2 = new ArrayList<>();
     private DuelMatch activeMatch;
     private int totalRounds = 1;
+    private net.minecraft.server.MinecraftServer server;
 
     /** Death framework — initialized in onMatchStart once we have a matchManager. */
     private DeathLifecycleManager deathLifecycleManager;
+
+    private com.google.gson.JsonObject pendingArenaState;
+    private com.google.gson.JsonObject pendingMatchManagerState;
 
     // -------------------------------------------------------------------------
     // DeathAwareMinigame
@@ -62,6 +72,11 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
     @Override
     public DeathLifecycleManager getDeathLifecycleManager() {
         return this.deathLifecycleManager;
+    }
+
+    @Override
+    public TeamManager teamManager() {
+        return this.teamManager;
     }
 
     // -------------------------------------------------------------------------
@@ -101,7 +116,7 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
     @Override
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         setState(GameState.WAITING_FOR_PLAYERS);
     }
 
@@ -151,7 +166,7 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         this.initDeathFramework();
 
         if (this.activeMatch == null) {
-            MatchCreationResult result = this.matchManager.createMatch(this.kit().orElse(null), this.matchRules(), this.team1, this.team2);
+            MatchCreationResult result = this.matchManager.createMatch(this.kit().orElse(null), this.matchRules(), getTeamPlayers("team_1"), getTeamPlayers("team_2"));
             if (!result.success()) {
                 for (ServerPlayerEntity player : this.players()) {
                     player.sendMessage(net.minecraft.text.Text.literal(result.userFacingError()));
@@ -182,6 +197,7 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         if (this.deathLifecycleManager != null) {
             this.deathLifecycleManager.handleMatchEnding(this::getPlayerByUuid);
         }
+        this.clearVanillaTeams();
     }
 
     // -------------------------------------------------------------------------
@@ -229,21 +245,22 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
 
     @Override
     protected void onGameTick(net.minecraft.server.MinecraftServer server) {
+        this.server = server;
         if ((this.getState() == GameState.STARTING || this.getState() == GameState.FROZEN) && this.activeMatch == null && this.canStartMatch()) {
             if (this.world != null) {
                 this.ensureArenaManager(this.world);
             }
-            MatchCreationResult result = this.matchManager.createMatch(this.kit().orElse(null), this.matchRules(), this.team1, this.team2);
+            MatchCreationResult result = this.matchManager.createMatch(this.kit().orElse(null), this.matchRules(), getTeamPlayers("team_1"), getTeamPlayers("team_2"));
             if (result.success()) {
                 this.activeMatch = result.match().orElse(null);
                 if (this.activeMatch != null) {
                     net.minecraft.util.math.Vec3d p1Spawn = this.activeMatch.getContext().getArena().getSpawn("player1");
                     net.minecraft.util.math.Vec3d p2Spawn = this.activeMatch.getContext().getArena().getSpawn("player2");
                     ServerWorld w = this.activeMatch.getContext().getArena().getWorld();
-                    for (ServerPlayerEntity p : this.team1) {
+                    for (ServerPlayerEntity p : getTeamPlayers("team_1")) {
                         if (p1Spawn != null) p.teleport(w, p1Spawn.x, p1Spawn.y, p1Spawn.z, java.util.Set.of(), p.getYaw(), p.getPitch());
                     }
-                    for (ServerPlayerEntity p : this.team2) {
+                    for (ServerPlayerEntity p : getTeamPlayers("team_2")) {
                         if (p2Spawn != null) p.teleport(w, p2Spawn.x, p2Spawn.y, p2Spawn.z, java.util.Set.of(), p.getYaw(), p.getPitch());
                     }
                 }
@@ -272,11 +289,17 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
     public void onPlayerJoin(ServerPlayerEntity player, Properties properties) {
         this.ensureArenaManager((ServerWorld) player.getEntityWorld());
         String team = properties.getProperty("player." + player.getUuid() + ".team", "").trim().toLowerCase(java.util.Locale.ROOT);
-        if ("team_1".equals(team)) {
-            this.addUnique(this.team1, player);
-        } else if ("team_2".equals(team)) {
-            this.addUnique(this.team2, player);
+        if ("team_1".equals(team) || this.loadedTeam1.contains(player.getUuid())) {
+            this.teamManager.assign(player, "team_1", "Team 1", dev.frost.miniverse.team.TeamRole.MEMBER);
+            this.loadedTeam1.remove(player.getUuid());
+        } else if ("team_2".equals(team) || this.loadedTeam2.contains(player.getUuid())) {
+            this.teamManager.assign(player, "team_2", "Team 2", dev.frost.miniverse.team.TeamRole.MEMBER);
+            this.loadedTeam2.remove(player.getUuid());
         }
+        if (this.matchManager != null) {
+            this.matchManager.updatePlayerReference(player);
+        }
+        this.syncVanillaTeams();
     }
 
     @Override
@@ -306,8 +329,8 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
             && !this.metadata.arenas().isEmpty()
             && this.duelType != null
             && this.kit().isPresent()
-            && !this.team1.isEmpty()
-            && !this.team2.isEmpty();
+            && !getTeamPlayers("team_1").isEmpty()
+            && !getTeamPlayers("team_2").isEmpty();
     }
 
     private void ensureArenaManager(ServerWorld world) {
@@ -320,6 +343,20 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         this.matchManager = new DuelMatchManager(this.arenaManager);
         this.setupEventInterceptors(world);
         this.applyGamerules();
+        
+        if (this.pendingArenaState != null) {
+            this.arenaManager.loadRuntimeState(this.pendingArenaState);
+            this.pendingArenaState = null;
+        }
+        if (this.pendingMatchManagerState != null && world.getServer() != null) {
+            this.matchManager.loadRuntimeState(this.pendingMatchManagerState, world.getServer());
+            this.pendingMatchManagerState = null;
+            
+            // Restore activeMatch reference if we have any active matches
+            if (this.activeMatch == null && !getTeamPlayers("team_1").isEmpty()) {
+                this.activeMatch = this.matchManager.getMatchForPlayerUuid(getTeamPlayers("team_1").get(0).getUuid()).orElse(null);
+            }
+        }
     }
 
     /**
@@ -366,12 +403,10 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
             @Override
             public String resolveTeamId(java.util.UUID playerId) {
                 // Identify which team a player belongs to for context metadata
-                for (ServerPlayerEntity p : team1) {
-                    if (p.getUuid().equals(playerId)) return "team_1";
-                }
-                for (ServerPlayerEntity p : team2) {
-                    if (p.getUuid().equals(playerId)) return "team_2";
-                }
+                dev.frost.miniverse.team.TeamSnapshot s1 = getTeamSnapshot("team_1");
+                if (s1 != null && s1.members().stream().anyMatch(m -> m.playerUuid().equals(playerId))) return "team_1";
+                dev.frost.miniverse.team.TeamSnapshot s2 = getTeamSnapshot("team_2");
+                if (s2 != null && s2.members().stream().anyMatch(m -> m.playerUuid().equals(playerId))) return "team_2";
                 return null;
             }
 
@@ -421,16 +456,27 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         this.previousNaturalRegen = null;
     }
 
-    private List<ServerPlayerEntity> players() {
+    private dev.frost.miniverse.team.TeamSnapshot getTeamSnapshot(String teamId) {
+        return this.teamManager.snapshots().stream().filter(s -> s.id().equals(teamId)).findFirst().orElse(null);
+    }
+
+    private List<ServerPlayerEntity> getTeamPlayers(String teamId) {
         List<ServerPlayerEntity> players = new ArrayList<>();
-        players.addAll(this.team1);
-        players.addAll(this.team2);
+        dev.frost.miniverse.team.TeamSnapshot snapshot = getTeamSnapshot(teamId);
+        if (snapshot != null) {
+            for (dev.frost.miniverse.team.TeamMembership m : snapshot.members()) {
+                ServerPlayerEntity p = this.getPlayerByUuid(m.playerUuid());
+                if (p != null) players.add(p);
+            }
+        }
         return players;
     }
 
-    private void addUnique(List<ServerPlayerEntity> players, ServerPlayerEntity player) {
-        players.removeIf(existing -> existing.getUuid().equals(player.getUuid()));
-        players.add(player);
+    private List<ServerPlayerEntity> players() {
+        List<ServerPlayerEntity> players = new ArrayList<>();
+        players.addAll(getTeamPlayers("team_1"));
+        players.addAll(getTeamPlayers("team_2"));
+        return players;
     }
 
     // -------------------------------------------------------------------------
@@ -470,16 +516,29 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         stateObj.addProperty("kitId", this.kitId);
 
         com.google.gson.JsonArray t1 = new com.google.gson.JsonArray();
-        for (ServerPlayerEntity p : this.team1) {
-            t1.add(p.getUuidAsString());
+        dev.frost.miniverse.team.TeamSnapshot s1 = getTeamSnapshot("team_1");
+        if (s1 != null) {
+            for (dev.frost.miniverse.team.TeamMembership m : s1.members()) {
+                t1.add(m.playerUuid().toString());
+            }
         }
         stateObj.add("team1", t1);
 
         com.google.gson.JsonArray t2 = new com.google.gson.JsonArray();
-        for (ServerPlayerEntity p : this.team2) {
-            t2.add(p.getUuidAsString());
+        dev.frost.miniverse.team.TeamSnapshot s2 = getTeamSnapshot("team_2");
+        if (s2 != null) {
+            for (dev.frost.miniverse.team.TeamMembership m : s2.members()) {
+                t2.add(m.playerUuid().toString());
+            }
         }
         stateObj.add("team2", t2);
+
+        if (this.arenaManager != null) {
+            stateObj.add("arenaManager", this.arenaManager.saveRuntimeState());
+        }
+        if (this.matchManager != null) {
+            stateObj.add("matchManager", this.matchManager.saveRuntimeState());
+        }
 
         return stateObj;
     }
@@ -499,9 +558,23 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         if (stateObj.has("kitId")) {
             this.kitId = stateObj.get("kitId").getAsString();
         }
+        if (stateObj.has("arenaManager")) {
+            this.pendingArenaState = stateObj.getAsJsonObject("arenaManager");
+        }
+        if (stateObj.has("matchManager")) {
+            this.pendingMatchManagerState = stateObj.getAsJsonObject("matchManager");
+        }
 
-        // Cannot restore team1 and team2 directly since ServerPlayerEntity isn't available at load time,
-        // it must be resolved later or during attachContext/reconnect.
+        if (stateObj.has("team1")) {
+            for (com.google.gson.JsonElement el : stateObj.getAsJsonArray("team1")) {
+                this.loadedTeam1.add(UUID.fromString(el.getAsString()));
+            }
+        }
+        if (stateObj.has("team2")) {
+            for (com.google.gson.JsonElement el : stateObj.getAsJsonArray("team2")) {
+                this.loadedTeam2.add(UUID.fromString(el.getAsString()));
+            }
+        }
     }
 
     @Override
@@ -541,5 +614,28 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
     /** Exposed for DuelsDeathCallbacks and DuelsRespawnStrategy. */
     public dev.frost.miniverse.minigame.core.MinigameContext getContext() {
         return context;
+    }
+
+    @Override
+    protected void syncVanillaTeams() {
+        net.minecraft.server.MinecraftServer srv = this.server != null ? this.server : (this.context != null ? this.context.nullableServer() : null);
+        if (srv == null) {
+            return;
+        }
+        this.vanillaTeams.syncSnapshots(srv, this.teamManager.snapshots(), snapshot -> {
+            net.minecraft.util.Formatting color = "team_1".equals(snapshot.id()) ? net.minecraft.util.Formatting.RED : net.minecraft.util.Formatting.BLUE;
+            return dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions.defaults()
+                .withColor(color)
+                .withPrefix(net.minecraft.text.Text.literal("[" + snapshot.label() + "] ").formatted(color))
+                .withFriendlyFireAllowed(false)
+                .withCollisionRule(net.minecraft.scoreboard.AbstractTeam.CollisionRule.NEVER);
+        });
+    }
+
+    protected void clearVanillaTeams() {
+        net.minecraft.server.MinecraftServer srv = this.server != null ? this.server : (this.context != null ? this.context.nullableServer() : null);
+        if (srv != null) {
+            this.vanillaTeams.clear(srv);
+        }
     }
 }

@@ -79,6 +79,18 @@ public class DuelMatchManager {
             .findFirst();
     }
 
+    public Optional<DuelMatch> getMatchForPlayerUuid(UUID uuid) {
+        return activeMatches.stream()
+            .filter(m -> m.getContext().getPlayers().stream().anyMatch(p -> p != null && p.getUuid().equals(uuid)))
+            .findFirst();
+    }
+
+    public void updatePlayerReference(ServerPlayerEntity player) {
+        for (DuelMatch match : activeMatches) {
+            match.getContext().updatePlayerReference(player);
+        }
+    }
+
     /**
      * Returns true if every member of team 1 across ALL active matches is online.
      * Used by DuelsMinigame.checkProgression to block ticking when a whole team is absent.
@@ -148,6 +160,26 @@ public class DuelMatchManager {
             match.endRound(2);
         } else if (!t2Alive) {
             match.endRound(1);
+        }
+    }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        com.google.gson.JsonArray matchesArr = new com.google.gson.JsonArray();
+        for (DuelMatch match : activeMatches) {
+            matchesArr.add(match.saveRuntimeState());
+        }
+        json.add("activeMatches", matchesArr);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json, net.minecraft.server.MinecraftServer server) {
+        if (json.has("activeMatches")) {
+            com.google.gson.JsonArray matchesArr = json.getAsJsonArray("activeMatches");
+            for (com.google.gson.JsonElement el : matchesArr) {
+                DuelMatch match = DuelMatch.loadRuntimeState(el.getAsJsonObject(), arenaManager, server);
+                activeMatches.add(match);
+            }
         }
     }
 }

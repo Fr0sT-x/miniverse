@@ -1,4 +1,4 @@
-package dev.frost.miniverse.minigame.core.respawn;
+package dev.frost.miniverse.minigame.impl.deathswap;
 
 import java.util.Locale;
 

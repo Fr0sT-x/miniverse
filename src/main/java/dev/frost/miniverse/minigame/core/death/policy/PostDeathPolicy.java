@@ -29,4 +29,23 @@ public interface PostDeathPolicy {
      */
     default void tick(net.minecraft.server.MinecraftServer server) {
     }
+
+    /**
+     * Saves the current runtime state of this policy.
+     * Default implementation returns an empty JsonObject.
+     *
+     * @return the serialized state
+     */
+    default com.google.gson.JsonObject saveRuntimeState() {
+        return new com.google.gson.JsonObject();
+    }
+
+    /**
+     * Restores the runtime state of this policy from a serialized state.
+     * This is called during minigame context restoration.
+     *
+     * @param state the serialized state
+     */
+    default void loadRuntimeState(com.google.gson.JsonObject state) {
+    }
 }

@@ -47,8 +47,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
+import dev.frost.miniverse.minigame.impl.infection.death.InfectionDeathLifecycleConfig;
 
-public final class InfectionMinigame extends AbstractMinigame implements PlayerRespawnAware, PlayerDamageAware, SpawnPointAware, TeamManagerProvider {
+public final class InfectionMinigame extends AbstractMinigame implements PlayerRespawnAware, PlayerDamageAware, SpawnPointAware, TeamManagerProvider, DeathAwareMinigame {
     private static final String NAME = "Infection";
     private static final String SURVIVOR_TEAM = "survivor";
     private static final String INFECTED_TEAM = "infected";
@@ -61,6 +65,8 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
     private final Set<UUID> survivors = ConcurrentHashMap.newKeySet();
     private final Set<UUID> infected = ConcurrentHashMap.newKeySet();
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("infection");
+    private final SpectatorService spectators = SpectatorService.getInstance();
+    private DeathLifecycleManager deathLifecycleManager;
 
     private InfectionSettings settings = InfectionSettings.defaults();
     private InfectionMapConfig mapConfig = new InfectionMapConfig(List.of());
@@ -83,7 +89,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
     @Override
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.setState(GameState.WAITING_FOR_PLAYERS);
         this.survivors.clear();
         this.infected.clear();
@@ -96,6 +102,13 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
     protected GlobalMatchRules configureGameRules() {
         return GlobalMatchRules.defaults();
     }
+
+    @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
+    }
+
+
 
     @Override
     protected boolean isTeamBased() {
@@ -118,6 +131,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         if (this.context != null) {
             this.context.setState(GameState.RUNNING);
         }
+        this.deathLifecycleManager = new DeathLifecycleManager(new InfectionDeathLifecycleConfig(this), this.spectators);
         this.ticksRemaining = Math.max(1, this.settings.matchDurationSeconds()) * 20;
         this.secondAccumulator = 0;
         this.survivors.clear();
@@ -149,6 +163,10 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
             this.context.setState(GameState.ENDING);
             this.context.roster().clear();
         }
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(id -> this.context != null ? this.context.resolvePlayer(id).orElse(null) : null);
+            this.deathLifecycleManager = null;
+        }
         if (this.server != null) {
             if (this.scoreboard != null) {
                 this.scoreboard.cleanup(this.server);
@@ -177,22 +195,12 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         }
     }
 
-    @Override
-    public void onEntityDeath(LivingEntity entity, DamageSource source) {
-        if (!(entity instanceof ServerPlayerEntity victim) || !this.isParticipant(victim)) {
-            return;
-        }
-        ServerPlayerEntity attacker = source.getAttacker() instanceof ServerPlayerEntity player ? player : null;
-        if (attacker != null && this.infected.contains(attacker.getUuid()) && this.survivors.contains(victim.getUuid())) {
-            this.infect(victim);
-        }
+    public boolean isSurvivor(ServerPlayerEntity player) {
+        return this.survivors.contains(player.getUuid());
     }
 
-    @Override
-    public void onPlayerDeath(ServerPlayerEntity player) {
-        if (this.isParticipant(player) && this.survivors.contains(player.getUuid())) {
-            this.infect(player);
-        }
+    public void processSurvivorDeath(ServerPlayerEntity victim) {
+        this.infect(victim);
     }
 
     @Override
@@ -354,11 +362,18 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
     }
 
     private void teleportToRandomSpawn(ServerPlayerEntity player) {
+        MapPosition spawn = this.getRandomSpawn(player);
+        if (spawn != null) {
+            this.teleport(player, spawn);
+        }
+    }
+
+    public MapPosition getRandomSpawn(ServerPlayerEntity player) {
         List<MapPosition> spawns = this.mapConfig.spawnPoints();
         if (spawns.isEmpty()) {
-            return;
+            return null;
         }
-        this.teleport(player, spawns.get(Math.floorMod(player.getUuid().hashCode(), spawns.size())));
+        return spawns.get(Math.floorMod(player.getUuid().hashCode(), spawns.size()));
     }
 
     @Override
@@ -370,6 +385,10 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
     private void teleport(ServerPlayerEntity player, MapPosition spawn) {
         ServerWorld world = player.getServerWorld();
         player.teleport(world, spawn.x(), spawn.y(), spawn.z(), Set.<PositionFlag>of(), spawn.yaw(), spawn.pitch());
+    }
+
+    public void syncVanillaTeamsPublic() {
+        this.syncVanillaTeams();
     }
 
     @Override
@@ -439,7 +458,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         }
     }
 
-    private MinigameContext context() {
+    public MinigameContext context() {
         if (this.context == null) {
             throw new IllegalStateException("Infection context is not attached.");
         }

@@ -89,5 +89,34 @@ public final class ResourceSprintStatistics {
         if (minutes > 0) return String.format("%d:%02d", minutes, secs);
         return String.format("%d sec", secs);
     }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        com.google.gson.JsonObject claimTicksObj = new com.google.gson.JsonObject();
+        claimTicks.forEach((uuid, ticks) -> {
+            com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+            for (int tick : ticks) {
+                arr.add(tick);
+            }
+            claimTicksObj.add(uuid.toString(), arr);
+        });
+        json.add("claimTicks", claimTicksObj);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        claimTicks.clear();
+        if (json.has("claimTicks")) {
+            com.google.gson.JsonObject claimTicksObj = json.getAsJsonObject("claimTicks");
+            for (String key : claimTicksObj.keySet()) {
+                com.google.gson.JsonArray arr = claimTicksObj.getAsJsonArray(key);
+                List<Integer> ticks = new ArrayList<>();
+                for (com.google.gson.JsonElement el : arr) {
+                    ticks.add(el.getAsInt());
+                }
+                claimTicks.put(UUID.fromString(key), ticks);
+            }
+        }
+    }
 }
 

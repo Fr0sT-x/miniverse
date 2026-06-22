@@ -667,13 +667,13 @@ with penalty scoring to avoid recent repeat pairings.
 
 ### F22 Respawn Policy Framework
 
-**Status:** Partially Implemented · **Adoption:** 1/11 (DeathSwap)
+**Status:** Totally retired · **Adoption:** 0/11 
 **⚠️ Deprecated by F05 — do not adopt in new gamemodes**
 
 **Purpose:** Pre-framework approach to post-death gamemode management (ELIMINATION vs
 POINTS respawn modes). Predates `DeathLifecycleManager`.
 
-**Planned fate:** Retire once DeathSwap is migrated to F05. See MIGRATION_PLAN.md.
+**Planned fate:** Already retired. No gamemodes use this anymore. This framework is deleted from codebase.
 
 ---
 

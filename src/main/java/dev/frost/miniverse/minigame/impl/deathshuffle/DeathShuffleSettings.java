@@ -15,7 +15,8 @@ public record DeathShuffleSettings(
     int pointsToWin,
     int gracePeriodSeconds,
     boolean perPlayerObjectives,
-    List<Identifier> activeObjectivePool
+    List<Identifier> activeObjectivePool,
+    int respawnDelaySeconds
 ) {
     public static DeathShuffleSettings fromNbt(NbtCompound nbt) {
         int roundDurationSeconds = 300;
@@ -46,7 +47,12 @@ public record DeathShuffleSettings(
             }
         }
 
-        return new DeathShuffleSettings(roundDurationSeconds, pointsToWin, gracePeriodSeconds, perPlayerObjectives, pool);
+        int respawnDelaySeconds = 5;
+        if (nbt.contains("respawnDelaySeconds", NbtElement.INT_TYPE)) {
+            respawnDelaySeconds = nbt.getInt("respawnDelaySeconds");
+        }
+
+        return new DeathShuffleSettings(roundDurationSeconds, pointsToWin, gracePeriodSeconds, perPlayerObjectives, pool, respawnDelaySeconds);
     }
 
     public NbtCompound toNbt() {
@@ -55,6 +61,7 @@ public record DeathShuffleSettings(
         nbt.putInt("pointsToWin", this.pointsToWin);
         nbt.putInt("gracePeriodSeconds", this.gracePeriodSeconds);
         nbt.putBoolean("perPlayerObjectives", this.perPlayerObjectives);
+        nbt.putInt("respawnDelaySeconds", this.respawnDelaySeconds);
 
         NbtList list = new NbtList();
         for (Identifier id : this.activeObjectivePool) {
@@ -69,6 +76,7 @@ public record DeathShuffleSettings(
         properties.setProperty("death_shuffle.pointsToWin", String.valueOf(this.pointsToWin));
         properties.setProperty("death_shuffle.gracePeriodSeconds", String.valueOf(this.gracePeriodSeconds));
         properties.setProperty("death_shuffle.perPlayerObjectives", String.valueOf(this.perPlayerObjectives));
+        properties.setProperty("death_shuffle.respawnDelaySeconds", String.valueOf(this.respawnDelaySeconds));
         
         String poolStr = String.join(",", this.activeObjectivePool.stream().map(Identifier::toString).toList());
         properties.setProperty("death_shuffle.activeObjectivePool", poolStr);
@@ -103,6 +111,11 @@ public record DeathShuffleSettings(
             }
         }
 
-        return new DeathShuffleSettings(roundDurationSeconds, pointsToWin, gracePeriodSeconds, perPlayerObjectives, pool);
+        int respawnDelaySeconds = 5;
+        try {
+            respawnDelaySeconds = Integer.parseInt(properties.getProperty("death_shuffle.respawnDelaySeconds", "5"));
+        } catch (NumberFormatException ignored) {}
+
+        return new DeathShuffleSettings(roundDurationSeconds, pointsToWin, gracePeriodSeconds, perPlayerObjectives, pool, respawnDelaySeconds);
     }
 }

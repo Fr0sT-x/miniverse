@@ -111,7 +111,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     @Override
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         if (this.context != null) this.context.setState(GameState.WAITING_FOR_PLAYERS);
         this.paused = false;
         this.elapsedTicks = 0;
@@ -121,9 +121,9 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
         }
         corpseManager.cleanup(server);
         economyManager.clear();
-        weaponManager.clear();
-        if (coinManager != null) coinManager.clear();
-        if (shopManager != null) shopManager.clear();
+        weaponManager.clear(server);
+        if (coinManager != null) coinManager.clear(server);
+        if (shopManager != null) shopManager.clear(server);
         nextSpawnIndex = 0;
         
         DeathLifecycleConfig config = new DeathLifecycleConfig() {
@@ -314,10 +314,12 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
                 }
                 return false;
             } else if (roleManager.hasRole(attacker, MurdererRole.class)) {
-                player.getServerWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, net.minecraft.sound.SoundCategory.PLAYERS, 0.65f, 1.0f);
-                player.getServerWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_ARROW_HIT_PLAYER, net.minecraft.sound.SoundCategory.PLAYERS, 0.65f, 0.7f);
-                if (this.deathLifecycleManager != null) {
-                    this.deathLifecycleManager.handleFatalDamage(player, source);
+                if (attacker.getMainHandStack().isOf(net.minecraft.item.Items.IRON_SWORD)) {
+                    player.getServerWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_PLAYER_ATTACK_CRIT, net.minecraft.sound.SoundCategory.PLAYERS, 0.65f, 1.0f);
+                    player.getServerWorld().playSound(null, player.getBlockPos(), net.minecraft.sound.SoundEvents.ENTITY_ARROW_HIT_PLAYER, net.minecraft.sound.SoundCategory.PLAYERS, 0.65f, 0.7f);
+                    if (this.deathLifecycleManager != null) {
+                        this.deathLifecycleManager.handleFatalDamage(player, source);
+                    }
                 }
                 return false;
             }
@@ -497,6 +499,13 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
         JsonObject json = new JsonObject();
         json.addProperty("elapsedTicks", elapsedTicks);
         json.addProperty("state", this.getState().name());
+        json.addProperty("nextSpawnIndex", nextSpawnIndex);
+        json.add("roleManager", roleManager.saveRuntimeState());
+        json.add("economyManager", economyManager.saveRuntimeState());
+        json.add("weaponManager", weaponManager.saveRuntimeState());
+        json.add("corpseManager", corpseManager.saveRuntimeState());
+        if (coinManager != null) json.add("coinManager", coinManager.saveRuntimeState());
+        if (shopManager != null) json.add("shopManager", shopManager.saveRuntimeState());
         return json;
     }
 
@@ -504,6 +513,13 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     public void loadRuntimeState(JsonObject json) {
         if (json.has("elapsedTicks")) elapsedTicks = json.get("elapsedTicks").getAsInt();
         if (json.has("state") && this.context != null) this.context.setState(GameState.valueOf(json.get("state").getAsString()));
+        if (json.has("nextSpawnIndex")) nextSpawnIndex = json.get("nextSpawnIndex").getAsInt();
+        if (json.has("roleManager")) roleManager.loadRuntimeState(json.getAsJsonObject("roleManager"));
+        if (json.has("economyManager")) economyManager.loadRuntimeState(json.getAsJsonObject("economyManager"));
+        if (json.has("weaponManager")) weaponManager.loadRuntimeState(json.getAsJsonObject("weaponManager"));
+        if (json.has("corpseManager")) corpseManager.loadRuntimeState(json.getAsJsonObject("corpseManager"));
+        if (coinManager != null && json.has("coinManager")) coinManager.loadRuntimeState(json.getAsJsonObject("coinManager"));
+        if (shopManager != null && json.has("shopManager")) shopManager.loadRuntimeState(json.getAsJsonObject("shopManager"));
     }
 
     @Override

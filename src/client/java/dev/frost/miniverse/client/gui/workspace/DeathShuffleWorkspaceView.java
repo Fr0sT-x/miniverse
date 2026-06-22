@@ -33,16 +33,19 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
 
     private IntFieldWidget roundDurationField;
     private IntFieldWidget pointsToWinField;
+    private IntFieldWidget respawnDelayField;
     private ButtonWidget perPlayerButton;
     private ButtonWidget blockPoolButton;
 
     private static int lastRoundDurationSeconds = 300;
     private static int lastPointsToWin = 5;
+    private static int lastRespawnDelaySeconds = 5;
     private static boolean lastPerPlayerObjectives = true;
     private static Set<Identifier> lastBlockPool = new java.util.HashSet<>();
 
     private int roundDurationSeconds = lastRoundDurationSeconds;
     private int pointsToWin = lastPointsToWin;
+    private int respawnDelaySeconds = lastRespawnDelaySeconds;
     private boolean perPlayerObjectives = lastPerPlayerObjectives;
     private Set<Identifier> blockPool = new java.util.HashSet<>(lastBlockPool);
     private RegistrySelectorState selectorState = new RegistrySelectorState();
@@ -99,6 +102,7 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
                 
                 client.setScreen(new RegistrySelectorScreen<>(context, provider));
             });
+            this.respawnDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, this.respawnDelaySeconds, 160, "Respawn Delay (s)", val -> "Delay before players respawn.");
         }
     }
 
@@ -115,6 +119,7 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
             Text.literal("Points to Win: " + this.pointsToWin),
             Text.literal("Round Duration: " + this.roundDurationSeconds + "s"),
             Text.literal("Per-Player DeathObjectives: " + (this.perPlayerObjectives ? "Yes" : "No")),
+            Text.literal("Respawn Delay: " + this.respawnDelaySeconds + "s"),
             Text.literal("DeathObjective Pool Size: " + this.blockPool.size() + " objectives")
         );
     }
@@ -128,6 +133,7 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
             context.drawText(textRenderer, Text.literal("Round Duration"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Player Assignment"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("DeathObjective Pool"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Respawn Delay"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -141,8 +147,10 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         if (this.moduleManager.isActive("rules")) {
             this.pointsToWin = readClamped(this.pointsToWinField, this.pointsToWin, 1, 100);
             this.roundDurationSeconds = readClamped(this.roundDurationField, this.roundDurationSeconds, 10, 3600);
+            this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 0, 60);
             lastRoundDurationSeconds = this.roundDurationSeconds;
             lastPointsToWin = this.pointsToWin;
+            lastRespawnDelaySeconds = this.respawnDelaySeconds;
             lastPerPlayerObjectives = this.perPlayerObjectives;
             lastBlockPool = new java.util.HashSet<>(this.blockPool);
         }
@@ -174,6 +182,7 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         builder.settings().putInt("roundDurationSeconds", this.roundDurationSeconds);
         builder.settings().putInt("pointsToWin", this.pointsToWin);
         builder.settings().putBoolean("perPlayerObjectives", this.perPlayerObjectives);
+        builder.settings().putInt("respawnDelaySeconds", this.respawnDelaySeconds);
         NbtList blockList = new NbtList();
         for (Identifier id : this.blockPool) {
             blockList.add(NbtString.of(id.toString()));

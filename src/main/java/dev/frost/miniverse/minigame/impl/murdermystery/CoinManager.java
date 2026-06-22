@@ -16,7 +16,7 @@ import java.util.List;
 public class CoinManager {
     private final VirtualEconomyManager economy;
     private final List<MurderMysteryMapConfig.CoinSpawnPoint> spawnPoints;
-    private final List<DisplayEntity.ItemDisplayEntity> activeCoins = new ArrayList<>();
+    private final List<java.util.UUID> activeCoinIds = new ArrayList<>();
     
     private int spawnTimer = 0;
     private final int spawnInterval;
@@ -34,10 +34,12 @@ public class CoinManager {
             spawnCoin(world);
         }
 
-        Iterator<DisplayEntity.ItemDisplayEntity> iterator = activeCoins.iterator();
+        java.util.Iterator<java.util.UUID> iterator = activeCoinIds.iterator();
         while (iterator.hasNext()) {
-            DisplayEntity.ItemDisplayEntity coin = iterator.next();
-            if (coin.isRemoved()) {
+            java.util.UUID uuid = iterator.next();
+            net.minecraft.entity.Entity entity = world.getEntity(uuid);
+            
+            if (!(entity instanceof DisplayEntity.ItemDisplayEntity coin) || coin.isRemoved()) {
                 iterator.remove();
                 continue;
             }
@@ -69,15 +71,43 @@ public class CoinManager {
         coin.setItemStack(new ItemStack(Items.GOLD_NUGGET));
         
         world.spawnEntity(coin);
-        activeCoins.add(coin);
+        activeCoinIds.add(coin.getUuid());
     }
 
-    public void clear() {
-        for (DisplayEntity.ItemDisplayEntity coin : activeCoins) {
-            if (coin != null && !coin.isRemoved()) {
-                coin.discard();
+    public void clear(net.minecraft.server.MinecraftServer server) {
+        if (server != null) {
+            for (java.util.UUID uuid : activeCoinIds) {
+                for (ServerWorld world : server.getWorlds()) {
+                    net.minecraft.entity.Entity e = world.getEntity(uuid);
+                    if (e != null && !e.isRemoved()) {
+                        e.discard();
+                    }
+                }
             }
         }
-        activeCoins.clear();
+        activeCoinIds.clear();
+    }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("spawnTimer", spawnTimer);
+        com.google.gson.JsonArray array = new com.google.gson.JsonArray();
+        for (java.util.UUID uuid : activeCoinIds) {
+            array.add(uuid.toString());
+        }
+        json.add("activeCoinIds", array);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        activeCoinIds.clear();
+        if (json.has("spawnTimer")) {
+            spawnTimer = json.get("spawnTimer").getAsInt();
+        }
+        if (json.has("activeCoinIds")) {
+            for (com.google.gson.JsonElement elem : json.getAsJsonArray("activeCoinIds")) {
+                activeCoinIds.add(java.util.UUID.fromString(elem.getAsString()));
+            }
+        }
     }
 }

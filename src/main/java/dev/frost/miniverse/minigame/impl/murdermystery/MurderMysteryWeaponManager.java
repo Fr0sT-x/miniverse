@@ -14,7 +14,7 @@ import java.util.Iterator;
 import java.util.List;
 
 public class MurderMysteryWeaponManager {
-    private final List<DisplayEntity.ItemDisplayEntity> droppedBows = new ArrayList<>();
+    private final List<java.util.UUID> droppedBowIds = new ArrayList<>();
     
     public void giveMurdererWeapon(ServerPlayerEntity player) {
         ItemStack sword = new ItemStack(Items.IRON_SWORD);
@@ -34,17 +34,23 @@ public class MurderMysteryWeaponManager {
         bow.setPosition(pos.x, pos.y + 0.5, pos.z);
         bow.setItemStack(new ItemStack(Items.BOW));
         world.spawnEntity(bow);
-        droppedBows.add(bow);
+        droppedBowIds.add(bow.getUuid());
     }
     
     public ServerPlayerEntity checkBowPickup(List<ServerPlayerEntity> eligiblePlayers) {
-        Iterator<DisplayEntity.ItemDisplayEntity> iterator = droppedBows.iterator();
+        if (eligiblePlayers.isEmpty()) return null;
+        ServerWorld world = eligiblePlayers.get(0).getServerWorld();
+        
+        Iterator<java.util.UUID> iterator = droppedBowIds.iterator();
         while (iterator.hasNext()) {
-            DisplayEntity.ItemDisplayEntity bow = iterator.next();
-            if (bow.isRemoved()) {
+            java.util.UUID uuid = iterator.next();
+            net.minecraft.entity.Entity entity = world.getEntity(uuid);
+            
+            if (!(entity instanceof DisplayEntity.ItemDisplayEntity bow) || bow.isRemoved()) {
                 iterator.remove();
                 continue;
             }
+            
             Box hitbox = bow.getBoundingBox().expand(1.5);
             for (ServerPlayerEntity player : eligiblePlayers) {
                 if (hitbox.intersects(player.getBoundingBox())) {
@@ -57,12 +63,36 @@ public class MurderMysteryWeaponManager {
         return null;
     }
 
-    public void clear() {
-        for (DisplayEntity.ItemDisplayEntity bow : droppedBows) {
-            if (bow != null && !bow.isRemoved()) {
-                bow.discard();
+    public void clear(net.minecraft.server.MinecraftServer server) {
+        if (server != null) {
+            for (java.util.UUID uuid : droppedBowIds) {
+                for (ServerWorld world : server.getWorlds()) {
+                    net.minecraft.entity.Entity e = world.getEntity(uuid);
+                    if (e != null && !e.isRemoved()) {
+                        e.discard();
+                    }
+                }
             }
         }
-        droppedBows.clear();
+        droppedBowIds.clear();
+    }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        com.google.gson.JsonArray array = new com.google.gson.JsonArray();
+        for (java.util.UUID uuid : droppedBowIds) {
+            array.add(uuid.toString());
+        }
+        json.add("droppedBowIds", array);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        droppedBowIds.clear();
+        if (json.has("droppedBowIds")) {
+            for (com.google.gson.JsonElement elem : json.getAsJsonArray("droppedBowIds")) {
+                droppedBowIds.add(java.util.UUID.fromString(elem.getAsString()));
+            }
+        }
     }
 }

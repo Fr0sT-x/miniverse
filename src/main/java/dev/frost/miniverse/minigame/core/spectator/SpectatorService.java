@@ -288,12 +288,14 @@ public final class SpectatorService {
                 }
             } else {
                 session.setTargetId(null);
-                if (restrictions.lockCamera()) {
-                    if (session.noTargetPolicy() == NoTargetPolicy.FREEZE) {
-                        FreezeService.getInstance().freeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
-                        return;
-                    } else if (session.noTargetPolicy() == NoTargetPolicy.REQUEST_ELIMINATION) {
+                if (restrictions.lockCamera() || !restrictions.allowFreecam()) {
+                    if (session.noTargetPolicy() == NoTargetPolicy.REQUEST_ELIMINATION) {
                         this.events.notifyNoTargetElimination(session);
+                        return;
+                    } else {
+                        // Enforce freeze if freecam is disabled and no valid targets exist
+                        this.cameraController.detach(spectator);
+                        FreezeService.getInstance().freeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
                         return;
                     }
                 }

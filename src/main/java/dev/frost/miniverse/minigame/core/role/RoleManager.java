@@ -68,4 +68,26 @@ public class RoleManager implements FrameworkModule {
         });
         playerRoles.clear();
     }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        playerRoles.forEach((uuid, role) -> {
+            json.addProperty(uuid.toString(), role.getClass().getName());
+        });
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        playerRoles.clear();
+        for (String key : json.keySet()) {
+            try {
+                UUID uuid = UUID.fromString(key);
+                String className = json.get(key).getAsString();
+                Role role = (Role) Class.forName(className).getDeclaredConstructor().newInstance();
+                playerRoles.put(uuid, role);
+            } catch (Exception e) {
+                // Ignore gracefully if class is not found or cannot be instantiated
+            }
+        }
+    }
 }

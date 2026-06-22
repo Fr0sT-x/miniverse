@@ -222,7 +222,7 @@ This is the simplest possible F05 migration.
 
 ### B03 — Migrate BountyHunt to F05
 
-**Status:** `[ ] Not started`
+**Status:** `[x] Complete — 2026-06-22`
 **Preconditions:** B02 complete
 **Files changed:** `BountyHuntMinigame.java` + new death policy/strategy files
 
@@ -243,7 +243,7 @@ The invincibility/grace period overlay should move to `DeathLifecycleCallbacks.o
 
 ### B04 — Migrate DeathSwap to F05 (Retire F22)
 
-**Status:** `[ ] Not started`
+**Status:** `[x] Complete — 2026-06-22`
 **Preconditions:** B03 complete
 **Files changed:** `DeathSwapMinigame.java`; delete `RespawnPolicyController.java`
 
@@ -261,9 +261,9 @@ These have no remaining users.
 
 ---
 
-### B05 — Migrate Infection to F05
+### B05 — Infection [BUG B05]
 
-**Status:** `[ ] Not started`
+**Status:** `[x] Complete`
 **Preconditions:** B04 complete
 **Files changed:** `InfectionMinigame.java` + new death policy files
 
@@ -285,7 +285,7 @@ for the survivor/infected role tracking (see Phase C step C05).
 
 ### B06 — Migrate Bridge to F05
 
-**Status:** `[ ] Not started`
+**Status:** `[x] Complete — 2026-06-22`
 **Preconditions:** B05 complete
 **Files changed:** `BridgeMinigame.java` + new death policy files
 
@@ -301,6 +301,17 @@ for the survivor/infected role tracking (see Phase C step C05).
 
 **Note:** The "feel" of immediate respawn is preserved via `ImmediateRespawnPolicy`
 which calls `executeRespawn()` immediately from `start()`.
+
+---
+
+### B08 — Migrate ResourceSprint to F05
+
+**Status:** `[x] Complete`
+**Preconditions:** B06 complete
+**Files changed:** `ResourceSprintMinigame.java` + new death policy files
+
+**What:** ResourceSprint uses vanilla death (`doImmediateRespawn=false`), like Speedrun.
+The migration ensures F05 tracks deaths but uses `VanillaDeathPolicy` so players respawn normally without elimination.
 
 ---
 
@@ -333,9 +344,9 @@ relevant gamemodes are complete. Each step is its own PR.
 
 ### C01 — Adopt CountdownService in All Gamemodes That Reimplement It
 
-**Status:** `[ ] Not started`
+**Status:** `[x] Complete`
 **Files changed:** `BountyHuntMinigame.java`, `ResourceSprintMinigame.java`,
-`BlockShuffleMinigame.java`, `DeathShuffleMinigame.java`, `BridgeMinigame.java`
+`BlockShuffleMinigame.java`, `DeathShuffleMinigame.java`
 
 **What:** Replace `Set<Integer> timeWarningsShown` / `announcedGraceThresholds` patterns
 with `CountdownService.announceOnce()` and `CountdownService.announceVisibleCountdown()`.

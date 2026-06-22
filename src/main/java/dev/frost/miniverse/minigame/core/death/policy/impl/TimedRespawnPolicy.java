@@ -86,4 +86,33 @@ public class TimedRespawnPolicy implements PostDeathPolicy {
             this.manager.executeRespawn(player);
         }
     }
+
+    @Override
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject root = new com.google.gson.JsonObject();
+        if (this.victimId != null) {
+            root.addProperty("victimId", this.victimId.toString());
+        }
+        root.addProperty("ticksRemaining", this.ticksRemaining);
+        root.addProperty("active", this.active);
+        root.addProperty("lastSeconds", this.lastSeconds);
+        return root;
+    }
+
+    @Override
+    public void loadRuntimeState(com.google.gson.JsonObject state) {
+        if (state == null) return;
+        if (state.has("victimId")) {
+            this.victimId = UUID.fromString(state.get("victimId").getAsString());
+        }
+        if (state.has("ticksRemaining")) {
+            this.ticksRemaining = state.get("ticksRemaining").getAsInt();
+        }
+        if (state.has("active")) {
+            this.active = state.get("active").getAsBoolean();
+        }
+        if (state.has("lastSeconds")) {
+            this.lastSeconds = state.get("lastSeconds").getAsInt();
+        }
+    }
 }

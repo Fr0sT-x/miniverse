@@ -4,6 +4,8 @@ import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.policy.DeathPolicy;
 import net.minecraft.server.network.ServerPlayerEntity;
 
+// Recommended to set doImmediateRespawn=false under the initialize method, as this policy uses the vanilla respawn system.
+
 public class VanillaDeathPolicy implements DeathPolicy {
     @Override
     public boolean interceptsRespawn() {

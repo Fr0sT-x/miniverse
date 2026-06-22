@@ -9,12 +9,23 @@ import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorSession;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
+import net.minecraft.entity.Entity;
+import net.minecraft.world.World;
 import net.minecraft.world.GameMode;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.Identifier;
 
 public class DeathLifecycleManager {
 
@@ -104,12 +115,6 @@ public class DeathLifecycleManager {
             // terrain reload ("Loading terrain" screen for ~30s). A simple game mode change
             // + teleport is sufficient; the client handles SPECTATOR mode without respawning.
 
-            SpectatorSession liveSession = this.spectatorService.isSpectating(victimId) ? this.spectatorService.session(victimId) : null;
-            RespawnStrategy.RespawnLocation location = this.config.getRespawnStrategy().resolve(context, liveSession);
-            if (location != null && location.world() != null) {
-                victim.teleport(location.world(), location.pos().x, location.pos().y, location.pos().z, java.util.Set.of(), location.yaw(), location.pitch());
-            }
-
             if (transitionState(victim, context, DeathState.SPECTATING)) {
                 if (callbacks != null) {
                     callbacks.onSpectatorEnter(victim, context);
@@ -145,7 +150,17 @@ public class DeathLifecycleManager {
         RespawnStrategy.RespawnLocation location = this.config.getRespawnStrategy().resolve(context, liveSession);
 
         player.changeGameMode(this.config.resolveRespawnGameMode());
-        player.teleport(location.world(), location.pos().x, location.pos().y, location.pos().z, java.util.Set.of(), location.yaw(), location.pitch());
+        
+        player.setHealth(player.getMaxHealth());
+        player.getHungerManager().setFoodLevel(20);
+        player.getHungerManager().setSaturationLevel(5.0f);
+        player.extinguish();
+        player.clearStatusEffects();
+        player.fallDistance = 0.0f;
+        
+        if (location != null && location.world() != null) {
+            player.teleport(location.world(), location.pos().x, location.pos().y, location.pos().z, java.util.Set.of(), location.yaw(), location.pitch());
+        }
         this.spectatorService.stopSpectating(player, dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason.RESPAWN);
 
         if (callbacks != null) {
@@ -225,6 +240,120 @@ public class DeathLifecycleManager {
     public void tick(net.minecraft.server.MinecraftServer server) {
         for (PostDeathPolicy policy : this.activePostDeathPolicies.values()) {
             policy.tick(server);
+        }
+    }
+
+    public JsonObject saveRuntimeState() {
+        JsonObject root = new JsonObject();
+        
+        JsonArray stateMachinesArray = new JsonArray();
+        for (Map.Entry<UUID, PlayerDeathStateMachine> entry : this.stateMachines.entrySet()) {
+            JsonObject smObj = new JsonObject();
+            smObj.addProperty("playerId", entry.getKey().toString());
+            smObj.addProperty("state", entry.getValue().getCurrentState().name());
+            stateMachinesArray.add(smObj);
+        }
+        root.add("stateMachines", stateMachinesArray);
+
+        JsonArray contextsArray = new JsonArray();
+        for (Map.Entry<UUID, DeathContext> entry : this.contexts.entrySet()) {
+            DeathContext ctx = entry.getValue();
+            JsonObject ctxObj = new JsonObject();
+            ctxObj.addProperty("victimId", ctx.victimId().toString());
+            ctxObj.addProperty("victimName", ctx.victimName());
+            if (ctx.killer() != null) {
+                ctxObj.addProperty("killerId", ctx.killer().getUuidAsString());
+            }
+            // DamageSource is too complex to fully serialize correctly in a general way, 
+            // so we skip it or recreate a generic one on load.
+            ctxObj.addProperty("dimension", ctx.dimension().getValue().toString());
+            ctxObj.addProperty("locX", ctx.location().x);
+            ctxObj.addProperty("locY", ctx.location().y);
+            ctxObj.addProperty("locZ", ctx.location().z);
+            ctxObj.addProperty("yawAtDeath", ctx.yawAtDeath());
+            ctxObj.addProperty("pitchAtDeath", ctx.pitchAtDeath());
+            ctxObj.addProperty("timestamp", ctx.timestamp());
+            if (ctx.victimTeamId() != null) ctxObj.addProperty("victimTeamId", ctx.victimTeamId());
+            if (ctx.matchIdentifier() != null) ctxObj.addProperty("matchIdentifier", ctx.matchIdentifier());
+            if (ctx.spectatorTargetAtDeath() != null) ctxObj.addProperty("spectatorTargetAtDeath", ctx.spectatorTargetAtDeath().toString());
+            contextsArray.add(ctxObj);
+        }
+        root.add("contexts", contextsArray);
+
+        JsonArray policiesArray = new JsonArray();
+        for (Map.Entry<UUID, PostDeathPolicy> entry : this.activePostDeathPolicies.entrySet()) {
+            JsonObject polObj = new JsonObject();
+            polObj.addProperty("playerId", entry.getKey().toString());
+            polObj.add("state", entry.getValue().saveRuntimeState());
+            policiesArray.add(polObj);
+        }
+        root.add("activePolicies", policiesArray);
+
+        return root;
+    }
+
+    public void loadRuntimeState(JsonObject root, net.minecraft.server.MinecraftServer server) {
+        if (root == null) return;
+
+        this.stateMachines.clear();
+        this.contexts.clear();
+        this.activePostDeathPolicies.clear();
+
+        if (root.has("stateMachines")) {
+            for (JsonElement el : root.getAsJsonArray("stateMachines")) {
+                JsonObject smObj = el.getAsJsonObject();
+                UUID playerId = UUID.fromString(smObj.get("playerId").getAsString());
+                DeathState state = DeathState.valueOf(smObj.get("state").getAsString());
+                PlayerDeathStateMachine sm = new PlayerDeathStateMachine();
+                // Fast forward state
+                if (state == DeathState.SPECTATING) {
+                    sm.transitionTo(DeathState.DEATH_PROCESSING);
+                    sm.transitionTo(DeathState.SPECTATING);
+                } else if (state == DeathState.RESPAWNING) {
+                    sm.transitionTo(DeathState.DEATH_PROCESSING);
+                    sm.transitionTo(DeathState.SPECTATING);
+                    sm.transitionTo(DeathState.RESPAWNING);
+                }
+                this.stateMachines.put(playerId, sm);
+            }
+        }
+
+        if (root.has("contexts")) {
+            for (JsonElement el : root.getAsJsonArray("contexts")) {
+                JsonObject ctxObj = el.getAsJsonObject();
+                UUID victimId = UUID.fromString(ctxObj.get("victimId").getAsString());
+                String victimName = ctxObj.get("victimName").getAsString();
+                Entity killer = null;
+                if (ctxObj.has("killerId")) {
+                    killer = server.getOverworld().getEntity(UUID.fromString(ctxObj.get("killerId").getAsString()));
+                }
+                RegistryKey<World> dimension = RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(ctxObj.get("dimension").getAsString()));
+                Vec3d loc = new Vec3d(ctxObj.get("locX").getAsDouble(), ctxObj.get("locY").getAsDouble(), ctxObj.get("locZ").getAsDouble());
+                float yaw = ctxObj.get("yawAtDeath").getAsFloat();
+                float pitch = ctxObj.get("pitchAtDeath").getAsFloat();
+                long timestamp = ctxObj.get("timestamp").getAsLong();
+                String teamId = ctxObj.has("victimTeamId") ? ctxObj.get("victimTeamId").getAsString() : null;
+                String matchId = ctxObj.has("matchIdentifier") ? ctxObj.get("matchIdentifier").getAsString() : null;
+                UUID specTarget = ctxObj.has("spectatorTargetAtDeath") ? UUID.fromString(ctxObj.get("spectatorTargetAtDeath").getAsString()) : null;
+
+                // Create a generic damage source since we can't perfectly serialize the original
+                net.minecraft.entity.damage.DamageSource source = server.getOverworld().getDamageSources().generic();
+
+                DeathContext ctx = new DeathContext(victimId, victimName, killer, source, dimension, loc, yaw, pitch, timestamp, teamId, matchId, specTarget);
+                this.contexts.put(victimId, ctx);
+            }
+        }
+
+        if (root.has("activePolicies")) {
+            for (JsonElement el : root.getAsJsonArray("activePolicies")) {
+                JsonObject polObj = el.getAsJsonObject();
+                UUID playerId = UUID.fromString(polObj.get("playerId").getAsString());
+                PostDeathPolicy policy = this.config.createPostDeathPolicy();
+                if (polObj.has("state")) {
+                    policy.loadRuntimeState(polObj.getAsJsonObject("state"));
+                }
+                this.activePostDeathPolicies.put(playerId, policy);
+            }
         }
     }
 }

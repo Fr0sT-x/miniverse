@@ -22,8 +22,10 @@ import dev.frost.miniverse.minigame.core.event.ServerTickAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
-import dev.frost.miniverse.minigame.core.respawn.RespawnMode;
-import dev.frost.miniverse.minigame.core.respawn.RespawnPolicyController;
+import dev.frost.miniverse.minigame.impl.deathswap.RespawnMode;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.impl.deathswap.death.DeathSwapDeathLifecycleConfig;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.swap.DerangementAssignment;
@@ -66,7 +68,7 @@ import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.team.TeamManagerProvider;
 
-public class DeathSwapMinigame extends AbstractMinigame implements PersistentMinigame, PlayerDamageAware, PlayerRespawnAware, TeamManagerProvider {
+public class DeathSwapMinigame extends AbstractMinigame implements PersistentMinigame, PlayerDamageAware, PlayerRespawnAware, TeamManagerProvider, DeathAwareMinigame {
     private static final String NAME = "Death Swap";
     private static final String SCOREBOARD_OBJECTIVE = "deathswap_display";
     private static final int DEATH_ATTRIBUTION_SECONDS = 90;
@@ -88,7 +90,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private DeathSwapSettings settings = DeathSwapSettings.defaults();
-    private RespawnPolicyController respawns = new RespawnPolicyController(RespawnMode.POINTS, this.spectators);
+    private DeathLifecycleManager deathLifecycleManager;
 
     @Nullable
     private MinecraftServer server;
@@ -100,7 +102,20 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, true, true, true, true, false);
+        return new GlobalMatchRules(true, true, true, true, true, true);
+    }
+
+    public void applySettings(DeathSwapSettings settings) {
+        this.settings = settings == null ? DeathSwapSettings.defaults() : settings;
+    }
+
+    public DeathSwapSettings getSettings() {
+        return this.settings;
+    }
+
+    @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
     }
 
     @Override
@@ -108,15 +123,10 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         return false;
     }
 
-    public void applySettings(DeathSwapSettings settings) {
-        this.settings = settings == null ? DeathSwapSettings.defaults() : settings;
-        this.respawns = new RespawnPolicyController(this.settings.respawnMode(), this.spectators);
-    }
-
     @Override
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.server = null;
         this.gameTicks = 0L;
@@ -160,6 +170,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         if (this.server != null) {
             this.vanillaTeams.pruneNamespaceTeams(this.server);
         }
+        this.deathLifecycleManager = new DeathLifecycleManager(new DeathSwapDeathLifecycleConfig(this), this.spectators);
         this.rebuildSoloTeams(participants);
         this.prepareMatch(participants);
         this.rebuildScoreboard();
@@ -180,6 +191,9 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
                 this.scoreboard.cleanup(this.server);
             }
             this.vanillaTeams.clear(this.server);
+        }
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(this::getPlayerByUuid);
         }
     }
 
@@ -214,16 +228,12 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
     @Override
     public void onEntityDeath(LivingEntity entity, DamageSource source) {
-        if (entity instanceof ServerPlayerEntity player && this.isParticipant(player)) {
-            this.handleParticipantDeath(player);
-        }
+        // Handled by DeathLifecycleManager via allowDamage()
     }
 
     @Override
     public void onPlayerDeath(ServerPlayerEntity player) {
-        if (this.isParticipant(player)) {
-            this.handleParticipantDeath(player);
-        }
+        // Handled by DeathLifecycleManager via allowDamage()
     }
 
     @Override
@@ -232,8 +242,10 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
             return;
         }
         this.context().roster().add(newPlayer);
-        this.respawns.handleRespawn(newPlayer);
         this.syncVanillaTeams();
+    }
+
+    public void processPlayerRespawn(ServerPlayerEntity newPlayer) {
     }
 
     @Override
@@ -245,6 +257,9 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         this.context().roster().remove(playerId);
         this.aliveParticipants.remove(playerId);
         this.deathAttributions.remove(playerId);
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleDisconnect(player);
+        }
         if (this.state == GameState.RUNNING) {
             this.checkEliminationEnd();
         }
@@ -403,7 +418,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         this.visibleCountdowns.reset();
     }
 
-    private void handleParticipantDeath(ServerPlayerEntity player) {
+    public void processPlayerDeath(ServerPlayerEntity player) {
         if (this.state != GameState.RUNNING) {
             return;
         }
@@ -415,7 +430,6 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
             if (!this.aliveParticipants.remove(playerId)) {
                 return;
             }
-            this.respawns.handleDeath(player, Text.literal("Eliminated from Death Swap."));
             this.broadcast(Text.literal(player.getName().getString() + " was eliminated.").formatted(Formatting.RED));
             this.checkEliminationEnd();
         }
@@ -536,7 +550,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
                 .withColor(color)
                 .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
                 .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
-                .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
+                .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
         });
     }
 
@@ -620,7 +634,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
 
 
-    private MinigameContext context() {
+    public MinigameContext context() {
         if (this.context == null) {
             throw new IllegalStateException("Death Swap runtime context is not attached.");
         }
@@ -676,7 +690,6 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
         if (root.has("settings") && root.get("settings").isJsonObject()) {
             this.settings = readSettings(root.getAsJsonObject("settings"), this.settings);
-            this.respawns = new RespawnPolicyController(this.settings.respawnMode(), this.spectators);
         }
         this.state = parseState(stringValue(root, "state", GameState.WAITING_FOR_PLAYERS.name()));
         this.context().setState(this.state);
@@ -704,6 +717,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         object.addProperty("seedMode", this.settings.seedMode().name());
         object.addProperty("seed", this.settings.seed());
         object.addProperty("respawnMode", this.settings.respawnMode().name());
+        object.addProperty("respawnDelaySeconds", this.settings.respawnDelaySeconds());
         object.addProperty("pointsToWin", this.settings.pointsToWin());
         object.addProperty("preserveVelocity", this.settings.preserveVelocity());
         return object;
@@ -725,6 +739,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
             seedMode,
             longValue(root, "seed", base.seed()),
             respawnMode,
+            intValue(root, "respawnDelaySeconds", base.respawnDelaySeconds()),
             intValue(root, "pointsToWin", base.pointsToWin()),
             booleanValue(root, "preserveVelocity", base.preserveVelocity()),
             base.teams()

@@ -13,7 +13,7 @@ import net.minecraft.server.MinecraftServer;
 import dev.frost.miniverse.minigame.core.FrameworkModule;
 
 public class CorpseManager implements FrameworkModule {
-    private final List<ArmorStandEntity> corpses = new ArrayList<>();
+    private final List<java.util.UUID> corpseIds = new ArrayList<>();
 
     public void spawnCorpse(ServerPlayerEntity player) {
         ServerWorld world = player.getServerWorld();
@@ -31,16 +31,38 @@ public class CorpseManager implements FrameworkModule {
         corpse.setPitch(90f);
 
         world.spawnEntity(corpse);
-        corpses.add(corpse);
+        corpseIds.add(corpse.getUuid());
     }
 
     @Override
     public void cleanup(MinecraftServer server) {
-        for (ArmorStandEntity corpse : corpses) {
-            if (corpse != null && !corpse.isRemoved()) {
-                corpse.discard();
+        for (java.util.UUID uuid : corpseIds) {
+            for (ServerWorld world : server.getWorlds()) {
+                net.minecraft.entity.Entity e = world.getEntity(uuid);
+                if (e != null && !e.isRemoved()) {
+                    e.discard();
+                }
             }
         }
-        corpses.clear();
+        corpseIds.clear();
+    }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        com.google.gson.JsonArray array = new com.google.gson.JsonArray();
+        for (java.util.UUID uuid : corpseIds) {
+            array.add(uuid.toString());
+        }
+        json.add("corpseIds", array);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        corpseIds.clear();
+        if (json.has("corpseIds")) {
+            for (com.google.gson.JsonElement elem : json.getAsJsonArray("corpseIds")) {
+                corpseIds.add(java.util.UUID.fromString(elem.getAsString()));
+            }
+        }
     }
 }

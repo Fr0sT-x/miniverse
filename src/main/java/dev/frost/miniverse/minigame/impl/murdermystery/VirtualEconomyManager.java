@@ -33,4 +33,19 @@ public class VirtualEconomyManager {
     public void clear() {
         balances.clear();
     }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        balances.forEach((uuid, balance) -> {
+            json.addProperty(uuid.toString(), balance);
+        });
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        balances.clear();
+        for (String key : json.keySet()) {
+            balances.put(UUID.fromString(key), json.get(key).getAsInt());
+        }
+    }
 }

@@ -14,14 +14,16 @@ public record BlockShuffleSettings(
     int roundDurationSeconds,
     int pointsToWin,
     boolean perPlayerBlocks,
-    Set<Identifier> blockPool
+    Set<Identifier> blockPool,
+    int respawnDelaySeconds
 ) {
     public static BlockShuffleSettings defaults() {
         return new BlockShuffleSettings(
             300,
             5,
             true,
-            new HashSet<>(BlockShuffleWeights.STANDARD_POOL)
+            new HashSet<>(BlockShuffleWeights.STANDARD_POOL),
+            5
         );
     }
 
@@ -44,7 +46,9 @@ public record BlockShuffleSettings(
             blockPool.addAll(BlockShuffleWeights.STANDARD_POOL);
         }
 
-        return new BlockShuffleSettings(roundDurationSeconds, pointsToWin, perPlayerBlocks, blockPool);
+        int respawnDelaySeconds = nbt.contains("respawnDelaySeconds") ? nbt.getInt("respawnDelaySeconds") : 5;
+
+        return new BlockShuffleSettings(roundDurationSeconds, pointsToWin, perPlayerBlocks, blockPool, respawnDelaySeconds);
     }
 
     public NbtCompound toNbt() {
@@ -52,6 +56,7 @@ public record BlockShuffleSettings(
         nbt.putInt("roundDurationSeconds", this.roundDurationSeconds);
         nbt.putInt("pointsToWin", this.pointsToWin);
         nbt.putBoolean("perPlayerBlocks", this.perPlayerBlocks);
+        nbt.putInt("respawnDelaySeconds", this.respawnDelaySeconds);
 
         NbtList list = new NbtList();
         for (Identifier id : this.blockPool) {
@@ -65,6 +70,7 @@ public record BlockShuffleSettings(
         properties.setProperty("blockshuffle.roundDurationSeconds", String.valueOf(this.roundDurationSeconds));
         properties.setProperty("blockshuffle.pointsToWin", String.valueOf(this.pointsToWin));
         properties.setProperty("blockshuffle.perPlayerBlocks", String.valueOf(this.perPlayerBlocks));
+        properties.setProperty("blockshuffle.respawnDelaySeconds", String.valueOf(this.respawnDelaySeconds));
     }
 
     public static BlockShuffleSettings fromProperties(Properties properties) {
@@ -75,9 +81,10 @@ public record BlockShuffleSettings(
         int roundDurationSeconds = parsePropertyInt(properties, "blockshuffle.roundDurationSeconds", 300);
         int pointsToWin = parsePropertyInt(properties, "blockshuffle.pointsToWin", 5);
         boolean perPlayerBlocks = Boolean.parseBoolean(properties.getProperty("blockshuffle.perPlayerBlocks", "true"));
+        int respawnDelaySeconds = parsePropertyInt(properties, "blockshuffle.respawnDelaySeconds", 5);
         
         Set<Identifier> blockPool = new HashSet<>(BlockShuffleWeights.STANDARD_POOL);
-        return new BlockShuffleSettings(roundDurationSeconds, pointsToWin, perPlayerBlocks, blockPool);
+        return new BlockShuffleSettings(roundDurationSeconds, pointsToWin, perPlayerBlocks, blockPool, respawnDelaySeconds);
     }
 
     private static int parsePropertyInt(Properties properties, String key, int defaultValue) {

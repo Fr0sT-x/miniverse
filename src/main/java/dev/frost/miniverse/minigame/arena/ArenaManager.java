@@ -63,4 +63,34 @@ public class ArenaManager {
         });
         world.setBlockState(pos, state);
     }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        com.google.gson.JsonArray arenasArray = new com.google.gson.JsonArray();
+        for (Arena arena : arenas) {
+            com.google.gson.JsonObject arenaJson = arena.saveRuntimeState();
+            arenaJson.addProperty("id", arena.getId());
+            arenasArray.add(arenaJson);
+        }
+        json.add("arenas", arenasArray);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        if (json.has("arenas")) {
+            com.google.gson.JsonArray arenasArray = json.getAsJsonArray("arenas");
+            for (com.google.gson.JsonElement el : arenasArray) {
+                com.google.gson.JsonObject arenaJson = el.getAsJsonObject();
+                if (arenaJson.has("id")) {
+                    String id = arenaJson.get("id").getAsString();
+                    for (Arena arena : arenas) {
+                        if (arena.getId().equals(id)) {
+                            arena.loadRuntimeState(arenaJson);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

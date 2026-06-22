@@ -79,8 +79,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.impl.bridge.death.BridgeDeathLifecycleConfig;
 
-public final class BridgeMinigame extends AbstractMinigame implements PlayerDamageAware, PlayerRegionAware, SpawnPointAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware {
+public final class BridgeMinigame extends AbstractMinigame implements PlayerDamageAware, PlayerRegionAware, SpawnPointAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware, DeathAwareMinigame {
 
     public static final String RED_TEAM = "red";
     public static final String BLUE_TEAM = "blue";
@@ -110,6 +113,12 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     private UUID lastScorerUuid;
     private String lastScorerTeamId;
     private final Map<UUID, Integer> arrowTimers = new java.util.HashMap<>();
+    private DeathLifecycleManager deathLifecycleManager;
+
+    @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
+    }
 
     @Override
     public void teleportToSpawn(ServerPlayerEntity player) {
@@ -121,6 +130,18 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     public void applySettings(BridgeSettings settings, BridgeMapConfig mapConfig) {
         this.settings = settings == null ? BridgeSettings.fromNbt(null) : settings;
         this.mapConfig = mapConfig == null ? new BridgeMapConfig(List.of(), List.of(), null, null) : mapConfig;
+    }
+
+    public BridgeSettings getSettings() {
+        return this.settings;
+    }
+
+    public BridgeMapConfig getMapConfig() {
+        return this.mapConfig;
+    }
+
+    public MinigameContext getContext() {
+        return this.context;
     }
 
     @Override
@@ -154,12 +175,10 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         return builder.build();
     }
 
-    private final Map<UUID, Integer> respawnTimers = new ConcurrentHashMap<>();
-
     @Override
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.setState(GameState.WAITING_FOR_PLAYERS);
         
         dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.registerGamemode(
@@ -176,7 +195,6 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         this.ticksRemaining = 0;
         this.stateTicks = 0;
         this.acceptingGoals = false;
-        this.respawnTimers.clear();
         this.arrowTimers.clear();
 
         java.util.Optional<com.google.gson.JsonObject> sessionJsonOpt = dev.frost.miniverse.session.SessionRuntimeConfig.getSessionJson();
@@ -225,7 +243,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, true, true, true, true, false);
+        return new GlobalMatchRules(true, false, true, true, true, false);
     }
 
     @Override
@@ -236,6 +254,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     @Override
     protected void onMatchStart() {
         try {
+            this.deathLifecycleManager = new DeathLifecycleManager(new BridgeDeathLifecycleConfig(this), MinigameManager.getInstance().getSpectatorService());
             this.doStartGame();
             
             dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload payload = new dev.frost.miniverse.common.NetworkConstants.LayoutSupportPayload(BridgeDefinition.ID, "default");
@@ -307,6 +326,10 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
         this.setState(GameState.ENDING);
         this.setRuntimeState(GameState.ENDING);
+
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(this::findParticipant);
+        }
 
         if (this.server != null) {
             if (this.scoreboard != null) {
@@ -416,26 +439,8 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         if (this.mapConfig.voidLevelRef() != null) {
             int voidY = this.mapConfig.voidLevelRef() - this.settings.voidDeathOffset();
             for (ServerPlayerEntity p : this.roster()) {
-                if (p.getY() <= voidY && p.getHealth() > 0 && !this.respawnTimers.containsKey(p.getUuid())) {
+                if (p.getY() <= voidY && p.getHealth() > 0 && (this.deathLifecycleManager == null || this.deathLifecycleManager.getContext(p.getUuid()) == null)) {
                     this.dieToVoid(p);
-                }
-            }
-        }
-
-        if (!this.respawnTimers.isEmpty()) {
-            for (Map.Entry<UUID, Integer> entry : this.respawnTimers.entrySet()) {
-                int remaining = entry.getValue() - 1;
-                if (remaining <= 0) {
-                    this.respawnTimers.remove(entry.getKey());
-                    ServerPlayerEntity p = this.server.getPlayerManager().getPlayer(entry.getKey());
-                    if (p != null && this.isParticipant(p) && this.getState() == GameState.RUNNING) {
-                        p.changeGameMode(GameMode.SURVIVAL);
-                        this.applyKit(p);
-                        this.teleportToTeamSpawn(p);
-                        p.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 3 * 20, 255, false, false, true));
-                    }
-                } else {
-                    this.respawnTimers.put(entry.getKey(), remaining);
                 }
             }
         }
@@ -565,17 +570,9 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     }
 
     private void dieToVoid(ServerPlayerEntity player) {
-        player.setHealth(20.0F);
-        player.clearStatusEffects();
-        player.getInventory().clear();
-        player.fallDistance = 0.0f;
-        player.setVelocity(0, 0, 0);
-        player.velocityModified = true;
-        this.teleportToTeamSpawnSafe(player);
-        this.broadcast(Text.literal(player.getName().getString() + " fell into the void.").formatted(Formatting.GRAY));
-        player.changeGameMode(GameMode.SURVIVAL);
-        this.applyKit(player);
-        player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 3 * 20, 255, false, false, true));
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleFatalDamage(player, player.getDamageSources().outOfWorld());
+        }
     }
 
     private void endMatchOnTimer() {
@@ -623,12 +620,6 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             this.teams.assign(newPlayer, BLUE_TEAM, "Blue", TeamRole.MEMBER);
         }
 
-        // Always teleport to team spawn on respawn (handles freeze, playing, etc.)
-        this.teleportToTeamSpawn(newPlayer);
-        if (this.getState() == GameState.RUNNING) {
-            this.applyKit(newPlayer);
-            newPlayer.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 3 * 20, 255, false, false, true));
-        }
         this.syncVanillaTeams();
     }
 
@@ -639,7 +630,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         }
 
         // Ignore damage if player is already "dead" and waiting to respawn
-        if (this.respawnTimers.containsKey(player.getUuid())) {
+        if (this.deathLifecycleManager != null && this.deathLifecycleManager.getContext(player.getUuid()) != null) {
             return false;
         }
 
@@ -654,19 +645,6 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             return false;
         }
 
-        // During PLAYING: intercept lethal damage to bypass death screen
-        if (player.getHealth() - amount <= 0.0F) {
-            player.setHealth(20.0F);
-            player.changeGameMode(GameMode.SPECTATOR);
-            player.clearStatusEffects();
-            player.getInventory().clear();
-            // Teleport to team spawn immediately so they don't fall forever as spectator
-            this.teleportToTeamSpawnSafe(player);
-            this.broadcast(source.getDeathMessage(player).copy().formatted(Formatting.GRAY));
-            this.respawnTimers.put(player.getUuid(), 3 * 20);
-            return false;
-        }
-
         if (!(source.getAttacker() instanceof ServerPlayerEntity attacker) || !this.isParticipant(attacker)) {
             return true;
         }
@@ -677,6 +655,9 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleDisconnect(player);
+        }
         if (!this.isParticipant(player)) {
             return;
         }
@@ -750,7 +731,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
         return false;
     }
 
-    private void applyKit(ServerPlayerEntity player) {
+    public void applyKit(ServerPlayerEntity player) {
         List<ItemStack> kit = new ArrayList<>();
         
         ItemStack sword = new ItemStack(Items.IRON_SWORD);
@@ -927,10 +908,14 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
 
     // isParticipant is inherited from AbstractMinigame
 
-    private String getTeamId(ServerPlayerEntity player) {
-        if (this.redPlayers.contains(player.getUuid())) return RED_TEAM;
-        if (this.bluePlayers.contains(player.getUuid())) return BLUE_TEAM;
+    public String getTeamId(UUID playerUuid) {
+        if (this.redPlayers.contains(playerUuid)) return RED_TEAM;
+        if (this.bluePlayers.contains(playerUuid)) return BLUE_TEAM;
         return null;
+    }
+
+    private String getTeamId(ServerPlayerEntity player) {
+        return this.getTeamId(player.getUuid());
     }
 
     protected List<ServerPlayerEntity> roster() {

@@ -28,9 +28,7 @@ public class BountyHuntRespawnStrategy implements RespawnStrategy {
         }
 
         // BountyHunt does not use configured Map spawn points.
-        // It relies on the vanilla world spawn logic for respawning.
-        BlockPos spawnPos = world.getSpawnPos();
-        float spawnAngle = world.getSpawnAngle();
-        return new RespawnLocation(world, new Vec3d(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5), spawnAngle, 0.0f);
+        // It relies on the vanilla world spawn logic for respawning, which includes beds.
+        return RespawnStrategy.resolveVanillaSpawn(world.getServer(), context.victimId(), world);
     }
 }

@@ -44,8 +44,18 @@ import dev.frost.miniverse.minigame.core.PersistentMinigame;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.impl.blockshuffle.death.BlockShuffleDeathLifecycleConfig;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamRole;
+import dev.frost.miniverse.team.TeamColorPalette;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import net.minecraft.scoreboard.AbstractTeam;
 
-public class BlockShuffleMinigame extends AbstractMinigame {
+public class BlockShuffleMinigame extends AbstractMinigame implements DeathAwareMinigame, TeamManagerProvider {
     private static final int TICKS_PER_SECOND = 20;
     private static final int INTERMISSION_SECONDS = 5;
 
@@ -61,10 +71,14 @@ public class BlockShuffleMinigame extends AbstractMinigame {
     private final Set<UUID> activePlayers = new HashSet<>();
     private final Map<UUID, Integer> points = new HashMap<>();
     private final Map<UUID, Identifier> assignedBlocks = new HashMap<>();
-    private final Set<Integer> timeWarningsShown = new HashSet<>();
+    private final dev.frost.miniverse.minigame.core.countdown.CountdownService countdowns = new dev.frost.miniverse.minigame.core.countdown.CountdownService();
 
     private ScoreboardTemplate scoreboard;
     private ScoreboardLine statusLine;
+    private DeathLifecycleManager deathLifecycleManager;
+
+    private final TeamManager teamManager = new TeamManager();
+    private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("blockshuffle");
 
     private enum RoundState {
         INTERMISSION,
@@ -89,10 +103,28 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         this.settings = settings == null ? BlockShuffleSettings.defaults() : settings;
     }
 
+    public BlockShuffleSettings getSettings() {
+        return this.settings;
+    }
+
+    @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
+    }
+
+    @Override
+    public TeamManager teamManager() {
+        return this.teamManager;
+    }
+
+    public dev.frost.miniverse.minigame.core.MinigameContext getContext() {
+        return this.context;
+    }
+
     @Override
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, false);
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.roundState = RoundState.INTERMISSION;
         this.server = null;
@@ -101,7 +133,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         this.activePlayers.clear();
         this.points.clear();
         this.assignedBlocks.clear();
-        this.timeWarningsShown.clear();
+        this.countdowns.reset();
     }
 
     @Override
@@ -113,12 +145,20 @@ public class BlockShuffleMinigame extends AbstractMinigame {
             return;
         }
 
+        this.deathLifecycleManager = new DeathLifecycleManager(new BlockShuffleDeathLifecycleConfig(this), SpectatorService.getInstance());
+
+        if (this.context != null && this.context.nullableServer() != null) {
+            this.vanillaTeams.pruneNamespaceTeams(this.context.nullableServer());
+        }
+
         this.setState(GameState.RUNNING);
         if (this.context != null) {
             this.context.setState(GameState.RUNNING);
             this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
         }
         
+        this.rebuildSoloTeams(participants);
+
         for (UUID uuid : this.activePlayers) {
             this.points.put(uuid, 0);
         }
@@ -135,9 +175,14 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         }
         if (this.server != null) {
             SpectatorService.getInstance().clearAll();
+            this.vanillaTeams.clear(this.server);
         }
         if (this.scoreboard != null) {
             this.scoreboard.cleanup(this.server);
+        }
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(id -> this.context != null ? this.context.resolvePlayer(id).orElse(null) : null);
+            this.deathLifecycleManager = null;
         }
         this.activePlayers.clear();
     }
@@ -187,7 +232,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
     private void startRound() {
         this.roundState = RoundState.ACTIVE;
-        this.timeWarningsShown.clear();
+        this.countdowns.reset();
         
         int duration = this.suddenDeathMode ? this.settings.roundDurationSeconds() / 2 : this.settings.roundDurationSeconds();
         this.roundTimerTicks = Math.max(10, duration) * TICKS_PER_SECOND;
@@ -221,15 +266,12 @@ public class BlockShuffleMinigame extends AbstractMinigame {
     private void checkTimeWarnings() {
         int secondsRemaining = this.roundTimerTicks / TICKS_PER_SECOND;
 
-        if (secondsRemaining == 60 && !this.timeWarningsShown.contains(60)) {
+        if (secondsRemaining == 60 && this.countdowns.announceOnce(this.getAliveParticipants(), 60, Text.empty())) {
             this.broadcast(Text.literal("⏰ 1 minute remaining!").formatted(Formatting.YELLOW));
-            this.timeWarningsShown.add(60);
-        } else if (secondsRemaining == 10 && !this.timeWarningsShown.contains(10)) {
+        } else if (secondsRemaining == 10 && this.countdowns.announceOnce(this.getAliveParticipants(), 10, Text.empty())) {
             this.broadcast(Text.literal("⏰ 10 seconds remaining!").formatted(Formatting.RED));
-            this.timeWarningsShown.add(10);
-        } else if (secondsRemaining <= 5 && secondsRemaining > 0 && !this.timeWarningsShown.contains(secondsRemaining)) {
+        } else if (secondsRemaining <= 5 && secondsRemaining > 0 && this.countdowns.announceOnce(this.getAliveParticipants(), secondsRemaining, Text.empty())) {
             GameMessenger.showGameTitle(this.getAliveParticipants(), Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.RED), Text.empty());
-            this.timeWarningsShown.add(secondsRemaining);
         }
     }
 
@@ -368,6 +410,8 @@ public class BlockShuffleMinigame extends AbstractMinigame {
             this.scoreboard.show(this.context.liveParticipants());
         }
 
+        this.syncVanillaTeams();
+
         this.scoreboard.clearLines();
         this.statusLine = this.scoreboard.addLine(Text.empty());
         this.scoreboard.addBlankLine();
@@ -413,9 +457,35 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         }
         SpectatorService.getInstance().stopSpectating(player, SpectatorStopReason.MANUAL);
 
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleDisconnect(player);
+        }
+
         if (this.state == GameState.RUNNING) {
             this.checkWinCondition();
         }
+    }
+
+    private void rebuildSoloTeams(List<ServerPlayerEntity> participants) {
+        this.teamManager.clear();
+        for (ServerPlayerEntity player : participants) {
+            String id = "solo_" + player.getUuid().toString().replace("-", "");
+            this.teamManager.assign(player, id, player.getName().getString(), TeamRole.MEMBER);
+        }
+        this.syncVanillaTeams();
+    }
+
+    @Override
+    protected void syncVanillaTeams() {
+        if (this.server == null) return;
+        this.vanillaTeams.syncSnapshots(this.server, this.teamManager.snapshots(), snapshot -> {
+            Formatting color = this.vanillaTeams.colorFor(snapshot.id());
+            return VanillaTeamOptions.defaults()
+                .withColor(color)
+                .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
+                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
+                .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
+        });
     }
 
 
@@ -471,12 +541,6 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         }
         stateObj.add("assignedBlocks", assignedBlocksObj);
         
-        JsonArray timeWarnings = new JsonArray();
-        for (Integer warning : this.timeWarningsShown) {
-            timeWarnings.add(warning);
-        }
-        stateObj.add("timeWarningsShown", timeWarnings);
-        
         return stateObj;
     }
 
@@ -517,12 +581,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
             }
         }
         
-        this.timeWarningsShown.clear();
-        if (stateObj.has("timeWarningsShown")) {
-            for (var elem : stateObj.getAsJsonArray("timeWarningsShown")) {
-                this.timeWarningsShown.add(elem.getAsInt());
-            }
-        }
+        this.countdowns.reset();
     }
 
     @Override
@@ -554,6 +613,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
         if (this.scoreboard != null) {
             this.scoreboard.show(player);
         }
+        this.rebuildSoloTeams(this.getAliveParticipants());
         this.rebuildScoreboard();
     }
 

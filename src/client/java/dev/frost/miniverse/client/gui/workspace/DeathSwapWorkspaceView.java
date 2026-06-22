@@ -24,6 +24,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     private IntFieldWidget swapIntervalField;
     private IntFieldWidget gracePeriodField;
     private IntFieldWidget borderSizeField;
+    private IntFieldWidget respawnDelayField;
     private TextFieldWidget seedValueField;
     private ButtonWidget seedModeButton;
     private ButtonWidget preserveVelocityButton;
@@ -31,13 +32,14 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     private int swapIntervalSeconds = 300;
     private int gracePeriodSeconds = 30;
     private int borderSize = 3000;
+    private int respawnDelaySeconds = 5;
     private DeathSwapSettings.SeedMode seedMode = DeathSwapSettings.SeedMode.RANDOM;
     private String seedValue = "";
     private boolean preserveVelocity = true;
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, false);
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true);
     }
 
     public DeathSwapWorkspaceView() {
@@ -89,6 +91,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
             this.preserveVelocityButton = this.addToggleButton(screen, "Preserve Velocity", () -> this.preserveVelocity, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 256, 190,
                 new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players keep their momentum when teleported.", "Players lose their momentum when teleported."),
                 () -> this.preserveVelocity = !this.preserveVelocity);
+            this.respawnDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 288, this.respawnDelaySeconds, "Respawn delay", val -> "Players wait " + val + " seconds before respawning.");
         }
     }
 
@@ -119,6 +122,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
             context.drawText(textRenderer, Text.literal("Seed Mode"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Seed Value"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Preserve Velocity"), labelX, labelY + 160, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Respawn Delay"), labelX, labelY + 192, UiTheme.TEXT_MUTED, false);
         }
     }
 
@@ -147,6 +151,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
             this.swapIntervalSeconds = readClamped(this.swapIntervalField, this.swapIntervalSeconds, 10, 3600);
             this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
             this.borderSize = readClamped(this.borderSizeField, this.borderSize, 100, 30000);
+            this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 0, 3600);
             if (this.seedValueField != null && this.seedMode == DeathSwapSettings.SeedMode.FIXED) {
                 this.seedValue = this.seedValueField.getText().trim();
             }
@@ -182,6 +187,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
         builder.settings().putInt("swapIntervalSeconds", this.swapIntervalSeconds);
         builder.settings().putInt("initialGracePeriodSeconds", this.gracePeriodSeconds);
         builder.settings().putInt("borderSize", this.borderSize);
+        builder.settings().putInt("respawnDelaySeconds", this.respawnDelaySeconds);
         builder.settings().putBoolean("preserveVelocity", this.preserveVelocity);
         builder.settings().putString("seedMode", this.seedMode.nbtValue());
         if (this.seedMode == DeathSwapSettings.SeedMode.FIXED) {

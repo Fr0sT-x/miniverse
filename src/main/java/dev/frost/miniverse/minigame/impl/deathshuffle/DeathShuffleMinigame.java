@@ -43,8 +43,18 @@ import java.util.stream.Collectors;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.impl.deathshuffle.death.DeathShuffleDeathLifecycleConfig;
+import dev.frost.miniverse.minigame.core.death.DeathContext;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamRole;
+import dev.frost.miniverse.team.TeamColorPalette;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import net.minecraft.scoreboard.AbstractTeam;
 
-public class DeathShuffleMinigame extends AbstractMinigame {
+public class DeathShuffleMinigame extends AbstractMinigame implements dev.frost.miniverse.minigame.core.death.DeathAwareMinigame, TeamManagerProvider {
     private static final int TICKS_PER_SECOND = 20;
 
     private DeathShuffleSettings settings;
@@ -55,15 +65,19 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     private int elapsedTicks;
     private int roundTimerTicks;
     private int graceTimerTicks;
+    private DeathLifecycleManager deathLifecycleManager;
     
     private final Set<UUID> activePlayers = new HashSet<>();
     private final Map<UUID, Integer> points = new HashMap<>();
     private final Map<UUID, Identifier> assignedObjectives = new HashMap<>();
     private final Set<UUID> completedThisRound = new HashSet<>();
-    private final Set<Integer> timeWarningsShown = new HashSet<>();
+    private final dev.frost.miniverse.minigame.core.countdown.CountdownService countdowns = new dev.frost.miniverse.minigame.core.countdown.CountdownService();
 
     private ScoreboardTemplate baseScoreboard;
     private final Map<UUID, ScoreboardLine> timerLines = new HashMap<>();
+
+    private final TeamManager teamManager = new TeamManager();
+    private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("deathshuffle");
 
     private enum RoundState {
         INTERMISSION,
@@ -81,6 +95,24 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     }
 
     @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
+    }
+
+    @Override
+    public TeamManager teamManager() {
+        return this.teamManager;
+    }
+
+    public dev.frost.miniverse.minigame.core.MinigameContext getContext() {
+        return this.context;
+    }
+
+    public DeathShuffleSettings getSettings() {
+        return this.settings;
+    }
+
+    @Override
     protected boolean isTeamBased() {
         return false;
     }
@@ -92,7 +124,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     @Override
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.setState(GameState.WAITING_FOR_PLAYERS);
         this.roundState = RoundState.INTERMISSION;
         this.server = null;
@@ -101,7 +133,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         this.points.clear();
         this.assignedObjectives.clear();
         this.completedThisRound.clear();
-        this.timeWarningsShown.clear();
+        this.countdowns.reset();
     }
 
     @Override
@@ -118,6 +150,14 @@ public class DeathShuffleMinigame extends AbstractMinigame {
             this.context.setState(GameState.RUNNING);
             this.activePlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).collect(Collectors.toSet()));
         }
+
+        this.deathLifecycleManager = new DeathLifecycleManager(new DeathShuffleDeathLifecycleConfig(this), dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSpectatorService());
+        
+        if (this.context != null && this.context.nullableServer() != null) {
+            this.vanillaTeams.pruneNamespaceTeams(this.context.nullableServer());
+        }
+
+        this.rebuildSoloTeams(participants);
         
         for (UUID uuid : this.activePlayers) {
             this.points.put(uuid, 0);
@@ -138,8 +178,14 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         if (this.context != null) {
             this.context.setState(GameState.ENDING);
         }
-        if (this.server != null && this.baseScoreboard != null) {
-            this.baseScoreboard.cleanup(this.server);
+        if (this.server != null) {
+            this.vanillaTeams.clear(this.server);
+            if (this.baseScoreboard != null) {
+                this.baseScoreboard.cleanup(this.server);
+            }
+        }
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(uuid -> this.server.getPlayerManager().getPlayer(uuid));
         }
         this.activePlayers.clear();
     }
@@ -236,7 +282,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
 
     private void startRound() {
         this.roundState = RoundState.ACTIVE;
-        this.timeWarningsShown.clear();
+        this.countdowns.reset();
         this.roundTimerTicks = Math.max(10, this.settings.roundDurationSeconds()) * TICKS_PER_SECOND;
         this.rebuildScoreboards();
     }
@@ -244,15 +290,12 @@ public class DeathShuffleMinigame extends AbstractMinigame {
     private void checkTimeWarnings() {
         int secondsRemaining = this.roundTimerTicks / TICKS_PER_SECOND;
 
-        if (secondsRemaining == 60 && !this.timeWarningsShown.contains(60)) {
+        if (secondsRemaining == 60 && this.countdowns.announceOnce(this.getAliveParticipants(), 60, Text.empty())) {
             this.broadcast(Text.literal("⏰ 1 minute remaining!").formatted(Formatting.YELLOW));
-            this.timeWarningsShown.add(60);
-        } else if (secondsRemaining == 10 && !this.timeWarningsShown.contains(10)) {
+        } else if (secondsRemaining == 10 && this.countdowns.announceOnce(this.getAliveParticipants(), 10, Text.empty())) {
             this.broadcast(Text.literal("⏰ 10 seconds remaining!").formatted(Formatting.RED));
-            this.timeWarningsShown.add(10);
-        } else if (secondsRemaining <= 5 && secondsRemaining > 0 && !this.timeWarningsShown.contains(secondsRemaining)) {
+        } else if (secondsRemaining <= 5 && secondsRemaining > 0 && this.countdowns.announceOnce(this.getAliveParticipants(), secondsRemaining, Text.empty())) {
             GameMessenger.showGameTitle(this.getAliveParticipants(), Text.literal(String.valueOf(secondsRemaining)).formatted(Formatting.RED), Text.empty());
-            this.timeWarningsShown.add(secondsRemaining);
         }
     }
 
@@ -356,22 +399,13 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         }
     }
 
-    @Override
-    public void onEntityDeath(LivingEntity entity, DamageSource source) {
-        if (!(entity instanceof ServerPlayerEntity player)) return;
+    public void processPlayerDeath(ServerPlayerEntity player, DeathContext context) {
         if (this.state != GameState.RUNNING || this.roundState != RoundState.ACTIVE) {
-            // Instantly respawn if in minigame
-            if (this.isParticipant(player.getUuid())) {
-                this.instantRespawn(player);
-            }
             return;
         }
 
         UUID uuid = player.getUuid();
         if (!this.activePlayers.contains(uuid)) return;
-
-        // Force instant respawn manually
-        this.instantRespawn(player);
 
         if (this.completedThisRound.contains(uuid)) {
             // Already completed this round
@@ -384,7 +418,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         DeathObjective objective = dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjectiveManager.get(this.server, assignedId);
 
         if (objective != null && objective.damageCondition().isPresent()) {
-            if (objective.damageCondition().get().test(player, source, 1.0f, 1.0f, false)) {
+            if (objective.damageCondition().get().test(player, context.damageSource(), 1.0f, 1.0f, false)) {
                 // Success!
                 this.completedThisRound.add(uuid);
                 this.points.put(uuid, this.points.getOrDefault(uuid, 0) + 1);
@@ -397,21 +431,12 @@ public class DeathShuffleMinigame extends AbstractMinigame {
             }
         }
     }
-    
-    private void instantRespawn(ServerPlayerEntity player) {
-        // Schedule a task for the next tick to respawn the player, since doing it inside the death event can cause issues
-        MinecraftServer server = this.server;
-        if (server != null) {
-            server.execute(() -> {
-                if (player.isDead()) {
-                    server.getPlayerManager().respawnPlayer(player, false, Entity.RemovalReason.KILLED);
-                }
-            });
-        }
-    }
 
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleDisconnect(player);
+        }
         if (this.context != null) this.context.roster().remove(player);
         this.activePlayers.remove(player.getUuid());
         
@@ -431,6 +456,7 @@ public class DeathShuffleMinigame extends AbstractMinigame {
             this.activePlayers.add(player.getUuid());
             this.points.putIfAbsent(player.getUuid(), 0);
             player.sendMessage(Text.literal("You joined the game late. Wait for your next objective!").formatted(Formatting.YELLOW), false);
+            this.rebuildSoloTeams(this.getAliveParticipants());
             this.rebuildScoreboards();
         }
     }
@@ -537,10 +563,34 @@ public class DeathShuffleMinigame extends AbstractMinigame {
         return this.activePlayers.contains(uuid);
     }
 
+    private void rebuildSoloTeams(List<ServerPlayerEntity> participants) {
+        this.teamManager.clear();
+        for (ServerPlayerEntity player : participants) {
+            String id = "solo_" + player.getUuid().toString().replace("-", "");
+            this.teamManager.assign(player, id, player.getName().getString(), TeamRole.MEMBER);
+        }
+        this.syncVanillaTeams();
+    }
+
+    @Override
+    protected void syncVanillaTeams() {
+        if (this.server == null) return;
+        this.vanillaTeams.syncSnapshots(this.server, this.teamManager.snapshots(), snapshot -> {
+            Formatting color = this.vanillaTeams.colorFor(snapshot.id());
+            return VanillaTeamOptions.defaults()
+                .withColor(color)
+                .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
+                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
+                .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
+        });
+    }
+
     private void rebuildScoreboards() {
         if (this.server == null) return;
         List<ServerPlayerEntity> participants = this.getAliveParticipants();
         if (participants.isEmpty()) return;
+
+        this.syncVanillaTeams();
 
         if (this.baseScoreboard == null) {
             this.baseScoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Death Shuffle").formatted(Formatting.RED, Formatting.BOLD)));

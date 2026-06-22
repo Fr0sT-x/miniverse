@@ -524,6 +524,38 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     @Override
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("state", this.state.name());
+        json.addProperty("paused", this.paused);
+        if (this.runnerUuid != null) {
+            json.addProperty("runnerUuid", this.runnerUuid.toString());
+        }
+        json.addProperty("elapsedTicks", this.elapsedTicks);
+        return json;
+    }
+
+    @Override
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        if (json == null) return;
+        if (json.has("state")) {
+            try {
+                this.state = GameState.valueOf(json.get("state").getAsString());
+            } catch (Exception ignored) {}
+        }
+        if (json.has("paused")) {
+            this.paused = json.get("paused").getAsBoolean();
+        }
+        if (json.has("runnerUuid")) {
+            this.runnerUuid = UUID.fromString(json.get("runnerUuid").getAsString());
+        }
+        if (json.has("elapsedTicks")) {
+            this.elapsedTicks = json.get("elapsedTicks").getAsInt();
+        }
+        this.rebuildScoreboard();
+    }
+
+    @Override
     public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(dev.frost.miniverse.minigame.core.SessionRoster roster) {
         int onlineCount = roster.onlinePlayers(this.context != null ? this.context.nullableServer() : null).size();
         if (onlineCount < 1) {

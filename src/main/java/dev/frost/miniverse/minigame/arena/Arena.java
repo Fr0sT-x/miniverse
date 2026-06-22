@@ -155,4 +155,59 @@ public class Arena {
         }
         return true;
     }
+
+    public com.google.gson.JsonObject saveRuntimeState() {
+        com.google.gson.JsonObject json = new com.google.gson.JsonObject();
+        json.addProperty("state", state.name());
+        if (activeMatchId != null) {
+            json.addProperty("activeMatchId", activeMatchId.toString());
+        }
+        com.google.gson.JsonArray blocksArray = new com.google.gson.JsonArray();
+        for (Map.Entry<BlockPos, TrackedBlock> entry : trackedBlocks.entrySet()) {
+            com.google.gson.JsonObject blockJson = new com.google.gson.JsonObject();
+            BlockPos pos = entry.getKey();
+            blockJson.addProperty("x", pos.getX());
+            blockJson.addProperty("y", pos.getY());
+            blockJson.addProperty("z", pos.getZ());
+            
+            NbtCompound stateNbt = net.minecraft.nbt.NbtHelper.fromBlockState(entry.getValue().state());
+            blockJson.addProperty("state", stateNbt.toString());
+            
+            if (entry.getValue().nbt() != null) {
+                blockJson.addProperty("nbt", entry.getValue().nbt().toString());
+            }
+            blocksArray.add(blockJson);
+        }
+        json.add("trackedBlocks", blocksArray);
+        return json;
+    }
+
+    public void loadRuntimeState(com.google.gson.JsonObject json) {
+        if (json.has("state")) {
+            this.state = ArenaState.valueOf(json.get("state").getAsString());
+        }
+        if (json.has("activeMatchId")) {
+            this.activeMatchId = UUID.fromString(json.get("activeMatchId").getAsString());
+        }
+        if (json.has("trackedBlocks")) {
+            com.google.gson.JsonArray blocksArray = json.getAsJsonArray("trackedBlocks");
+            for (com.google.gson.JsonElement el : blocksArray) {
+                com.google.gson.JsonObject obj = el.getAsJsonObject();
+                BlockPos pos = new BlockPos(obj.get("x").getAsInt(), obj.get("y").getAsInt(), obj.get("z").getAsInt());
+                try {
+                    NbtCompound stateNbt = net.minecraft.nbt.StringNbtReader.parse(obj.get("state").getAsString());
+                    net.minecraft.registry.RegistryEntryLookup<net.minecraft.block.Block> blockLookup = world.getRegistryManager().getWrapperOrThrow(net.minecraft.registry.RegistryKeys.BLOCK);
+                    BlockState state = net.minecraft.nbt.NbtHelper.toBlockState(blockLookup, stateNbt);
+                    
+                    NbtCompound nbt = null;
+                    if (obj.has("nbt")) {
+                        nbt = net.minecraft.nbt.StringNbtReader.parse(obj.get("nbt").getAsString());
+                    }
+                    trackedBlocks.put(pos, new TrackedBlock(state, nbt));
+                } catch (Exception e) {
+                    System.err.println("Failed to parse NBT for tracked block at " + pos + " in arena " + id);
+                }
+            }
+        }
+    }
 }

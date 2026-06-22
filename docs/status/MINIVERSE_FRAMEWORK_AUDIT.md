@@ -14,7 +14,7 @@
 | Total Frameworks Discovered | 23 |
 | Total Gamemodes | 11 |
 | All gamemodes extend `AbstractMinigame` | Yes |
-| Death Lifecycle Framework adoption | 2/11 (18%) |
+| Death Lifecycle Framework adoption | 3/11 (27%) |
 | Persistent Session Framework adoption | 5/11 (45%) |
 | Team Framework adoption | 6/11 (55%) |
 | Arena Framework adoption | 1/11 (9%) |
@@ -31,7 +31,7 @@ Miniverse has a strong, well-designed framework core. `AbstractMinigame` provide
 
 **Top Weaknesses:**
 - `GameState` enum is bloated with overlapping values; no single canonical "running" state
-- Death Lifecycle Framework adoption is very low (2/11)
+- Death Lifecycle Framework adoption is very low (3/11)
 - `MinigameManager` is still a singleton despite a `// TODO: Migrate` comment
 - `SpectatorService.onPlayerLeave` does not clean up the *leaving player's own session* (confirmed bug)
 - `MinigameEventRouter.onAfterDeath` falls through to `active.onPlayerDeath(player)` — **not** to `DeathAwareMinigame` dispatch — when the manager is null (confirmed bug; check code path carefully)
@@ -614,7 +614,7 @@ Miniverse has a strong, well-designed framework core. `AbstractMinigame` provide
 | Match Lifecycle (F02) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Freeze (F03) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Spectator (F04) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Death Lifecycle (F05) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| Death Lifecycle (F05) | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | Persistent Session (F06) | ✅ | ❌ | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❌ | ⚠️ | ✅ | ✅ |
 | Global Match Rules (F07) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Team Framework (F08) | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ⚠️ | ❌ | ✅ | ✅ |
@@ -661,17 +661,16 @@ Miniverse has a strong, well-designed framework core. `AbstractMinigame` provide
 
 ### Speedrun
 
-**Frameworks Used:** Session, Match Lifecycle, Freeze, Spectator, Global Match Rules, Map Protection, Scoreboard, `DynamicParticipantMinigame`, `PauseAwareMinigame`, `PlayerRespawnAware`, `PlayerLeaveAware`, `EntityDeathAware`, `ServerTickAware`, VanillaTeamAdapter
+**Frameworks Used:** Session, Match Lifecycle, Freeze, Spectator, Death Lifecycle (F05), Global Match Rules, Map Protection, Scoreboard, `DynamicParticipantMinigame`, `PauseAwareMinigame`, `PlayerRespawnAware`, `PlayerLeaveAware`, `EntityDeathAware`, `ServerTickAware`, VanillaTeamAdapter
 
-**Frameworks Missing:** Death Lifecycle (F05), Team Framework (F08, no `TeamManager`), Protected Items (F13), Persistent Session (F06), Kit (F14), Role (F15), Arena (F18)
+**Frameworks Missing:** Team Framework (F08, no `TeamManager`), Protected Items (F13), Persistent Session (F06), Kit (F14), Role (F15), Arena (F18)
 
 **Partial Integrations:**
 - `PersistentMinigame` — inherited no-op from `AbstractMinigame`; no meaningful state saved
-- Spectator — used directly for dead runner but not via Death Lifecycle Framework
 
-**Compliance Score:** 58/100
+**Compliance Score:** 62/100
 
-**Notes:** Relatively simple gamemode. Single-player runner. No teams. Death handling is done inline in `EntityDeathAware.onEntityDeath()` by checking for `EnderDragonEntity`. This is correct for the win condition but the "runner dies → spectate" transition could migrate to Death Lifecycle. Low complexity makes it a reasonable second migration candidate.
+**Notes:** Relatively simple gamemode. Single-player runner. No teams. Death Lifecycle (F05) is used purely for event hooks (death counter/sound) with `interceptsRespawn=false` so players respawn normally via vanilla logic.
 
 ---
 

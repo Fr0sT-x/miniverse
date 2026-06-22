@@ -37,9 +37,6 @@ public final class BountyHuntCommands {
                 .then(literal("grace")
                     .then(argument("seconds", IntegerArgumentType.integer(0, 3600))
                         .executes(BountyHuntCommands::setGrace)))
-                .then(literal("invincibility")
-                    .then(argument("seconds", IntegerArgumentType.integer(0, 3600))
-                        .executes(BountyHuntCommands::setInvincibility)))
                 .then(literal("scoreToWin")
                     .then(argument("score", IntegerArgumentType.integer(1, 99))
                         .executes(BountyHuntCommands::setScoreToWin)))
@@ -138,15 +135,6 @@ public final class BountyHuntCommands {
         return 1;
     }
 
-    private static int setInvincibility(CommandContext<ServerCommandSource> context) {
-        BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
-        if (bountyHunt == null) return 0;
-        int seconds = IntegerArgumentType.getInteger(context, "seconds");
-        bountyHunt.applySettings(bountyHunt.getSettings().withRespawnInvincibilitySeconds(seconds));
-        context.getSource().sendFeedback(() -> Text.literal("Set respawn invincibility to " + seconds + "s."), true);
-        return 1;
-    }
-
     private static int setScoreToWin(CommandContext<ServerCommandSource> context) {
         BountyHuntMinigame bountyHunt = getOrCreatePending(context.getSource());
         if (bountyHunt == null) return 0;
@@ -233,7 +221,6 @@ public final class BountyHuntCommands {
         context.getSource().sendFeedback(() -> Text.literal("- State: " + (state == null ? "NONE" : state.name())), false);
         context.getSource().sendFeedback(() -> Text.literal("- Participants: " + manager.getParticipantCount()), false);
         context.getSource().sendFeedback(() -> Text.literal("- Grace: " + settings.gracePeriodSeconds() + "s"), false);
-        context.getSource().sendFeedback(() -> Text.literal("- Invincibility: " + settings.respawnInvincibilitySeconds() + "s"), false);
         context.getSource().sendFeedback(() -> Text.literal("- Score to win: " + settings.scoreToWin()), false);
         context.getSource().sendFeedback(() -> Text.literal("- Target swap: " + settings.targetSwapIntervalSeconds() + "s"), false);
         context.getSource().sendFeedback(() -> Text.literal("- Tracker: " + settings.trackerEnabled() + " cooldown=" + settings.compassCooldownSeconds() + "s"), false);

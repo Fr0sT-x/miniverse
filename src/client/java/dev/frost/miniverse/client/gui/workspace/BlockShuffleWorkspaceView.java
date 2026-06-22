@@ -50,7 +50,7 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true, false);
+        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
     }
 
     public BlockShuffleWorkspaceView() {

@@ -40,7 +40,7 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true, true, false);
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, false);
     }
 
     public BridgeWorkspaceView() {

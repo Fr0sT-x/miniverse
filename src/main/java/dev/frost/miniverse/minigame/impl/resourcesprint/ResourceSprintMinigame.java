@@ -107,7 +107,7 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults(false, false);
+        return GlobalMatchRules.defaults();
     }
 
     @Override
@@ -153,6 +153,8 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.settings = ResourceSprintSettings.defaults();
         this.server = null;

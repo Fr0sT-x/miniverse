@@ -100,14 +100,14 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
         setState(GameState.WAITING_FOR_PLAYERS);
     }
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        // doImmediateRespawn=false required: framework calls changeGameMode(SPECTATOR) on fatal damage; 
-        // client must not auto-respawn before the framework transition completes. See DECISIONS.md D04.
-        return GlobalMatchRules.defaults(true, false);
+        return GlobalMatchRules.defaults();
     }
 
     @Override

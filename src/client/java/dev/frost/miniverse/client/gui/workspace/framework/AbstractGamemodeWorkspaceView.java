@@ -35,7 +35,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private UiLayout.Rect selectAllButtonRect;
     private UiLayout.Rect clearButtonRect;
 
-    private TriState keepInventoryState = TriState.DEFAULT;
     private TriState pvpEnabledState = TriState.DEFAULT;
     private TriState doDaylightCycleState = TriState.DEFAULT;
     private TriState doWeatherCycleState = TriState.DEFAULT;
@@ -43,16 +42,12 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private TriState naturalRegenerationState = TriState.DEFAULT;
     private TriState announceAdvancementsState = TriState.DEFAULT;
 
-    private ButtonWidget keepInventoryBtn;
     private ButtonWidget pvpEnabledBtn;
     private ButtonWidget doDaylightCycleBtn;
     private ButtonWidget doWeatherCycleBtn;
     private ButtonWidget fallDamageBtn;
     private ButtonWidget naturalRegenerationBtn;
     private ButtonWidget announceAdvancementsBtn;
-    private ButtonWidget immediateRespawnBtn;
-    
-    protected TriState immediateRespawnState = TriState.DEFAULT;
 
     protected void useGameRules() {
         this.moduleManager.register("gamerules", "G", "Game Rules", "Rules", "Override default session match rules.", UiTheme.ACCENT_BLUE);
@@ -98,8 +93,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private void initGameRules(SessionScreen screen) {
         if (this.moduleManager.isActive("gamerules")) {
             int y = this.layout.mainPanel().y() + 96;
-            this.keepInventoryBtn = this.addTriStateButton(screen, "Keep Inventory", () -> this.keepInventoryState, defaultMatchRules().keepInventory(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Players keep their inventory upon death.", "FORCE OFF: Players drop their items upon death.", "DEFAULT: Use the global server setting for keep inventory."), () -> this.keepInventoryState = this.keepInventoryState.next());
-            y += 30;
             this.pvpEnabledBtn = this.addTriStateButton(screen, "PvP Enabled", () -> this.pvpEnabledState, defaultMatchRules().pvpEnabled(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Players can damage each other.", "FORCE OFF: Players cannot damage each other.", "DEFAULT: Use the global server setting for PvP."), () -> this.pvpEnabledState = this.pvpEnabledState.next());
             y += 30;
             this.doDaylightCycleBtn = this.addTriStateButton(screen, "Daylight Cycle", () -> this.doDaylightCycleState, defaultMatchRules().doDaylightCycle(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: The sun and moon progress normally.", "FORCE OFF: Time is frozen.", "DEFAULT: Use the global server setting for daylight cycle."), () -> this.doDaylightCycleState = this.doDaylightCycleState.next());
@@ -111,15 +104,8 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.naturalRegenerationBtn = this.addTriStateButton(screen, "Natural Regen", () -> this.naturalRegenerationState, defaultMatchRules().naturalRegeneration(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Health regenerates naturally.", "FORCE OFF: Health does not regenerate naturally.", "DEFAULT: Use the global server setting for natural regeneration."), () -> this.naturalRegenerationState = this.naturalRegenerationState.next());
             y += 30;
             this.announceAdvancementsBtn = this.addTriStateButton(screen, "Advancements", () -> this.announceAdvancementsState, defaultMatchRules().announceAdvancements(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Player advancements are broadcasted to chat.", "FORCE OFF: Player advancements are not broadcasted.", "DEFAULT: Use the global server setting for advancements."), () -> this.announceAdvancementsState = this.announceAdvancementsState.next());
-            y += 30;
-            this.immediateRespawnBtn = this.addTriStateButton(screen, "Immediate Respawn", () -> this.immediateRespawnState, defaultMatchRules().doImmediateRespawn(), this.layout.mainPanel().x() + 180, y, 200, getImmediateRespawnTooltip(), () -> this.immediateRespawnState = this.immediateRespawnState.next());
         }
     }
-
-    protected TriStateTooltip getImmediateRespawnTooltip() {
-        return new TriStateTooltip("FORCE ON: Players instantly respawn without the vanilla death screen.", "FORCE OFF: Players see the vanilla death screen.", "DEFAULT: Use the global server setting for immediate respawn.");
-    }
-
 
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
         return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
@@ -203,8 +189,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         if (this.moduleManager.isActive("gamerules")) {
             int labelX = this.layout.mainPanel().x() + 38;
             int y = this.layout.mainPanel().y() + 102;
-            context.drawText(textRenderer, Text.literal("Keep Inventory"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
             context.drawText(textRenderer, Text.literal("PvP Enabled"), labelX, y, UiTheme.TEXT_MUTED, false);
             y += 30;
             context.drawText(textRenderer, Text.literal("Daylight Cycle"), labelX, y, UiTheme.TEXT_MUTED, false);
@@ -216,8 +200,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             context.drawText(textRenderer, Text.literal("Natural Regen"), labelX, y, UiTheme.TEXT_MUTED, false);
             y += 30;
             context.drawText(textRenderer, Text.literal("Advancements"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Immediate Respawn"), labelX, y, UiTheme.TEXT_MUTED, false);
         }
 
         this.renderGamemodeForeground(context, textRenderer, mouseX, mouseY, delta);
@@ -533,7 +515,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     }
 
     private void buildGameRulesSettings(SessionPayloadBuilder builder) {
-        if (this.keepInventoryState != TriState.DEFAULT) builder.settings().putString("gamerule.keepInventory", this.keepInventoryState == TriState.FORCE_ON ? "true" : "false");
         if (this.pvpEnabledState != TriState.DEFAULT) builder.settings().putString("gamerule.pvpEnabled", this.pvpEnabledState == TriState.FORCE_ON ? "true" : "false");
         if (this.doDaylightCycleState != TriState.DEFAULT) builder.settings().putString("gamerule.doDaylightCycle", this.doDaylightCycleState == TriState.FORCE_ON ? "true" : "false");
         if (this.doWeatherCycleState != TriState.DEFAULT) builder.settings().putString("gamerule.doWeatherCycle", this.doWeatherCycleState == TriState.FORCE_ON ? "true" : "false");

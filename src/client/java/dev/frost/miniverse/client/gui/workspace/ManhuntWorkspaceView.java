@@ -161,18 +161,10 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         }
     }
 
-    @Override
-    protected dev.frost.miniverse.client.gui.workspace.framework.TriStateTooltip getImmediateRespawnTooltip() {
-        return new dev.frost.miniverse.client.gui.workspace.framework.TriStateTooltip(
-            "FORCE ON: Players instantly respawn without the vanilla death screen.",
-            "FORCE OFF: Players see the vanilla death screen. Speedrunners will be forced into spectator mode after respawning.",
-            "DEFAULT: Use the global server setting for immediate respawn."
-        );
-    }
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(false, true, true, true, true, true, true, true);
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true);
     }
 
     @Override

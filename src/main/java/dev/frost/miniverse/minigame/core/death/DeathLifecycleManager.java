@@ -28,9 +28,18 @@ public class DeathLifecycleManager {
     private final Map<UUID, DeathContext> contexts = new ConcurrentHashMap<>();
     private final Map<UUID, PostDeathPolicy> activePostDeathPolicies = new ConcurrentHashMap<>();
 
+    @Nullable
+    public DeathContext getContext(UUID playerId) {
+        return this.contexts.get(playerId);
+    }
+
     public DeathLifecycleManager(DeathLifecycleConfig config, SpectatorService spectatorService) {
         this.config = config;
         this.spectatorService = spectatorService;
+    }
+
+    public DeathLifecycleConfig getConfig() {
+        return this.config;
     }
 
     private boolean transitionState(ServerPlayerEntity player, DeathContext context, DeathState targetState) {
@@ -137,6 +146,7 @@ public class DeathLifecycleManager {
 
         player.changeGameMode(this.config.resolveRespawnGameMode());
         player.teleport(location.world(), location.pos().x, location.pos().y, location.pos().z, java.util.Set.of(), location.yaw(), location.pitch());
+        this.spectatorService.stopSpectating(player, dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason.RESPAWN);
 
         if (callbacks != null) {
             callbacks.onRespawnComplete(player, context);
@@ -144,6 +154,15 @@ public class DeathLifecycleManager {
 
         if (transitionState(player, context, DeathState.ALIVE)) {
             this.activePostDeathPolicies.remove(playerId);
+            this.stateMachines.remove(playerId);
+            this.contexts.remove(playerId);
+        }
+    }
+
+    public void handleVanillaRespawn(ServerPlayerEntity player) {
+        UUID playerId = player.getUuid();
+        PlayerDeathStateMachine stateMachine = this.stateMachines.get(playerId);
+        if (stateMachine != null && stateMachine.getCurrentState() == DeathState.DEATH_PROCESSING) {
             this.stateMachines.remove(playerId);
             this.contexts.remove(playerId);
         }

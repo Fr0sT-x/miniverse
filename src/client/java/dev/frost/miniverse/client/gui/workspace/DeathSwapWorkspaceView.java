@@ -37,7 +37,7 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, false, true, true, true, true, true, false);
+        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, false);
     }
 
     public DeathSwapWorkspaceView() {

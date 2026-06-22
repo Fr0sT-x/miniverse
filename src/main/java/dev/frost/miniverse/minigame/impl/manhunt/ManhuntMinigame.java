@@ -72,12 +72,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import dev.frost.miniverse.minigame.core.tracker.PlayerTracker;
 
+import dev.frost.miniverse.minigame.core.death.ImmediateRespawnNotifier;
+
 /**
  * Manhunt minigame implementation.
  * In this game, Speedrunners try to reach the End while Hunters try to stop them.
  * If a Speedrunner dies, the Hunters win. Hunters can respawn upon death.
  */
-public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractMinigame implements TeamManagerProvider, dev.frost.miniverse.minigame.core.event.RosterAware {
+public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractMinigame implements TeamManagerProvider, dev.frost.miniverse.minigame.core.event.RosterAware, ImmediateRespawnNotifier {
     private static final String NAME = "Manhunt";
 
     private GameState state;
@@ -137,6 +139,8 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.teams.clear();
         this.deadSpeedrunners.clear();
@@ -156,7 +160,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     @Override
     protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules configureGameRules() {
-        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults(false, true);
+        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
     }
 
     @Override
@@ -230,6 +234,18 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         this.pendingLateJoinTeleports.clear();
         this.speedrunnerRespawns.reset();
         ProtectedItemService.getInstance().removeRule(TRACKER_TYPE);
+    }
+
+    public Text getDeathTitle(ServerPlayerEntity victim, DamageSource source) {
+        String killerName = source != null && source.getAttacker() != null ? source.getAttacker().getName().getString() : "Unknown";
+        return Text.literal("You were killed by " + killerName + "!").formatted(Formatting.RED);
+    }
+
+    public Text getDeathSubtitle(ServerPlayerEntity victim, DamageSource source, int ticksRemaining) {
+        int seconds = (int) Math.ceil(ticksRemaining / 20.0);
+        return Text.literal("Respawning in ").formatted(Formatting.GRAY)
+            .append(Text.literal(String.valueOf(seconds)).formatted(Formatting.GREEN))
+            .append(Text.literal(" seconds...").formatted(Formatting.GRAY));
     }
 
     @Override
@@ -1430,18 +1446,39 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         this.playerTracker.updatePositions(targets, this.settings.netherTrackingEnabled());
     }
 
+    private final java.util.Map<UUID, Integer> lastHunterSeconds = new java.util.HashMap<>();
+
     private void tickHunterRespawns() {
         for (Map.Entry<UUID, Long> entry : new ArrayList<>(this.pendingHunterRespawns.entrySet())) {
-            if (entry.getValue() > this.gameTicks) {
-                continue;
-            }
-
             ServerPlayerEntity hunter = this.getPlayerByUuid(entry.getKey());
             if (hunter == null || hunter.isDisconnected()) {
                 continue;
             }
 
+            if (entry.getValue() > this.gameTicks) {
+                int ticksRemaining = (int) (entry.getValue() - this.gameTicks);
+                int currentSeconds = (int) Math.ceil(ticksRemaining / 20.0);
+                Integer lastSecs = this.lastHunterSeconds.get(entry.getKey());
+                
+                if (lastSecs == null) {
+                    hunter.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket(10, 100, 20));
+                    hunter.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.SubtitleS2CPacket(this.getDeathSubtitle(hunter, null, ticksRemaining)));
+                    hunter.networkHandler.sendPacket(new TitleS2CPacket(this.getDeathTitle(hunter, null)));
+                    this.lastHunterSeconds.put(entry.getKey(), currentSeconds);
+                } else if (lastSecs != currentSeconds) {
+                    hunter.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket(0, 100, 20));
+                    hunter.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.SubtitleS2CPacket(this.getDeathSubtitle(hunter, null, ticksRemaining)));
+                    hunter.networkHandler.sendPacket(new TitleS2CPacket(this.getDeathTitle(hunter, null)));
+                    this.lastHunterSeconds.put(entry.getKey(), currentSeconds);
+                }
+                continue;
+            }
+
             this.pendingHunterRespawns.remove(entry.getKey());
+            this.lastHunterSeconds.remove(entry.getKey());
+            hunter.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket(0, 20, 10));
+            hunter.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.SubtitleS2CPacket(Text.empty()));
+            hunter.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("Respawned!").formatted(Formatting.GREEN)));
             hunter.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
             hunter.setHealth(hunter.getMaxHealth());
             hunter.getHungerManager().setFoodLevel(20);

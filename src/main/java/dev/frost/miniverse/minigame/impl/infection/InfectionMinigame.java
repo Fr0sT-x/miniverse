@@ -82,6 +82,8 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
         this.setState(GameState.WAITING_FOR_PLAYERS);
         this.survivors.clear();
         this.infected.clear();
@@ -92,7 +94,7 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults(false, false);
+        return GlobalMatchRules.defaults();
     }
 
     @Override

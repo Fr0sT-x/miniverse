@@ -31,6 +31,7 @@
 | D12 | deathLifecycleManager initialised in onMatchStart, not initialize() | DECIDED | 2026-06-20 |
 | D13 | PlayerTransferService retry gap must be fixed before session routing work | DECIDED | 2026-06-20 |
 | D14 | Framework bugs are fixed before gamemode migration begins | DECIDED | 2026-06-20 |
+| D15 | Speedrun is Not an Elimination Gamemode (Death is a Non-Event) | DECIDED | 2026-06-22 |
 
 ---
 
@@ -382,6 +383,19 @@ Fix the framework first; migrate clean.
 - B02: `doImmediateRespawn=true` in Duels and MurderMystery — fix in those two gamemodes
 - B03: `BlockShuffle.initialize()` double clearAll — fix before any BlockShuffle changes
 - B04: BlockShuffle/DeathShuffle missing `onPlayerLeave` — fix before any round logic changes
+
+**Supersedes:** Nothing.
+
+---
+
+### D15 — Speedrun is Not an Elimination Gamemode
+
+**Status:** DECIDED
+**Date:** 2026-06-22
+
+**Decision:** Speedrun's death-and-respawn behavior is intentionally unchanged (death is a non-event — respawn and keep running). The F05 migration routes the fatal-damage event through `DeathLifecycleManager` only to provide a framework home for callbacks, not to enforce elimination or spectator mechanics.
+
+**Reason:** Speedrun is about time to completion; dying is just a time penalty. `interceptsRespawn` is set to `false`.
 
 **Supersedes:** Nothing.
 

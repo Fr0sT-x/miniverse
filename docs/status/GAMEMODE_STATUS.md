@@ -19,7 +19,7 @@
 | F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F05 Death Lifecycle | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| F05 Death Lifecycle | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | F06 Persistence | ✅ | ❌ | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❌ | ⚠️ | ✅ | ✅ |
 | F07 Global Rules | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | F08 Team | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ⚠️ | ❌ | ✅ | ✅ |
@@ -38,7 +38,7 @@
 | F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | F22 Respawn Policy | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **Compliance %** | **72%** | **58%** | **70%** | **68%** | **62%** | **54%** | **55%** | **71%** | **76%** | **75%** | **66%** |
+| **Compliance %** | **72%** | **62%** | **74%** | **68%** | **62%** | **54%** | **55%** | **71%** | **76%** | **75%** | **66%** |
 
 ---
 
@@ -85,55 +85,53 @@
 ### Speedrun
 
 **Main class:** `SpeedrunMinigame`
-**Status:** Production-near · **Compliance:** 58%
+**Status:** Production-near · **Compliance:** 62%
 **Last reviewed:** 2026-06-20
 
 **Gamerules:** `keepInventory=true`, `doImmediateRespawn=false`
 
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
+- F05 Death Lifecycle (callbacks only, interceptsRespawn=false)
 - F07 Global Rules, F09 Map Protection, F12 Scoreboard
 - `DynamicParticipantMinigame`, `PauseAwareMinigame`, `PlayerRespawnAware`,
   `PlayerLeaveAware`, `EntityDeathAware`, VanillaTeamAdapter
 
 **Frameworks NOT used:**
-- F05 Death Lifecycle — death is handled inline in `onEntityDeath` (checks for EnderDragon)
 - F06 Persistence — no `saveRuntimeState` override (inherited no-op)
 - F08 Team — single-player runner, no teams
 
 **Known issues / debt:**
-- Death handling (runner dies → spectate) handled inline. Straightforward F05 migration candidate.
 - `PersistentMinigame` inherited but no meaningful state saved.
 
-**Migration target:** F05 Death Lifecycle (Phase B, second in sequence)
+**Migration target:** None currently
 
 ---
 
 ### BountyHunt
 
 **Main class:** `BountyHuntMinigame`
-**Status:** Production-near · **Compliance:** 70%
+**Status:** Production-near · **Compliance:** 74%
 **Last reviewed:** 2026-06-20
 
 **Gamerules:** `keepInventory=false`, `doImmediateRespawn=false`
 
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
+- F05 Death Lifecycle (Full elimination/respawn flow)
 - F07 Global Rules, F09 Map Protection, F12 Scoreboard
 - F13 Protected Items (tracker compass), F20 Player Snapshot (persistence)
 - `DynamicParticipantMinigame`, `RosterAware`, `PauseAwareMinigame`,
   `PlayerLeaveAware`, `PlayerDamageAware`, VanillaTeamAdapter
-- `ProtectionOverlaySender` (respawn/grace period rendering)
+- `ProtectionOverlaySender` (grace period rendering)
 
 **Frameworks NOT used:**
-- F05 Death Lifecycle — death handled inline in `onEntityDeath`
 - F08 Team — all-vs-all, no teams
 
 **Known issues / debt:**
 - `announcedGraceThresholds` set — manual reimplementation of F19 CountdownService.
-- Inline death handling in `onEntityDeath`. Migrate to F05.
 
-**Migration target:** F05 Death Lifecycle (Phase B), F19 CountdownService (Phase C)
+**Migration target:** F19 CountdownService (Phase C)
 
 ---
 

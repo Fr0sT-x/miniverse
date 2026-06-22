@@ -54,7 +54,6 @@ public final class BountyHuntDefinition implements MinigameDefinition {
     private void fillSettingsMap(NbtCompound settingsNbt, java.util.function.BiConsumer<String, String> put) {
         BountyHuntSettings settings = BountyHuntSettings.fromNbt(settingsNbt);
         put.accept("bountyhunt.gracePeriodSeconds", Integer.toString(settings.gracePeriodSeconds()));
-        put.accept("bountyhunt.respawnInvincibilitySeconds", Integer.toString(settings.respawnInvincibilitySeconds()));
         put.accept("bountyhunt.scoreToWin", Integer.toString(settings.scoreToWin()));
         put.accept("bountyhunt.targetSwapIntervalSeconds", Integer.toString(settings.targetSwapIntervalSeconds()));
         put.accept("bountyhunt.trackerEnabled", Boolean.toString(settings.trackerEnabled()));

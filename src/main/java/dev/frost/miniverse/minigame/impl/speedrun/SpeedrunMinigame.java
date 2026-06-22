@@ -43,7 +43,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
+import dev.frost.miniverse.minigame.impl.speedrun.death.SpeedrunDeathLifecycleConfig;
 
 /**
  * MCSR-style speedrun session implementation.
@@ -51,7 +54,7 @@ import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
  * This is a lightweight server-side MVP: runners, a live timer,
  * and Ender Dragon defeat as the completion condition.
  */
-public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, DynamicParticipantMinigame, PauseAwareMinigame {
+public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, DynamicParticipantMinigame, PauseAwareMinigame, DeathAwareMinigame {
     private static final String NAME = "Speedrun";
     private static final int TICKS_PER_SECOND = 20;
     private ScoreboardTemplate scoreboard;
@@ -68,6 +71,12 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     private int tickCounter;
     @Nullable
     private MinecraftServer server;
+    private DeathLifecycleManager deathLifecycleManager;
+
+    @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
+    }
 
     public SpeedrunMinigame() {
         this.vanillaTeams.setFriendlyFireAllowed(true);
@@ -86,17 +95,24 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
         this.setState(GameState.WAITING_FOR_PLAYERS);
         this.runnerUuid = null;
         this.elapsedTicks = 0;
         this.tickCounter = 0;
         this.server = null;
         this.paused = false;
+
+        this.deathLifecycleManager = new DeathLifecycleManager(
+            new SpeedrunDeathLifecycleConfig(),
+            dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance()
+        );
     }
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults(true, false);
+        return GlobalMatchRules.defaults();
     }
 
     @Override
@@ -136,6 +152,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     @Override
     protected void onMatchEnd() {
+        this.deathLifecycleManager.handleMatchEnding(this::getPlayerByUuid);
         this.setState(GameState.ENDING);
         this.setRuntimeState(GameState.ENDING);
 
@@ -153,11 +170,6 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         if (this.context != null) {
             this.context.roster().clear();
         }
-    }
-
-    @Override
-    public void onPlayerDeath(ServerPlayerEntity player) {
-        // Speedrun finishes only when a team defeats the Ender Dragon.
     }
 
     public void handleDragonDeath() {
@@ -192,10 +204,6 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             this.handleDragonDeath();
             return;
         }
-
-        if (entity instanceof ServerPlayerEntity player && this.isParticipant(player)) {
-            this.onPlayerDeath(player);
-        }
     }
 
     @Override
@@ -210,6 +218,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         if (this.isParticipant(player)) {
             this.handlePlayerLeave(player);
         }
+        this.deathLifecycleManager.handleDisconnect(player);
     }
 
     public void setRunner(ServerPlayerEntity player) {

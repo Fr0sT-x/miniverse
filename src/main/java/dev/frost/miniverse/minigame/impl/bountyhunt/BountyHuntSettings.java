@@ -7,7 +7,6 @@ import java.util.Properties;
 
 public record BountyHuntSettings(
     int gracePeriodSeconds,
-    int respawnInvincibilitySeconds,
     int scoreToWin,
     int targetSwapIntervalSeconds,
     boolean trackerEnabled,
@@ -16,14 +15,14 @@ public record BountyHuntSettings(
     String trackerItemId,
     int disconnectGraceSeconds,
     boolean highValueTargetEnabled,
-    boolean revengeAssignmentEnabled
+    boolean revengeAssignmentEnabled,
+    int respawnDelaySeconds
 ) {
     public static BountyHuntSettings defaults() {
         int globalGrace = Integer.getInteger("miniverse.lifecycle.disconnectGraceSeconds", 300);
         int modeGrace = Integer.getInteger("miniverse.bountyhunt.disconnectGraceSeconds", globalGrace);
         return new BountyHuntSettings(
             Integer.getInteger("miniverse.bountyhunt.gracePeriodSeconds", 300),
-            Integer.getInteger("miniverse.bountyhunt.respawnInvincibilitySeconds", 120),
             Integer.getInteger("miniverse.bountyhunt.scoreToWin", 5),
             Integer.getInteger("miniverse.bountyhunt.targetSwapIntervalSeconds", 0),
             Boolean.parseBoolean(System.getProperty("miniverse.bountyhunt.trackerEnabled", "true")),
@@ -32,7 +31,8 @@ public record BountyHuntSettings(
             System.getProperty("miniverse.bountyhunt.trackerItemId", "minecraft:compass"),
             modeGrace,
             Boolean.parseBoolean(System.getProperty("miniverse.bountyhunt.highValueTargetEnabled", "false")),
-            Boolean.parseBoolean(System.getProperty("miniverse.bountyhunt.revengeAssignmentEnabled", "false"))
+            Boolean.parseBoolean(System.getProperty("miniverse.bountyhunt.revengeAssignmentEnabled", "false")),
+            Integer.getInteger("miniverse.bountyhunt.respawnDelaySeconds", 5)
         ).normalized();
     }
 
@@ -44,7 +44,6 @@ public record BountyHuntSettings(
 
         return new BountyHuntSettings(
             getIntOrDefault(settings, "gracePeriodSeconds", defaults.gracePeriodSeconds()),
-            getIntOrDefault(settings, "respawnInvincibilitySeconds", defaults.respawnInvincibilitySeconds()),
             getIntOrDefault(settings, "scoreToWin", defaults.scoreToWin()),
             getIntOrDefault(settings, "targetSwapIntervalSeconds", defaults.targetSwapIntervalSeconds()),
             getBooleanOrDefault(settings, "trackerEnabled", defaults.trackerEnabled()),
@@ -53,7 +52,8 @@ public record BountyHuntSettings(
             getStringOrDefault(settings, "trackerItemId", defaults.trackerItemId()),
             getIntOrDefault(settings, "disconnectGraceSeconds", defaults.disconnectGraceSeconds()),
             getBooleanOrDefault(settings, "highValueTargetEnabled", defaults.highValueTargetEnabled()),
-            getBooleanOrDefault(settings, "revengeAssignmentEnabled", defaults.revengeAssignmentEnabled())
+            getBooleanOrDefault(settings, "revengeAssignmentEnabled", defaults.revengeAssignmentEnabled()),
+            getIntOrDefault(settings, "respawnDelaySeconds", defaults.respawnDelaySeconds())
         ).normalized();
     }
 
@@ -65,7 +65,6 @@ public record BountyHuntSettings(
 
         return new BountyHuntSettings(
             parseInt(properties.getProperty("bountyhunt.gracePeriodSeconds"), defaults.gracePeriodSeconds()),
-            parseInt(properties.getProperty("bountyhunt.respawnInvincibilitySeconds"), defaults.respawnInvincibilitySeconds()),
             parseInt(properties.getProperty("bountyhunt.scoreToWin"), defaults.scoreToWin()),
             parseInt(properties.getProperty("bountyhunt.targetSwapIntervalSeconds"), defaults.targetSwapIntervalSeconds()),
             parseBoolean(properties.getProperty("bountyhunt.trackerEnabled"), defaults.trackerEnabled()),
@@ -74,52 +73,49 @@ public record BountyHuntSettings(
             properties.getProperty("bountyhunt.trackerItemId", defaults.trackerItemId()),
             parseInt(properties.getProperty("bountyhunt.disconnectGraceSeconds"), defaults.disconnectGraceSeconds()),
             parseBoolean(properties.getProperty("bountyhunt.highValueTargetEnabled"), defaults.highValueTargetEnabled()),
-            parseBoolean(properties.getProperty("bountyhunt.revengeAssignmentEnabled"), defaults.revengeAssignmentEnabled())
+            parseBoolean(properties.getProperty("bountyhunt.revengeAssignmentEnabled"), defaults.revengeAssignmentEnabled()),
+            parseInt(properties.getProperty("bountyhunt.respawnDelaySeconds"), defaults.respawnDelaySeconds())
         ).normalized();
     }
 
     public BountyHuntSettings withGracePeriodSeconds(int gracePeriodSeconds) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
-    }
-
-    public BountyHuntSettings withRespawnInvincibilitySeconds(int respawnInvincibilitySeconds) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withScoreToWin(int scoreToWin) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withTargetSwapIntervalSeconds(int targetSwapIntervalSeconds) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withTrackerEnabled(boolean trackerEnabled) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withNetherTrackingEnabled(boolean netherTrackingEnabled) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withCompassCooldownSeconds(int compassCooldownSeconds) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withTrackerItemId(String trackerItemId) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withDisconnectGraceSeconds(int disconnectGraceSeconds) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withHighValueTargetEnabled(boolean highValueTargetEnabled) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     public BountyHuntSettings withRevengeAssignmentEnabled(boolean revengeAssignmentEnabled) {
-        return new BountyHuntSettings(gracePeriodSeconds, respawnInvincibilitySeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled).normalized();
+        return new BountyHuntSettings(gracePeriodSeconds, scoreToWin, targetSwapIntervalSeconds, trackerEnabled, netherTrackingEnabled, compassCooldownSeconds, trackerItemId, disconnectGraceSeconds, highValueTargetEnabled, revengeAssignmentEnabled, respawnDelaySeconds).normalized();
     }
 
     private BountyHuntSettings normalized() {
@@ -128,7 +124,6 @@ public record BountyHuntSettings(
             : this.trackerItemId.trim().toLowerCase();
         return new BountyHuntSettings(
             Math.clamp(this.gracePeriodSeconds, 0, 3600),
-            Math.clamp(this.respawnInvincibilitySeconds, 0, 3600),
             Math.clamp(this.scoreToWin, 1, 99),
             Math.clamp(this.targetSwapIntervalSeconds, 0, 3600),
             this.trackerEnabled,
@@ -137,7 +132,8 @@ public record BountyHuntSettings(
             itemId,
             Math.clamp(this.disconnectGraceSeconds, 0, 3600),
             this.highValueTargetEnabled,
-            this.revengeAssignmentEnabled
+            this.revengeAssignmentEnabled,
+            this.respawnDelaySeconds
         );
     }
 

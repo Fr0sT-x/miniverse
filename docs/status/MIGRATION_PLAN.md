@@ -201,10 +201,10 @@ The migration steps for each gamemode follow a fixed pattern:
 
 ### B02 — Migrate Speedrun to F05
 
-**Status:** `[ ] Not started`
+**Status:** `[x] Complete — 2026-06-21`
 **Preconditions:** B01 complete
-**Files changed:** `SpeedrunMinigame.java` + new `SpeedrunDeathPolicy.java`,
-`SpeedrunSpectatorPolicy.java`, `SpeedrunRespawnStrategy.java` (or use built-in policies)
+**Files changed:** `SpeedrunMinigame.java` + new `SpeedrunDeathLifecycleConfig.java`,
+`SpeedrunDeathCallbacks.java`
 
 **What:** Speedrun's only death scenario: runner entity death → spectate forever.
 This is the simplest possible F05 migration.

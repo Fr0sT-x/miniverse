@@ -223,6 +223,14 @@ public final class MinigameEventRouter {
             return;
         }
         Minigame active = this.activeMinigame();
+        
+        if (active instanceof dev.frost.miniverse.minigame.core.death.DeathAwareMinigame deathAware) {
+            dev.frost.miniverse.minigame.core.death.DeathLifecycleManager manager = deathAware.getDeathLifecycleManager();
+            if (manager != null) {
+                manager.handleVanillaRespawn(newPlayer);
+            }
+        }
+        
         if (active instanceof PlayerRespawnAware respawnAware) {
             respawnAware.onPlayerRespawn(oldPlayer, newPlayer, alive);
         }

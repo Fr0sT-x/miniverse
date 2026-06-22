@@ -74,11 +74,9 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     @Override
     public final void startGame() {
         GlobalMatchRules base = this.configureGameRules();
-        if (base == null) base = GlobalMatchRules.defaults(false, false);
+        if (base == null) base = GlobalMatchRules.defaults();
 
         this.gameRules = new GlobalMatchRules(
-            base.keepInventory(),
-            base.doImmediateRespawn(),
             this.pvpEnabledOverride != null ? this.pvpEnabledOverride : base.pvpEnabled(),
             this.doDaylightCycleOverride != null ? this.doDaylightCycleOverride : base.doDaylightCycle(),
             this.doWeatherCycleOverride != null ? this.doWeatherCycleOverride : base.doWeatherCycle(),
@@ -133,11 +131,23 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     protected abstract GlobalMatchRules configureGameRules();
 
     private void resetGameRules() {
-        GlobalMatchRules.defaults(false, false).apply(this.context.nullableServer());
+        GlobalMatchRules.defaults().apply(this.context.nullableServer());
     }
 
     protected boolean isTeamBased() {
         return true;
+    }
+
+    private final java.util.Map<net.minecraft.world.GameRules.Key<net.minecraft.world.GameRules.BooleanRule>, Boolean> queuedBooleanRules = new java.util.HashMap<>();
+
+    protected void applyVanillaGameRule(net.minecraft.world.GameRules.Key<net.minecraft.world.GameRules.BooleanRule> key, boolean value) {
+        if (this.context != null && this.context.nullableServer() != null) {
+            for (net.minecraft.server.world.ServerWorld world : this.context.nullableServer().getWorlds()) {
+                world.getGameRules().get(key).set(value, this.context.nullableServer());
+            }
+        } else {
+            this.queuedBooleanRules.put(key, value);
+        }
     }
 
     protected boolean isScoreboardEnabled() {
@@ -173,6 +183,15 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
                     entry.setValue(ticks);
                 }
             }
+        }
+        
+        if (!this.queuedBooleanRules.isEmpty()) {
+            for (java.util.Map.Entry<net.minecraft.world.GameRules.Key<net.minecraft.world.GameRules.BooleanRule>, Boolean> entry : this.queuedBooleanRules.entrySet()) {
+                for (net.minecraft.server.world.ServerWorld world : server.getWorlds()) {
+                    world.getGameRules().get(entry.getKey()).set(entry.getValue(), server);
+                }
+            }
+            this.queuedBooleanRules.clear();
         }
         
         if (this.context != null && this.getState() == GameState.PAUSED) {

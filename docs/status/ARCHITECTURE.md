@@ -264,7 +264,7 @@ Do not call `SpectatorService` directly. Configure `DeathSpectatorPolicy` in
 
 ### F05 Death Lifecycle Framework
 
-**Status:** Mostly Implemented · **Adoption:** 2/11 (Duels, MurderMystery)
+**Status:** Mostly Implemented · **Adoption:** 3/11 (Duels, MurderMystery, Speedrun)
 
 **Purpose:** Centralises the entire player death flow — fatal damage interception →
 inventory/effects cleanup → spectator transition → post-death timer or condition →

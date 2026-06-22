@@ -20,10 +20,10 @@ import java.util.List;
 public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
     
-    private IntFieldWidget graceField;
-    private IntFieldWidget invincibilityField;
-    private IntFieldWidget scoreToWinField;
-    private IntFieldWidget targetSwapField;
+    private TextFieldWidget pointsToWinField;
+    private IntFieldWidget gracePeriodField;
+    private IntFieldWidget targetSwapIntervalField;
+    private IntFieldWidget respawnDelayField;
     private IntFieldWidget compassCooldownField;
     private TextFieldWidget trackerItemField;
     private ButtonWidget trackerToggle;
@@ -31,10 +31,10 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
     private ButtonWidget hvtToggle;
     private ButtonWidget revengeToggle;
 
-    private int graceSeconds = 300;
-    private int invincibilitySeconds = 120;
-    private int scoreToWin = 5;
-    private int targetSwapSeconds = 0;
+    private int scoreToWin = 1000;
+    private int gracePeriodSeconds = 120;
+    private int targetSwapIntervalSeconds = 600;
+    private int respawnDelaySeconds = 5;
     private int compassCooldownSeconds = 2;
     private boolean trackerEnabled = true;
     private boolean netherTrackingEnabled = true;
@@ -57,20 +57,27 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
         if (this.moduleManager.isActive("rules")) {
             int cx1 = this.layout.mainPanel().x() + 150;
             int cx2 = this.layout.mainPanel().x() + 500;
+            int sx1 = this.layout.mainPanel().x() + 250;
+            int sx2 = this.layout.mainPanel().x() + 600;
 
             // Row 1
-            this.scoreToWinField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 124, this.scoreToWin, "Score to win", val -> "Score needed to win the match.");
-            this.targetSwapField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 124, this.targetSwapSeconds, "Target swap seconds",
-                "Targets will not rotate.",
-                val -> "Targets will rotate every " + val + " seconds.");
-
+            this.pointsToWinField = this.addField(screen, cx1, this.layout.mainPanel().y() + 124, String.valueOf(this.scoreToWin), "Points to win", () -> "Points needed to win.");
+            
             // Row 2
-            this.graceField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 156, this.graceSeconds, "Grace seconds",
-                "No grace period, PvP is enabled immediately.",
-                val -> "Players have " + val + " seconds of peace before PvP is enabled.");
-            this.invincibilityField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 156, this.invincibilitySeconds, "Invincibility seconds",
-                "No respawn invincibility.",
-                val -> "Players are invincible for " + val + " seconds after respawning.");
+            this.gracePeriodField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 156, this.gracePeriodSeconds, "Grace seconds",
+                "No grace period.",
+                val -> "Players have " + val + " seconds of peace.");
+            this.addStepper(screen, this.gracePeriodField, sx1, this.layout.mainPanel().y() + 156, 0, 600, 10);
+            
+            this.targetSwapIntervalField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 156, this.targetSwapIntervalSeconds, "Swap seconds",
+                "Targets will not rotate.",
+                val -> "Targets rotate every " + val + " seconds.");
+            this.addStepper(screen, this.targetSwapIntervalField, sx2, this.layout.mainPanel().y() + 156, 10, 3600, 30);
+
+            this.respawnDelayField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 188, this.respawnDelaySeconds, "Respawn delay",
+                "Instant respawn.",
+                val -> "Dead players spectate for " + val + " seconds.");
+            this.addStepper(screen, this.respawnDelayField, sx1, this.layout.mainPanel().y() + 188, 0, 300, 1);
 
             // Row 3
             this.trackerToggle = this.addToggleButton(screen, "Tracker", () -> this.trackerEnabled, cx1, this.layout.mainPanel().y() + 208, 170,
@@ -99,7 +106,6 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
         if (this.moduleManager.isActive("players")) {
-            // Action buttons are not auto-handled yet, so let's just let players use drag/drop or we could add them to init
         }
     }
 
@@ -119,10 +125,10 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
 
         if (this.moduleManager.isActive("rules")) {
             context.drawText(textRenderer, Text.literal("Match Settings"), lx1, by + 108, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("Score To Win"), lx1, by + 130, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Target Swap"), lx2, by + 130, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Points To Win"), lx1, by + 130, UiTheme.TEXT_MUTED, false);
             context.drawText(textRenderer, Text.literal("Grace Period"), lx1, by + 162, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Invincibility"), lx2, by + 162, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Target Shuffle"), lx2, by + 162, UiTheme.TEXT_MUTED, false);
+            context.drawText(textRenderer, Text.literal("Respawn Delay"), lx1, by + 194, UiTheme.TEXT_MUTED, false);
 
             context.drawText(textRenderer, Text.literal("Tracking Options"), lx1, by + 192, UiTheme.ACCENT_BLUE, false);
             context.drawText(textRenderer, Text.literal("Tracker Toggle"), lx1, by + 214, UiTheme.TEXT_MUTED, false);
@@ -144,10 +150,10 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
 
     protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
-            this.graceSeconds = readClamped(this.graceField, this.graceSeconds, 0, 3600);
-            this.invincibilitySeconds = readClamped(this.invincibilityField, this.invincibilitySeconds, 0, 3600);
-            this.scoreToWin = readClamped(this.scoreToWinField, this.scoreToWin, 1, 99);
-            this.targetSwapSeconds = readClamped(this.targetSwapField, this.targetSwapSeconds, 0, 3600);
+            try { this.scoreToWin = Integer.parseInt(this.pointsToWinField.getText()); } catch (Exception ignored) {}
+            this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
+            this.targetSwapIntervalSeconds = readClamped(this.targetSwapIntervalField, this.targetSwapIntervalSeconds, 10, 3600);
+            this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 0, 300);
             this.compassCooldownSeconds = readClamped(this.compassCooldownField, this.compassCooldownSeconds, 0, 300);
             if (this.trackerItemField != null) {
                 this.trackerItemId = this.trackerItemField.getText().trim();
@@ -181,10 +187,10 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
 
     @Override
     protected void buildSessionSettings(SessionPayloadBuilder builder) {
-        builder.settings().putInt("gracePeriodSeconds", this.graceSeconds);
-        builder.settings().putInt("respawnInvincibilitySeconds", this.invincibilitySeconds);
         builder.settings().putInt("scoreToWin", this.scoreToWin);
-        builder.settings().putInt("targetSwapIntervalSeconds", this.targetSwapSeconds);
+        builder.settings().putInt("gracePeriodSeconds", this.gracePeriodSeconds);
+        builder.settings().putInt("targetSwapIntervalSeconds", this.targetSwapIntervalSeconds);
+        builder.settings().putInt("respawnDelaySeconds", this.respawnDelaySeconds);
         builder.settings().putInt("compassCooldownSeconds", this.compassCooldownSeconds);
         builder.settings().putBoolean("trackerEnabled", this.trackerEnabled);
         builder.settings().putBoolean("netherTracking", this.netherTrackingEnabled);

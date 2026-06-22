@@ -77,7 +77,7 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, false, true, true, true, true, true, false);
+        return GlobalMatchRules.defaults();
     }
 
     @Override
@@ -91,6 +91,8 @@ public class BlockShuffleMinigame extends AbstractMinigame {
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.roundState = RoundState.INTERMISSION;
         this.server = null;

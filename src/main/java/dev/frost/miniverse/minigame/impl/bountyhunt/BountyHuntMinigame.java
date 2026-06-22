@@ -74,13 +74,17 @@ import dev.frost.miniverse.minigame.core.tracker.PlayerTracker;
 import static dev.frost.miniverse.minigame.core.util.MinigameSerializationUtil.*;
 import java.util.concurrent.ThreadLocalRandom;
 
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.impl.bountyhunt.death.BountyHuntDeathLifecycleConfig;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
-public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.miniverse.minigame.core.event.RosterAware {
+import dev.frost.miniverse.minigame.core.death.ImmediateRespawnNotifier;
+
+public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.miniverse.minigame.core.event.RosterAware, DeathAwareMinigame, ImmediateRespawnNotifier {
     private static final String NAME = "Bounty Hunt";
     private static final String TRACKER_TYPE = ProtectedItemTypes.TRACKER_COMPASS;
-    private static final Identifier RESPAWN_PROTECTION_OVERLAY = ProtectionOverlayPresets.RESPAWN_PROTECTION.overlayId();
     private static final Identifier GRACE_PROTECTION_OVERLAY = ProtectionOverlayPresets.GRACE_PERIOD.overlayId();
     private static final int BOUNTY_PROTECTION_COLOR = 0xE6FFFFFF;
     private static final ProtectionOverlaySettings BOUNTY_PROTECTION_OVERLAY = ProtectionOverlaySettings.DEFAULT
@@ -106,7 +110,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
     private final Map<UUID, UUID> targetAssignments = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> scores = new ConcurrentHashMap<>();
-    private final Map<UUID, Long> invincibleUntilTicks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> compassCooldownUntilTicks = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> killStreaks = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> targetBountyValues = new ConcurrentHashMap<>();
@@ -116,6 +119,8 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     private GameState state;
     private BountyHuntSettings settings;
     private MinecraftServer server;
+    // Death Lifecycle Framework — see ARCHITECTURE.md F05
+    private DeathLifecycleManager deathLifecycleManager;
     private long gameTicks;
     private int tickCounter;
     private int graceTicksRemaining;
@@ -127,8 +132,13 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     }
 
     @Override
+    public DeathLifecycleManager getDeathLifecycleManager() {
+        return this.deathLifecycleManager;
+    }
+
+    @Override
     protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults(false, false);
+        return GlobalMatchRules.defaults();
     }
 
     // Context is attached in AbstractMinigame
@@ -140,6 +150,10 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         }
     }
 
+    public dev.frost.miniverse.minigame.core.MinigameContext getContext() {
+        return this.context;
+    }
+
     public void setVanillaTeammateCollisionAllowed(boolean allowed) {
         if (this.getVanillaTeams() != null) {
             this.getVanillaTeams().setTeammateCollisionAllowed(allowed);
@@ -149,10 +163,11 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.setState(GameState.WAITING_FOR_PLAYERS);
         this.targetAssignments.clear();
         this.scores.clear();
-        this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
         this.killStreaks.clear();
         this.targetBountyValues.clear();
@@ -173,7 +188,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.registerProtectedItems();
         this.targetAssignments.clear();
         this.scores.clear();
-        this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
         this.killStreaks.clear();
         this.targetBountyValues.clear();
@@ -185,6 +199,8 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.tickCounter = 0;
         this.graceTicksRemaining = this.settings.gracePeriodSeconds() * 20;
         this.targetSwapTicksRemaining = this.settings.targetSwapIntervalSeconds() * 20;
+
+        this.deathLifecycleManager = new DeathLifecycleManager(new dev.frost.miniverse.minigame.impl.bountyhunt.death.BountyHuntDeathLifecycleConfig(this), dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getSpectatorService());
 
         this.assignInitialTargets();
         this.grantTrackersToParticipants();
@@ -208,16 +224,36 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.setState(GameState.ENDING);
         this.targetAssignments.clear();
         this.scores.clear();
-        this.clearInvincibilityStates();
-        this.clearGraceProtectionStates();
+        this.clearVanillaTeams();
         this.compassCooldownUntilTicks.clear();
         this.killStreaks.clear();
         this.targetBountyValues.clear();
         this.playerTracker.clear();
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(this::getPlayerByUuid);
+        }
         this.clearScoreboard();
     }
 
-    public void handlePlayerDeath(ServerPlayerEntity player, @Nullable DamageSource source) {
+    @Override
+    public void onEntityDeath(LivingEntity entity, DamageSource source) {
+        // Handled by DeathLifecycleManager via allowDamage()
+    }
+
+    public Text getDeathTitle(ServerPlayerEntity victim, net.minecraft.entity.damage.DamageSource source) {
+        String killerName = source != null && source.getAttacker() != null ? source.getAttacker().getName().getString() : "Unknown";
+        return Text.literal("You were killed by " + killerName + "!").formatted(net.minecraft.util.Formatting.RED);
+    }
+
+    @Override
+    public Text getDeathSubtitle(ServerPlayerEntity victim, net.minecraft.entity.damage.DamageSource source, int ticksRemaining) {
+        int seconds = (int) Math.ceil(ticksRemaining / 20.0);
+        return Text.literal("Respawning in ").formatted(net.minecraft.util.Formatting.GRAY)
+            .append(Text.literal(String.valueOf(seconds)).formatted(net.minecraft.util.Formatting.GREEN))
+            .append(Text.literal(" seconds...").formatted(net.minecraft.util.Formatting.GRAY));
+    }
+
+    public void processPlayerDeath(ServerPlayerEntity player, @Nullable DamageSource source) {
         if (!this.isParticipant(player)) {
             return;
         }
@@ -301,7 +337,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             this.playerTracker.updatePositions(this.getParticipants(), this.settings.netherTrackingEnabled());
             this.tickGracePeriod();
             this.tickTargetSwap();
-            this.tickInvincibilityWindows();
             if (this.state == GameState.RUNNING && this.settings.trackerEnabled()) {
                 this.updateTrackers();
             }
@@ -334,21 +369,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     }
 
     @Override
-    public void onEntityDeath(LivingEntity entity, DamageSource source) {
-        if (entity instanceof ServerPlayerEntity player && this.isParticipant(player)) {
-            this.handlePlayerDeath(player, source);
-        }
-    }
-
-    @Override
-    public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
-        if (this.isParticipant(oldPlayer)) {
-            this.replaceParticipant(oldPlayer, newPlayer);
-            this.handlePlayerRespawn(oldPlayer, newPlayer);
-        }
-    }
-
-    @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
         if (this.isParticipant(player)) {
             this.removeParticipant(player);
@@ -358,7 +378,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
     @Override
     protected void onPlayerJoinGame(ServerPlayerEntity player, MinecraftServer server) {
-        this.sendInvincibilityStatesTo(player);
         this.sendGraceProtectionStatesTo(player);
     }
 
@@ -372,8 +391,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             this.registerProtectedItems();
             this.grantTracker(player);
             this.assignInitialTargets();
-            this.syncTrackerTarget(player, true);
-            this.sendInvincibilityStatesTo(player);
+            this.sendGraceProtectionStatesTo(player);
             this.sendGraceProtectionStatesTo(player);
             player.sendMessage(Text.literal("Joined Bounty Hunt in progress.").formatted(Formatting.GREEN), false);
         }
@@ -381,19 +399,21 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.rebuildScoreboard();
     }
 
-    public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
+    public void processPlayerRespawn(ServerPlayerEntity newPlayer) {
         this.grantTracker(newPlayer);
         this.syncTrackerTarget(newPlayer, false);
-        this.applyRespawnInvincibility(newPlayer);
         this.syncVanillaTeams();
     }
 
     public void handlePlayerLeave(ServerPlayerEntity player) {
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleDisconnect(player);
+        }
         UUID playerUuid = player.getUuid();
-        this.invincibleUntilTicks.remove(playerUuid);
+        this.targetAssignments.remove(playerUuid);
         this.compassCooldownUntilTicks.remove(playerUuid);
         this.playerTracker.remove(playerUuid);
-        ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, RESPAWN_PROTECTION_OVERLAY);
+        this.scores.remove(playerUuid);
         ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, LEADER_OVERLAY);
         if (this.state == GameState.STARTING && this.graceTicksRemaining > 0) {
             ProtectionOverlaySender.broadcastClearOverlay(this.server, playerUuid, GRACE_PROTECTION_OVERLAY);
@@ -438,13 +458,10 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             return false;
         }
 
-        if (this.isInvincible(player)) {
-            this.notifyInvincibleHit(source);
-            return true;
-        }
-
-        if (this.state == GameState.STARTING && source.getAttacker() instanceof ServerPlayerEntity attacker) {
-            return this.isParticipant(attacker);
+        if (this.state == GameState.STARTING) {
+            if (source.getAttacker() instanceof ServerPlayerEntity attacker) {
+                return this.isParticipant(attacker);
+            }
         }
 
         return false;
@@ -524,7 +541,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         }
 
         if (this.settings.compassCooldownSeconds() > 0) {
-            this.compassCooldownUntilTicks.put(player.getUuid(), this.gameTicks + (long) this.settings.compassCooldownSeconds() * 20L);
+            this.compassCooldownUntilTicks.put(player.getUuid(), this.gameTicks + this.settings.compassCooldownSeconds() * 20L);
         }
         this.syncTrackerTarget(player, true);
     }
@@ -611,7 +628,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
         List<ServerPlayerEntity> candidates = this.getParticipants().stream()
             .filter(entry -> !entry.getUuid().equals(hunter.getUuid()))
-            .filter(entry -> !this.isInvincible(entry))
             .toList();
 
         if (candidates.isEmpty()) {
@@ -642,9 +658,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         ServerPlayerEntity target = bestCandidates.get(ThreadLocalRandom.current().nextInt(bestCandidates.size()));
         this.targetAssignments.put(hunter.getUuid(), target.getUuid());
         hunter.sendMessage(Text.literal("Your target is: " + target.getName().getString()).formatted(Formatting.AQUA), true);
-        if (this.isInvincible(target)) {
-            hunter.sendMessage(Text.literal("Your new target is currently invincible, hang tight.").formatted(Formatting.YELLOW), true);
-        }
+        this.syncTrackerTarget(hunter, true);
         hunter.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0F, 1.0F);
     }
 
@@ -744,52 +758,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             .build());
     }
 
-
-
-    private void applyRespawnInvincibility(ServerPlayerEntity player) {
-        if (this.settings.respawnInvincibilitySeconds() <= 0) {
-            this.invincibleUntilTicks.remove(player.getUuid());
-            return;
-        }
-
-        int durationTicks = this.settings.respawnInvincibilitySeconds() * 20;
-        this.invincibleUntilTicks.put(player.getUuid(), this.gameTicks + durationTicks);
-        ProtectionOverlaySender.broadcast(
-            this.server,
-            player.getUuid(),
-            RESPAWN_PROTECTION_OVERLAY,
-            durationTicks,
-            true,
-            BOUNTY_PROTECTION_COLOR,
-            BOUNTY_PROTECTION_OVERLAY
-        );
-        player.sendMessage(Text.literal("You are invincible for " + this.formatDuration(this.settings.respawnInvincibilitySeconds()) + " after respawn.")
-            .formatted(Formatting.YELLOW), true);
-    }
-
-    private void tickInvincibilityWindows() {
-        for (Map.Entry<UUID, Long> entry : new ArrayList<>(this.invincibleUntilTicks.entrySet())) {
-            long remainingTicks = entry.getValue() - this.gameTicks;
-            if (remainingTicks > 0) {
-                int secondsRemaining = (int) Math.max(1L, (remainingTicks + 19L) / 20L);
-                ServerPlayerEntity player = this.getPlayerByUuid(entry.getKey());
-                if (player != null && !player.isDisconnected()) {
-                    player.sendMessage(Text.literal("Invincible: " + this.formatDuration(secondsRemaining))
-                        .formatted(Formatting.GOLD), true);
-                }
-                continue;
-            }
-
-            this.invincibleUntilTicks.remove(entry.getKey());
-            ProtectionOverlaySender.broadcastClearOverlay(this.server, entry.getKey(), RESPAWN_PROTECTION_OVERLAY);
-            ServerPlayerEntity player = this.getPlayerByUuid(entry.getKey());
-            if (player != null && !player.isDisconnected()) {
-                player.sendMessage(Text.literal("Invincibility ended. You are vulnerable again.")
-                    .formatted(Formatting.RED), true);
-            }
-        }
-    }
-
     private void maybeAnnounceGraceCountdown(int secondsLeft) {
         if (secondsLeft <= 0) {
             return;
@@ -817,10 +785,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         int minutes = Math.max(0, totalSeconds) / 60;
         int seconds = Math.max(0, totalSeconds) % 60;
         return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
-    }
-
-    private boolean isInvincible(ServerPlayerEntity player) {
-        return this.invincibleUntilTicks.getOrDefault(player.getUuid(), 0L) > this.gameTicks;
     }
 
     private List<ServerPlayerEntity> getParticipants() {
@@ -947,35 +911,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         GameMessenger.broadcast(this.getParticipants(), message);
     }
 
-    private void notifyInvincibleHit(DamageSource source) {
-        if (!(source.getAttacker() instanceof ServerPlayerEntity attacker)) {
-            return;
-        }
-        if (!this.isParticipant(attacker)) {
-            return;
-        }
-        attacker.sendMessage(Text.literal("This target is invincible").formatted(Formatting.YELLOW), false);
-        attacker.playSound(SoundEvents.ITEM_SHIELD_BLOCK, 1.0F, 1.0F);
-    }
-
-    private void sendInvincibilityStatesTo(ServerPlayerEntity player) {
-        for (Map.Entry<UUID, Long> entry : this.invincibleUntilTicks.entrySet()) {
-            long remainingTicks = entry.getValue() - this.gameTicks;
-            if (remainingTicks <= 0) {
-                continue;
-            }
-            ProtectionOverlaySender.send(
-                player,
-                entry.getKey(),
-                RESPAWN_PROTECTION_OVERLAY,
-                (int) remainingTicks,
-                true,
-                BOUNTY_PROTECTION_COLOR,
-                BOUNTY_PROTECTION_OVERLAY
-            );
-        }
-    }
-
     private void sendGraceProtectionStatesTo(ServerPlayerEntity recipient) {
         if (this.state != GameState.STARTING || this.graceTicksRemaining <= 0) {
             return;
@@ -1027,18 +962,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         broadcastGraceProtectionState(0, false);
     }
 
-    private void clearInvincibilityStates() {
-        for (UUID playerId : new ArrayList<>(this.invincibleUntilTicks.keySet())) {
-            ProtectionOverlaySender.broadcastClearOverlay(this.server, playerId, RESPAWN_PROTECTION_OVERLAY);
-        }
-        this.invincibleUntilTicks.clear();
-        if (this.server != null) {
-            for (ServerPlayerEntity p : this.getParticipants()) {
-                ProtectionOverlaySender.broadcastClearOverlay(this.server, p.getUuid(), LEADER_OVERLAY);
-            }
-        }
-    }
-
     private void endGameWithWinner(ServerPlayerEntity winner) {
         this.state = GameState.ENDING;
         this.setRuntimeState(GameState.ENDING);
@@ -1073,7 +996,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         root.add("scores", writeUuidIntMap(this.scores));
         root.add("killStreaks", writeUuidIntMap(this.killStreaks));
         root.add("targetBountyValues", writeUuidIntMap(this.targetBountyValues));
-        root.add("invincibleUntilTicks", writeUuidLongMap(this.invincibleUntilTicks));
         root.add("compassCooldownUntilTicks", writeUuidLongMap(this.compassCooldownUntilTicks));
         root.add("trackingData", this.playerTracker.writeTrackingData());
         return root;
@@ -1088,7 +1010,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.scores.clear();
         this.killStreaks.clear();
         this.targetBountyValues.clear();
-        this.invincibleUntilTicks.clear();
         this.compassCooldownUntilTicks.clear();
         this.playerTracker.clear();
         this.announcedGraceThresholds.clear();
@@ -1111,7 +1032,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         this.scores.putAll(readUuidIntMap(root, "scores"));
         this.killStreaks.putAll(readUuidIntMap(root, "killStreaks"));
         this.targetBountyValues.putAll(readUuidIntMap(root, "targetBountyValues"));
-        this.invincibleUntilTicks.putAll(readUuidLongMap(root, "invincibleUntilTicks"));
         this.compassCooldownUntilTicks.putAll(readUuidLongMap(root, "compassCooldownUntilTicks"));
         if (root.has("trackingData") && root.get("trackingData").isJsonArray()) {
             this.playerTracker.readTrackingData(root.getAsJsonArray("trackingData"));
@@ -1148,7 +1068,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
     private JsonObject writeSettings() {
         JsonObject settingsJson = new JsonObject();
         settingsJson.addProperty("gracePeriodSeconds", this.settings.gracePeriodSeconds());
-        settingsJson.addProperty("respawnInvincibilitySeconds", this.settings.respawnInvincibilitySeconds());
         settingsJson.addProperty("scoreToWin", this.settings.scoreToWin());
         settingsJson.addProperty("targetSwapIntervalSeconds", this.settings.targetSwapIntervalSeconds());
         settingsJson.addProperty("trackerEnabled", this.settings.trackerEnabled());
@@ -1158,6 +1077,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         settingsJson.addProperty("disconnectGraceSeconds", this.settings.disconnectGraceSeconds());
         settingsJson.addProperty("highValueTargetEnabled", this.settings.highValueTargetEnabled());
         settingsJson.addProperty("revengeAssignmentEnabled", this.settings.revengeAssignmentEnabled());
+        settingsJson.addProperty("respawnDelaySeconds", this.settings.respawnDelaySeconds());
         return settingsJson;
     }
 
@@ -1165,7 +1085,6 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         BountyHuntSettings base = fallback == null ? BountyHuntSettings.defaults() : fallback;
         return new BountyHuntSettings(
             intValue(root, "gracePeriodSeconds", base.gracePeriodSeconds()),
-            intValue(root, "respawnInvincibilitySeconds", base.respawnInvincibilitySeconds()),
             intValue(root, "scoreToWin", base.scoreToWin()),
             intValue(root, "targetSwapIntervalSeconds", base.targetSwapIntervalSeconds()),
             booleanValue(root, "trackerEnabled", base.trackerEnabled()),
@@ -1174,7 +1093,8 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             stringValue(root, "trackerItemId", base.trackerItemId()),
             intValue(root, "disconnectGraceSeconds", base.disconnectGraceSeconds()),
             booleanValue(root, "highValueTargetEnabled", base.highValueTargetEnabled()),
-            booleanValue(root, "revengeAssignmentEnabled", base.revengeAssignmentEnabled())
+            booleanValue(root, "revengeAssignmentEnabled", base.revengeAssignmentEnabled()),
+            intValue(root, "respawnDelaySeconds", base.respawnDelaySeconds())
         );
     }
 

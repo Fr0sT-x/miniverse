@@ -100,7 +100,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
     @Override
     protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, false, true, true, true, true, true, false);
+        return new GlobalMatchRules(true, true, true, true, true, false);
     }
 
     @Override
@@ -115,6 +115,8 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
 
     @Override
     public void initialize() {
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.server = null;
         this.gameTicks = 0L;

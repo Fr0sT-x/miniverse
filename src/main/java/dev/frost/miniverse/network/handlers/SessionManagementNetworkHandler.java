@@ -17,6 +17,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 public class SessionManagementNetworkHandler {
+    private static final java.util.Set<String> pendingDeletions = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public static void register() {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.REQUEST_SESSIONS_ID, (payload, context) -> handleRequest(context.server(), context.player()));
@@ -27,6 +28,7 @@ public class SessionManagementNetworkHandler {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.INSPECT_SESSION_ID, (payload, context) -> handleInspect(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RELAUNCH_SESSION_ID, (payload, context) -> handleRelaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_SESSION_ID, (payload, context) -> handleDeleteRetained(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_ALL_SESSIONS_ID, (payload, context) -> handleDeleteAll(context.server(), context.player(), payload));
     }
 
     private static void handleRequest(MinecraftServer server, ServerPlayerEntity player) {
@@ -198,8 +200,58 @@ public class SessionManagementNetworkHandler {
             player.sendMessage(Text.literal("Unknown session '" + sessionId + "'."), false);
             return;
         }
-        SessionRegistry.removeSession(sessionId);
-        player.sendMessage(Text.literal("Deleted retained session " + sessionId + "."), false);
-        SessionListSerializer.sendSessionList(server, player);
+        if (!pendingDeletions.add(sessionId)) {
+            return;
+        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> SessionRegistry.removeSession(sessionId))
+            .whenComplete((ignored, error) -> server.execute(() -> {
+                pendingDeletions.remove(sessionId);
+                if (error != null) {
+                    dev.frost.miniverse.Miniverse.LOGGER.warn("Failed to delete session {}", sessionId, error);
+                    player.sendMessage(Text.literal("Failed to delete session " + sessionId + ": " + error.getMessage()), false);
+                } else {
+                    player.sendMessage(Text.literal("Deleted retained session " + sessionId + "."), false);
+                }
+                SessionListSerializer.sendSessionList(server, player);
+            }));
+    }
+
+    private static void handleDeleteAll(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.DeleteAllSessionsPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "delete sessions")) {
+            return;
+        }
+        java.util.List<String> sessionIds = payload.sessionIds().stream()
+            .filter(id -> id != null && !id.isBlank())
+            .filter(id -> SessionManager.getInstance().getSession(id).isEmpty())
+            .filter(id -> SessionRegistry.loadSnapshot(id).isPresent())
+            .filter(pendingDeletions::add)
+            .toList();
+
+        if (sessionIds.isEmpty()) {
+            SessionListSerializer.sendSessionList(server, player);
+            return;
+        }
+
+        player.sendMessage(Text.literal("Deleting " + sessionIds.size() + " retained session(s)..."), false);
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            for (String sessionId : sessionIds) {
+                try {
+                    SessionRegistry.removeSession(sessionId);
+                } catch (Exception e) {
+                    dev.frost.miniverse.Miniverse.LOGGER.warn("Failed to delete session {} during bulk delete", sessionId, e);
+                } finally {
+                    pendingDeletions.remove(sessionId);
+                }
+            }
+        }).whenComplete((ignored, error) -> server.execute(() -> {
+            if (error != null) {
+                dev.frost.miniverse.Miniverse.LOGGER.warn("Bulk session delete encountered an error", error);
+                player.sendMessage(Text.literal("Bulk delete encountered an error. Some sessions may not have been deleted."), false);
+            } else {
+                player.sendMessage(Text.literal("Deleted " + sessionIds.size() + " session(s)."), false);
+            }
+            SessionListSerializer.sendSessionList(server, player);
+        }));
     }
 }

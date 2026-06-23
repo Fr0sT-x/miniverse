@@ -22,6 +22,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     protected final MinecraftClient client = MinecraftClient.getInstance();
     protected final WorkspaceModuleManager moduleManager = new WorkspaceModuleManager();
     protected StandardWorkspaceLayout layout;
+    protected SettingsLayoutBuilder rulesLayout;
     
     protected String sessionName;
     protected ValidationResult status = null;
@@ -200,6 +201,10 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             context.drawText(textRenderer, Text.literal("Natural Regen"), labelX, y, UiTheme.TEXT_MUTED, false);
             y += 30;
             context.drawText(textRenderer, Text.literal("Advancements"), labelX, y, UiTheme.TEXT_MUTED, false);
+        }
+
+        if (this.moduleManager.isActive("rules") && this.rulesLayout != null) {
+            this.rulesLayout.renderForeground(context, textRenderer);
         }
 
         this.renderGamemodeForeground(context, textRenderer, mouseX, mouseY, delta);
@@ -526,4 +531,65 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     protected abstract ValidationResult validateGamemodeStart();
     protected abstract void buildSessionSettings(SessionPayloadBuilder builder);
     protected abstract void buildSessionGroups(SessionPayloadBuilder builder);
+
+    public interface WidgetFactory {
+        void create(SessionScreen screen, int x, int y, int width);
+    }
+
+    protected class SettingsLayoutBuilder {
+        private int currentY;
+        private final SessionScreen screen;
+        private final java.util.List<java.util.function.BiConsumer<DrawContext, TextRenderer>> foregroundRenderers = new java.util.ArrayList<>();
+
+        public SettingsLayoutBuilder(SessionScreen screen) {
+            this.screen = screen;
+            this.currentY = layout.mainPanel().y() + 104;
+        }
+
+        public void addHeading(String text) {
+            int y = this.currentY;
+            int x = layout.mainPanel().x() + 24;
+            this.foregroundRenderers.add((context, textRenderer) -> context.drawText(textRenderer, Text.literal(text), x, y + 4, UiTheme.ACCENT_BLUE, false));
+            this.currentY += 24;
+        }
+
+        public void addRow(String leftLabel, WidgetFactory leftWidget, String rightLabel, WidgetFactory rightWidget) {
+            int y = this.currentY;
+            int lx1 = layout.mainPanel().x() + 24;
+            int cx1 = lx1 + 126;
+            int lx2 = layout.mainPanel().x() + (layout.mainPanel().width() / 2) + 24;
+            int cx2 = lx2 + 126;
+
+            if (leftLabel != null && leftWidget != null) {
+                this.foregroundRenderers.add((context, textRenderer) -> context.drawText(textRenderer, Text.literal(leftLabel), lx1, y + 6, UiTheme.TEXT_MUTED, false));
+                leftWidget.create(this.screen, cx1, y, 170);
+            }
+            if (rightLabel != null && rightWidget != null) {
+                this.foregroundRenderers.add((context, textRenderer) -> context.drawText(textRenderer, Text.literal(rightLabel), lx2, y + 6, UiTheme.TEXT_MUTED, false));
+                rightWidget.create(this.screen, cx2, y, 170);
+            }
+            this.currentY += 32;
+        }
+
+        public void addRow(String leftLabel, WidgetFactory leftWidget) {
+            this.addRow(leftLabel, leftWidget, null, null);
+        }
+
+        public void addFullRow(String label, WidgetFactory widget) {
+            int y = this.currentY;
+            int lx1 = layout.mainPanel().x() + 24;
+            int cx1 = lx1 + 126;
+            if (label != null && widget != null) {
+                this.foregroundRenderers.add((context, textRenderer) -> context.drawText(textRenderer, Text.literal(label), lx1, y + 6, UiTheme.TEXT_MUTED, false));
+                widget.create(this.screen, cx1, y, layout.mainPanel().width() - 174);
+            }
+            this.currentY += 32;
+        }
+
+        public void renderForeground(DrawContext context, TextRenderer textRenderer) {
+            for (java.util.function.BiConsumer<DrawContext, TextRenderer> renderer : this.foregroundRenderers) {
+                renderer.accept(context, textRenderer);
+            }
+        }
+    }
 }

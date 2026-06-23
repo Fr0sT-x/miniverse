@@ -55,43 +55,79 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.swapIntervalField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, this.swapIntervalSeconds, "Swap interval seconds", val -> "Players will swap positions every " + val + " seconds.");
-            this.gracePeriodField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.gracePeriodSeconds, "Grace period seconds",
-                "No grace period, swapping begins immediately.",
-                val -> "Players have " + val + " seconds of peace before swapping begins.");
-            this.borderSizeField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, this.borderSize, "Border size", val -> "Size of the world border in blocks.");
-            this.seedModeButton = this.addCycleButton(screen, () -> seedModeLabel(), () -> this.seedMode.ordinal(), this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 170, new String[]{
-                "Random world seed will be used.",
-                "Specify an exact world seed in the text field."
-            }, 2, () -> {
-                this.seedMode = this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? DeathSwapSettings.SeedMode.FIXED : DeathSwapSettings.SeedMode.RANDOM;
-                this.seedModeButton.setMessage(Text.literal(seedModeLabel()));
-                if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
-                    this.seedValueField.setEditable(false);
-                    this.seedValueField.active = false;
-                    this.seedValueField.setText("");
-                    this.seedValueField.setSuggestion("Enter world seed");
-                } else {
-                    this.seedValueField.setEditable(true);
-                    this.seedValueField.active = true;
-                    this.seedValueField.setSuggestion("");
-                    this.seedValueField.setText(this.seedValue);
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+
+            this.rulesLayout.addRow(
+                "Swap Interval", (s, x, y, w) -> {
+                    this.swapIntervalField = this.addIntField(s, x, y, this.swapIntervalSeconds, w, "Swap interval seconds", val -> "Players will swap positions every " + val + " seconds.");
                 }
-            });
-            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, this.seedMode == DeathSwapSettings.SeedMode.FIXED ? this.seedValue : "", 170, "Seed value", () -> "The exact world seed to use.");
-            if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
-                this.seedValueField.setEditable(false);
-                this.seedValueField.active = false;
-                this.seedValueField.setSuggestion("Enter world seed");
-            } else {
-                this.seedValueField.setEditable(true);
-                this.seedValueField.active = true;
-                this.seedValueField.setSuggestion("");
-            }
-            this.preserveVelocityButton = this.addToggleButton(screen, "Preserve Velocity", () -> this.preserveVelocity, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 256, 190,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players keep their momentum when teleported.", "Players lose their momentum when teleported."),
-                () -> this.preserveVelocity = !this.preserveVelocity);
-            this.respawnDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 288, this.respawnDelaySeconds, "Respawn delay", val -> "Players wait " + val + " seconds before respawning.");
+            );
+
+            this.rulesLayout.addRow(
+                "Grace Period", (s, x, y, w) -> {
+                    this.gracePeriodField = this.addIntField(s, x, y, this.gracePeriodSeconds, w, "Grace period seconds",
+                        "No grace period, swapping begins immediately.",
+                        val -> "Players have " + val + " seconds of peace before swapping begins.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Border Size", (s, x, y, w) -> {
+                    this.borderSizeField = this.addIntField(s, x, y, this.borderSize, w, "Border size", val -> "Size of the world border in blocks.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Seed Mode", (s, x, y, w) -> {
+                    this.seedModeButton = this.addCycleButton(s, () -> seedModeLabel(), () -> this.seedMode.ordinal(), x, y, w, new String[]{
+                        "Random world seed will be used.",
+                        "Specify an exact world seed in the text field."
+                    }, 2, () -> {
+                        this.seedMode = this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? DeathSwapSettings.SeedMode.FIXED : DeathSwapSettings.SeedMode.RANDOM;
+                        this.seedModeButton.setMessage(Text.literal(seedModeLabel()));
+                        if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
+                            this.seedValueField.setEditable(false);
+                            this.seedValueField.active = false;
+                            this.seedValueField.setText("");
+                            this.seedValueField.setSuggestion("Enter world seed");
+                        } else {
+                            this.seedValueField.setEditable(true);
+                            this.seedValueField.active = true;
+                            this.seedValueField.setSuggestion("");
+                            this.seedValueField.setText(this.seedValue);
+                        }
+                    });
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Seed Value", (s, x, y, w) -> {
+                    this.seedValueField = this.addField(s, x, y, this.seedMode == DeathSwapSettings.SeedMode.FIXED ? this.seedValue : "", w, "Seed value", () -> "The exact world seed to use.");
+                    if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
+                        this.seedValueField.setEditable(false);
+                        this.seedValueField.active = false;
+                        this.seedValueField.setSuggestion("Enter world seed");
+                    } else {
+                        this.seedValueField.setEditable(true);
+                        this.seedValueField.active = true;
+                        this.seedValueField.setSuggestion("");
+                    }
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Preserve Velocity", (s, x, y, w) -> {
+                    this.preserveVelocityButton = this.addToggleButton(s, "Preserve Velocity", () -> this.preserveVelocity, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players keep their momentum when teleported.", "Players lose their momentum when teleported."),
+                        () -> this.preserveVelocity = !this.preserveVelocity);
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Respawn Delay", (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn delay", val -> "Players wait " + val + " seconds before respawning.");
+                }
+            );
         }
     }
 
@@ -113,17 +149,6 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int labelX = this.layout.mainPanel().x() + 38;
-        int labelY = this.layout.mainPanel().y() + 102;
-        if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Swap Interval"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Grace Period"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Border Size"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Seed Mode"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Seed Value"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Preserve Velocity"), labelX, labelY + 160, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Respawn Delay"), labelX, labelY + 192, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

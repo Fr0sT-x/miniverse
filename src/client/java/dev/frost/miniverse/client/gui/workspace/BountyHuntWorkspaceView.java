@@ -55,57 +55,84 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            int cx1 = this.layout.mainPanel().x() + 150;
-            int cx2 = this.layout.mainPanel().x() + 500;
-            int sx1 = this.layout.mainPanel().x() + 250;
-            int sx2 = this.layout.mainPanel().x() + 600;
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
 
-            // Row 1
-            this.pointsToWinField = this.addField(screen, cx1, this.layout.mainPanel().y() + 124, String.valueOf(this.scoreToWin), "Points to win", () -> "Points needed to win.");
-            
-            // Row 2
-            this.gracePeriodField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 156, this.gracePeriodSeconds, "Grace seconds",
-                "No grace period.",
-                val -> "Players have " + val + " seconds of peace.");
-            this.addStepper(screen, this.gracePeriodField, sx1, this.layout.mainPanel().y() + 156, 0, 600, 10);
-            
-            this.targetSwapIntervalField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 156, this.targetSwapIntervalSeconds, "Swap seconds",
-                "Targets will not rotate.",
-                val -> "Targets rotate every " + val + " seconds.");
-            this.addStepper(screen, this.targetSwapIntervalField, sx2, this.layout.mainPanel().y() + 156, 10, 3600, 30);
+            this.rulesLayout.addHeading("Match Settings");
+            this.rulesLayout.addRow(
+                "Points To Win", (s, x, y, w) -> {
+                    this.pointsToWinField = this.addField(s, x, y, String.valueOf(this.scoreToWin), w, "Points to win", () -> "Points needed to win.");
+                }
+            );
 
-            this.respawnDelayField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 188, this.respawnDelaySeconds, "Respawn delay",
-                "Instant respawn.",
-                val -> "Dead players spectate for " + val + " seconds.");
-            this.addStepper(screen, this.respawnDelayField, sx1, this.layout.mainPanel().y() + 188, 0, 300, 1);
+            this.rulesLayout.addRow(
+                "Grace Period", (s, x, y, w) -> {
+                    this.gracePeriodField = this.addIntField(s, x, y, this.gracePeriodSeconds, w, "Grace seconds",
+                        "No grace period.",
+                        val -> "Players have " + val + " seconds of peace.");
+                    this.addStepper(s, this.gracePeriodField, x + w + 4, y, 0, 600, 10);
+                },
+                "Target Shuffle", (s, x, y, w) -> {
+                    this.targetSwapIntervalField = this.addIntField(s, x, y, this.targetSwapIntervalSeconds, w, "Swap seconds",
+                        "Targets will not rotate.",
+                        val -> "Targets rotate every " + val + " seconds.");
+                    this.addStepper(s, this.targetSwapIntervalField, x + w + 4, y, 10, 3600, 30);
+                }
+            );
 
-            // Row 3
-            this.trackerToggle = this.addToggleButton(screen, "Tracker", () -> this.trackerEnabled, cx1, this.layout.mainPanel().y() + 208, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players receive a tracker pointing to their target.", "Tracking is disabled."),
-                () -> this.trackerEnabled = !this.trackerEnabled);
-            this.netherToggle = this.addToggleButton(screen, "Nether Tracking", () -> this.netherTrackingEnabled, cx2, this.layout.mainPanel().y() + 208, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Trackers work when the target is in a different dimension.", "OFF: Trackers spin randomly if the target is in a different dimension."),
-                () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
+            this.rulesLayout.addRow(
+                "Respawn Delay", (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn delay",
+                        "Instant respawn.",
+                        val -> "Dead players spectate for " + val + " seconds.");
+                    this.addStepper(s, this.respawnDelayField, x + w + 4, y, 0, 300, 1);
+                }
+            );
 
-            // Row 4
-            this.compassCooldownField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 240, this.compassCooldownSeconds, "Cooldown seconds",
-                "No tracker cooldown.",
-                val -> "Players must wait " + val + " seconds between tracker uses.");
-            this.trackerItemField = this.addField(screen, cx2, this.layout.mainPanel().y() + 240, this.trackerItemId, "Tracker item", () -> "The item id used for tracking targets.");
+            this.rulesLayout.addHeading("Tracking Options");
+            this.rulesLayout.addRow(
+                "Tracker Toggle", (s, x, y, w) -> {
+                    this.trackerToggle = this.addToggleButton(s, "Tracker", () -> this.trackerEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players receive a tracker pointing to their target.", "Tracking is disabled."),
+                        () -> this.trackerEnabled = !this.trackerEnabled);
+                },
+                "Nether Toggle", (s, x, y, w) -> {
+                    this.netherToggle = this.addToggleButton(s, "Nether Tracking", () -> this.netherTrackingEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Trackers work when the target is in a different dimension.", "OFF: Trackers spin randomly if the target is in a different dimension."),
+                        () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
+                }
+            );
 
-            // Row 5
-            this.hvtToggle = this.addToggleButton(screen, "HVT", () -> this.highValueTargetEnabled, cx1, this.layout.mainPanel().y() + 292, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: The High Value Target system is active.", "OFF: The High Value Target system is disabled."),
-                () -> this.highValueTargetEnabled = !this.highValueTargetEnabled);
-            this.revengeToggle = this.addToggleButton(screen, "Revenge", () -> this.revengeAssignmentEnabled, cx2, this.layout.mainPanel().y() + 292, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Players can be assigned their killer as a target.", "OFF: Players will not be assigned their killer as a target."),
-                () -> this.revengeAssignmentEnabled = !this.revengeAssignmentEnabled);
+            this.rulesLayout.addRow(
+                "Cooldown", (s, x, y, w) -> {
+                    this.compassCooldownField = this.addIntField(s, x, y, this.compassCooldownSeconds, w, "Cooldown seconds",
+                        "No tracker cooldown.",
+                        val -> "Players must wait " + val + " seconds between tracker uses.");
+                },
+                "Tracker Item", (s, x, y, w) -> {
+                    this.trackerItemField = this.addField(s, x, y, this.trackerItemId, w, "Tracker item", () -> "The item id used for tracking targets.");
+                }
+            );
+
+            this.rulesLayout.addHeading("Bonus Features");
+            this.rulesLayout.addRow(
+                "High Value Target", (s, x, y, w) -> {
+                    this.hvtToggle = this.addToggleButton(s, "HVT", () -> this.highValueTargetEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: The High Value Target system is active.", "OFF: The High Value Target system is disabled."),
+                        () -> this.highValueTargetEnabled = !this.highValueTargetEnabled);
+                },
+                "Revenge Contracts", (s, x, y, w) -> {
+                    this.revengeToggle = this.addToggleButton(s, "Revenge", () -> this.revengeAssignmentEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Players can be assigned their killer as a target.", "OFF: Players will not be assigned their killer as a target."),
+                        () -> this.revengeAssignmentEnabled = !this.revengeAssignmentEnabled);
+                }
+            );
         }
     }
 
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("players")) {
+        if (this.moduleManager.isActive("rules")) {
+            this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
         }
     }
 
@@ -119,27 +146,6 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int lx1 = this.layout.mainPanel().x() + 24;
-        int lx2 = this.layout.mainPanel().x() + 374;
-        int by = this.layout.mainPanel().y();
-
-        if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Match Settings"), lx1, by + 108, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("Points To Win"), lx1, by + 130, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Grace Period"), lx1, by + 162, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Target Shuffle"), lx2, by + 162, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Respawn Delay"), lx1, by + 194, UiTheme.TEXT_MUTED, false);
-
-            context.drawText(textRenderer, Text.literal("Tracking Options"), lx1, by + 192, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("Tracker Toggle"), lx1, by + 214, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Nether Toggle"), lx2, by + 214, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Cooldown"), lx1, by + 246, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Tracker Item"), lx2, by + 246, UiTheme.TEXT_MUTED, false);
-
-            context.drawText(textRenderer, Text.literal("Bonus Features"), lx1, by + 276, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("High Value Target"), lx1, by + 298, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Revenge Contracts"), lx2, by + 298, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

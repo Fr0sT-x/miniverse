@@ -51,36 +51,45 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.actionDelete = new UiLayout.Rect(actionStart + 424, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
             this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
         } else if (this.moduleManager.isActive("rules")) {
-            int y = this.layout.mainPanel().y() + 96;
-            this.seedModeButton = this.addCycleButton(screen, () -> "Seed Mode: " + this.seedMode.label, () -> this.seedMode.ordinal(), this.layout.mainPanel().x() + 180, y, 170, new String[]{
-                "Random world seed will be used.",
-                "Specify an exact world seed in the text field."
-            }, 2, () -> {
-                this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
-                this.seedModeButton.setMessage(Text.literal("Seed Mode: " + this.seedMode.label));
-                if (this.seedMode == SeedMode.RANDOM) {
-                    this.seedValueField.setEditable(false);
-                    this.seedValueField.active = false;
-                    this.seedValueField.setText("");
-                    this.seedValueField.setSuggestion("Enter world seed");
-                } else {
-                    this.seedValueField.setEditable(true);
-                    this.seedValueField.active = true;
-                    this.seedValueField.setSuggestion("");
-                    this.seedValueField.setText(this.seedValue);
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+            
+            this.rulesLayout.addRow(
+                "Seed Mode", (s, x, y, w) -> {
+                    this.seedModeButton = this.addCycleButton(s, () -> "Seed Mode: " + this.seedMode.label, () -> this.seedMode.ordinal(), x, y, w, new String[]{
+                        "Random world seed will be used.",
+                        "Specify an exact world seed in the text field."
+                    }, 2, () -> {
+                        this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
+                        this.seedModeButton.setMessage(Text.literal("Seed Mode: " + this.seedMode.label));
+                        if (this.seedMode == SeedMode.RANDOM) {
+                            this.seedValueField.setEditable(false);
+                            this.seedValueField.active = false;
+                            this.seedValueField.setText("");
+                            this.seedValueField.setSuggestion("Enter world seed");
+                        } else {
+                            this.seedValueField.setEditable(true);
+                            this.seedValueField.active = true;
+                            this.seedValueField.setSuggestion("");
+                            this.seedValueField.setText(this.seedValue);
+                        }
+                    });
                 }
-            });
-            y += 32;
-            this.seedValueField = this.addField(screen, this.layout.mainPanel().x() + 180, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", 170, "Seed value", () -> "Specify an exact world seed in the text field.");
-            if (this.seedMode == SeedMode.RANDOM) {
-                this.seedValueField.setEditable(false);
-                this.seedValueField.active = false;
-                this.seedValueField.setSuggestion("Enter world seed");
-            } else {
-                this.seedValueField.setEditable(true);
-                this.seedValueField.active = true;
-                this.seedValueField.setSuggestion("");
-            }
+            );
+
+            this.rulesLayout.addRow(
+                "Fixed Seed", (s, x, y, w) -> {
+                    this.seedValueField = this.addField(s, x, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", w, "Seed value", () -> "Specify an exact world seed in the text field.");
+                    if (this.seedMode == SeedMode.RANDOM) {
+                        this.seedValueField.setEditable(false);
+                        this.seedValueField.active = false;
+                        this.seedValueField.setSuggestion("Enter world seed");
+                    } else {
+                        this.seedValueField.setEditable(true);
+                        this.seedValueField.active = true;
+                        this.seedValueField.setSuggestion("");
+                    }
+                }
+            );
         }
     }
 
@@ -107,10 +116,6 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("rules")) {
-            this.drawLabel(context, textRenderer, "Seed Mode", this.layout.mainPanel().x() + 38, this.layout.mainPanel().y() + 102);
-            this.drawLabel(context, textRenderer, "Fixed Seed", this.layout.mainPanel().x() + 38, this.layout.mainPanel().y() + 134);
-        }
     }
 
     @Override

@@ -71,54 +71,75 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
             this.actionDelete = new UiLayout.Rect(actionStart + 424, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
             this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
         } else if (this.moduleManager.isActive("rules")) {
-            int y = this.layout.mainPanel().y() + 96;
-            this.modeButton = this.addCycleButton(screen, () -> "Mode: " + titleCase(this.mode.nbtValue()), () -> this.mode.ordinal(), this.layout.mainPanel().x() + 180, y, 190, new String[]{
-                "Win condition: First to find all items.",
-                "Win condition: Most items found before time runs out."
-            }, 2, () -> {
-                this.mode = this.mode == ResourceSprintSettings.Mode.FIRST_TO_COMPLETE ? ResourceSprintSettings.Mode.TIME_LIMITED : ResourceSprintSettings.Mode.FIRST_TO_COMPLETE;
-                this.modeButton.setMessage(Text.literal("Mode: " + titleCase(this.mode.nbtValue())));
-            });
-            y += 32;
-            this.timeLimitField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.timeLimitSeconds, 190, "Time limit seconds", val -> "Match will end after " + val + " seconds.");
-            y += 32;
-            this.tieBreakButton = this.addCycleButton(screen, () -> "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), () -> this.tieBreakRule.ordinal(), this.layout.mainPanel().x() + 180, y, 190, new String[]{
-                "The rule used to break ties at the end of the match.",
-                "The rule used to break ties at the end of the match."
-            }, 2, () -> {
-                this.tieBreakRule = this.tieBreakRule == ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH ? ResourceSprintSettings.TieBreakRule.FASTEST_TOTAL_TIME : ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
-                this.tieBreakButton.setMessage(Text.literal("Tie-Break: " + titleCase(this.tieBreakRule.nbtValue())));
-            });
-            y += 32;
-            this.distributionButton = this.addCycleButton(screen, () -> "Distribution: " + shortDistribution(this.distributionMode), () -> this.distributionMode.ordinal(), this.layout.mainPanel().x() + 180, y, 190, new String[]{
-                "How collected resources are shared among team members.",
-                "How collected resources are shared among team members."
-            }, 2, () -> {
-                this.distributionMode = this.distributionMode.next();
-                this.distributionButton.setMessage(Text.literal("Distribution: " + shortDistribution(this.distributionMode)));
-            });
-            y += 32;
-            this.addActionButton(screen, "Configure Objectives", this.layout.mainPanel().x() + 180, y, 190, "Select which resources teams must collect.", () -> {
-                this.syncStateFromWidgets();
-                RegistrySelectorContext<net.minecraft.item.Item> selectorContext = new RegistrySelectorContext<>(
-                    "minecraft:item",
-                    "Select Objectives",
-                    RegistrySelectorContext.SelectionMode.MULTI,
-                    new RegistrySelectorState(),
-                    result -> {
-                        this.objectivesPool = result.selectedEntries().stream()
-                            .map(net.minecraft.registry.Registries.ITEM::getId)
-                            .map(net.minecraft.util.Identifier::toString)
-                            .collect(Collectors.toSet());
-                    },
-                    "resourcesprint",
-                    this.objectivesPool.stream()
-                        .map(net.minecraft.util.Identifier::of)
-                        .map(net.minecraft.registry.Registries.ITEM::get)
-                        .collect(Collectors.toSet())
-                );
-                MinecraftClient.getInstance().setScreen(new RegistrySelectorScreen<>(selectorContext, new ItemRegistryProvider()));
-            });
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+
+            this.rulesLayout.addRow(
+                "Mode", (s, x, y, w) -> {
+                    this.modeButton = this.addCycleButton(s, () -> "Mode: " + titleCase(this.mode.nbtValue()), () -> this.mode.ordinal(), x, y, w, new String[]{
+                        "Win condition: First to find all items.",
+                        "Win condition: Most items found before time runs out."
+                    }, 2, () -> {
+                        this.mode = this.mode == ResourceSprintSettings.Mode.FIRST_TO_COMPLETE ? ResourceSprintSettings.Mode.TIME_LIMITED : ResourceSprintSettings.Mode.FIRST_TO_COMPLETE;
+                        this.modeButton.setMessage(Text.literal("Mode: " + titleCase(this.mode.nbtValue())));
+                    });
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Time Limit", (s, x, y, w) -> {
+                    this.timeLimitField = this.addIntField(s, x, y, this.timeLimitSeconds, w, "Time limit seconds", val -> "Match will end after " + val + " seconds.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Tie Break", (s, x, y, w) -> {
+                    this.tieBreakButton = this.addCycleButton(s, () -> "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), () -> this.tieBreakRule.ordinal(), x, y, w, new String[]{
+                        "The rule used to break ties at the end of the match.",
+                        "The rule used to break ties at the end of the match."
+                    }, 2, () -> {
+                        this.tieBreakRule = this.tieBreakRule == ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH ? ResourceSprintSettings.TieBreakRule.FASTEST_TOTAL_TIME : ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
+                        this.tieBreakButton.setMessage(Text.literal("Tie-Break: " + titleCase(this.tieBreakRule.nbtValue())));
+                    });
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Distribution", (s, x, y, w) -> {
+                    this.distributionButton = this.addCycleButton(s, () -> "Distribution: " + shortDistribution(this.distributionMode), () -> this.distributionMode.ordinal(), x, y, w, new String[]{
+                        "How collected resources are shared among team members.",
+                        "How collected resources are shared among team members."
+                    }, 2, () -> {
+                        this.distributionMode = this.distributionMode.next();
+                        this.distributionButton.setMessage(Text.literal("Distribution: " + shortDistribution(this.distributionMode)));
+                    });
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Objectives", (s, x, y, w) -> {
+                    this.addActionButton(s, "Configure Objectives", x, y, w, "Select which resources teams must collect.", () -> {
+                        this.syncStateFromWidgets();
+                        RegistrySelectorContext<net.minecraft.item.Item> selectorContext = new RegistrySelectorContext<>(
+                            "minecraft:item",
+                            "Select Objectives",
+                            RegistrySelectorContext.SelectionMode.MULTI,
+                            new RegistrySelectorState(),
+                            result -> {
+                                this.objectivesPool = result.selectedEntries().stream()
+                                    .map(net.minecraft.registry.Registries.ITEM::getId)
+                                    .map(net.minecraft.util.Identifier::toString)
+                                    .collect(Collectors.toSet());
+                            },
+                            "resourcesprint",
+                            this.objectivesPool.stream()
+                                .map(net.minecraft.util.Identifier::of)
+                                .map(net.minecraft.registry.Registries.ITEM::get)
+                                .collect(Collectors.toSet())
+                        );
+                        MinecraftClient.getInstance().setScreen(new RegistrySelectorScreen<>(selectorContext, new ItemRegistryProvider()));
+                    });
+                }
+            );
         }
     }
 
@@ -146,15 +167,6 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        if (this.moduleManager.isActive("rules")) {
-            int labelX = this.layout.mainPanel().x() + 38;
-            int labelY = this.layout.mainPanel().y() + 102;
-            context.drawText(textRenderer, Text.literal("Mode"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Time Limit"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Tie Break"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Distribution"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Objectives"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

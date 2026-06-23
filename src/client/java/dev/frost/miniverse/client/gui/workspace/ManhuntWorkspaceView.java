@@ -59,105 +59,136 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            int cx1 = this.layout.mainPanel().x() + 150;
-            int cx2 = this.layout.mainPanel().x() + 500;
-            int sx1 = cx1 + 178;
-            int sx2 = cx2 + 178;
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
 
-            // Row 1
-            this.seedModeButton = this.addCycleButton(screen, () -> this.seedMode.displayName, () -> this.seedMode.ordinal(), cx1, this.layout.mainPanel().y() + 124, 170, new String[]{
-                "Random world seed will be used.",
-                "Specify an exact world seed in the text field."
-            }, 2, () -> {
-                this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
-                this.seedModeButton.setMessage(Text.literal(this.seedMode.displayName));
-                
-                if (this.seedMode == SeedMode.RANDOM) {
-                    this.seedValueField.setEditable(false);
-                    this.seedValueField.active = false;
-                    this.seedValueField.setText("");
-                    this.seedValueField.setSuggestion("Enter world seed");
-                } else {
-                    this.seedValueField.setEditable(true);
-                    this.seedValueField.active = true;
-                    this.seedValueField.setSuggestion("");
-                    this.seedValueField.setText(this.seedValue);
+            this.rulesLayout.addHeading("World & Startup");
+            this.rulesLayout.addRow(
+                "Seed Mode", (s, x, y, w) -> {
+                    this.seedModeButton = this.addCycleButton(s, () -> this.seedMode.displayName, () -> this.seedMode.ordinal(), x, y, w, new String[]{
+                        "Random world seed will be used.",
+                        "Specify an exact world seed in the text field."
+                    }, 2, () -> {
+                        this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
+                        this.seedModeButton.setMessage(Text.literal(this.seedMode.displayName));
+                        if (this.seedMode == SeedMode.RANDOM) {
+                            this.seedValueField.setEditable(false);
+                            this.seedValueField.active = false;
+                            this.seedValueField.setText("");
+                            this.seedValueField.setSuggestion("Enter world seed");
+                        } else {
+                            this.seedValueField.setEditable(true);
+                            this.seedValueField.active = true;
+                            this.seedValueField.setSuggestion("");
+                            this.seedValueField.setText(this.seedValue);
+                        }
+                    });
+                },
+                "Fixed Seed", (s, x, y, w) -> {
+                    this.seedValueField = this.addField(s, x, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", w, "Fixed seed", () -> "Specify an exact world seed in the text field.");
+                    if (this.seedMode == SeedMode.RANDOM) {
+                        this.seedValueField.setEditable(false);
+                        this.seedValueField.active = false;
+                        this.seedValueField.setSuggestion("Enter world seed");
+                    } else {
+                        this.seedValueField.setEditable(true);
+                        this.seedValueField.active = true;
+                        this.seedValueField.setSuggestion("");
+                    }
                 }
-            });
-            this.seedValueField = this.addField(screen, cx2, this.layout.mainPanel().y() + 124, this.seedMode == SeedMode.FIXED ? this.seedValue : "", "Fixed seed", () -> "Specify an exact world seed in the text field.");
-            if (this.seedMode == SeedMode.RANDOM) {
-                this.seedValueField.setEditable(false);
-                this.seedValueField.active = false;
-                this.seedValueField.setSuggestion("Enter world seed");
-            } else {
-                this.seedValueField.setEditable(true);
-                this.seedValueField.active = true;
-                this.seedValueField.setSuggestion("");
-            }
+            );
 
-            // Row 2
-            this.gracePeriodField = this.addIntField(screen, cx1, this.layout.mainPanel().y() + 156, this.gracePeriodSeconds, "Hunter release seconds",
-                "No hunter release delay.",
-                val -> "Hunters cannot move for the first " + val + " seconds.");
-            this.addStepper(screen, this.gracePeriodField, sx1, this.layout.mainPanel().y() + 156, 0, 3600, 5);
+            this.rulesLayout.addRow(
+                "Release Delay", (s, x, y, w) -> {
+                    this.gracePeriodField = this.addIntField(s, x, y, this.gracePeriodSeconds, w, "Hunter release seconds",
+                        "No hunter release delay.",
+                        val -> "Hunters cannot move for the first " + val + " seconds.");
+                    this.addStepper(s, this.gracePeriodField, x + w + 4, y, 0, 3600, 5);
+                }
+            );
 
-            // Row 3
-            this.huntersCompassButton = this.addToggleButton(screen, "Hunters Compass", () -> this.huntersCompassEnabled, cx1, this.layout.mainPanel().y() + 208, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Hunters receive a compass pointing to the nearest speedrunner.", "OFF: Hunters will not receive any compass to track speedrunners."),
-                () -> this.huntersCompassEnabled = !this.huntersCompassEnabled);
-            this.compassCooldownField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 208, this.compassCooldownSeconds, "Compass cooldown seconds",
-                "No compass cooldown.",
-                val -> "Hunters must wait " + val + " seconds between compass uses.");
-            this.addStepper(screen, this.compassCooldownField, sx2, this.layout.mainPanel().y() + 208, 0, 300, 1);
+            this.rulesLayout.addHeading("Tracking & Difficulty");
+            this.rulesLayout.addRow(
+                "Hunters Compass", (s, x, y, w) -> {
+                    this.huntersCompassButton = this.addToggleButton(s, "Hunters Compass", () -> this.huntersCompassEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Hunters receive a compass pointing to the nearest speedrunner.", "OFF: Hunters will not receive any compass to track speedrunners."),
+                        () -> this.huntersCompassEnabled = !this.huntersCompassEnabled);
+                },
+                "Compass Cooldown", (s, x, y, w) -> {
+                    this.compassCooldownField = this.addIntField(s, x, y, this.compassCooldownSeconds, w, "Compass cooldown seconds",
+                        "No compass cooldown.",
+                        val -> "Hunters must wait " + val + " seconds between compass uses.");
+                    this.addStepper(s, this.compassCooldownField, x + w + 4, y, 0, 300, 1);
+                }
+            );
 
-            // Row 4
-            this.netherTrackingButton = this.addToggleButton(screen, "Nether Tracking", () -> this.netherTrackingEnabled, cx1, this.layout.mainPanel().y() + 240, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Compasses work when target is in a different dimension.", "OFF: Compasses spin randomly if target is in a different dimension."),
-                () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
-            this.runnerGlowPulseField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 240, this.runnerGlowPulseMinutes, "Runner glow pulse minutes",
-                "Speedrunners will not glow.",
-                val -> "Speedrunners will glow every " + val + " minutes to reveal their location.");
-            this.addStepper(screen, this.runnerGlowPulseField, sx2, this.layout.mainPanel().y() + 240, 0, 120, 5);
+            this.rulesLayout.addRow(
+                "Nether Tracking", (s, x, y, w) -> {
+                    this.netherTrackingButton = this.addToggleButton(s, "Nether Tracking", () -> this.netherTrackingEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Compasses work when target is in a different dimension.", "OFF: Compasses spin randomly if target is in a different dimension."),
+                        () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
+                },
+                "Runner Glow Pulse", (s, x, y, w) -> {
+                    this.runnerGlowPulseField = this.addIntField(s, x, y, this.runnerGlowPulseMinutes, w, "Runner glow pulse minutes",
+                        "Speedrunners will not glow.",
+                        val -> "Speedrunners will glow every " + val + " minutes to reveal their location.");
+                    this.addStepper(s, this.runnerGlowPulseField, x + w + 4, y, 0, 120, 5);
+                }
+            );
 
-            // Row 5
-            this.runnerLivesButton = this.addCycleButton(screen, () -> "Runner Lives: " + formatLives(this.runnerLives), () -> livesToIndex(this.runnerLives), cx1, this.layout.mainPanel().y() + 292, 170, new String[]{
-                "Unlimited lives for speedrunners.",
-                "Speedrunners have 1 life.",
-                "Speedrunners have 2 lives.",
-                "Speedrunners have 3 lives.",
-                "Speedrunners have 5 lives."
-            }, 5, () -> {
-                this.runnerLives = nextLivesValue(this.runnerLives);
-                this.runnerLivesButton.setMessage(Text.literal("Runner Lives: " + formatLives(this.runnerLives)));
-            });
-            this.respawnDelayField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 292, this.respawnDelaySeconds, "Runner respawn seconds",
-                "Speedrunners will respawn instantly.",
-                val -> "Speedrunners will be forced to spectate for " + val + " seconds before respawning.");
-            this.addStepper(screen, this.respawnDelayField, sx2, this.layout.mainPanel().y() + 292, 0, 3600, 30);
+            this.rulesLayout.addHeading("Lives & Respawns");
+            this.rulesLayout.addRow(
+                "Runner Lives", (s, x, y, w) -> {
+                    this.runnerLivesButton = this.addCycleButton(s, () -> "Runner Lives: " + formatLives(this.runnerLives), () -> livesToIndex(this.runnerLives), x, y, w, new String[]{
+                        "Unlimited lives for speedrunners.",
+                        "Speedrunners have 1 life.",
+                        "Speedrunners have 2 lives.",
+                        "Speedrunners have 3 lives.",
+                        "Speedrunners have 5 lives."
+                    }, 5, () -> {
+                        this.runnerLives = nextLivesValue(this.runnerLives);
+                        this.runnerLivesButton.setMessage(Text.literal("Runner Lives: " + formatLives(this.runnerLives)));
+                    });
+                },
+                "Runner Respawn", (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Runner respawn seconds",
+                        "Speedrunners will respawn instantly.",
+                        val -> "Speedrunners will be forced to spectate for " + val + " seconds before respawning.");
+                    this.addStepper(s, this.respawnDelayField, x + w + 4, y, 0, 3600, 30);
+                }
+            );
 
-            // Row 6
-            this.hunterLivesButton = this.addCycleButton(screen, () -> "Hunter Lives: " + formatLives(this.hunterLives), () -> livesToIndex(this.hunterLives), cx1, this.layout.mainPanel().y() + 324, 170, new String[]{
-                "Unlimited lives for hunters.",
-                "Hunters have 1 life.",
-                "Hunters have 2 lives.",
-                "Hunters have 3 lives.",
-                "Hunters have 5 lives."
-            }, 5, () -> {
-                this.hunterLives = nextLivesValue(this.hunterLives);
-                this.hunterLivesButton.setMessage(Text.literal("Hunter Lives: " + formatLives(this.hunterLives)));
-            });
-            this.hunterRespawnDelayField = this.addIntField(screen, cx2, this.layout.mainPanel().y() + 324, this.hunterRespawnDelaySeconds, "Hunter respawn seconds",
-                "Hunters will respawn instantly.",
-                val -> "Hunters will be forced to spectate for " + val + " seconds before respawning.");
-            this.addStepper(screen, this.hunterRespawnDelayField, sx2, this.layout.mainPanel().y() + 324, 0, 3600, 5);
+            this.rulesLayout.addRow(
+                "Hunter Lives", (s, x, y, w) -> {
+                    this.hunterLivesButton = this.addCycleButton(s, () -> "Hunter Lives: " + formatLives(this.hunterLives), () -> livesToIndex(this.hunterLives), x, y, w, new String[]{
+                        "Unlimited lives for hunters.",
+                        "Hunters have 1 life.",
+                        "Hunters have 2 lives.",
+                        "Hunters have 3 lives.",
+                        "Hunters have 5 lives."
+                    }, 5, () -> {
+                        this.hunterLives = nextLivesValue(this.hunterLives);
+                        this.hunterLivesButton.setMessage(Text.literal("Hunter Lives: " + formatLives(this.hunterLives)));
+                    });
+                },
+                "Hunter Respawn", (s, x, y, w) -> {
+                    this.hunterRespawnDelayField = this.addIntField(s, x, y, this.hunterRespawnDelaySeconds, w, "Hunter respawn seconds",
+                        "Hunters will respawn instantly.",
+                        val -> "Hunters will be forced to spectate for " + val + " seconds before respawning.");
+                    this.addStepper(s, this.hunterRespawnDelayField, x + w + 4, y, 0, 3600, 5);
+                }
+            );
 
-            // Row 7
-            this.midGameJoinTeleportButton = this.addToggleButton(screen, "Mid-Game Join TP", () -> this.midGameJoinTeleportEnabled, cx1, this.layout.mainPanel().y() + 378, 170, 
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Late joiners will be placed in spectator and prompted to teleport to an active teammate.", "OFF: Late joiners will spawn at world spawn."), 
-                () -> {
-                this.midGameJoinTeleportEnabled = !this.midGameJoinTeleportEnabled;
-                this.midGameJoinTeleportButton.setMessage(Text.literal("Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled)));
-            });
+            this.rulesLayout.addHeading("Advanced Options");
+            this.rulesLayout.addRow(
+                "Mid-Game Join TP Layout", (s, x, y, w) -> {
+                    this.midGameJoinTeleportButton = this.addToggleButton(s, "Mid-Game Join TP", () -> this.midGameJoinTeleportEnabled, x, y, w, 
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Late joiners will be placed in spectator and prompted to teleport to an active teammate.", "OFF: Late joiners will spawn at world spawn."), 
+                        () -> {
+                        this.midGameJoinTeleportEnabled = !this.midGameJoinTeleportEnabled;
+                        this.midGameJoinTeleportButton.setMessage(Text.literal("Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled)));
+                    });
+                }
+            );
         }
     }
 
@@ -188,31 +219,6 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int lx1 = this.layout.mainPanel().x() + 24;
-        int lx2 = this.layout.mainPanel().x() + 374;
-        int by = this.layout.mainPanel().y();
-
-        if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("World & Startup"), lx1, by + 108, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("Seed Mode"), lx1, by + 130, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Fixed Seed"), lx2, by + 130, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Release Delay"), lx1, by + 162, UiTheme.TEXT_MUTED, false);
-
-            context.drawText(textRenderer, Text.literal("Tracking & Difficulty"), lx1, by + 192, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("Hunters Compass"), lx1, by + 214, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Compass Cooldown"), lx2, by + 214, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Nether Tracking"), lx1, by + 246, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Runner Glow Pulse"), lx2, by + 246, UiTheme.TEXT_MUTED, false);
-
-            context.drawText(textRenderer, Text.literal("Lives & Respawns"), lx1, by + 276, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("Runner Lives"), lx1, by + 298, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Runner Respawn"), lx2, by + 298, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Hunter Lives"), lx1, by + 330, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Hunter Respawn"), lx2, by + 330, UiTheme.TEXT_MUTED, false);
-
-            context.drawText(textRenderer, Text.literal("Advanced Options"), lx1, by + 360, UiTheme.ACCENT_BLUE, false);
-            context.drawText(textRenderer, Text.literal("Mid-Game Join TP Layout"), lx1, by + 384, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

@@ -69,40 +69,64 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.pointsToWinField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, this.pointsToWin, 160, "Points to Win", val -> "Score needed to win the match.");
-            this.roundDurationField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.roundDurationSeconds, 160, "Round Duration (s)", val -> "Players have " + val + " seconds to complete their death objective.");
-            
-            this.perPlayerButton = this.addToggleButton(screen, "Per-Player DeathObjectives", () -> this.perPlayerObjectives, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, 220,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Each player gets a different objective.", "All players get the same objective."),
-                () -> this.perPlayerObjectives = !this.perPlayerObjectives);
-            
-            this.blockPoolButton = this.addActionButton(screen, "Configure DeathObjective Pool (" + this.blockPool.size() + " objectives)", this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, 240, "Click to configure the pool of possible death objectives.", () -> {
-                Registry<DeathObjective> registry = client.world.getRegistryManager().get(DeathObjective.REGISTRY_KEY);
-                Set<DeathObjective> initialSelection = this.blockPool.stream()
-                    .map(id -> DeathObjectiveManager.get(client.getServer(), id))
-                    .filter(java.util.Objects::nonNull)
-                    .collect(Collectors.toSet());
-                    
-                DeathObjectiveRegistryProvider provider = new DeathObjectiveRegistryProvider(registry);
-                RegistrySelectorContext<DeathObjective> context = new RegistrySelectorContext<>(
-                    "miniverse:death_objective",
-                    "Select DeathObjective Pool",
-                    RegistrySelectorContext.SelectionMode.MULTI,
-                    this.selectorState,
-                    newSelection -> {
-                        this.blockPool = newSelection.selectedEntries().stream()
-                            .map(provider::getId)
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+
+            this.rulesLayout.addRow(
+                "Points to Win", (s, x, y, w) -> {
+                    this.pointsToWinField = this.addIntField(s, x, y, this.pointsToWin, w, "Points to Win", val -> "Score needed to win the match.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Round Duration", (s, x, y, w) -> {
+                    this.roundDurationField = this.addIntField(s, x, y, this.roundDurationSeconds, w, "Round Duration (s)", val -> "Players have " + val + " seconds to complete their death objective.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Player Assignment", (s, x, y, w) -> {
+                    this.perPlayerButton = this.addToggleButton(s, "Per-Player DeathObjectives", () -> this.perPlayerObjectives, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Each player gets a different objective.", "All players get the same objective."),
+                        () -> this.perPlayerObjectives = !this.perPlayerObjectives);
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "DeathObjective Pool", (s, x, y, w) -> {
+                    this.blockPoolButton = this.addActionButton(s, "Configure DeathObjective Pool (" + this.blockPool.size() + " objectives)", x, y, w, "Click to configure the pool of possible death objectives.", () -> {
+                        Registry<DeathObjective> registry = client.world.getRegistryManager().get(DeathObjective.REGISTRY_KEY);
+                        Set<DeathObjective> initialSelection = this.blockPool.stream()
+                            .map(id -> DeathObjectiveManager.get(client.getServer(), id))
                             .filter(java.util.Objects::nonNull)
                             .collect(Collectors.toSet());
-                        lastBlockPool = new java.util.HashSet<>(this.blockPool);
-                    },
-                    "deathshuffle",
-                    initialSelection
-                );
-                
-                client.setScreen(new RegistrySelectorScreen<>(context, provider));
-            });
-            this.respawnDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 224, this.respawnDelaySeconds, 160, "Respawn Delay (s)", val -> "Delay before players respawn.");
+                            
+                        DeathObjectiveRegistryProvider provider = new DeathObjectiveRegistryProvider(registry);
+                        RegistrySelectorContext<DeathObjective> context = new RegistrySelectorContext<>(
+                            "miniverse:death_objective",
+                            "Select DeathObjective Pool",
+                            RegistrySelectorContext.SelectionMode.MULTI,
+                            this.selectorState,
+                            newSelection -> {
+                                this.blockPool = newSelection.selectedEntries().stream()
+                                    .map(provider::getId)
+                                    .filter(java.util.Objects::nonNull)
+                                    .collect(Collectors.toSet());
+                                lastBlockPool = new java.util.HashSet<>(this.blockPool);
+                            },
+                            "deathshuffle",
+                            initialSelection
+                        );
+                        
+                        client.setScreen(new RegistrySelectorScreen<>(context, provider));
+                    });
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Respawn Delay", (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn Delay (s)", val -> "Delay before players respawn.");
+                }
+            );
         }
     }
 
@@ -126,15 +150,6 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int labelX = this.layout.mainPanel().x() + 38;
-        int labelY = this.layout.mainPanel().y() + 102;
-        if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Points to Win"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Round Duration"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Player Assignment"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("DeathObjective Pool"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Respawn Delay"), labelX, labelY + 128, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

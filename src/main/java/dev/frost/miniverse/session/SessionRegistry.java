@@ -469,7 +469,16 @@ public final class SessionRegistry {
         long cutoffMillis = Instant.now().minus(retention.maxAgeDays(), ChronoUnit.DAYS).toEpochMilli();
         List<CleanupCandidate> sessionCandidates = entries.stream()
             .filter(Files::isDirectory)
-            .map(path -> new CleanupCandidate(path, MiniverseFileUtils.lastModifiedMillis(path)))
+            .map(path -> {
+                long updatedAt = 0L;
+                Optional<JsonObject> json = SessionConfigJson.read(path.resolve(SESSION_JSON_FILE_NAME));
+                if (json.isPresent() && SessionConfigJson.longValue(json.get(), "cachedUpdatedAt", 0L) > 0L) {
+                    updatedAt = SessionConfigJson.longValue(json.get(), "cachedUpdatedAt", 0L);
+                } else {
+                    updatedAt = MiniverseFileUtils.lastModifiedMillis(path);
+                }
+                return new CleanupCandidate(path, updatedAt);
+            })
             .sorted(Comparator.comparingLong(CleanupCandidate::updatedAtMillis).reversed())
             .toList();
         Set<Path> retained = new HashSet<>();
@@ -593,19 +602,30 @@ public final class SessionRegistry {
         }
         long seed = SessionConfigJson.longValue(object, "seed", 0L);
         int playerCount = SessionConfigJson.integer(object, "playerCount", 0);
-        long updatedAt = MiniverseFileUtils.lastModifiedMillis(sessionRoot);
-        long createdAt = SessionConfigJson.longValue(object, "createdAt", updatedAt);
+        long cachedUpdatedAt = SessionConfigJson.longValue(object, "cachedUpdatedAt", 0L);
+        long cachedPlayedMillis = SessionConfigJson.longValue(object, "cachedPlayedMillis", -1L);
+
+        long updatedAt;
+        long playedMillis;
+        long createdAt = SessionConfigJson.longValue(object, "createdAt", MiniverseFileUtils.lastModifiedMillis(sessionRoot));
         long launchedAt = SessionConfigJson.longValue(object, "launchedAt", 0L);
-        long playedMillis = launchedAt > 0L ? Math.max(0L, updatedAt - launchedAt) : 0L;
-        Optional<SaveMetadata> saveMetadata = latestMinigameSave(sessionRoot);
-        if (saveMetadata.isPresent()) {
-            SaveMetadata metadata = saveMetadata.get();
-            long saveTimestamp = saveTimestamp(metadata);
-            if (saveTimestamp > 0L) {
-                updatedAt = saveTimestamp;
-            }
-            if (metadata.clockTicks() > 0L) {
-                playedMillis = ticksToMillis(metadata.clockTicks());
+
+        if (cachedUpdatedAt > 0L && cachedPlayedMillis >= 0L) {
+            updatedAt = cachedUpdatedAt;
+            playedMillis = cachedPlayedMillis;
+        } else {
+            updatedAt = MiniverseFileUtils.lastModifiedMillis(sessionRoot);
+            playedMillis = launchedAt > 0L ? Math.max(0L, updatedAt - launchedAt) : 0L;
+            Optional<SaveMetadata> saveMetadata = latestMinigameSave(sessionRoot);
+            if (saveMetadata.isPresent()) {
+                SaveMetadata metadata = saveMetadata.get();
+                long saveTimestamp = saveTimestamp(metadata);
+                if (saveTimestamp > 0L) {
+                    updatedAt = saveTimestamp;
+                }
+                if (metadata.clockTicks() > 0L) {
+                    playedMillis = ticksToMillis(metadata.clockTicks());
+                }
             }
         }
 
@@ -825,6 +845,44 @@ public final class SessionRegistry {
             SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to update session pause flag for {}", sessionId, e);
+        }
+    }
+
+    public static synchronized void computeAndWriteDisplayMetadata(String sessionId) {
+        Path sessionRoot = sessionsRoot().resolve(sessionId);
+        if (!Files.isDirectory(sessionRoot)) {
+            return;
+        }
+        Optional<SaveMetadata> saveMetadata = latestMinigameSave(sessionRoot);
+        long updatedAt = MiniverseFileUtils.lastModifiedMillis(sessionRoot);
+        long playedMillis = 0L;
+        if (saveMetadata.isPresent()) {
+            SaveMetadata metadata = saveMetadata.get();
+            long saveTimestamp = saveTimestamp(metadata);
+            if (saveTimestamp > 0L) {
+                updatedAt = saveTimestamp;
+            }
+            if (metadata.clockTicks() > 0L) {
+                playedMillis = ticksToMillis(metadata.clockTicks());
+            }
+        }
+        writeDisplayMetadata(sessionId, updatedAt, playedMillis);
+    }
+
+    public static synchronized void writeDisplayMetadata(String sessionId, long updatedAtMillis, long playedMillis) {
+        Path sessionRoot = sessionsRoot().resolve(sessionId);
+        if (!Files.exists(sessionRoot)) {
+            return;
+        }
+        try {
+            Files.createDirectories(sessionRoot);
+            JsonObject json = readJson(sessionId).orElseGet(JsonObject::new);
+            json.addProperty("sessionId", sessionId);
+            json.addProperty("cachedUpdatedAt", updatedAtMillis);
+            json.addProperty("cachedPlayedMillis", playedMillis);
+            SessionConfigJson.write(sessionRoot.resolve(SESSION_JSON_FILE_NAME), json);
+        } catch (IOException e) {
+            Miniverse.LOGGER.warn("Failed to write display metadata for {}", sessionId, e);
         }
     }
 

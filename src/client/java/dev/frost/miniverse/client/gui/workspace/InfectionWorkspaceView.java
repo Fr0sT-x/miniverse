@@ -41,17 +41,35 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            int cx1 = this.layout.mainPanel().x() + 180;
-            int cx2 = this.layout.mainPanel().x() + 180;
-            int y = this.layout.mainPanel().y() + 96;
-            this.durationField = this.addIntField(screen, cx1, y, this.durationSeconds, "Match duration", val -> "Total match duration will be " + val + " seconds.");
-            this.infectedField = this.addIntField(screen, cx2, y + 32, this.startingInfected, "Starting infected", val -> "The match will start with " + val + " alpha infected.");
-            this.respawnField = this.addIntField(screen, cx1, y + 64, this.respawnDelay, "Respawn delay",
-                "Infected will respawn instantly.",
-                val -> "Infected will be forced to spectate for " + val + " seconds before respawning.");
-            this.friendlyFireButton = this.addToggleButton(screen, "Friendly Fire", () -> this.allowFriendlyFire, cx2, y + 96, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Survivors can damage other survivors.", "Survivors cannot damage each other."),
-                () -> this.allowFriendlyFire = !this.allowFriendlyFire);
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+
+            this.rulesLayout.addRow(
+                "Match Duration", (s, x, y, w) -> {
+                    this.durationField = this.addIntField(s, x, y, this.durationSeconds, w, "Match duration", val -> "Total match duration will be " + val + " seconds.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Starting Infected", (s, x, y, w) -> {
+                    this.infectedField = this.addIntField(s, x, y, this.startingInfected, w, "Starting infected", val -> "The match will start with " + val + " alpha infected.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Respawn Delay", (s, x, y, w) -> {
+                    this.respawnField = this.addIntField(s, x, y, this.respawnDelay, w, "Respawn delay",
+                        "Infected will respawn instantly.",
+                        val -> "Infected will be forced to spectate for " + val + " seconds before respawning.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Friendly Fire", (s, x, y, w) -> {
+                    this.friendlyFireButton = this.addToggleButton(s, "Friendly Fire", () -> this.allowFriendlyFire, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Survivors can damage other survivors.", "Survivors cannot damage each other."),
+                        () -> this.allowFriendlyFire = !this.allowFriendlyFire);
+                }
+            );
         }
     }
 
@@ -73,14 +91,6 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int labelX = this.layout.mainPanel().x() + 38;
-        int labelY = this.layout.mainPanel().y() + 102;
-        if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Match Duration"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Starting Infected"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Respawn Delay"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Friendly Fire"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

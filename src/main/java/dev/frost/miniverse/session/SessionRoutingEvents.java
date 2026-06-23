@@ -306,6 +306,7 @@ public final class SessionRoutingEvents {
 
             if (stopState.returnComplete()) {
                 Miniverse.LOGGER.info("Main server archiving session {} after return complete.", stopState.sessionId());
+                SessionRegistry.computeAndWriteDisplayMetadata(stopState.sessionId());
                 sessionManager.archiveSession(stopState.sessionId());
             }
         }

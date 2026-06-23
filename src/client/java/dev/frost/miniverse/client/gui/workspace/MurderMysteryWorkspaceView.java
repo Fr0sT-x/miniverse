@@ -40,10 +40,31 @@ public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceV
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            this.durationField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 96, this.durationSeconds, "Round duration (seconds)", val -> "The murderer must eliminate everyone within " + val + " seconds.");
-            this.detectiveCountField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 128, this.detectiveCount, "Detective count", val -> "The match will have " + val + " detective(s).");
-            this.coinIntervalField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 160, this.coinInterval, "Coin spawn interval (seconds)", val -> "Coins will spawn on the map every " + val + " seconds.");
-            this.bowPriceField = this.addIntField(screen, this.layout.mainPanel().x() + 180, this.layout.mainPanel().y() + 192, this.bowPrice, "Detective bow price (coins)", val -> "Innocents must collect " + val + " coins to receive a bow.");
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+
+            this.rulesLayout.addRow(
+                "Match Duration (s)", (s, x, y, w) -> {
+                    this.durationField = this.addIntField(s, x, y, this.durationSeconds, w, "Round duration (seconds)", val -> "The murderer must eliminate everyone within " + val + " seconds.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Detective Count", (s, x, y, w) -> {
+                    this.detectiveCountField = this.addIntField(s, x, y, this.detectiveCount, w, "Detective count", val -> "The match will have " + val + " detective(s).");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Coin Interval (s)", (s, x, y, w) -> {
+                    this.coinIntervalField = this.addIntField(s, x, y, this.coinInterval, w, "Coin spawn interval (seconds)", val -> "Coins will spawn on the map every " + val + " seconds.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Detective Bow Price", (s, x, y, w) -> {
+                    this.bowPriceField = this.addIntField(s, x, y, this.bowPrice, w, "Detective bow price (coins)", val -> "Innocents must collect " + val + " coins to receive a bow.");
+                }
+            );
         }
     }
 
@@ -65,14 +86,6 @@ public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceV
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int labelX = this.layout.mainPanel().x() + 38;
-        int labelY = this.layout.mainPanel().y() + 102;
-        if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Match Duration (s)"), labelX, labelY, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Detective Count"), labelX, labelY + 32, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Coin Interval (s)"), labelX, labelY + 64, UiTheme.TEXT_MUTED, false);
-            context.drawText(textRenderer, Text.literal("Detective Bow Price"), labelX, labelY + 96, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

@@ -26,6 +26,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<MapEditorActionPayload> MAP_EDITOR_ACTION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_editor_action"));
     public static final CustomPayload.Id<RelaunchSessionPayload> RELAUNCH_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_relaunch"));
     public static final CustomPayload.Id<DeleteSessionPayload> DELETE_SESSION_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_delete"));
+    public static final CustomPayload.Id<DeleteAllSessionsPayload> DELETE_ALL_SESSIONS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "session_delete_all"));
     public static final CustomPayload.Id<ChangeSeedPayload> CHANGE_SEED_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "change_seed"));
     public static final CustomPayload.Id<CleanupPlayerPayload> CLEANUP_PLAYER_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "cleanup_player"));
     public static final CustomPayload.Id<LauncherSettingsPayload> LAUNCHER_SETTINGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "launcher_settings"));
@@ -93,6 +94,7 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(MAP_EDITOR_ACTION_ID, MapEditorActionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RELAUNCH_SESSION_ID, RelaunchSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DELETE_SESSION_ID, DeleteSessionPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DELETE_ALL_SESSIONS_ID, DeleteAllSessionsPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CHANGE_SEED_ID, ChangeSeedPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CLEANUP_PLAYER_ID, CleanupPlayerPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(LAUNCHER_SETTINGS_ID, LauncherSettingsPayload.CODEC);
@@ -338,6 +340,19 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return DELETE_SESSION_ID;
+        }
+    }
+
+    public record DeleteAllSessionsPayload(java.util.List<String> sessionIds) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DeleteAllSessionsPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING.collect(PacketCodecs.toList()),
+            DeleteAllSessionsPayload::sessionIds,
+            DeleteAllSessionsPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DELETE_ALL_SESSIONS_ID;
         }
     }
 

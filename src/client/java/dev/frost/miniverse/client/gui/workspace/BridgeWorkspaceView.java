@@ -59,35 +59,55 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     @Override
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
-            int y = this.layout.mainPanel().y() + 96;
-            this.targetScoreField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.targetScore, "Target Score", val -> "Goals needed to win the match.");
-            y += 30;
-            this.respawnDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.respawnDelay, "Respawn delay",
-                "Players will respawn instantly.",
-                val -> "Players will be forced to spectate for " + val + " seconds before respawning.");
-            y += 30;
-            this.roundResetDelayField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.roundResetDelay, "Round reset delay",
-                "Next round starts instantly.",
-                val -> "Time in seconds before the next round starts: " + val);
-            y += 30;
-            this.voidDeathOffsetField = this.addIntField(screen, this.layout.mainPanel().x() + 180, y, this.voidDeathOffset, "Void Death Offset", val -> "Y-level offset from the void point selected in map editor, to trigger a void death.");
-            y += 30;
-            
-            this.allowBuildingBtn = this.addToggleButton(screen, "Allow Building", () -> this.allowBuilding, this.layout.mainPanel().x() + 180, y, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can place blocks.", "Block placement is disabled."),
-                () -> this.allowBuilding = !this.allowBuilding);
-            y += 30;
-            this.allowBlockBreakingBtn = this.addToggleButton(screen, "Allow Block Breaking", () -> this.allowBlockBreaking, this.layout.mainPanel().x() + 180, y, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can break placed blocks.", "Block breaking is disabled."),
-                () -> this.allowBlockBreaking = !this.allowBlockBreaking);
-            y += 30;
-            this.enableBowBtn = this.addToggleButton(screen, "Enable Bows", () -> this.enableBow, this.layout.mainPanel().x() + 180, y, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a bow.", "Bows are disabled."),
-                () -> this.enableBow = !this.enableBow);
-            y += 30;
-            this.enablePickaxeBtn = this.addToggleButton(screen, "Enable Pickaxes", () -> this.enablePickaxe, this.layout.mainPanel().x() + 180, y, 170,
-                new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a pickaxe.", "Pickaxes are disabled."),
-                () -> this.enablePickaxe = !this.enablePickaxe);
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+
+            this.rulesLayout.addRow(
+                "Target Score", (s, x, y, w) -> {
+                    this.targetScoreField = this.addIntField(s, x, y, this.targetScore, w, "Target Score", val -> "Goals needed to win the match.");
+                },
+                "Respawn Delay", (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelay, w, "Respawn delay",
+                        "Players will respawn instantly.",
+                        val -> "Players will be forced to spectate for " + val + " seconds before respawning.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Round Reset Delay", (s, x, y, w) -> {
+                    this.roundResetDelayField = this.addIntField(s, x, y, this.roundResetDelay, w, "Round reset delay",
+                        "Next round starts instantly.",
+                        val -> "Time in seconds before the next round starts: " + val);
+                },
+                "Void Death Offset", (s, x, y, w) -> {
+                    this.voidDeathOffsetField = this.addIntField(s, x, y, this.voidDeathOffset, w, "Void Death Offset", val -> "Y-level offset from the void point selected in map editor, to trigger a void death.");
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Allow Building", (s, x, y, w) -> {
+                    this.allowBuildingBtn = this.addToggleButton(s, "Allow Building", () -> this.allowBuilding, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can place blocks.", "Block placement is disabled."),
+                        () -> this.allowBuilding = !this.allowBuilding);
+                },
+                "Allow Block Breaking", (s, x, y, w) -> {
+                    this.allowBlockBreakingBtn = this.addToggleButton(s, "Allow Block Breaking", () -> this.allowBlockBreaking, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can break placed blocks.", "Block breaking is disabled."),
+                        () -> this.allowBlockBreaking = !this.allowBlockBreaking);
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Enable Bows", (s, x, y, w) -> {
+                    this.enableBowBtn = this.addToggleButton(s, "Enable Bows", () -> this.enableBow, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a bow.", "Bows are disabled."),
+                        () -> this.enableBow = !this.enableBow);
+                },
+                "Enable Pickaxes", (s, x, y, w) -> {
+                    this.enablePickaxeBtn = this.addToggleButton(s, "Enable Pickaxes", () -> this.enablePickaxe, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a pickaxe.", "Pickaxes are disabled."),
+                        () -> this.enablePickaxe = !this.enablePickaxe);
+                }
+            );
         }
     }
 
@@ -111,25 +131,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
-        int labelX = this.layout.mainPanel().x() + 38;
-        int y = this.layout.mainPanel().y() + 102;
-        if (this.moduleManager.isActive("rules")) {
-            context.drawText(textRenderer, Text.literal("Target Score"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Respawn Delay"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Round Reset Delay"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Void Death Offset"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Allow Building"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Allow Block Breaking"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Enable Bows"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Enable Pickaxes"), labelX, y, UiTheme.TEXT_MUTED, false);
-        }
     }
 
     @Override

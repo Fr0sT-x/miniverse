@@ -799,12 +799,12 @@ public final class AdminWorkspaceView implements WorkspaceView {
         if (!this.connected()) {
             return;
         }
-        int count = 0;
-        for (SessionEntry entry : this.retainedSessions()) {
-            ClientPlayNetworking.send(new NetworkConstants.DeleteSessionPayload(entry.id()));
-            count++;
+        java.util.List<String> ids = this.retainedSessions().stream().map(SessionEntry::id).toList();
+        if (ids.isEmpty()) {
+            return;
         }
-        this.statusMessage = "Deleting " + count + " retained sessions.";
+        ClientPlayNetworking.send(new NetworkConstants.DeleteAllSessionsPayload(ids));
+        this.statusMessage = "Deleting " + ids.size() + " retained sessions.";
         this.scrollOffset = 0;
         this.rebuildScrollableButtons();
     }

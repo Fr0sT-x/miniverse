@@ -72,6 +72,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     @Nullable
     private MinecraftServer server;
     private DeathLifecycleManager deathLifecycleManager;
+    private final Set<UUID> initializedPlayers = new java.util.HashSet<>();
 
     @Override
     public DeathLifecycleManager getDeathLifecycleManager() {
@@ -103,6 +104,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.tickCounter = 0;
         this.server = null;
         this.paused = false;
+        this.initializedPlayers.clear();
 
         this.deathLifecycleManager = new DeathLifecycleManager(
             new SpeedrunDeathLifecycleConfig(),
@@ -166,6 +168,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.elapsedTicks = 0;
         this.tickCounter = 0;
         this.server = null;
+        this.initializedPlayers.clear();
 
         if (this.context != null) {
             this.context.roster().clear();
@@ -287,10 +290,10 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     public String getFormattedTime() {
         int totalSeconds = this.elapsedTicks / TICKS_PER_SECOND;
-        int minutes = totalSeconds / 60;
+        int hours = totalSeconds / 3600;
+        int minutes = (totalSeconds % 3600) / 60;
         int seconds = totalSeconds % 60;
-        int hundredths = (this.elapsedTicks % TICKS_PER_SECOND) * 5;
-        return String.format("%d:%02d.%02d", minutes, seconds, hundredths);
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds);
     }
 
     public boolean canStartRun() {
@@ -359,12 +362,13 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     private void prepareRunnerForRun(ServerPlayerEntity player) {
-        player.getInventory().clear();
-        player.changeGameMode(GameMode.SURVIVAL);
-        player.setHealth(player.getMaxHealth());
-        player.getHungerManager().setFoodLevel(20);
-        player.getHungerManager().setSaturationLevel(20.0F);
-        player.addStatusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 40, 0, true, false, false));
+        if (this.initializedPlayers.add(player.getUuid())) {
+            player.changeGameMode(GameMode.SURVIVAL);
+            player.setHealth(player.getMaxHealth());
+            player.getHungerManager().setFoodLevel(20);
+            player.getHungerManager().setSaturationLevel(20.0F);
+            player.addStatusEffect(new StatusEffectInstance(StatusEffects.SATURATION, 40, 0, true, false, false));
+        }
     }
 
     private void endGameWithVictory(Text reason) {
@@ -449,7 +453,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             this.runnerLine.updateAll();
         }
         if (this.timeLine != null) {
-            this.timeLine.setText(Text.literal("Time: " + (this.getState() == GameState.RUNNING ? this.elapsedTicks / 20 : 0)));
+            this.timeLine.setText(Text.literal("Time: " + (this.getState() == GameState.RUNNING ? this.getFormattedTime() : "00:00:00")));
             this.timeLine.updateAll();
         }
     }
@@ -467,7 +471,6 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
         VanillaTeamOptions runnerOptions = VanillaTeamOptions.defaults()
             .withColor(Formatting.GREEN)
-            .withPrefix(Text.literal("[RUNNER] ").formatted(Formatting.GREEN))
             .withFriendlyFireAllowed(true)
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
         VanillaTeamOptions spectatorOptions = VanillaTeamOptions.defaults()
@@ -532,6 +535,11 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             json.addProperty("runnerUuid", this.runnerUuid.toString());
         }
         json.addProperty("elapsedTicks", this.elapsedTicks);
+        com.google.gson.JsonArray initializedArray = new com.google.gson.JsonArray();
+        for (UUID uuid : this.initializedPlayers) {
+            initializedArray.add(uuid.toString());
+        }
+        json.add("initializedPlayers", initializedArray);
         return json;
     }
 
@@ -551,6 +559,12 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         }
         if (json.has("elapsedTicks")) {
             this.elapsedTicks = json.get("elapsedTicks").getAsInt();
+        }
+        if (json.has("initializedPlayers")) {
+            this.initializedPlayers.clear();
+            for (com.google.gson.JsonElement el : json.getAsJsonArray("initializedPlayers")) {
+                this.initializedPlayers.add(UUID.fromString(el.getAsString()));
+            }
         }
         this.rebuildScoreboard();
     }

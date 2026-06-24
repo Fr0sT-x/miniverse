@@ -87,6 +87,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     private final Map<UUID, ArrayDeque<UUID>> recentTargets = new ConcurrentHashMap<>();
     private final Map<UUID, SwapAttribution> deathAttributions = new ConcurrentHashMap<>();
     private Map<UUID, UUID> pendingAssignment = Map.of();
+    private final Set<UUID> initializedPlayers = ConcurrentHashMap.newKeySet();
 
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private DeathSwapSettings settings = DeathSwapSettings.defaults();
@@ -138,6 +139,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         this.visibleCountdowns.reset();
         this.teams.clear();
         this.spectators.clearAll();
+        this.initializedPlayers.clear();
         this.aliveParticipants.clear();
         this.points.clear();
         this.recentTargets.clear();
@@ -165,6 +167,8 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         this.visibleCountdowns.reset();
         this.aliveParticipants.clear();
         this.aliveParticipants.addAll(participants.stream().map(ServerPlayerEntity::getUuid).toList());
+        this.initializedPlayers.clear();
+        this.initializedPlayers.addAll(participants.stream().map(ServerPlayerEntity::getUuid).toList());
         this.points.clear();
         this.deathAttributions.clear();
         if (this.server != null) {
@@ -297,10 +301,12 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         if (this.state == GameState.RUNNING) {
             this.aliveParticipants.add(player.getUuid());
             this.points.putIfAbsent(player.getUuid(), 0);
-            player.changeGameMode(GameMode.SURVIVAL);
-            player.setHealth(player.getMaxHealth());
-            player.getHungerManager().setFoodLevel(20);
-            player.getHungerManager().setSaturationLevel(20.0F);
+            if (this.initializedPlayers.add(player.getUuid())) {
+                player.changeGameMode(GameMode.SURVIVAL);
+                player.setHealth(player.getMaxHealth());
+                player.getHungerManager().setFoodLevel(20);
+                player.getHungerManager().setSaturationLevel(20.0F);
+            }
             this.rebuildSoloTeams(this.getParticipants());
             this.rebuildScoreboard();
             player.sendMessage(Text.literal("Joined Death Swap in progress. You will be included in the next swap cycle.").formatted(Formatting.GREEN), false);
@@ -672,6 +678,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         root.add("recentTargets", this.writeRecentTargets());
         root.add("deathAttributions", this.writeDeathAttributions());
         root.add("pendingAssignment", writeUuidUuidMap(this.pendingAssignment));
+        root.add("initializedPlayers", writeUuidArray(this.initializedPlayers));
         return root;
     }
 
@@ -687,6 +694,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         this.recentTargets.clear();
         this.deathAttributions.clear();
         this.pendingAssignment = Map.of();
+        this.initializedPlayers.clear();
 
         if (root.has("settings") && root.get("settings").isJsonObject()) {
             this.settings = readSettings(root.getAsJsonObject("settings"), this.settings);
@@ -706,6 +714,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         this.readRecentTargets(root);
         this.readDeathAttributions(root);
         this.pendingAssignment = readUuidUuidMap(root, "pendingAssignment");
+        this.initializedPlayers.addAll(readUuidArray(root, "initializedPlayers"));
         this.rebuildScoreboard();
     }
 

@@ -71,7 +71,7 @@ public record ManhuntSessionData(
     private static JsonObject writeSettings(ManhuntSettings settings) {
         JsonObject object = new JsonObject();
         object.addProperty("hunterReleaseDelaySeconds", settings.hunterReleaseDelaySeconds());
-        object.addProperty("speedrunnerRespawnDelaySeconds", settings.speedrunnerRespawnDelaySeconds());
+        object.addProperty("runnerRespawnDelaySeconds", settings.runnerRespawnDelaySeconds());
         object.addProperty("huntersCompassEnabled", settings.huntersCompassEnabled());
         object.addProperty("netherTrackingEnabled", settings.netherTrackingEnabled());
         object.addProperty("compassCooldownSeconds", settings.compassCooldownSeconds());
@@ -81,6 +81,8 @@ public record ManhuntSessionData(
         object.addProperty("hunterRespawnDelaySeconds", settings.hunterRespawnDelaySeconds());
         object.addProperty("midGameJoinTeleportEnabled", settings.midGameJoinTeleportEnabled());
         object.addProperty("disconnectGraceSeconds", settings.disconnectGraceSeconds());
+        object.addProperty("runnerRespawnAtTeammate", settings.runnerRespawnAtTeammate());
+        object.addProperty("hunterRespawnAtTeammate", settings.hunterRespawnAtTeammate());
         return object;
     }
 
@@ -89,9 +91,15 @@ public record ManhuntSessionData(
         if (object == null) {
             return defaults;
         }
+        
+        int runnerRespawnDelay = intValue(object, "runnerRespawnDelaySeconds", -1);
+        if (runnerRespawnDelay == -1) {
+            runnerRespawnDelay = intValue(object, "speedrunnerRespawnDelaySeconds", defaults.runnerRespawnDelaySeconds());
+        }
+
         return new ManhuntSettings(
             intValue(object, "hunterReleaseDelaySeconds", defaults.hunterReleaseDelaySeconds()),
-            intValue(object, "speedrunnerRespawnDelaySeconds", defaults.speedrunnerRespawnDelaySeconds()),
+            runnerRespawnDelay,
             booleanValue(object, "huntersCompassEnabled", defaults.huntersCompassEnabled()),
             booleanValue(object, "netherTrackingEnabled", defaults.netherTrackingEnabled()),
             intValue(object, "compassCooldownSeconds", defaults.compassCooldownSeconds()),
@@ -100,7 +108,9 @@ public record ManhuntSessionData(
             intValue(object, "hunterLives", defaults.hunterLives()),
             intValue(object, "hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds()),
             booleanValue(object, "midGameJoinTeleportEnabled", defaults.midGameJoinTeleportEnabled()),
-            intValue(object, "disconnectGraceSeconds", defaults.disconnectGraceSeconds())
+            intValue(object, "disconnectGraceSeconds", defaults.disconnectGraceSeconds()),
+            booleanValue(object, "runnerRespawnAtTeammate", defaults.runnerRespawnAtTeammate()),
+            booleanValue(object, "hunterRespawnAtTeammate", defaults.hunterRespawnAtTeammate())
         );
     }
 

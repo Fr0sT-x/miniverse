@@ -200,7 +200,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             seconds,
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             current.huntersCompassEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
@@ -209,7 +209,9 @@ public final class ManhuntCommands {
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter release delay to " + seconds + " second(s)."), true);
         return 1;
@@ -226,7 +228,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             current.hunterReleaseDelaySeconds(),
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             enabled,
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
@@ -235,7 +237,9 @@ public final class ManhuntCommands {
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter compass to " + enabled + "."), true);
         return 1;
@@ -252,7 +256,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             current.hunterReleaseDelaySeconds(),
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             current.huntersCompassEnabled(),
             enabled,
             current.compassCooldownSeconds(),
@@ -261,7 +265,9 @@ public final class ManhuntCommands {
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt Nether tracking to " + enabled + "."), true);
         return 1;
@@ -278,7 +284,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             current.hunterReleaseDelaySeconds(),
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             current.huntersCompassEnabled(),
             current.netherTrackingEnabled(),
             seconds,
@@ -287,7 +293,9 @@ public final class ManhuntCommands {
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt compass cooldown to " + seconds + " second(s)."), true);
         return 1;
@@ -304,7 +312,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             current.hunterReleaseDelaySeconds(),
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             current.huntersCompassEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
@@ -313,7 +321,9 @@ public final class ManhuntCommands {
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt runner glow pulse to every " + minutes + " minute(s). 0 disables it."), true);
         return 1;
@@ -330,7 +340,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             current.hunterReleaseDelaySeconds(),
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             current.huntersCompassEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
@@ -339,7 +349,9 @@ public final class ManhuntCommands {
             current.hunterLives(),
             current.hunterRespawnDelaySeconds(),
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt runner lives to " + formatLives(lives) + "."), true);
         return 1;
@@ -356,7 +368,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             current.hunterReleaseDelaySeconds(),
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             current.huntersCompassEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
@@ -365,7 +377,9 @@ public final class ManhuntCommands {
             lives,
             current.hunterRespawnDelaySeconds(),
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter lives to " + formatLives(lives) + "."), true);
         return 1;
@@ -382,7 +396,7 @@ public final class ManhuntCommands {
         ManhuntSettings current = manhunt.getSettings();
         manhunt.applySettings(new ManhuntSettings(
             current.hunterReleaseDelaySeconds(),
-            current.speedrunnerRespawnDelaySeconds(),
+            current.runnerRespawnDelaySeconds(),
             current.huntersCompassEnabled(),
             current.netherTrackingEnabled(),
             current.compassCooldownSeconds(),
@@ -391,7 +405,9 @@ public final class ManhuntCommands {
             current.hunterLives(),
             seconds,
             current.midGameJoinTeleportEnabled(),
-            current.disconnectGraceSeconds()
+            current.disconnectGraceSeconds(),
+            current.runnerRespawnAtTeammate(),
+            current.hunterRespawnAtTeammate()
         ));
         source.sendFeedback(() -> Text.literal("Set Manhunt hunter respawn delay to " + seconds + " second(s)."), true);
         return 1;
@@ -450,7 +466,7 @@ public final class ManhuntCommands {
         source.sendFeedback(() -> Text.literal("- Hunters: " + manhunt.getHunters().size()), false);
         ManhuntSettings settings = manhunt.getSettings();
         source.sendFeedback(() -> Text.literal("- Hunter release delay: " + settings.hunterReleaseDelaySeconds() + "s"), false);
-        source.sendFeedback(() -> Text.literal("- Speedrunner respawn delay: " + settings.speedrunnerRespawnDelaySeconds() + "s"), false);
+        source.sendFeedback(() -> Text.literal("- Speedrunner respawn delay: " + settings.runnerRespawnDelaySeconds() + "s"), false);
         source.sendFeedback(() -> Text.literal("- Hunter respawn delay: " + settings.hunterRespawnDelaySeconds() + "s"), false);
         source.sendFeedback(() -> Text.literal("- Compass: " + settings.huntersCompassEnabled() + " cooldown=" + settings.compassCooldownSeconds() + "s"), false);
         source.sendFeedback(() -> Text.literal("- Nether tracking: " + settings.netherTrackingEnabled()), false);

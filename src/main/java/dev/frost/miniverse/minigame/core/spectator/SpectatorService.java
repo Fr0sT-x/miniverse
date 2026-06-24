@@ -118,11 +118,18 @@ public final class SpectatorService {
         for (UUID spectatorId : List.copyOf(this.sessions.keySet())) {
             this.stopSpectating(spectatorId, SpectatorStopReason.MATCH_END, restoreGameMode, server);
         }
+        this.cameraController.clearPending();
         this.tickCounter = 0L;
     }
 
     public void tick(MinecraftServer server) {
-        if (server == null || this.sessions.isEmpty()) {
+        if (server == null) {
+            return;
+        }
+        // Process sync requests before anything else.
+        this.cameraController.tickSyncRequests(server);
+
+        if (this.sessions.isEmpty()) {
             return;
         }
         this.tickCounter++;
@@ -221,7 +228,7 @@ public final class SpectatorService {
         session.setTargetId(nextTargetId);
         Entity target = SpectatorUtils.findEntity(spectator.getEntityWorld().getServer(), nextTargetId);
         if (target != null) {
-            this.cameraController.attach(spectator, target);
+            this.cameraController.attachImmediate(spectator, target);
         }
         if (!nextTargetId.equals(previous)) {
             this.events.notifyTargetChanged(session, previous, nextTargetId);
@@ -234,11 +241,14 @@ public final class SpectatorService {
         if (session == null) {
             return;
         }
-        if (restoreGameMode && server != null) {
+        if (server != null) {
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(spectatorId);
             if (player != null && !player.isDisconnected()) {
+                dev.frost.miniverse.minigame.core.freeze.FreezeService.getInstance().unfreeze(player, dev.frost.miniverse.minigame.core.freeze.FreezeReason.SPECTATOR_NO_TARGET);
                 this.cameraController.detach(player);
-                player.changeGameMode(session.returnMode());
+                if (restoreGameMode) {
+                    player.changeGameMode(session.returnMode());
+                }
             }
         }
         this.events.notifyStop(session, reason);
@@ -283,8 +293,16 @@ public final class SpectatorService {
             if (selectedTarget != null) {
                 session.setTargetId(selectedTarget.getUuid());
                 if (force || !this.cameraController.isAttachedTo(spectator, selectedTarget)) {
-                    this.cameraController.attach(spectator, selectedTarget);
+                    if (force) {
+                        this.cameraController.attach(spectator, selectedTarget);
+                    } else {
+                        this.cameraController.attachImmediate(spectator, selectedTarget);
+                    }
                     FreezeService.getInstance().unfreeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
+                } else if (restrictions.lockCamera() && spectator.interactionManager.getGameMode() == GameMode.SPECTATOR) {
+                    if (this.tickCounter % 40 == 0) {
+                        this.cameraController.forceSyncPacket(spectator, selectedTarget);
+                    }
                 }
             } else {
                 session.setTargetId(null);
@@ -316,7 +334,11 @@ public final class SpectatorService {
             if (selectedTarget != null) {
                 session.setTargetId(selectedTarget.getUuid());
                 if (force || !this.cameraController.isAttachedTo(spectator, selectedTarget)) {
-                    this.cameraController.attach(spectator, selectedTarget);
+                    if (force) {
+                        this.cameraController.attach(spectator, selectedTarget);
+                    } else {
+                        this.cameraController.attachImmediate(spectator, selectedTarget);
+                    }
                 }
             } else {
                 session.setTargetId(null);

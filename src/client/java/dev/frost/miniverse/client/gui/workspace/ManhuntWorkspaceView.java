@@ -20,7 +20,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     private IntFieldWidget gracePeriodField;
     private TextFieldWidget seedValueField;
-    private IntFieldWidget respawnDelayField;
+    private IntFieldWidget runnerRespawnDelayField;
     private IntFieldWidget hunterRespawnDelayField;
     private ButtonWidget midGameJoinTeleportButton;
     private IntFieldWidget compassCooldownField;
@@ -30,17 +30,23 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     private ButtonWidget netherTrackingButton;
     private ButtonWidget runnerLivesButton;
     private ButtonWidget hunterLivesButton;
+    private ButtonWidget runnerRespawnAtTeammateButton;
+    private ButtonWidget hunterRespawnAtTeammateButton;
 
-    private boolean huntersCompassEnabled = true;
-    private boolean netherTrackingEnabled = true;
-    private boolean midGameJoinTeleportEnabled = false;
-    private int gracePeriodSeconds = 30;
-    private int respawnDelaySeconds = 300;
-    private int hunterRespawnDelaySeconds = 0;
-    private int compassCooldownSeconds = 2;
-    private int runnerGlowPulseMinutes = 0;
-    private int runnerLives = -1;
-    private int hunterLives = -1;
+    private final dev.frost.miniverse.minigame.impl.manhunt.ManhuntSettings defaults = dev.frost.miniverse.minigame.impl.manhunt.ManhuntSettings.defaults();
+
+    private boolean huntersCompassEnabled = defaults.huntersCompassEnabled();
+    private boolean netherTrackingEnabled = defaults.netherTrackingEnabled();
+    private boolean midGameJoinTeleportEnabled = defaults.midGameJoinTeleportEnabled();
+    private int gracePeriodSeconds = defaults.hunterReleaseDelaySeconds();
+    private int runnerRespawnDelaySeconds = defaults.runnerRespawnDelaySeconds();
+    private int hunterRespawnDelaySeconds = defaults.hunterRespawnDelaySeconds();
+    private int compassCooldownSeconds = defaults.compassCooldownSeconds();
+    private int runnerGlowPulseMinutes = defaults.runnerGlowPulseMinutes();
+    private int runnerLives = defaults.runnerLives();
+    private int hunterLives = defaults.hunterLives();
+    private boolean runnerRespawnAtTeammate = defaults.runnerRespawnAtTeammate();
+    private boolean hunterRespawnAtTeammate = defaults.hunterRespawnAtTeammate();
     private SeedMode seedMode = SeedMode.RANDOM;
     private String seedValue = "";
 
@@ -150,10 +156,10 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
                     });
                 },
                 "Runner Respawn", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Runner respawn seconds",
+                    this.runnerRespawnDelayField = this.addIntField(s, x, y, this.runnerRespawnDelaySeconds, w, "Runner respawn seconds",
                         "Speedrunners will respawn instantly.",
                         val -> "Speedrunners will be forced to spectate for " + val + " seconds before respawning.");
-                    this.addStepper(s, this.respawnDelayField, x + w + 4, y, 0, 3600, 30);
+                    this.addStepper(s, this.runnerRespawnDelayField, x + w + 4, y, 0, 3600, 30);
                 }
             );
 
@@ -175,6 +181,19 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
                         "Hunters will respawn instantly.",
                         val -> "Hunters will be forced to spectate for " + val + " seconds before respawning.");
                     this.addStepper(s, this.hunterRespawnDelayField, x + w + 4, y, 0, 3600, 5);
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Runner Respawn TP", (s, x, y, w) -> {
+                    this.runnerRespawnAtTeammateButton = this.addToggleButton(s, "Runner Respawn TP", () -> this.runnerRespawnAtTeammate, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Speedrunners will spawn at spectating teammate's location.", "OFF: Speedrunners will spawn at normal spawn location."),
+                        () -> this.runnerRespawnAtTeammate = !this.runnerRespawnAtTeammate);
+                },
+                "Hunter Respawn TP", (s, x, y, w) -> {
+                    this.hunterRespawnAtTeammateButton = this.addToggleButton(s, "Hunter Respawn TP", () -> this.hunterRespawnAtTeammate, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Hunters will spawn at spectating teammate's location.", "OFF: Hunters will spawn at normal spawn location."),
+                        () -> this.hunterRespawnAtTeammate = !this.hunterRespawnAtTeammate);
                 }
             );
 
@@ -211,7 +230,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             Text.literal(this.teamGrid.getMembers("speedrunner").size() + " speedrunner(s) vs " + this.teamGrid.getMembers("hunter").size() + " hunter(s)"),
             Text.literal("Release delay: " + this.gracePeriodSeconds + "s"),
             Text.literal("Tracking: " + onOff(this.huntersCompassEnabled) + ", Nether " + onOff(this.netherTrackingEnabled) + ", cooldown " + this.compassCooldownSeconds + "s"),
-            Text.literal("Runner lives: " + formatLives(this.runnerLives) + ", respawn " + this.respawnDelaySeconds + "s"),
+            Text.literal("Runner lives: " + formatLives(this.runnerLives) + ", respawn " + this.runnerRespawnDelaySeconds + "s"),
             Text.literal("Hunter lives: " + formatLives(this.hunterLives) + ", respawn " + this.hunterRespawnDelaySeconds + "s"),
             Text.literal("Seed: " + this.seedMode.displayName)
         );
@@ -247,7 +266,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             }
             this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
             this.compassCooldownSeconds = readClamped(this.compassCooldownField, this.compassCooldownSeconds, 0, 300);
-            this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 0, 3600);
+            this.runnerRespawnDelaySeconds = readClamped(this.runnerRespawnDelayField, this.runnerRespawnDelaySeconds, 0, 3600);
             this.hunterRespawnDelaySeconds = readClamped(this.hunterRespawnDelayField, this.hunterRespawnDelaySeconds, 0, 3600);
             this.runnerGlowPulseMinutes = readClamped(this.runnerGlowPulseField, this.runnerGlowPulseMinutes, 0, 120);
         }
@@ -281,7 +300,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     protected void buildSessionSettings(SessionPayloadBuilder builder) {
         builder.settings().putBoolean("huntersCompass", this.huntersCompassEnabled);
         builder.settings().putInt("hunterReleaseDelaySeconds", this.gracePeriodSeconds);
-        builder.settings().putInt("speedrunnerRespawnDelaySeconds", this.respawnDelaySeconds);
+        builder.settings().putInt("speedrunnerRespawnDelaySeconds", this.runnerRespawnDelaySeconds);
         builder.settings().putInt("hunterRespawnDelaySeconds", this.hunterRespawnDelaySeconds);
         builder.settings().putInt("compassCooldownSeconds", this.compassCooldownSeconds);
         builder.settings().putInt("runnerGlowPulseMinutes", this.runnerGlowPulseMinutes);
@@ -289,6 +308,8 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putInt("hunterLives", this.hunterLives);
         builder.settings().putBoolean("netherTracking", this.netherTrackingEnabled);
         builder.settings().putBoolean("midGameJoinTeleportEnabled", this.midGameJoinTeleportEnabled);
+        builder.settings().putBoolean("runnerRespawnAtTeammate", this.runnerRespawnAtTeammate);
+        builder.settings().putBoolean("hunterRespawnAtTeammate", this.hunterRespawnAtTeammate);
         builder.settings().putString("seedMode", this.seedMode.nbtValue);
         if (this.seedMode == SeedMode.FIXED) {
             long parsedSeed;

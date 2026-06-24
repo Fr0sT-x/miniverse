@@ -47,7 +47,7 @@ public final class ManhuntDefinition implements MinigameDefinition {
     public void writeSessionProperties(NbtCompound settingsNbt, Properties properties) {
         ManhuntSettings settings = ManhuntSettings.fromNbt(settingsNbt);
         properties.setProperty("manhunt.hunterReleaseDelaySeconds", Integer.toString(settings.hunterReleaseDelaySeconds()));
-        properties.setProperty("manhunt.speedrunnerRespawnDelaySeconds", Integer.toString(settings.speedrunnerRespawnDelaySeconds()));
+        properties.setProperty("manhunt.runnerRespawnDelaySeconds", Integer.toString(settings.runnerRespawnDelaySeconds()));
         properties.setProperty("manhunt.huntersCompass", Boolean.toString(settings.huntersCompassEnabled()));
         properties.setProperty("manhunt.netherTracking", Boolean.toString(settings.netherTrackingEnabled()));
         properties.setProperty("manhunt.compassCooldownSeconds", Integer.toString(settings.compassCooldownSeconds()));
@@ -56,6 +56,8 @@ public final class ManhuntDefinition implements MinigameDefinition {
         properties.setProperty("manhunt.hunterLives", Integer.toString(settings.hunterLives()));
         properties.setProperty("manhunt.hunterRespawnDelaySeconds", Integer.toString(settings.hunterRespawnDelaySeconds()));
         properties.setProperty("manhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
+        properties.setProperty("manhunt.runnerRespawnAtTeammate", Boolean.toString(settings.runnerRespawnAtTeammate()));
+        properties.setProperty("manhunt.hunterRespawnAtTeammate", Boolean.toString(settings.hunterRespawnAtTeammate()));
 
         NbtList roles = settingsNbt.getList("roles", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < roles.size(); i++) {
@@ -72,7 +74,7 @@ public final class ManhuntDefinition implements MinigameDefinition {
     public void writeLaunchProperties(NbtCompound settingsNbt, Map<String, String> properties) {
         ManhuntSettings settings = ManhuntSettings.fromNbt(settingsNbt);
         properties.put("miniverse.manhunt.hunterReleaseDelaySeconds", Integer.toString(settings.hunterReleaseDelaySeconds()));
-        properties.put("miniverse.manhunt.respawnDelaySeconds", Integer.toString(settings.speedrunnerRespawnDelaySeconds()));
+        properties.put("miniverse.manhunt.runnerRespawnDelaySeconds", Integer.toString(settings.runnerRespawnDelaySeconds()));
         properties.put("miniverse.manhunt.huntersCompass", Boolean.toString(settings.huntersCompassEnabled()));
         properties.put("miniverse.manhunt.netherTracking", Boolean.toString(settings.netherTrackingEnabled()));
         properties.put("miniverse.manhunt.compassCooldownSeconds", Integer.toString(settings.compassCooldownSeconds()));
@@ -81,6 +83,8 @@ public final class ManhuntDefinition implements MinigameDefinition {
         properties.put("miniverse.manhunt.hunterLives", Integer.toString(settings.hunterLives()));
         properties.put("miniverse.manhunt.hunterRespawnDelaySeconds", Integer.toString(settings.hunterRespawnDelaySeconds()));
         properties.put("miniverse.manhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
+        properties.put("miniverse.manhunt.runnerRespawnAtTeammate", Boolean.toString(settings.runnerRespawnAtTeammate()));
+        properties.put("miniverse.manhunt.hunterRespawnAtTeammate", Boolean.toString(settings.hunterRespawnAtTeammate()));
     }
 
     @Override

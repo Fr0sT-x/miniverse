@@ -33,28 +33,14 @@ public class ManhuntPostDeathPolicy implements PostDeathPolicy {
             return;
         }
 
-        // We already incremented in onDeath callback, so we need to get current deaths without incrementing.
-        int deaths = role == ManhuntRole.SPEEDRUNNER ? 
-            this.minigame.incrementDeaths(this.victimId, role) - 1 : 
-            this.minigame.incrementDeaths(this.victimId, role) - 1; 
-        
-        // Wait, incrementing again? We shouldn't!
-        // We'll use a hack to read without incrementing:
-        // Or we just check lives remaining from the current death count.
-        // Actually, incrementDeaths returns the newly merged value.
-        // We already did this. We can just add a getDeaths in minigame, but for now we can just subtract 1.
+        int deaths = this.minigame.getDeaths(this.victimId, role);
         
         int maxLives = role == ManhuntRole.SPEEDRUNNER ? 
             this.minigame.getSettings().runnerLives() : 
             this.minigame.getSettings().hunterLives();
 
-        // Let's get the deaths by merging 0, which won't change the value since we sum.
-        deaths = this.minigame.incrementDeaths(this.victimId, role);
-        this.minigame.incrementDeaths(this.victimId, role); // Wait, merge 1 adds 1. 
-        // Oh, we just incremented again! We will fix this in Minigame.
-
         int delaySeconds = role == ManhuntRole.SPEEDRUNNER ? 
-            this.minigame.getSettings().speedrunnerRespawnDelaySeconds() : 
+            this.minigame.getSettings().runnerRespawnDelaySeconds() : 
             this.minigame.getSettings().hunterRespawnDelaySeconds();
 
         // We can just rely on the fact that if delay == 0, we respawn instantly.

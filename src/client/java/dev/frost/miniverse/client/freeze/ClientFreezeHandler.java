@@ -30,6 +30,7 @@ public final class ClientFreezeHandler {
             resyncKey(client, client.options.rightKey);
             resyncKey(client, client.options.jumpKey);
             resyncKey(client, client.options.sprintKey);
+            resyncKey(client, client.options.sneakKey);
         }
 
         wasFrozen = frozen;
@@ -43,6 +44,7 @@ public final class ClientFreezeHandler {
         suppressKey(client.options.rightKey);
         suppressKey(client.options.jumpKey);
         suppressKey(client.options.sprintKey);
+        suppressKey(client.options.sneakKey);
 
         if (client.player.input != null) {
             clearInput(client.player.input);
@@ -80,4 +82,3 @@ public final class ClientFreezeHandler {
         key.setPressed(pressed);
     }
 }
-

@@ -218,6 +218,14 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         }
     }
 
+    public int getDeaths(UUID playerId, ManhuntRole role) {
+        if (role == ManhuntRole.SPEEDRUNNER) {
+            return this.speedrunnerDeaths.getOrDefault(playerId, 0);
+        } else {
+            return this.hunterDeaths.getOrDefault(playerId, 0);
+        }
+    }
+
     public void endGameWithHunterVictory() {
         this.state = GameState.ENDING;
         this.setRuntimeState(GameState.ENDING);
@@ -271,9 +279,6 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         }
 
         this.gameTicks++;
-        if (this.deathLifecycleManager != null) {
-            this.deathLifecycleManager.tick(server);
-        }
 
         this.tickCounter++;
         if (this.tickCounter >= 20) {
@@ -563,7 +568,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     }
 
     public void setSpeedrunnerRespawnDelaySeconds(int seconds) {
-        this.applySettings(this.settings.withSpeedrunnerRespawnDelaySeconds(seconds));
+        this.applySettings(this.settings.withRunnerRespawnDelaySeconds(seconds));
     }
 
     static boolean isTrackerCompass(ItemStack stack) {

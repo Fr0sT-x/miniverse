@@ -7,7 +7,7 @@ import java.util.Properties;
 
 public record ManhuntSettings(
     int hunterReleaseDelaySeconds,
-    int speedrunnerRespawnDelaySeconds,
+    int runnerRespawnDelaySeconds,
     boolean huntersCompassEnabled,
     boolean netherTrackingEnabled,
     int compassCooldownSeconds,
@@ -16,7 +16,9 @@ public record ManhuntSettings(
     int hunterLives,
     int hunterRespawnDelaySeconds,
     boolean midGameJoinTeleportEnabled,
-    int disconnectGraceSeconds
+    int disconnectGraceSeconds,
+    boolean runnerRespawnAtTeammate,
+    boolean hunterRespawnAtTeammate
 ) {
     public static final int UNLIMITED_LIVES = -1;
 
@@ -25,16 +27,18 @@ public record ManhuntSettings(
         int modeGrace = Integer.getInteger("miniverse.manhunt.disconnectGraceSeconds", globalGrace);
         return new ManhuntSettings(
             Integer.getInteger("miniverse.manhunt.hunterReleaseDelaySeconds", 10),
-            Integer.getInteger("miniverse.manhunt.respawnDelaySeconds", 5),
+            Integer.getInteger("miniverse.manhunt.runnerRespawnDelaySeconds", 300),
             Boolean.parseBoolean(System.getProperty("miniverse.manhunt.huntersCompass", "true")),
             Boolean.parseBoolean(System.getProperty("miniverse.manhunt.netherTracking", "true")),
             Integer.getInteger("miniverse.manhunt.compassCooldownSeconds", 2),
             Integer.getInteger("miniverse.manhunt.runnerGlowPulseMinutes", 0),
             Integer.getInteger("miniverse.manhunt.runnerLives", UNLIMITED_LIVES),
             Integer.getInteger("miniverse.manhunt.hunterLives", UNLIMITED_LIVES),
-            Integer.getInteger("miniverse.manhunt.hunterRespawnDelaySeconds", 0),
+            Integer.getInteger("miniverse.manhunt.hunterRespawnDelaySeconds", 5),
             Boolean.parseBoolean(System.getProperty("miniverse.manhunt.midGameJoinTeleportEnabled", "false")),
-            modeGrace
+            modeGrace,
+            Boolean.parseBoolean(System.getProperty("miniverse.manhunt.runnerRespawnAtTeammate", "true")),
+            Boolean.parseBoolean(System.getProperty("miniverse.manhunt.hunterRespawnAtTeammate", "false"))
         ).normalized();
     }
 
@@ -49,9 +53,17 @@ public record ManhuntSettings(
             releaseDelay = getIntOrDefault(settings, "gracePeriodSeconds", defaults.hunterReleaseDelaySeconds());
         }
 
+        int runnerRespawnDelay = getIntOrDefault(settings, "runnerRespawnDelaySeconds", Integer.MIN_VALUE);
+        if (runnerRespawnDelay == Integer.MIN_VALUE) {
+            runnerRespawnDelay = getIntOrDefault(settings, "speedrunnerRespawnDelaySeconds", Integer.MIN_VALUE);
+            if (runnerRespawnDelay == Integer.MIN_VALUE) {
+                runnerRespawnDelay = getIntOrDefault(settings, "respawnDelaySeconds", defaults.runnerRespawnDelaySeconds());
+            }
+        }
+
         return new ManhuntSettings(
             releaseDelay,
-            getIntOrDefault(settings, "speedrunnerRespawnDelaySeconds", defaults.speedrunnerRespawnDelaySeconds()),
+            runnerRespawnDelay,
             getBooleanOrDefault(settings, "huntersCompass", defaults.huntersCompassEnabled()),
             getBooleanOrDefault(settings, "netherTracking", defaults.netherTrackingEnabled()),
             getIntOrDefault(settings, "compassCooldownSeconds", defaults.compassCooldownSeconds()),
@@ -60,7 +72,9 @@ public record ManhuntSettings(
             getIntOrDefault(settings, "hunterLives", defaults.hunterLives()),
             getIntOrDefault(settings, "hunterRespawnDelaySeconds", defaults.hunterRespawnDelaySeconds()),
             getBooleanOrDefault(settings, "midGameJoinTeleportEnabled", defaults.midGameJoinTeleportEnabled()),
-            getIntOrDefault(settings, "disconnectGraceSeconds", defaults.disconnectGraceSeconds())
+            getIntOrDefault(settings, "disconnectGraceSeconds", defaults.disconnectGraceSeconds()),
+            getBooleanOrDefault(settings, "runnerRespawnAtTeammate", defaults.runnerRespawnAtTeammate()),
+            getBooleanOrDefault(settings, "hunterRespawnAtTeammate", defaults.hunterRespawnAtTeammate())
         ).normalized();
     }
 
@@ -72,7 +86,7 @@ public record ManhuntSettings(
 
         return new ManhuntSettings(
             parseInt(properties.getProperty("manhunt.hunterReleaseDelaySeconds"), defaults.hunterReleaseDelaySeconds()),
-            parseInt(properties.getProperty("manhunt.speedrunnerRespawnDelaySeconds"), defaults.speedrunnerRespawnDelaySeconds()),
+            parseInt(properties.getProperty("manhunt.runnerRespawnDelaySeconds", properties.getProperty("manhunt.speedrunnerRespawnDelaySeconds", properties.getProperty("manhunt.respawnDelaySeconds"))), defaults.runnerRespawnDelaySeconds()),
             parseBoolean(properties.getProperty("manhunt.huntersCompass"), defaults.huntersCompassEnabled()),
             parseBoolean(properties.getProperty("manhunt.netherTracking"), defaults.netherTrackingEnabled()),
             parseInt(properties.getProperty("manhunt.compassCooldownSeconds"), defaults.compassCooldownSeconds()),
@@ -81,11 +95,13 @@ public record ManhuntSettings(
             parseInt(properties.getProperty("manhunt.hunterLives"), defaults.hunterLives()),
             parseInt(properties.getProperty("manhunt.hunterRespawnDelaySeconds"), defaults.hunterRespawnDelaySeconds()),
             parseBoolean(properties.getProperty("manhunt.midGameJoinTeleportEnabled"), defaults.midGameJoinTeleportEnabled()),
-            parseInt(properties.getProperty("manhunt.disconnectGraceSeconds"), defaults.disconnectGraceSeconds())
+            parseInt(properties.getProperty("manhunt.disconnectGraceSeconds"), defaults.disconnectGraceSeconds()),
+            parseBoolean(properties.getProperty("manhunt.runnerRespawnAtTeammate"), defaults.runnerRespawnAtTeammate()),
+            parseBoolean(properties.getProperty("manhunt.hunterRespawnAtTeammate"), defaults.hunterRespawnAtTeammate())
         ).normalized();
     }
 
-    public ManhuntSettings withSpeedrunnerRespawnDelaySeconds(int seconds) {
+    public ManhuntSettings withRunnerRespawnDelaySeconds(int seconds) {
         return new ManhuntSettings(
             this.hunterReleaseDelaySeconds,
             seconds,
@@ -97,14 +113,16 @@ public record ManhuntSettings(
             this.hunterLives,
             this.hunterRespawnDelaySeconds,
             this.midGameJoinTeleportEnabled,
-            this.disconnectGraceSeconds
+            this.disconnectGraceSeconds,
+            this.runnerRespawnAtTeammate,
+            this.hunterRespawnAtTeammate
         ).normalized();
     }
 
     private ManhuntSettings normalized() {
         return new ManhuntSettings(
             Math.clamp(this.hunterReleaseDelaySeconds, 0, 3600),
-            Math.clamp(this.speedrunnerRespawnDelaySeconds, 0, 3600),
+            Math.clamp(this.runnerRespawnDelaySeconds, 0, 3600),
             this.huntersCompassEnabled,
             this.netherTrackingEnabled,
             Math.clamp(this.compassCooldownSeconds, 0, 300),
@@ -113,7 +131,9 @@ public record ManhuntSettings(
             normalizeLives(this.hunterLives),
             Math.clamp(this.hunterRespawnDelaySeconds, 0, 3600),
             this.midGameJoinTeleportEnabled,
-            Math.clamp(this.disconnectGraceSeconds, 0, 3600)
+            Math.clamp(this.disconnectGraceSeconds, 0, 3600),
+            this.runnerRespawnAtTeammate,
+            this.hunterRespawnAtTeammate
         );
     }
 

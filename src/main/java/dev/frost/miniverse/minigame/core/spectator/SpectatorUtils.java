@@ -8,12 +8,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-final class SpectatorUtils {
+public final class SpectatorUtils {
     private SpectatorUtils() {
     }
 
     @Nullable
-    static Entity findEntity(MinecraftServer server, UUID entityId) {
+    public static Entity findEntity(MinecraftServer server, UUID entityId) {
         if (server == null || entityId == null) {
             return null;
         }

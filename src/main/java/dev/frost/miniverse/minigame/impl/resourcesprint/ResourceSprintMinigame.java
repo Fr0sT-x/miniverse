@@ -47,7 +47,6 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
 public class ResourceSprintMinigame extends AbstractMinigame implements TeamManagerProvider, PauseAwareMinigame, PersistentMinigame {
     private static final int TICKS_PER_SECOND = 20;
@@ -140,11 +139,6 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
     public void setVanillaFriendlyFireAllowed(boolean allowed) {
         this.vanillaTeams.setFriendlyFireAllowed(allowed);
         this.syncVanillaTeams();
-    }
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
     }
 
     @Override

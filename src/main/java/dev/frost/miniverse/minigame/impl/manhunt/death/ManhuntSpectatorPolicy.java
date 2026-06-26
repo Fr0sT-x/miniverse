@@ -25,7 +25,7 @@ public class ManhuntSpectatorPolicy implements DeathSpectatorPolicy {
             SpectatorPolicies.teamOnly(this.minigame.teamManager(), true),
             SpectatorTargetProviders.roster(),
             SpectatorMode.STANDARD,
-            null, null, null, NoTargetPolicy.FREEZE
+            null, null, null, NoTargetPolicy.STATIONARY_FREE_FLY
         );
     }
 
@@ -36,6 +36,6 @@ public class ManhuntSpectatorPolicy implements DeathSpectatorPolicy {
 
     @Override
     public NoTargetPolicy noTargetPolicy() {
-        return NoTargetPolicy.FREE_FLY;
+        return NoTargetPolicy.STATIONARY_FREE_FLY;
     }
 }

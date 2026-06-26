@@ -32,7 +32,7 @@ public class VisibilityManager {
             .collect(Collectors.toList());
 
         List<ServerPlayerEntity> spectators = allPlayers.stream()
-            .filter(p -> roleManager.getRole(p).map(dev.frost.miniverse.minigame.core.role.Role::isSpectator).orElse(false))
+            .filter(p -> roleManager.getRoles(p).stream().anyMatch(dev.frost.miniverse.minigame.core.role.Role::isSpectator))
             .collect(Collectors.toList());
 
         List<ServerPlayerEntity> activePlayers = allPlayers.stream()

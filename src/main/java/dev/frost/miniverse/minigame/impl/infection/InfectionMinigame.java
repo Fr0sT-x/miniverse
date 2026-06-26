@@ -46,7 +46,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
@@ -96,11 +95,6 @@ public final class InfectionMinigame extends AbstractMinigame implements PlayerR
         this.teams.clear();
         this.ticksRemaining = 0;
         this.secondAccumulator = 0;
-    }
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
     }
 
     @Override

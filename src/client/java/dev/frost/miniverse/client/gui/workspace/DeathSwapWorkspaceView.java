@@ -37,18 +37,12 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
     private String seedValue = "";
     private boolean preserveVelocity = true;
 
-    @Override
-    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true);
-    }
-
     public DeathSwapWorkspaceView() {
         super("deathswap");
         this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure swap timing and match rules.", UiTheme.ACCENT_BLUE);
-        this.useGameRules();
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_RED);
     }
 

@@ -114,8 +114,6 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
         
         this.moduleManager.register("kits", "K", "Kits", "Kits & Duel Types", "Manage kit layouts and inventory.", 0xFFFFAA00);
         this.moduleManager.register("duel_types_config", "D", "Duel Types", "Kits & Duel Types", "Create and manage Duel Types.", 0xFF6600CC);
-        
-        this.useGameRules();
         this.moduleManager.register("match_rules", "M", "Match Rules", "Rules", "Configure match-specific rules like total rounds.", UiTheme.ACCENT_GREEN);
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
     }

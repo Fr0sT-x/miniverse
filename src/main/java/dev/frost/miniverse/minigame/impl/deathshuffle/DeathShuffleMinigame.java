@@ -42,7 +42,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.impl.deathshuffle.death.DeathShuffleDeathLifecycleConfig;
 import dev.frost.miniverse.minigame.core.death.DeathContext;
@@ -87,11 +86,6 @@ public class DeathShuffleMinigame extends AbstractMinigame implements dev.frost.
 
     public DeathShuffleMinigame() {
         this.settings = DeathShuffleSettings.fromNbt(new net.minecraft.nbt.NbtCompound()); // Defaults
-    }
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, true, true, true, true, false);
     }
 
     @Override
@@ -580,7 +574,7 @@ public class DeathShuffleMinigame extends AbstractMinigame implements dev.frost.
             return VanillaTeamOptions.defaults()
                 .withColor(color)
                 .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
-                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
+                .withFriendlyFireAllowed(true)
                 .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
         });
     }

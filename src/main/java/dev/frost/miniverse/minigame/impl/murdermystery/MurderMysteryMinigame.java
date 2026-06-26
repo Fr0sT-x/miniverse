@@ -45,7 +45,6 @@ import net.minecraft.util.Hand;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.World;
 import com.google.gson.JsonObject;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -96,6 +95,12 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     private MinecraftServer server;
     private int nextSpawnIndex = 0;
 
+    public MurderMysteryMinigame() {
+        this.roleManager.registerRoleType("murderer", dev.frost.miniverse.minigame.impl.murdermystery.role.MurdererRole::new);
+        this.roleManager.registerRoleType("detective", dev.frost.miniverse.minigame.impl.murdermystery.role.DetectiveRole::new);
+        this.roleManager.registerRoleType("innocent", dev.frost.miniverse.minigame.impl.murdermystery.role.InnocentRole::new);
+        this.roleManager.registerRoleType("spectator", dev.frost.miniverse.minigame.impl.murdermystery.role.SpectatorRole::new);
+    }
 
     public void applySettings(MurderMysterySettings settings) {
         applySettings(settings, null);
@@ -171,11 +176,6 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     }
 
     @Override
-    protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
-    }
-
-    @Override
     protected boolean isTeamBased() {
         return false;
     }
@@ -196,7 +196,8 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
         Collections.shuffle(players);
         
         if (players.size() >= 1) {
-            roleManager.assignRole(players.get(0), new MurdererRole());
+            roleManager.clearRoles(players.get(0));
+            roleManager.addRole(players.get(0), new MurdererRole());
             weaponManager.giveMurdererWeapon(players.get(0));
             players.get(0).sendMessage(Text.literal("You are the Murderer!").formatted(Formatting.RED), false);
             GameMessenger.showGameTitle(Collections.singleton(players.get(0)), Text.literal("MURDERER").formatted(Formatting.RED), Text.literal("Kill everyone!").formatted(Formatting.GRAY));
@@ -204,14 +205,16 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
         
         int detectiveCount = Math.min(settings.detectiveCount(), Math.max(0, players.size() - 1));
         for (int i = 1; i <= detectiveCount; i++) {
-            roleManager.assignRole(players.get(i), new DetectiveRole());
+            roleManager.clearRoles(players.get(i));
+            roleManager.addRole(players.get(i), new DetectiveRole());
             weaponManager.giveDetectiveWeapon(players.get(i));
             players.get(i).sendMessage(Text.literal("You are the Detective!").formatted(Formatting.BLUE), false);
             GameMessenger.showGameTitle(Collections.singleton(players.get(i)), Text.literal("DETECTIVE").formatted(Formatting.BLUE), Text.literal("Find and kill the Murderer!").formatted(Formatting.GRAY));
         }
         
         for (int i = detectiveCount + 1; i < players.size(); i++) {
-            roleManager.assignRole(players.get(i), new InnocentRole());
+            roleManager.clearRoles(players.get(i));
+            roleManager.addRole(players.get(i), new InnocentRole());
             players.get(i).sendMessage(Text.literal("You are Innocent!").formatted(Formatting.GREEN), false);
             GameMessenger.showGameTitle(Collections.singleton(players.get(i)), Text.literal("INNOCENT").formatted(Formatting.GREEN), Text.literal("Stay alive as long as you can!").formatted(Formatting.GRAY));
         }
@@ -370,7 +373,7 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
             weaponManager.dropDetectiveWeapon(player.getServerWorld(), player.getPos());
             GameMessenger.broadcast(context.liveParticipants(), Text.literal("Detective disconnected! The Detective's Bow has dropped.").formatted(Formatting.RED));
         }
-        roleManager.removeRole(player);
+        roleManager.clearRoles(player);
         context.roster().remove(player);
         visibilityManager.sync(server);
         checkWinConditions();
@@ -380,7 +383,8 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
         context.roster().add(player);
         if (this.getState() == GameState.RUNNING || this.getState() == GameState.ENDING) {
-            roleManager.assignRole(player, new SpectatorRole());
+            roleManager.clearRoles(player);
+            roleManager.addRole(player, new SpectatorRole());
             SpectatorService.getInstance().startSpectating(
                 player, 
                 SpectatorPolicies.unrestricted(), 
@@ -392,7 +396,8 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
             );
             teleportToRandomSpawn(player);
         } else {
-            roleManager.assignRole(player, new InnocentRole());
+            roleManager.clearRoles(player);
+            roleManager.addRole(player, new InnocentRole());
             player.changeGameMode(GameMode.ADVENTURE);
             teleportToRandomSpawn(player);
         }

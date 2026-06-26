@@ -53,7 +53,8 @@ public class MurderMysteryDeathCallbacks implements DeathLifecycleCallbacks {
         }
 
         minigame.getCorpseManager().spawnCorpse(victim);
-        minigame.getRoleManager().assignRole(victim, new SpectatorRole());
+        minigame.getRoleManager().clearRoles(victim);
+        minigame.getRoleManager().addRole(victim, new SpectatorRole());
         minigame.getVisibilityManager().sync(minigame.getContext().nullableServer());
         minigame.updateScoreboardTick();
 

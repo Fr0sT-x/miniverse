@@ -62,7 +62,9 @@ public class ManhuntPostDeathPolicy implements PostDeathPolicy {
     private void checkEndGameConditions() {
         // If there are no alive speedrunners, hunters win
         if (this.minigame.getAliveSpeedrunnerCount() == 0) {
-            this.minigame.endGameWithHunterVictory();
+            if (!this.minigame.isProgressionBlocked()) {
+                this.minigame.endGameWithHunterVictory();
+            }
         } else if (!this.minigame.hasHunterInReconnectGrace()) {
             this.minigame.endGameWithRunnerVictory(Text.literal("All hunters have been eliminated."));
         }
@@ -78,8 +80,6 @@ public class ManhuntPostDeathPolicy implements PostDeathPolicy {
     @Override
     public void tick(MinecraftServer server) {
         if (this.isEliminated) {
-            // Eliminated players stay in spectator, but we can verify endgame again just in case
-            this.checkEndGameConditions();
             return;
         }
 

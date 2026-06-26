@@ -58,7 +58,6 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players into speedrunners and hunters.", UiTheme.ACCENT_RED);
         this.moduleManager.register("rules", "r", "Match Rules", "Rules", "Configure seed, tracking, lives, and difficulty.", UiTheme.ACCENT);
-        this.useGameRules();
         this.moduleManager.register("summary", "s", "Summary", "Summary", "Review and launch the configured match.", UiTheme.ACCENT);
     }
 
@@ -209,12 +208,6 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
                 }
             );
         }
-    }
-
-
-    @Override
-    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, true);
     }
 
     @Override

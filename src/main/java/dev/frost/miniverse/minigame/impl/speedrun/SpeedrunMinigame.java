@@ -45,7 +45,6 @@ import java.util.UUID;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.impl.speedrun.death.SpeedrunDeathLifecycleConfig;
 
 /**
@@ -111,11 +110,6 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.initializedPlayers.clear();
         this.knownRoster.clear();
         this.needsScoreboardRebuild = false;
-    }
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
     }
 
     @Override

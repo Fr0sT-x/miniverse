@@ -26,7 +26,6 @@ import dev.frost.miniverse.minigame.impl.deathswap.RespawnMode;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.impl.deathswap.death.DeathSwapDeathLifecycleConfig;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.swap.DerangementAssignment;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
@@ -100,11 +99,6 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
     private int swapTicksRemaining;
     private int swapCount;
     private boolean warnedCurrentSwap;
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, true, true, true, true, true);
-    }
 
     public void applySettings(DeathSwapSettings settings) {
         this.settings = settings == null ? DeathSwapSettings.defaults() : settings;
@@ -224,7 +218,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         if (!this.isParticipant(player)) {
             return true;
         }
-        if (!this.gameRules.pvpEnabled() && this.isParticipantAttacker(source)) {
+        if (!true && this.isParticipantAttacker(source)) {
             return false;
         }
         return true;
@@ -325,7 +319,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
         if (this.server == null) {
             return;
         }
-        this.gameRules.apply(this.server);
+        
         for (ServerPlayerEntity participant : participants) {
             participant.changeGameMode(GameMode.SURVIVAL);
             participant.setHealth(participant.getMaxHealth());
@@ -555,7 +549,7 @@ public class DeathSwapMinigame extends AbstractMinigame implements PersistentMin
             return VanillaTeamOptions.defaults()
                 .withColor(color)
                 .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
-                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
+                .withFriendlyFireAllowed(true)
                 .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
         });
     }

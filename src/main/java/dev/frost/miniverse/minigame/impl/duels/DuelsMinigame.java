@@ -33,7 +33,6 @@ import java.util.Optional;
 import java.util.Properties;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamManager;
@@ -118,11 +117,6 @@ public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigam
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
         this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         setState(GameState.WAITING_FOR_PLAYERS);
-    }
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
     }
 
     @Override

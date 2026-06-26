@@ -39,7 +39,6 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
         super("speedrun");
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Draft and assign teams.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Control seed and world behavior.", UiTheme.ACCENT_BLUE);
-        this.useGameRules();
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_GREEN);
     }
 

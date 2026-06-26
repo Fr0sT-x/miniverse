@@ -22,7 +22,7 @@
    - [F04 Spectator Framework](#f04-spectator-framework)
    - [F05 Death Lifecycle Framework](#f05-death-lifecycle-framework)
    - [F06 Persistent Session Framework](#f06-persistent-session-framework)
-   - [F07 Global Match Rules Framework](#f07-global-match-rules-framework)
+   - [F07 Global Match Rules Framework (Retired)](#f07-global-match-rules-framework)
    - [F08 Team Framework](#f08-team-framework)
    - [F09 Map Protection Framework](#f09-map-protection-framework)
    - [F10 Region Trigger Framework](#f10-region-trigger-framework)
@@ -361,50 +361,13 @@ must survive restarts, override both `saveRuntimeState()` and `loadRuntimeState(
 
 ### F07 Global Match Rules Framework
 
-**Status:** Fully Implemented · **Adoption:** 11/11 (enforced via `AbstractMinigame`)
+**Status:** Totally retired · **Adoption:** 0/11
+**⚠️ Deprecated — completely removed from codebase**
 
-**Purpose:** Standardises gamerule application at match start and reset at match end.
+**Purpose:** Pre-framework approach to standardize gamerules. Gamemodes now manually call `applyVanillaGameRule` in their `initialize()` method for structurally mandatory gamerules (like `KEEP_INVENTORY` or `DO_IMMEDIATE_RESPAWN`), relying on server defaults for the rest. 
+The associated Workspace UI components to toggle gamerules were also removed to prevent admins from breaking gamemode logic.
 
-**Record:** `GlobalMatchRules(keepInventory, doImmediateRespawn, pvpEnabled,
-doDaylightCycle, doWeatherCycle, fallDamage, naturalRegeneration, announceAdvancements)`
-
-**Convenience constructor:** `GlobalMatchRules.defaults(keepInventory, doImmediateRespawn)`
-sets all other fields to `true` (standard overworld behaviour).
-
-**Gamemode values (confirmed from source):**
-
-| Gamemode | keepInventory | doImmediateRespawn | Notes |
-|----------|:---:|:---:|-------|
-| Manhunt | false | true | |
-| Speedrun | true | false | |
-| BountyHunt | false | false | |
-| DeathSwap | true | false | Full constructor used |
-| ResourceSprint | false | false | |
-| BlockShuffle | true | false | Full constructor used |
-| DeathShuffle | true | false | Full constructor used |
-| **Duels** | **true** | **true** ⚠️ | **Bug B02 — must change to false** |
-| **MurderMystery** | **true** | **true** ⚠️ | **Bug B02 — must change to false** |
-| Bridge | true | true | Bug B02 candidate when Death Lifecycle adopted |
-| Infection | false | false | |
-
-**How AbstractMinigame applies it:**
-```
-startGame()
-  → configureGameRules()         // abstract — gamemode returns the record
-  → merge session property overrides (pvp, daylight, etc. — NOT keepInventory/doImmediateRespawn)
-  → gameRules.apply(server)      // applied to all worlds
-stopGame()
-  → GlobalMatchRules.defaults(false, false).apply(server)  // reset
-```
-
-**Overrideable via session properties:** `gamerule.pvpEnabled`, `gamerule.doDaylightCycle`,
-`gamerule.doWeatherCycle`, `gamerule.fallDamage`, `gamerule.naturalRegeneration`,
-`gamerule.announceAdvancements`. Note: `keepInventory` and `doImmediateRespawn` are
-**not** overrideable via session properties — they are always taken from `configureGameRules()`.
-
-> **AI note:** See interaction I01. Any gamemode using `DeathLifecycleManager` with
-> `interceptsRespawn = true` MUST return `doImmediateRespawn = false`.
-
+**Planned fate:** Already retired. No gamemodes use this anymore. This framework is deleted from the codebase.
 ---
 
 ### F08 Team Framework
@@ -706,8 +669,8 @@ framework migration work that depends on the affected component.
 ### I01 Death Lifecycle vs. doImmediateRespawn
 
 **Rule:** Any gamemode implementing `DeathAwareMinigame` with a `DeathPolicy` where
-`interceptsRespawn()` returns `true` MUST return `doImmediateRespawn = false` from
-`configureGameRules()`.
+`interceptsRespawn()` returns `true` MUST manually apply `doImmediateRespawn = false` in
+`initialize()`.
 
 **Why:** When `doImmediateRespawn = true`, the Minecraft client automatically sends a
 respawn packet without showing the death screen. The Death Lifecycle Framework calls

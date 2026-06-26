@@ -5,7 +5,6 @@ import dev.frost.miniverse.map.editor.MapMarker;
 import dev.frost.miniverse.minigame.core.corpse.CorpseManager;
 import dev.frost.miniverse.minigame.core.event.*;
 import dev.frost.miniverse.minigame.core.role.RoleManager;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import net.minecraft.entity.LivingEntity;
@@ -34,32 +33,6 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     protected MinigameContext context;
     private final Set<FrameworkModule> activeModules = new LinkedHashSet<>();
     private VanillaTeamAdapter vanillaTeamAdapter;
-    protected GlobalMatchRules gameRules;
-
-    private Boolean pvpEnabledOverride;
-    private Boolean doDaylightCycleOverride;
-    private Boolean doWeatherCycleOverride;
-    private Boolean fallDamageOverride;
-    private Boolean naturalRegenerationOverride;
-    private Boolean announceAdvancementsOverride;
-
-    public void applyGameRulesOverrides(java.util.Properties properties) {
-        this.pvpEnabledOverride = parseOverride(properties, "gamerule.pvpEnabled");
-        this.doDaylightCycleOverride = parseOverride(properties, "gamerule.doDaylightCycle");
-        this.doWeatherCycleOverride = parseOverride(properties, "gamerule.doWeatherCycle");
-        this.fallDamageOverride = parseOverride(properties, "gamerule.fallDamage");
-        this.naturalRegenerationOverride = parseOverride(properties, "gamerule.naturalRegeneration");
-        this.announceAdvancementsOverride = parseOverride(properties, "gamerule.announceAdvancements");
-    }
-
-    @Nullable
-    private Boolean parseOverride(java.util.Properties properties, String key) {
-        String val = properties.getProperty(key);
-        if (val == null || val.isBlank()) {
-            return null;
-        }
-        return Boolean.parseBoolean(val);
-    }
 
     @Override
     public final void attachContext(MinigameContext context) {
@@ -73,22 +46,6 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
 
     @Override
     public final void startGame() {
-        GlobalMatchRules base = this.configureGameRules();
-        if (base == null) base = GlobalMatchRules.defaults();
-
-        this.gameRules = new GlobalMatchRules(
-            this.pvpEnabledOverride != null ? this.pvpEnabledOverride : base.pvpEnabled(),
-            this.doDaylightCycleOverride != null ? this.doDaylightCycleOverride : base.doDaylightCycle(),
-            this.doWeatherCycleOverride != null ? this.doWeatherCycleOverride : base.doWeatherCycle(),
-            this.fallDamageOverride != null ? this.fallDamageOverride : base.fallDamage(),
-            this.naturalRegenerationOverride != null ? this.naturalRegenerationOverride : base.naturalRegeneration(),
-            this.announceAdvancementsOverride != null ? this.announceAdvancementsOverride : base.announceAdvancements()
-        );
-
-        if (this.context.nullableServer() != null) {
-            this.gameRules.apply(this.context.nullableServer());
-        }
-
         if (this.isTeamBased()) {
             this.vanillaTeamAdapter = new VanillaTeamAdapter(this.getName().toLowerCase().replace(" ", "_"));
             this.syncVanillaTeams();
@@ -117,21 +74,11 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
         }
 
         this.clearParticipants();
-
-        if (this.context.nullableServer() != null) {
-            this.resetGameRules();
-        }
     }
 
     protected abstract void onMatchStart();
 
     protected void onMatchEnd() {
-    }
-
-    protected abstract GlobalMatchRules configureGameRules();
-
-    private void resetGameRules() {
-        GlobalMatchRules.defaults().apply(this.context.nullableServer());
     }
 
     protected boolean isTeamBased() {

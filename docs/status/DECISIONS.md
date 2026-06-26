@@ -16,7 +16,8 @@
 ## Index
 
 | ID | Title | Status | Date |
-|----|-------|--------|------|
+|| D16 | F07 Global Match Rules Framework Removed | DECIDED | 2026-06-26 |
+----|-------|--------|------|
 | D01 | AbstractMinigame as universal base class | DECIDED | 2026-06-20 |
 | D02 | Framework-first: opt-in interfaces over identity checks | DECIDED | 2026-06-20 |
 | D03 | GameState enum consolidation required | DECIDED | 2026-06-20 |
@@ -424,3 +425,14 @@ Copy this template and append it to the file:
 - `PROPOSED` — under discussion, not yet locked in
 - `DECIDED` — locked in; AI sessions must not contradict this
 - `SUPERSEDED BY DXX` — replaced by a newer decision; kept for history
+### D16 — F07 Global Match Rules Framework Removed
+
+**Status:** DECIDED
+**Date:** 2026-06-26
+
+**Decision:** The F07 Global Match Rules Framework, along with its associated UI components, has been completely removed from the codebase.
+
+**Reason:** `configureGameRules()` allowed server administrators to toggle structurally mandatory gamerules (like `KEEP_INVENTORY` or `DO_IMMEDIATE_RESPAWN`) via the workspace UI. This routinely broke gamemodes. Gamemodes now strictly rely on explicitly applying mandatory gamerules via `applyVanillaGameRule()` during their `initialize()` sequence and defaulting to vanilla server properties for everything else.
+
+**Supersedes:** Nothing.
+

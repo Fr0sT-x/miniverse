@@ -36,24 +36,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     private UiLayout.Rect selectAllButtonRect;
     private UiLayout.Rect clearButtonRect;
 
-    private TriState pvpEnabledState = TriState.DEFAULT;
-    private TriState doDaylightCycleState = TriState.DEFAULT;
-    private TriState doWeatherCycleState = TriState.DEFAULT;
-    private TriState fallDamageState = TriState.DEFAULT;
-    private TriState naturalRegenerationState = TriState.DEFAULT;
-    private TriState announceAdvancementsState = TriState.DEFAULT;
-
-    private ButtonWidget pvpEnabledBtn;
-    private ButtonWidget doDaylightCycleBtn;
-    private ButtonWidget doWeatherCycleBtn;
-    private ButtonWidget fallDamageBtn;
-    private ButtonWidget naturalRegenerationBtn;
-    private ButtonWidget announceAdvancementsBtn;
-
-    protected void useGameRules() {
-        this.moduleManager.register("gamerules", "G", "Game Rules", "Rules", "Override default session match rules.", UiTheme.ACCENT_BLUE);
-    }
-
     public AbstractGamemodeWorkspaceView(String defaultSessionNamePrefix) {
         this.sessionName = defaultSessionNamePrefix + "-" + System.currentTimeMillis();
     }
@@ -88,41 +70,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.mapGrid.setMaps(dev.frost.miniverse.client.gui.SessionSnapshotData.maps().stream().filter(map -> map.validFor(this.gameId())).toList());
         }
         this.initGamemode(screen);
-        this.initGameRules(screen);
-    }
-
-    private void initGameRules(SessionScreen screen) {
-        if (this.moduleManager.isActive("gamerules")) {
-            int y = this.layout.mainPanel().y() + 96;
-            this.pvpEnabledBtn = this.addTriStateButton(screen, "PvP Enabled", () -> this.pvpEnabledState, defaultMatchRules().pvpEnabled(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Players can damage each other.", "FORCE OFF: Players cannot damage each other.", "DEFAULT: Use the global server setting for PvP."), () -> this.pvpEnabledState = this.pvpEnabledState.next());
-            y += 30;
-            this.doDaylightCycleBtn = this.addTriStateButton(screen, "Daylight Cycle", () -> this.doDaylightCycleState, defaultMatchRules().doDaylightCycle(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: The sun and moon progress normally.", "FORCE OFF: Time is frozen.", "DEFAULT: Use the global server setting for daylight cycle."), () -> this.doDaylightCycleState = this.doDaylightCycleState.next());
-            y += 30;
-            this.doWeatherCycleBtn = this.addTriStateButton(screen, "Weather Cycle", () -> this.doWeatherCycleState, defaultMatchRules().doWeatherCycle(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Rain and thunder will occur naturally.", "FORCE OFF: Weather will remain clear.", "DEFAULT: Use the global server setting for weather cycle."), () -> this.doWeatherCycleState = this.doWeatherCycleState.next());
-            y += 30;
-            this.fallDamageBtn = this.addTriStateButton(screen, "Fall Damage", () -> this.fallDamageState, defaultMatchRules().fallDamage(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Players take damage from falling.", "FORCE OFF: Players are immune to fall damage.", "DEFAULT: Use the global server setting for fall damage."), () -> this.fallDamageState = this.fallDamageState.next());
-            y += 30;
-            this.naturalRegenerationBtn = this.addTriStateButton(screen, "Natural Regen", () -> this.naturalRegenerationState, defaultMatchRules().naturalRegeneration(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Health regenerates naturally.", "FORCE OFF: Health does not regenerate naturally.", "DEFAULT: Use the global server setting for natural regeneration."), () -> this.naturalRegenerationState = this.naturalRegenerationState.next());
-            y += 30;
-            this.announceAdvancementsBtn = this.addTriStateButton(screen, "Advancements", () -> this.announceAdvancementsState, defaultMatchRules().announceAdvancements(), this.layout.mainPanel().x() + 180, y, 200, new TriStateTooltip("FORCE ON: Player advancements are broadcasted to chat.", "FORCE OFF: Player advancements are not broadcasted.", "DEFAULT: Use the global server setting for advancements."), () -> this.announceAdvancementsState = this.announceAdvancementsState.next());
-        }
-    }
-
-    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
-    }
-
-    protected String formatRuleState(TriState state, boolean defaultVal) {
-        if (state == TriState.DEFAULT) {
-            return "DEFAULT (§" + (defaultVal ? "aON" : "cOFF") + "§r)";
-        }
-        if (state == TriState.FORCE_ON) {
-            return "FORCE §aON";
-        }
-        if (state == TriState.FORCE_OFF) {
-            return "FORCE §cOFF";
-        }
-        return state.label();
     }
 
     protected abstract void initGamemode(SessionScreen screen);
@@ -151,10 +98,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         }
 
         this.renderGamemodeBackground(context, textRenderer, mouseX, mouseY, delta);
-
-        if (this.moduleManager.isActive("gamerules")) {
-            this.renderSettingsModulePanel(context, textRenderer, this.moduleManager.getActiveModule().label(), this.moduleManager.getActiveModule().accent());
-        }
 
         if (this.moduleManager.isActive("summary")) {
             this.syncStateFromWidgets();
@@ -185,22 +128,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     public void renderForeground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
         if (this.rosterGrid != null && (this.moduleManager.isActive("players") || this.moduleManager.isActive("teams"))) {
             this.rosterGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
-        }
-        
-        if (this.moduleManager.isActive("gamerules")) {
-            int labelX = this.layout.mainPanel().x() + 38;
-            int y = this.layout.mainPanel().y() + 102;
-            context.drawText(textRenderer, Text.literal("PvP Enabled"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Daylight Cycle"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Weather Cycle"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Fall Damage"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Natural Regen"), labelX, y, UiTheme.TEXT_MUTED, false);
-            y += 30;
-            context.drawText(textRenderer, Text.literal("Advancements"), labelX, y, UiTheme.TEXT_MUTED, false);
         }
 
         if (this.moduleManager.isActive("rules") && this.rulesLayout != null) {
@@ -416,19 +343,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         return btn;
     }
 
-    protected ButtonWidget addTriStateButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<TriState> stateSupplier, boolean defaultVal, int x, int y, int width, TriStateTooltip tooltip, Runnable onCycle) {
-        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(labelPrefix + ": " + formatRuleState(stateSupplier.get(), defaultVal)), b -> {
-            onCycle.run();
-            b.setMessage(Text.literal(labelPrefix + ": " + formatRuleState(stateSupplier.get(), defaultVal)));
-        }).dimensions(x, y, width, 20).build();
-        screen.addWidget(btn);
 
-        int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-        int zoneW = (x + width) - zoneX;
-        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> tooltip.resolve(stateSupplier.get())));
-
-        return btn;
-    }
 
     protected ButtonWidget addCycleButton(SessionScreen screen, java.util.function.Supplier<String> labelSupplier, java.util.function.Supplier<Integer> cycleIndexSupplier, int x, int y, int width, String[] stateTooltips, int cycleLength, Runnable onCycle) {
         if (stateTooltips.length != cycleLength) {
@@ -512,20 +427,10 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             builder.settings().putString("mapId", this.selectedMapId);
         }
         this.buildSessionSettings(builder);
-        this.buildGameRulesSettings(builder);
         this.buildSessionGroups(builder);
         builder.dispatch();
         
         this.status = ValidationResult.success("Requested " + this.title() + " session creation.");
-    }
-
-    private void buildGameRulesSettings(SessionPayloadBuilder builder) {
-        if (this.pvpEnabledState != TriState.DEFAULT) builder.settings().putString("gamerule.pvpEnabled", this.pvpEnabledState == TriState.FORCE_ON ? "true" : "false");
-        if (this.doDaylightCycleState != TriState.DEFAULT) builder.settings().putString("gamerule.doDaylightCycle", this.doDaylightCycleState == TriState.FORCE_ON ? "true" : "false");
-        if (this.doWeatherCycleState != TriState.DEFAULT) builder.settings().putString("gamerule.doWeatherCycle", this.doWeatherCycleState == TriState.FORCE_ON ? "true" : "false");
-        if (this.fallDamageState != TriState.DEFAULT) builder.settings().putString("gamerule.fallDamage", this.fallDamageState == TriState.FORCE_ON ? "true" : "false");
-        if (this.naturalRegenerationState != TriState.DEFAULT) builder.settings().putString("gamerule.naturalRegeneration", this.naturalRegenerationState == TriState.FORCE_ON ? "true" : "false");
-        if (this.announceAdvancementsState != TriState.DEFAULT) builder.settings().putString("gamerule.announceAdvancements", this.announceAdvancementsState == TriState.FORCE_ON ? "true" : "false");
     }
 
     protected abstract ValidationResult validateGamemodeStart();

@@ -78,7 +78,6 @@ import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.impl.bridge.death.BridgeDeathLifecycleConfig;
@@ -240,11 +239,6 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
                 }
             }
         }
-    }
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return new GlobalMatchRules(true, false, true, true, true, false);
     }
 
     @Override

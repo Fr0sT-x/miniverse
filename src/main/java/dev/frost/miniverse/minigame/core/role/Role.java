@@ -13,4 +13,10 @@ public interface Role {
     default boolean isSpectator() {
         return false;
     }
+    
+    default com.google.gson.JsonObject saveState() {
+        return new com.google.gson.JsonObject();
+    }
+    
+    default void loadState(com.google.gson.JsonObject state) {}
 }

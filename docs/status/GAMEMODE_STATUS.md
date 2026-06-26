@@ -21,7 +21,7 @@
 | F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F07 Global Rules | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
 | F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
@@ -29,7 +29,7 @@
 | F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F15 Role | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
 | F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
@@ -57,7 +57,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - F05 Death Lifecycle ✅
-- F07 Global Rules, F08 Team (TeamManager + VanillaTeamAdapter)
+- F08 Team (TeamManager + VanillaTeamAdapter)
 - F09 Map Protection, F12 Scoreboard (sidebar timer)
 - F13 Protected Items (tracker compass)
 - F20 Player Snapshot (full persistence via `saveRuntimeState` override)
@@ -87,7 +87,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - F05 Death Lifecycle (callbacks only, interceptsRespawn=false)
-- F07 Global Rules, F09 Map Protection, F12 Scoreboard
+- F09 Map Protection, F12 Scoreboard
 - `DynamicParticipantMinigame`, `PauseAwareMinigame`, `PlayerRespawnAware`,
   `PlayerLeaveAware`, `EntityDeathAware`, VanillaTeamAdapter
 
@@ -112,7 +112,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - F05 Death Lifecycle (Full elimination/respawn flow)
-- F07 Global Rules, F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection, F12 Scoreboard
+- F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection, F12 Scoreboard
 - F13 Protected Items (tracker compass), F20 Player Snapshot (persistence)
 - `DynamicParticipantMinigame`, `RosterAware`, `PauseAwareMinigame`,
   `PlayerLeaveAware`, `PlayerDamageAware`, VanillaTeamAdapter
@@ -138,7 +138,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - F05 Death Lifecycle (Full points/respawn flow)
-- F07 Global Rules, F08 Team, F09 Map Protection, F12 Scoreboard
+- F08 Team, F09 Map Protection, F12 Scoreboard
 - F19 Countdown Service (**correct usage**)
 - F20 Player Snapshot, F21 Derangement/Swap
 
@@ -162,7 +162,7 @@
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - F05 Death Lifecycle ✅
 - F06 Persistence ✅
-- F07 Global Rules, F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection
+- F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection
 - F12 Scoreboard, `PauseAwareMinigame`, `PlayerLeaveAware`, `PlayerRespawnAware`, VanillaTeamAdapter
 
 **Frameworks NOT used:**
@@ -187,7 +187,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator (directly, for elimination)
 - F06 Persistence ✅
-- F07 Global Rules, F08 Team (TeamManager + VanillaTeamAdapter), F09 Map Protection, F12 Scoreboard
+- F08 Team (TeamManager + VanillaTeamAdapter), F09 Map Protection, F12 Scoreboard
 - `DynamicParticipantMinigame`, `PauseAwareMinigame`
 
 **Frameworks NOT used:**
@@ -222,7 +222,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - F05 Death Lifecycle ✅
-- F07 Global Rules, F08 Team (TeamManager + VanillaTeamAdapter), F09 Map Protection, F12 Scoreboard
+- F08 Team (TeamManager + VanillaTeamAdapter), F09 Map Protection, F12 Scoreboard
 - `PersistentMinigame` (partial), `DynamicParticipantMinigame`, `PauseAwareMinigame`,
   `PlayerLeaveAware`
 
@@ -251,7 +251,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - **F05 Death Lifecycle** ✅ (reference implementation)
-- F07 Global Rules, F08 Team (TeamManager + VanillaTeamAdapter), F09 Map Protection
+- F08 Team (TeamManager + VanillaTeamAdapter), F09 Map Protection
 - F14 Kit, F18 Arena, `SpawnPointAware`, Map Editor
 - Custom: `DuelsDeathPolicy`, `DuelsSpectatorPolicy`, `DuelsRespawnStrategy`, `DuelsDeathCallbacks`
 
@@ -282,7 +282,7 @@
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - **F05 Death Lifecycle** ✅ (second reference implementation)
 - F06 Persistence ✅
-- F07 Global Rules, F09 Map Protection, F12 Scoreboard
+- F09 Map Protection, F12 Scoreboard
 - F15 Role (Murderer/Detective/Innocent/Spectator roles)
 - F16 Visibility (role-based name-tag rules)
 - F17 Corpse (armor stand at death location)
@@ -325,7 +325,7 @@
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
 - F05 Death Lifecycle ✅
-- F07 Global Rules, F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection
+- F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection
 - F10 Region Trigger (**only production user** — correct pattern for goal detection)
 - F12 Scoreboard, F20 Player Snapshot, F23 Inventory Layout
 - `SpawnPointAware`, `PauseAwareMinigame`, `PlayerDamageAware`, `PlayerRegionAware`, Map Editor
@@ -352,7 +352,7 @@
 
 **Frameworks actively used:**
 - F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
-- F07 Global Rules, F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection
+- F08 Team (TeamManager + TeamManagerProvider), F09 Map Protection
 - F12 Scoreboard, F20 Player Snapshot (full persistence)
 - `SpawnPointAware`, `PauseAwareMinigame`, `PlayerRespawnAware`, `PlayerDamageAware`, VanillaTeamAdapter
 

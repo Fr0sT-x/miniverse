@@ -37,9 +37,6 @@ public class SessionRuntimeInitializer<T extends Minigame> {
     public void applySettingsIfNecessary(T minigame, Properties properties) {
         if (!this.settingsApplied) {
             this.handler.applySettings(minigame, properties);
-            if (minigame instanceof AbstractMinigame am) {
-                am.applyGameRulesOverrides(properties);
-            }
             this.settingsApplied = true;
         }
     }

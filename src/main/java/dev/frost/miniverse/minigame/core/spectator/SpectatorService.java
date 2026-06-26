@@ -306,16 +306,18 @@ public final class SpectatorService {
                 }
             } else {
                 session.setTargetId(null);
-                if (restrictions.lockCamera() || !restrictions.allowFreecam()) {
-                    if (session.noTargetPolicy() == NoTargetPolicy.REQUEST_ELIMINATION) {
-                        this.events.notifyNoTargetElimination(session);
-                        return;
-                    } else {
-                        // Enforce freeze if freecam is disabled and no valid targets exist
-                        this.cameraController.detach(spectator);
-                        FreezeService.getInstance().freeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
-                        return;
-                    }
+                if (session.noTargetPolicy() == NoTargetPolicy.REQUEST_ELIMINATION) {
+                    this.events.notifyNoTargetElimination(session);
+                    return;
+                } else if (session.noTargetPolicy() == NoTargetPolicy.STATIONARY_FREE_FLY || session.noTargetPolicy() == NoTargetPolicy.FREEZE) {
+                    this.cameraController.detach(spectator);
+                    FreezeService.getInstance().freeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
+                    return;
+                } else if (restrictions.lockCamera() || !restrictions.allowFreecam()) {
+                    // Enforce freeze if freecam is disabled and no valid targets exist
+                    this.cameraController.detach(spectator);
+                    FreezeService.getInstance().freeze(spectator, FreezeReason.SPECTATOR_NO_TARGET);
+                    return;
                 }
                 if (force || !restrictions.allowFreecam()) {
                     this.cameraController.detach(spectator);

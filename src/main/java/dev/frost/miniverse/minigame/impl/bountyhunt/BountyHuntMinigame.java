@@ -78,8 +78,6 @@ import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.impl.bountyhunt.death.BountyHuntDeathLifecycleConfig;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
-
 import dev.frost.miniverse.minigame.core.death.ImmediateRespawnNotifier;
 
 public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.miniverse.minigame.core.event.RosterAware, DeathAwareMinigame, ImmediateRespawnNotifier, dev.frost.miniverse.team.TeamManagerProvider {
@@ -143,10 +141,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
         return this.teamManager;
     }
 
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
-    }
+
 
     // Context is attached in AbstractMinigame
 
@@ -170,7 +165,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
 
     @Override
     public void initialize() {
-        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
         this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
         this.setState(GameState.WAITING_FOR_PLAYERS);
         this.targetAssignments.clear();
@@ -908,7 +903,7 @@ public class BountyHuntMinigame extends AbstractMinigame implements dev.frost.mi
             return VanillaTeamOptions.defaults()
                 .withColor(color)
                 .withPrefix(Text.literal("[" + dev.frost.miniverse.team.TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
-                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
+                .withFriendlyFireAllowed(true)
                 .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
         });
     }

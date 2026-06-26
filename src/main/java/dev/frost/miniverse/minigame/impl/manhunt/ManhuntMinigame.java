@@ -110,8 +110,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     private long gameTicks;
     private MinecraftServer server;
     private DeathLifecycleManager deathLifecycleManager;
+    private final dev.frost.miniverse.minigame.core.role.RoleManager roleManager = new dev.frost.miniverse.minigame.core.role.RoleManager();
 
     public ManhuntMinigame() {
+        this.roleManager.registerRoleType("hunter", HunterRole::new);
+        this.roleManager.registerRoleType("speedrunner", SpeedrunnerRole::new);
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.applySettings(ManhuntSettings.defaults());
     }
@@ -143,16 +146,13 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         this.pendingLateJoinTeleports.clear();
         this.initializedPlayers.clear();
         this.gameTicks = 0L;
-        this.deathLifecycleManager = new DeathLifecycleManager(new ManhuntDeathLifecycleConfig(this), SpectatorService.getInstance());
-    }
-
-    @Override
-    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules configureGameRules() {
-        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
+        this.deathLifecycleManager = null;
+        this.roleManager.cleanup(this.server);
     }
 
     @Override
     protected void onMatchStart() {
+        this.deathLifecycleManager = new DeathLifecycleManager(new ManhuntDeathLifecycleConfig(this), SpectatorService.getInstance());
         this.state = GameState.RUNNING;
         this.setRuntimeState(GameState.RUNNING);
         this.registerProtectedItems();
@@ -192,6 +192,9 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     @Override
     protected void onMatchEnd() {
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleMatchEnding(this::getPlayerByUuid);
+        }
         this.state = GameState.ENDING;
 
         for (ServerPlayerEntity hunter : this.getHunters()) {
@@ -210,6 +213,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         this.compassCooldownUntilTicks.clear();
         this.pendingLateJoinTeleports.clear();
         ProtectedItemService.getInstance().removeRule(TRACKER_TYPE);
+        this.deathLifecycleManager = null;
     }
 
     public int incrementDeaths(UUID playerId, ManhuntRole role) {
@@ -341,9 +345,9 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     @Override
     public void onPlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer, boolean alive) {
-        if (this.isParticipant(oldPlayer)) {
-            this.replaceParticipant(oldPlayer, newPlayer);
-        }
+        // Issue 8: F05 DeathLifecycleManager's handleVanillaRespawn updates the entity.
+        // We leave this empty because roster additions via replaceParticipant are redundant
+        // and F05 already handles the underlying player entity replacement correctly.
     }
 
     @Override
@@ -586,7 +590,7 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     private void registerProtectedItems() {
         ProtectedItemService service = ProtectedItemService.getInstance();
-        service.clearRules();
+        service.removeRule(TRACKER_TYPE);
         service.registerRule(ProtectedItemRule.builder(TRACKER_TYPE)
             .preventDrop()
             .preventExternalStorage()
@@ -636,6 +640,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         TeamRole teamRole = role == ManhuntRole.SPEEDRUNNER ? TeamRole.RUNNER : TeamRole.HUNTER;
         String teamId = role == ManhuntRole.SPEEDRUNNER ? "speedrunners" : "hunters";
         String teamLabel = role == ManhuntRole.SPEEDRUNNER ? "Speedrunners" : "Hunters";
+        
+        dev.frost.miniverse.minigame.core.role.Role newRole = role == ManhuntRole.SPEEDRUNNER ? new SpeedrunnerRole() : new HunterRole();
+        this.roleManager.clearRoles(player);
+        this.roleManager.addRole(player, newRole);
+
         this.teams.assign(player, teamId, teamLabel, teamRole);
         this.eliminatedHunters.remove(playerUuid);
 
@@ -694,7 +703,8 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
                     );
                 }
             } else {
-                if (this.initializedPlayers.add(player.getUuid())) {
+                boolean isNewJoiner = this.initializedPlayers.add(player.getUuid());
+                if (isNewJoiner) {
                     player.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
                     player.setHealth(player.getMaxHealth());
                     player.getHungerManager().setFoodLevel(20);
@@ -721,11 +731,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
                 }
                 
                 if (resolvedRole == ManhuntRole.SPEEDRUNNER) {
-                    if (!this.aliveSpeedrunners.contains(player.getUuid())) {
+                    if (isNewJoiner) {
                         this.spawnPlayerAtWorldSpawn(player);
                     }
                 } else if (resolvedRole == ManhuntRole.HUNTER) {
-                    if (this.initializedPlayers.contains(player.getUuid())) {
+                    if (!isNewJoiner) {
                         // They are reconnecting. Do not teleport them to another hunter or world spawn.
                     } else {
                         ServerPlayerEntity activeHunter = this.getActiveHunters().stream()
@@ -759,14 +769,9 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     @Nullable
     private ManhuntRole roleFor(UUID playerUuid) {
-        if (!this.teams.contains(playerUuid)) {
-            return null;
-        }
-        return switch (this.teams.role(playerUuid)) {
-            case RUNNER -> ManhuntRole.SPEEDRUNNER;
-            case HUNTER -> ManhuntRole.HUNTER;
-            default -> null;
-        };
+        if (this.roleManager.hasRole(playerUuid, SpeedrunnerRole.class)) return ManhuntRole.SPEEDRUNNER;
+        if (this.roleManager.hasRole(playerUuid, HunterRole.class)) return ManhuntRole.HUNTER;
+        return null;
     }
 
     @Nullable
@@ -932,6 +937,9 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     }
 
     public void handlePlayerLeave(ServerPlayerEntity player) {
+        if (this.deathLifecycleManager != null) {
+            this.deathLifecycleManager.handleDisconnect(player);
+        }
         UUID playerUuid = player.getUuid();
         ManhuntRole role = this.roleFor(playerUuid);
         if (role == null) {
@@ -944,7 +952,14 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
         this.compassCooldownUntilTicks.remove(player.getUuid());
         this.hunterTrackingIndexes.remove(player.getUuid());
 
-        if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive() && this.getAliveSpeedrunnerCount() <= 0) {
+        if (role == ManhuntRole.SPEEDRUNNER) {
+            this.aliveSpeedrunners.remove(playerUuid);
+            for (ServerPlayerEntity hunter : this.getActiveHunters()) {
+                this.syncHunterTracking(hunter, false);
+            }
+        }
+
+        if (role == ManhuntRole.SPEEDRUNNER && this.state.isActive() && this.huntStarted && this.getAliveSpeedrunnerCount() <= 0) {
             if (!this.checkProgression(this.context.roster()).blocked()) {
                 this.endGameWithHunterVictory();
             }
@@ -1421,6 +1436,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
             return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, null, net.minecraft.text.Text.literal("Waiting for a Hunter to reconnect...").formatted(net.minecraft.util.Formatting.RED));
         }
         return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
+    }
+
+    public boolean isProgressionBlocked() {
+        if (this.context == null) return false;
+        return this.checkProgression(this.context.roster()).blocked();
     }
 
     @Override

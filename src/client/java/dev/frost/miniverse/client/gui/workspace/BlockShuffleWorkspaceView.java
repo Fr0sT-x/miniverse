@@ -51,18 +51,12 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
     private RegistrySelectorState selectorState = new RegistrySelectorState();
     private int timeLimitSeconds = 3600;
 
-    @Override
-    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return dev.frost.miniverse.minigame.core.rules.GlobalMatchRules.defaults();
-    }
-
     public BlockShuffleWorkspaceView() {
         super("blockshuffle");
         this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure scoring and win rules.", UiTheme.ACCENT_BLUE);
-        this.useGameRules();
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_BLUE);
     }
 

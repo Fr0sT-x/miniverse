@@ -34,7 +34,6 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for Infection.", UiTheme.ACCENT_RED, "Valid Infection Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune duration, infected count, respawn delay, and friendly fire.", UiTheme.ACCENT_BLUE);
-        this.useGameRules();
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the map-backed session.", UiTheme.ACCENT);
     }
 

@@ -38,11 +38,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     private boolean enableBow = true;
     private boolean enablePickaxe = true;
 
-    @Override
-    protected dev.frost.miniverse.minigame.core.rules.GlobalMatchRules defaultMatchRules() {
-        return new dev.frost.miniverse.minigame.core.rules.GlobalMatchRules(true, true, true, true, true, false);
-    }
-
     public BridgeWorkspaceView() {
         super("bridge");
         this.teamGrid.addColumn("available", "Available", 0x7C8088, true);
@@ -52,7 +47,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players to Red and Blue teams.", UiTheme.ACCENT_RED);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for The Bridge.", UiTheme.ACCENT_BLUE, "Valid Bridge Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune score limits, respawn delays, and item permissions.", UiTheme.ACCENT);
-        this.useGameRules();
         this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
     }
 

@@ -43,7 +43,6 @@ import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.rules.GlobalMatchRules;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.impl.blockshuffle.death.BlockShuffleDeathLifecycleConfig;
@@ -87,11 +86,6 @@ public class BlockShuffleMinigame extends AbstractMinigame implements DeathAware
 
     public BlockShuffleMinigame() {
         this.settings = BlockShuffleSettings.defaults();
-    }
-
-    @Override
-    protected GlobalMatchRules configureGameRules() {
-        return GlobalMatchRules.defaults();
     }
 
     @Override
@@ -483,7 +477,7 @@ public class BlockShuffleMinigame extends AbstractMinigame implements DeathAware
             return VanillaTeamOptions.defaults()
                 .withColor(color)
                 .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
-                .withFriendlyFireAllowed(this.gameRules.pvpEnabled())
+                .withFriendlyFireAllowed(true)
                 .withCollisionRule(AbstractTeam.CollisionRule.ALWAYS);
         });
     }

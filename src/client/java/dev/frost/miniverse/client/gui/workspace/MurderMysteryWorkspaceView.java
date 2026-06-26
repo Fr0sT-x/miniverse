@@ -33,7 +33,6 @@ public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceV
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for Murder Mystery.", UiTheme.ACCENT_BLUE, "Valid Murder Mystery Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune duration, detective count, and coin economy.", UiTheme.ACCENT_BLUE);
-        this.useGameRules();
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the map-backed session.", UiTheme.ACCENT);
     }
 

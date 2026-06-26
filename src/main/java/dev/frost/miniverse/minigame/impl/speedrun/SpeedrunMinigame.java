@@ -54,25 +54,29 @@ import dev.frost.miniverse.minigame.impl.speedrun.death.SpeedrunDeathLifecycleCo
  * This is a lightweight server-side MVP: runners, a live timer,
  * and Ender Dragon defeat as the completion condition.
  */
-public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, DynamicParticipantMinigame, PauseAwareMinigame, DeathAwareMinigame {
+public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAware, EntityDeathAware, PlayerRespawnAware, PlayerLeaveAware, DynamicParticipantMinigame, PauseAwareMinigame, DeathAwareMinigame, dev.frost.miniverse.minigame.core.event.RosterAware {
     private static final String NAME = "Speedrun";
     private static final int TICKS_PER_SECOND = 20;
     private ScoreboardTemplate scoreboard;
     private ScoreboardLine playersLine;
-    private ScoreboardLine runnerLine;
     private ScoreboardLine timeLine;
     private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("speedrun");
 
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private boolean paused = false;
-    @Nullable
-    private UUID runnerUuid;
     private int elapsedTicks;
     private int tickCounter;
+    private int timeLimitTicks = 0;
     @Nullable
     private MinecraftServer server;
     private DeathLifecycleManager deathLifecycleManager;
     private final Set<UUID> initializedPlayers = new java.util.HashSet<>();
+    private final java.util.Map<UUID, ServerPlayerEntity> knownRoster = new java.util.HashMap<>();
+    private boolean needsScoreboardRebuild = false;
+
+    public void setTimeLimitTicks(int ticks) {
+        this.timeLimitTicks = ticks;
+    }
 
     @Override
     public DeathLifecycleManager getDeathLifecycleManager() {
@@ -99,17 +103,14 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
         this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, false);
         this.setState(GameState.WAITING_FOR_PLAYERS);
-        this.runnerUuid = null;
         this.elapsedTicks = 0;
         this.tickCounter = 0;
+        this.timeLimitTicks = 0;
         this.server = null;
         this.paused = false;
         this.initializedPlayers.clear();
-
-        this.deathLifecycleManager = new DeathLifecycleManager(
-            new SpeedrunDeathLifecycleConfig(),
-            dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance()
-        );
+        this.knownRoster.clear();
+        this.needsScoreboardRebuild = false;
     }
 
     @Override
@@ -128,27 +129,28 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             return;
         }
 
-        if (this.runnerUuid == null) {
-            List<ServerPlayerEntity> participants = this.getParticipants();
-            if (!participants.isEmpty()) {
-                this.runnerUuid = participants.get(0).getUuid();
-            }
-        }
-
-        if (this.getRunner() == null) {
-            this.broadcastMessage(Text.literal("Cannot start Speedrun: no runner is assigned.").formatted(Formatting.RED));
+        if (this.getParticipants().isEmpty()) {
+            this.broadcastMessage(Text.literal("Cannot start Speedrun: no participants.").formatted(Formatting.RED));
             return;
         }
+
+        this.deathLifecycleManager = new DeathLifecycleManager(
+            new SpeedrunDeathLifecycleConfig(),
+            dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance()
+        );
 
         this.setState(GameState.RUNNING);
         this.setRuntimeState(GameState.RUNNING);
         this.elapsedTicks = 0;
         this.tickCounter = 0;
 
+        for (ServerPlayerEntity p : this.getParticipants()) {
+            this.knownRoster.put(p.getUuid(), p);
+        }
+
         this.prepareParticipantsForRun();
 
         this.broadcastMessage(Text.literal("✓ Speedrun started!").formatted(Formatting.GREEN));
-        this.broadcastMessage(Text.literal("Runner: " + this.getRunner().getName().getString()).formatted(Formatting.YELLOW));
         this.rebuildScoreboard();
     }
 
@@ -159,16 +161,14 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         this.setRuntimeState(GameState.ENDING);
 
         this.restoreParticipants();
-        if (this.server != null && this.scoreboard != null) {
-            this.scoreboard.cleanup(this.server);
-        }
         this.clearVanillaTeams();
 
-        this.runnerUuid = null;
+        this.deathLifecycleManager = null;
         this.elapsedTicks = 0;
         this.tickCounter = 0;
         this.server = null;
         this.initializedPlayers.clear();
+        this.knownRoster.clear();
 
         if (this.context != null) {
             this.context.roster().clear();
@@ -186,6 +186,12 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     @Override
     protected void onGameTick(MinecraftServer server) {
         this.server = server;
+        
+        if (this.needsScoreboardRebuild) {
+            this.rebuildScoreboard();
+            this.needsScoreboardRebuild = false;
+        }
+
         if (this.getState() == GameState.ENDING) {
             return;
         }
@@ -193,6 +199,11 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         if (this.getState() == GameState.RUNNING && !this.paused) {
             this.elapsedTicks++;
             this.tickCounter++;
+
+            if (this.timeLimitTicks > 0 && this.elapsedTicks >= this.timeLimitTicks) {
+                this.endGameWithVictory(Text.literal("Time's Up!").formatted(Formatting.RED));
+                return;
+            }
 
             if (this.tickCounter >= TICKS_PER_SECOND) {
                 this.tickCounter = 0;
@@ -218,70 +229,67 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
 
     @Override
     public void onPlayerLeave(ServerPlayerEntity player) {
-        if (this.isParticipant(player)) {
-            this.handlePlayerLeave(player);
-        }
-        this.deathLifecycleManager.handleDisconnect(player);
+        // Disconnect cleanup is handled in onRosterChanged
     }
 
-    public void setRunner(ServerPlayerEntity player) {
-        this.addParticipant(player);
-        this.runnerUuid = player.getUuid();
-
-        if (this.getState() == GameState.RUNNING) {
-            this.prepareRunnerForRun(player);
+    @Override
+    public void onRosterChanged(dev.frost.miniverse.minigame.core.SessionRoster roster) {
+        if (this.server == null) {
+            return;
         }
-        this.syncVanillaTeams();
 
-        this.rebuildScoreboard();
+        boolean rosterChanged = false;
+
+        List<UUID> disconnected = new ArrayList<>();
+        for (java.util.Map.Entry<UUID, ServerPlayerEntity> entry : this.knownRoster.entrySet()) {
+            if (!roster.contains(entry.getKey())) {
+                disconnected.add(entry.getKey());
+            }
+        }
+        
+        for (UUID uuid : disconnected) {
+            ServerPlayerEntity p = this.knownRoster.remove(uuid);
+            if (p != null && this.deathLifecycleManager != null) {
+                this.deathLifecycleManager.handleDisconnect(p);
+            }
+            rosterChanged = true;
+        }
+
+        for (ServerPlayerEntity p : roster.onlinePlayers(this.server)) {
+            if (!this.knownRoster.containsKey(p.getUuid())) {
+                this.knownRoster.put(p.getUuid(), p);
+                if (this.getState() == GameState.RUNNING) {
+                    this.prepareRunnerForRun(p);
+                }
+                rosterChanged = true;
+            }
+        }
+
+        this.syncVanillaTeams();
+        if (rosterChanged && this.scoreboard != null && this.getState() != GameState.WAITING_FOR_PLAYERS) {
+            this.rebuildScoreboard();
+        } else if (this.scoreboard != null) {
+            this.updateScoreboardTick();
+        }
     }
 
     public void syncLateParticipant(ServerPlayerEntity player) {
-        this.addParticipant(player);
-        if (this.getState() == GameState.RUNNING) {
-            this.prepareRunnerForRun(player);
+        if (dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance().isSpectating(player.getUuid())) {
+            dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance().stopSpectating(
+                player, dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason.MANUAL
+            );
         }
-        this.syncVanillaTeams();
-        this.rebuildScoreboard();
+        // Instead of manually managing roster here, we let the framework's addParticipant 
+        // trigger onRosterChanged which handles everything gracefully!
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().addParticipant(player);
     }
 
     @Override
     public void addParticipantMidGame(ServerPlayerEntity player, String teamId, String role) {
-        String normalizedRole = role == null ? "" : role.trim().toLowerCase();
-        if (this.getRunner() == null) {
-            this.setRunner(player);
-            return;
-        }
-        if (normalizedRole.equals("runner") || normalizedRole.equals("speedrunner")) {
-            this.addRunnerParticipant(player);
-            if (this.getState() == GameState.RUNNING) {
-                player.sendMessage(Text.literal("Joined Speedrun in progress as a runner.").formatted(Formatting.GREEN), false);
-            }
-            return;
-        }
         this.syncLateParticipant(player);
         if (this.getState() == GameState.RUNNING) {
-            player.sendMessage(Text.literal("Joined Speedrun in progress as a runner.").formatted(Formatting.GREEN), false);
+            player.sendMessage(Text.literal("Joined Speedrun in progress.").formatted(Formatting.GREEN), false);
         }
-    }
-
-    @Nullable
-    public ServerPlayerEntity getRunner() {
-        if (this.runnerUuid == null) {
-            return null;
-        }
-
-        for (ServerPlayerEntity participant : this.getParticipants()) {
-            if (participant.getUuid().equals(this.runnerUuid)) {
-                return participant;
-            }
-        }
-
-        if (this.server != null) {
-            return this.server.getPlayerManager().getPlayer(this.runnerUuid);
-        }
-
-        return null;
     }
 
     public int getElapsedTicks() {
@@ -297,7 +305,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     public boolean canStartRun() {
-        return this.getRunner() != null && !this.getParticipants().isEmpty();
+        return !this.getParticipants().isEmpty();
     }
 
     public void handlePlayerRespawn(ServerPlayerEntity oldPlayer, ServerPlayerEntity newPlayer) {
@@ -306,23 +314,12 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         }
 
         this.replaceParticipant(oldPlayer, newPlayer);
-        if (this.runnerUuid != null && this.runnerUuid.equals(oldPlayer.getUuid())) {
-            this.runnerUuid = newPlayer.getUuid();
-        }
+        this.knownRoster.remove(oldPlayer.getUuid());
+        this.knownRoster.put(newPlayer.getUuid(), newPlayer);
 
         if (this.getState() == GameState.RUNNING) {
             this.syncParticipantModes();
         }
-    }
-
-    public void handlePlayerLeave(ServerPlayerEntity player) {
-        this.removeParticipant(player);
-
-        if (this.getRunner() == null && !this.getParticipants().isEmpty()) {
-            this.runnerUuid = this.getParticipants().get(0).getUuid();
-            this.rebuildScoreboard();
-        }
-        this.syncVanillaTeams();
     }
 
     private void prepareParticipantsForRun() {
@@ -344,22 +341,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         }
     }
 
-    private boolean isRunner(ServerPlayerEntity player) {
-        return this.runnerUuid != null && this.runnerUuid.equals(player.getUuid());
-    }
 
-    private boolean isRunnerConnected() {
-        return this.getRunner() != null;
-    }
-
-    private void addRunnerParticipant(ServerPlayerEntity player) {
-        this.addParticipant(player);
-        if (this.getState() == GameState.RUNNING) {
-            this.prepareRunnerForRun(player);
-        }
-        this.syncVanillaTeams();
-        this.rebuildScoreboard();
-    }
 
     private void prepareRunnerForRun(ServerPlayerEntity player) {
         if (this.initializedPlayers.add(player.getUuid())) {
@@ -372,22 +354,16 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     private void endGameWithVictory(Text reason) {
-        this.setState(GameState.ENDING);
-        this.setRuntimeState(GameState.ENDING);
-
         this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
         this.broadcastMessage(Text.literal("🏆 SPEEDRUN COMPLETE! 🏆").formatted(Formatting.GOLD));
         this.broadcastMessage(reason.copy().formatted(Formatting.GOLD));
         this.broadcastMessage(Text.literal("Time: " + this.getFormattedTime()).formatted(Formatting.YELLOW));
         this.broadcastMessage(Text.literal("═══════════════════════════════════").formatted(Formatting.GOLD));
 
-        ServerPlayerEntity runner = this.getRunner();
-        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getStandardEndSequence().start(NAME, runner == null
+        List<ServerPlayerEntity> runners = this.getParticipants();
+        dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getStandardEndSequence().start(NAME, runners.isEmpty()
             ? new MatchEndResult(Set.of(), Text.literal("No winner"))
-            : MatchEndResult.winner(runner));
-        if (this.server != null && this.scoreboard != null) {
-            this.scoreboard.cleanup(this.server);
-        }
+            : MatchEndResult.winners(runners, Text.literal("Runners")));
     }
 
 
@@ -425,18 +401,29 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     private void rebuildScoreboard() {
-        if (this.server == null) {
+        if (this.server == null || this.getState() == GameState.WAITING_FOR_PLAYERS) {
             return;
         }
         if (this.scoreboard == null) {
             this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate(this.getName(), Text.literal("Speedrun").formatted(Formatting.LIGHT_PURPLE, Formatting.BOLD)));
-            this.scoreboard.show(this.getParticipants());
+        }
+
+        for (ServerPlayerEntity p : this.getParticipants()) {
+            if (!this.scoreboard.isViewing(p)) {
+                this.scoreboard.show(p);
+            }
         }
 
         this.syncVanillaTeams();
         this.scoreboard.clearLines();
-        this.playersLine = this.scoreboard.addLine(Text.empty());
-        this.runnerLine = this.scoreboard.addLine(Text.empty());
+        
+        List<ServerPlayerEntity> participants = this.getParticipants();
+        this.scoreboard.addLine(Text.literal("Players: " + participants.size()));
+        
+        for (ServerPlayerEntity p : participants) {
+            this.scoreboard.addLine(Text.literal(" - " + p.getName().getString()).formatted(Formatting.GRAY));
+        }
+        
         this.scoreboard.addBlankLine();
         this.timeLine = this.scoreboard.addLine(Text.empty());
         this.scoreboard.resendStructure();
@@ -444,14 +431,6 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     }
 
     private void updateScoreboardTick() {
-        if (this.playersLine != null) {
-            this.playersLine.setText(Text.literal("Players: " + this.getParticipantCount()));
-            this.playersLine.updateAll();
-        }
-        if (this.runnerLine != null) {
-            this.runnerLine.setText(Text.literal("Runner: " + (this.getRunner() == null ? 0 : 1)));
-            this.runnerLine.updateAll();
-        }
         if (this.timeLine != null) {
             this.timeLine.setText(Text.literal("Time: " + (this.getState() == GameState.RUNNING ? this.getFormattedTime() : "00:00:00")));
             this.timeLine.updateAll();
@@ -467,25 +446,16 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         }
 
         List<ServerPlayerEntity> runners = this.getParticipants();
-        List<ServerPlayerEntity> spectators = List.of();
 
         VanillaTeamOptions runnerOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.GREEN)
             .withFriendlyFireAllowed(true)
-            .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
-        VanillaTeamOptions spectatorOptions = VanillaTeamOptions.defaults()
-            .withColor(Formatting.DARK_GRAY)
-            .withPrefix(Text.literal("[SPEC] ").formatted(Formatting.DARK_GRAY))
-            .withFriendlyFireAllowed(false)
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
 
         List<TeamSnapshot> snapshots = List.of(
-            new TeamSnapshot("runner", "Runner", runners.stream().map(player -> TeamMembership.of(player, TeamRole.RUNNER)).toList()),
-            new TeamSnapshot("spectators", "Spectators", spectators.stream().map(player -> TeamMembership.of(player, TeamRole.SPECTATOR)).toList())
+            new TeamSnapshot("runner", "Runner", runners.stream().map(player -> TeamMembership.of(player, TeamRole.RUNNER)).toList())
         );
         this.vanillaTeams.syncSnapshots(this.server, snapshots, snapshot -> switch (snapshot.id()) {
             case "runner" -> runnerOptions;
-            case "spectators" -> spectatorOptions;
             default -> VanillaTeamOptions.defaults();
         });
     }
@@ -514,6 +484,9 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
     @Override
     public void setState(GameState state) {
         this.state = state;
+        if (state == GameState.FROZEN) {
+            this.rebuildScoreboard();
+        }
     }
 
     @Override
@@ -531,10 +504,8 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         com.google.gson.JsonObject json = new com.google.gson.JsonObject();
         json.addProperty("state", this.state.name());
         json.addProperty("paused", this.paused);
-        if (this.runnerUuid != null) {
-            json.addProperty("runnerUuid", this.runnerUuid.toString());
-        }
         json.addProperty("elapsedTicks", this.elapsedTicks);
+        json.addProperty("timeLimitTicks", this.timeLimitTicks);
         com.google.gson.JsonArray initializedArray = new com.google.gson.JsonArray();
         for (UUID uuid : this.initializedPlayers) {
             initializedArray.add(uuid.toString());
@@ -554,11 +525,11 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
         if (json.has("paused")) {
             this.paused = json.get("paused").getAsBoolean();
         }
-        if (json.has("runnerUuid")) {
-            this.runnerUuid = UUID.fromString(json.get("runnerUuid").getAsString());
-        }
         if (json.has("elapsedTicks")) {
             this.elapsedTicks = json.get("elapsedTicks").getAsInt();
+        }
+        if (json.has("timeLimitTicks")) {
+            this.timeLimitTicks = json.get("timeLimitTicks").getAsInt();
         }
         if (json.has("initializedPlayers")) {
             this.initializedPlayers.clear();
@@ -566,7 +537,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
                 this.initializedPlayers.add(UUID.fromString(el.getAsString()));
             }
         }
-        this.rebuildScoreboard();
+        this.needsScoreboardRebuild = true;
     }
 
     @Override

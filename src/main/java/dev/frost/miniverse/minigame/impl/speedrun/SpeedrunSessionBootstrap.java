@@ -31,16 +31,18 @@ final class SpeedrunSessionBootstrap {
 
             @Override
             public void applySettings(SpeedrunMinigame minigame, Properties properties) {
+                try {
+                    int minutes = Integer.parseInt(properties.getProperty("timeLimitMinutes", "0"));
+                    if (minutes > 0) {
+                        minigame.setTimeLimitTicks(minutes * 60 * 20);
+                    }
+                } catch (NumberFormatException ignored) {}
             }
 
             @Override
             public void onPlayerJoin(SpeedrunMinigame minigame, ServerPlayerEntity player, Properties properties) {
-                if (minigame.getRunner() == null) {
-                    minigame.setRunner(player);
-                    return;
-                }
                 if (minigame.getState() == GameState.WAITING_FOR_PLAYERS) {
-                    minigame.addParticipantMidGame(player, "", "runner");
+                    minigame.addParticipantMidGame(player, "", "");
                     return;
                 }
                 minigame.syncLateParticipant(player);
@@ -54,7 +56,7 @@ final class SpeedrunSessionBootstrap {
                     .withReturnSeconds(10)
                     .withStartTitle(
                         Text.literal(minigame.getName()),
-                        Text.literal("Beat Minecraft as fast as possible. Late joiners spectate the active run.")
+                        Text.literal("Beat Minecraft as fast as possible.")
                     );
             }
 

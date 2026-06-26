@@ -29,9 +29,6 @@ public final class SpeedrunCommands {
                 .then(literal("add")
                     .then(argument("player", EntityArgumentType.player())
                         .executes(SpeedrunCommands::addByName)))
-                .then(literal("runner")
-                    .then(argument("player", EntityArgumentType.player())
-                        .executes(SpeedrunCommands::setRunner)))
                 .then(literal("start").executes(SpeedrunCommands::start))
                 .then(literal("stop").executes(SpeedrunCommands::stop))
                 .then(literal("info").executes(SpeedrunCommands::info))
@@ -47,17 +44,16 @@ public final class SpeedrunCommands {
             return 0;
         }
 
-        MinigameManager manager = MinigameManager.getInstance();
-        manager.addParticipant(player);
-
-        if (speedrun.getRunner() == null) {
-            speedrun.setRunner(player);
-            source.sendFeedback(() -> Text.literal("You joined Speedrun as the runner."), false);
+        if (dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance().isSpectating(player.getUuid())) {
+            dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance().stopSpectating(
+                player, dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason.MANUAL
+            );
+        }
+        MinigameManager.getInstance().addParticipant(player);
+        if (speedrun.getState() == GameState.RUNNING) {
+            player.sendMessage(Text.literal("Joined Speedrun in progress."), false);
         } else {
-            if (speedrun.getState() == GameState.RUNNING) {
-                player.changeGameMode(GameMode.SPECTATOR);
-            }
-            source.sendFeedback(() -> Text.literal("You joined Speedrun as a spectator."), false);
+            source.sendFeedback(() -> Text.literal("You joined Speedrun."), false);
         }
 
         return 1;
@@ -72,34 +68,17 @@ public final class SpeedrunCommands {
             return 0;
         }
 
-        MinigameManager manager = MinigameManager.getInstance();
-        manager.addParticipant(target);
-
-        if (speedrun.getRunner() == null) {
-            speedrun.setRunner(target);
-            source.sendFeedback(() -> Text.literal("Added " + target.getName().getString() + " as the runner."), true);
-        } else {
-            if (speedrun.getState() == GameState.RUNNING) {
-                target.changeGameMode(GameMode.SPECTATOR);
-            }
-            source.sendFeedback(() -> Text.literal("Added " + target.getName().getString() + " as a spectator."), true);
+        if (dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance().isSpectating(target.getUuid())) {
+            dev.frost.miniverse.minigame.core.spectator.SpectatorService.getInstance().stopSpectating(
+                target, dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason.MANUAL
+            );
         }
-
-        return 1;
-    }
-
-    private static int setRunner(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-        ServerCommandSource source = context.getSource();
-        ServerPlayerEntity target = EntityArgumentType.getPlayer(context, "player");
-
-        SpeedrunMinigame speedrun = getOrCreatePendingSpeedrun(source);
-        if (speedrun == null) {
-            return 0;
-        }
-
         MinigameManager.getInstance().addParticipant(target);
-        speedrun.setRunner(target);
-        source.sendFeedback(() -> Text.literal(target.getName().getString() + " is now the runner."), true);
+        if (speedrun.getState() == GameState.RUNNING) {
+            target.sendMessage(Text.literal("Joined Speedrun in progress."), false);
+        }
+        source.sendFeedback(() -> Text.literal("Added " + target.getName().getString() + " to Speedrun."), true);
+
         return 1;
     }
 
@@ -119,27 +98,15 @@ public final class SpeedrunCommands {
         }
 
         if (!speedrun.canStartRun()) {
-            source.sendError(Text.literal("You need at least one participant and one runner before starting."));
+            source.sendError(Text.literal("You need at least one participant before starting."));
             return 0;
-        }
-
-        for (ServerPlayerEntity participant : manager.getParticipants()) {
-            if (speedrun.getRunner() != null && participant.getUuid().equals(speedrun.getRunner().getUuid())) {
-                participant.getInventory().clear();
-                participant.changeGameMode(GameMode.SURVIVAL);
-                participant.getHungerManager().setFoodLevel(20);
-                participant.getHungerManager().setSaturationLevel(20.0F);
-            } else {
-                participant.changeGameMode(GameMode.SPECTATOR);
-            }
         }
 
         manager.setCurrentState(GameState.STARTING);
         speedrun.startGame();
 
-        ServerPlayerEntity runner = speedrun.getRunner();
         source.sendFeedback(
-            () -> Text.literal("Speedrun started for runner " + (runner == null ? "unknown" : runner.getName().getString()) + "."),
+            () -> Text.literal("Speedrun started for " + manager.getParticipantCount() + " participants."),
             true
         );
         return 1;
@@ -169,12 +136,10 @@ public final class SpeedrunCommands {
             return 1;
         }
 
-        ServerPlayerEntity runner = speedrun.getRunner();
         source.sendFeedback(() -> Text.literal("Speedrun info:"), false);
         source.sendFeedback(() -> Text.literal("- State: " + speedrun.getState().name()), false);
         source.sendFeedback(() -> Text.literal("- Participants: " + MinigameManager.getInstance().getParticipantCount()), false);
-        source.sendFeedback(() -> Text.literal("- Runner: " + (runner == null ? "none" : runner.getName().getString())), false);
-        source.sendFeedback(() -> Text.literal("- Time: " + speedrun.getFormattedTime()), false);
+        source.sendFeedback(() -> Text.literal("- Time: " + (speedrun.getState() == GameState.RUNNING ? "In Progress" : "Not Started")), false);
         return 1;
     }
 
@@ -187,6 +152,3 @@ public final class SpeedrunCommands {
         return active instanceof SpeedrunMinigame speedrun ? speedrun : null;
     }
 }
-
-
-

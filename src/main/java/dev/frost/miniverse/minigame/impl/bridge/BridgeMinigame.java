@@ -206,9 +206,10 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
                 for (com.google.gson.JsonElement elem : teamsArray) {
                     if (elem.isJsonObject()) {
                         com.google.gson.JsonObject teamObj = elem.getAsJsonObject();
-                        String label = dev.frost.miniverse.session.SessionConfigJson.string(teamObj, "label", "");
-                        boolean isRed = RED_TEAM.equalsIgnoreCase(label);
-                        boolean isBlue = BLUE_TEAM.equalsIgnoreCase(label);
+                        String id = dev.frost.miniverse.session.SessionConfigJson.string(teamObj, "id", "");
+                        String label = dev.frost.miniverse.session.SessionConfigJson.string(teamObj, "label", id);
+                        boolean isRed = RED_TEAM.equalsIgnoreCase(id) || RED_TEAM.equalsIgnoreCase(label);
+                        boolean isBlue = BLUE_TEAM.equalsIgnoreCase(id) || BLUE_TEAM.equalsIgnoreCase(label);
                         if (teamObj.has("members") && teamObj.get("members").isJsonArray()) {
                             for (com.google.gson.JsonElement memElem : teamObj.getAsJsonArray("members")) {
                                 if (memElem.isJsonObject()) {
@@ -558,6 +559,7 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
             
             p.getInventory().clear();
             this.applyKit(p);
+            p.setHealth(20.0F);
             FreezeService.getInstance().freeze(p, FreezeReason.ROUND_RESET);
             p.networkHandler.sendPacket(new ExperienceBarUpdateS2CPacket(0.0f, 0, 0));
         }

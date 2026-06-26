@@ -46,10 +46,10 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     public BridgeWorkspaceView() {
         super("bridge");
         this.teamGrid.addColumn("available", "Available", 0x7C8088, true);
-        this.teamGrid.addColumn("team_1", "Team 1", 0xDD3333, false);
-        this.teamGrid.addColumn("team_2", "Team 2", 0x3344DD, false);
+        this.teamGrid.addColumn("red", "Red", 0xDD3333, false);
+        this.teamGrid.addColumn("blue", "Blue", 0x3344DD, false);
         
-        this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players to Team 1 and Team 2.", UiTheme.ACCENT_RED);
+        this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players to Red and Blue teams.", UiTheme.ACCENT_RED);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for The Bridge.", UiTheme.ACCENT_BLUE, "Valid Bridge Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune score limits, respawn delays, and item permissions.", UiTheme.ACCENT);
         this.useGameRules();
@@ -160,8 +160,8 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     @Override
     protected ValidationResult validateGamemodeStart() {
         this.syncStateFromWidgets();
-        int team1 = this.teamGrid.getMembers("team_1").size();
-        int team2 = this.teamGrid.getMembers("team_2").size();
+        int team1 = this.teamGrid.getMembers("red").size();
+        int team2 = this.teamGrid.getMembers("blue").size();
         int unassigned = this.teamGrid.getMembers("available").size();
         if (team1 + team2 + unassigned < 2) {
             return ValidationResult.error("Need at least two players.");
@@ -183,23 +183,23 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected void buildSessionGroups(SessionPayloadBuilder builder) {
-        List<SessionSnapshotData.RosterEntry> team1Members = new ArrayList<>(this.teamGrid.getMembers("team_1"));
-        List<SessionSnapshotData.RosterEntry> team2Members = new ArrayList<>(this.teamGrid.getMembers("team_2"));
+        List<SessionSnapshotData.RosterEntry> redMembers = new ArrayList<>(this.teamGrid.getMembers("red"));
+        List<SessionSnapshotData.RosterEntry> blueMembers = new ArrayList<>(this.teamGrid.getMembers("blue"));
         
-        int t1 = team1Members.size();
-        int t2 = team2Members.size();
+        int t1 = redMembers.size();
+        int t2 = blueMembers.size();
         for (SessionSnapshotData.RosterEntry entry : this.teamGrid.getMembers("available")) {
             if (t1 <= t2) {
-                team1Members.add(entry);
+                redMembers.add(entry);
                 t1++;
             } else {
-                team2Members.add(entry);
+                blueMembers.add(entry);
                 t2++;
             }
         }
         
-        builder.addGroup("team_1", "Team 1", team1Members);
-        builder.addGroup("team_2", "Team 2", team2Members);
+        builder.addGroup("red", "Red", redMembers);
+        builder.addGroup("blue", "Blue", blueMembers);
     }
     
     private static String onOff(boolean value) {

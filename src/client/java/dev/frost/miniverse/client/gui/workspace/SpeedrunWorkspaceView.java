@@ -29,6 +29,9 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
     private TextFieldWidget seedValueField;
     private ButtonWidget seedModeButton;
 
+    private TextFieldWidget timeLimitField;
+    private String timeLimitValue = "0";
+
     private SeedMode seedMode = SeedMode.RANDOM;
     private String seedValue = "";
 
@@ -52,7 +55,13 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.actionSolo = new UiLayout.Rect(actionStart + 530, actionY, 96, StandardWorkspaceLayout.BUTTON_HEIGHT);
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
-            
+
+            this.rulesLayout.addRow(
+                "Time Limit", (s, x, y, w) -> {
+                    this.timeLimitField = this.addField(s, x, y, this.timeLimitValue, w, "Minutes (0 = off)", () -> "Match time limit in minutes. 0 = unlimited.");
+                }
+            );
+
             this.rulesLayout.addRow(
                 "Seed Mode", (s, x, y, w) -> {
                     this.seedModeButton = this.addCycleButton(s, () -> "Seed Mode: " + this.seedMode.label, () -> this.seedMode.ordinal(), x, y, w, new String[]{
@@ -187,6 +196,9 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             if (this.seedValueField != null && this.seedMode == SeedMode.FIXED) {
                 this.seedValue = this.seedValueField.getText().trim();
             }
+            if (this.timeLimitField != null) {
+                this.timeLimitValue = this.timeLimitField.getText().trim();
+            }
         }
     }
 
@@ -215,6 +227,13 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
     protected void buildSessionSettings(SessionPayloadBuilder builder) {
         this.syncStateFromWidgets();
         builder.settings().putString("seedMode", this.seedMode.nbtValue);
+        
+        int timeLimitMinutes = 0;
+        try {
+            timeLimitMinutes = Integer.parseInt(this.timeLimitValue);
+        } catch (NumberFormatException ignored) {}
+        builder.settings().putInt("timeLimitMinutes", timeLimitMinutes);
+
         if (this.seedMode == SeedMode.FIXED) {
             long parsedSeed;
             if (this.seedValue.isEmpty()) {

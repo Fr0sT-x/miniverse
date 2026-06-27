@@ -18,6 +18,7 @@ public class MapNetworkHandler {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.EDIT_MAP_ID, (payload, context) -> handleEditMap(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.RENAME_MAP_ID, (payload, context) -> handleRenameMap(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_MAP_ID, (payload, context) -> handleDeleteMap(context.server(), context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.IMPORT_WORLD_MAP_ID, (payload, context) -> handleImportWorldMap(context.server(), context.player(), payload));
     }
 
     private static void handleCreateVoidMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CreateVoidMapPayload payload) {
@@ -92,5 +93,43 @@ public class MapNetworkHandler {
             player.sendMessage(Text.literal("Map editor launched for " + result.mapId() + ". Use /miniverse_map_save in the editor server to save changes."), false);
             SessionListSerializer.sendSessionList(server, player);
         }));
+    }
+
+    private static void handleImportWorldMap(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.ImportWorldMapPayload payload) {
+        if (!SessionPermissions.checkCanManageSessions(player, "import maps")) {
+            return;
+        }
+        String worldPath = payload.worldAbsolutePath() == null ? "" : payload.worldAbsolutePath().trim();
+        String displayName = payload.displayName() == null ? "" : payload.displayName().trim();
+        if (worldPath.isBlank()) {
+            player.sendMessage(Text.literal("World path is empty.").formatted(Formatting.RED), false);
+            return;
+        }
+
+        player.sendMessage(Text.literal("Importing world from " + worldPath + "..."), false);
+
+        // Run the file copy off the server tick thread (may be large)
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                dev.frost.miniverse.map.MapDescriptor result =
+                    dev.frost.miniverse.map.MapStore.importWorldMap(worldPath, displayName);
+                server.execute(() -> {
+                    player.sendMessage(
+                        Text.literal("World imported as map '" + result.metadata().name() + "' (id: " + result.metadata().id() + ").").formatted(Formatting.GREEN),
+                        false
+                    );
+                    for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+                        if (SessionPermissions.canManageSessions(online)) {
+                            SessionListSerializer.sendSessionList(server, online);
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                server.execute(() -> player.sendMessage(
+                    Text.literal("Failed to import world: " + e.getMessage()).formatted(Formatting.RED),
+                    false
+                ));
+            }
+        });
     }
 }

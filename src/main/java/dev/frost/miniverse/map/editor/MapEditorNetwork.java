@@ -53,12 +53,36 @@ public final class MapEditorNetwork {
             return;
         }
         switch (type) {
-            case "start_add" -> MapEditorPlacementController.start(player, mapId, extension.get(), definition.get());
+            case "start_add" -> MapEditorPlacementController.start(player, mapId, extension.get(), definition.get(), string(action, "properties", "{}"));
+            case "add_logical" -> addLogicalMarker(server, player, mapId, extension.get(), definition.get(), string(action, "name", "New"), string(action, "properties", "{}"));
             case "delete" -> deleteMarker(player, mapId, extension.get(), definition.get(), string(action, "markerId", ""));
             case "teleport" -> teleportToMarker(player, mapId, extension.get(), definition.get(), string(action, "markerId", ""));
             case "rename" -> renameMarker(server, player, mapId, extension.get(), definition.get(), string(action, "markerId", ""), string(action, "name", ""));
             case "update_properties" -> updateProperties(server, player, mapId, extension.get(), definition.get(), string(action, "markerId", ""), string(action, "properties", "{}"));
             default -> player.sendMessage(Text.literal("Unknown map editor action: " + type).formatted(Formatting.RED), false);
+        }
+    }
+
+    private static void addLogicalMarker(MinecraftServer server, ServerPlayerEntity player, String mapId, MapEditorExtension extension, MarkerDefinition definition, String name, String propertiesJson) {
+        com.google.gson.JsonObject properties;
+        try {
+            properties = com.google.gson.JsonParser.parseString(propertiesJson).getAsJsonObject();
+        } catch (Exception e) {
+            player.sendMessage(Text.literal("Invalid properties JSON.").formatted(Formatting.RED), false);
+            return;
+        }
+
+        List<MapMarker> markers = new ArrayList<>(MapEditorMarkerStore.load(mapId, extension, definition));
+        String id = java.util.UUID.randomUUID().toString();
+        MapMarker marker = new MapMarker(id, definition.key(), name, definition.type(), List.of(), List.of(), properties);
+        markers.add(marker);
+        
+        try {
+            MapEditorMarkerStore.save(mapId, extension, definition, markers);
+            dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
+            player.sendMessage(Text.literal("Added logical marker.").formatted(Formatting.GREEN), false);
+        } catch (IOException e) {
+            player.sendMessage(Text.literal("Failed to add logical marker: " + e.getMessage()).formatted(Formatting.RED), false);
         }
     }
 

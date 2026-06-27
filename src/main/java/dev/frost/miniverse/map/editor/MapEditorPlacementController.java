@@ -78,12 +78,19 @@ public final class MapEditorPlacementController {
         });
     }
 
-    public static void start(ServerPlayerEntity player, String mapId, MapEditorExtension extension, MarkerDefinition definition) {
+    public static void start(ServerPlayerEntity player, String mapId, MapEditorExtension extension, MarkerDefinition definition, String propertiesJson) {
         if (SESSIONS.containsKey(player.getUuid())) {
             SESSIONS.get(player.getUuid()).cancel(player);
         }
 
-        PlacementSession session = new PlacementSession(mapId, extension, definition);
+        com.google.gson.JsonObject properties;
+        try {
+            properties = com.google.gson.JsonParser.parseString(propertiesJson).getAsJsonObject();
+        } catch (Exception e) {
+            properties = new com.google.gson.JsonObject();
+        }
+
+        PlacementSession session = new PlacementSession(mapId, extension, definition, properties);
         SESSIONS.put(player.getUuid(), session);
 
         if (definition.type() == MarkerType.REGION) {
@@ -103,6 +110,7 @@ public final class MapEditorPlacementController {
         private final String mapId;
         private final MapEditorExtension extension;
         private final MarkerDefinition definition;
+        private final com.google.gson.JsonObject properties;
         
         // Point/Multi-Point
         private final List<MapPosition> selectedPoints = new ArrayList<>();
@@ -113,10 +121,11 @@ public final class MapEditorPlacementController {
         private MapPosition regionCorner1 = null;
         private final net.minecraft.util.collection.DefaultedList<ItemStack> savedInventory = net.minecraft.util.collection.DefaultedList.ofSize(36, ItemStack.EMPTY);
 
-        public PlacementSession(String mapId, MapEditorExtension extension, MarkerDefinition definition) {
+        public PlacementSession(String mapId, MapEditorExtension extension, MarkerDefinition definition, com.google.gson.JsonObject properties) {
             this.mapId = mapId;
             this.extension = extension;
             this.definition = definition;
+            this.properties = properties;
         }
 
         public void setupBuilderInventory(ServerPlayerEntity player) {
@@ -327,16 +336,13 @@ public final class MapEditorPlacementController {
                 MapMarker route = markers.getFirst();
                 List<MapPosition> points = new ArrayList<>(route.points());
                 points.add(position);
-                markers.set(0, new MapMarker(route.id(), route.definitionKey(), route.name(), route.type(), points, List.of(), new com.google.gson.JsonObject()));
+                markers.set(0, new MapMarker(route.id(), route.definitionKey(), route.name(), route.type(), points, List.of(), this.properties));
                 this.save(player, markers, "Added point to " + this.definition.displayName() + ".");
-                return;
+            } else {
+                String id = java.util.UUID.randomUUID().toString();
+                markers.add(new MapMarker(id, this.definition.key(), this.definition.displayName(), this.definition.type(), List.of(position), List.of(), this.properties));
+                this.save(player, markers, "Placed " + this.definition.displayName() + ".");
             }
-            if (markers.size() >= this.definition.maxCount()) {
-                markers.removeLast();
-            }
-            String name = this.definition.single() ? this.definition.displayName() : this.definition.displayName() + " #" + (markers.size() + 1);
-            markers.add(MapMarker.point(this.definition, name, position));
-            this.save(player, markers, "Placed " + this.definition.displayName() + ".");
         }
 
         private void saveRegion(ServerPlayerEntity player) {

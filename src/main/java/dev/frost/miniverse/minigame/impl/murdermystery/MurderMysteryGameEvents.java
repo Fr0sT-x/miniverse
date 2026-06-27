@@ -13,6 +13,7 @@ public class MurderMysteryGameEvents {
         if (registered) return;
         registered = true;
 
+        // TODO: Migrate MurderMystery to EntityInteractAware (tracked in DECISIONS.md)
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (world.isClient() || !(player instanceof ServerPlayerEntity serverPlayer)) {
                 return ActionResult.PASS;

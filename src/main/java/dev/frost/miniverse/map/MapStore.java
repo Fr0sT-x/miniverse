@@ -91,6 +91,62 @@ public final class MapStore {
         return readDescriptor(folder).orElseThrow(() -> new IOException("Failed to create map structure for " + name));
     }
 
+    /**
+     * Imports an existing Minecraft world folder (at {@code absoluteWorldPath}) into the
+     * Miniverse maps directory.
+     *
+     * <p>The external folder (which can be named anything, e.g. "Airship", "SkyWars_v3") is
+     * copied into {@code maps/<id>/world/}. A {@code map.json} is always written (overwriting
+     * any existing one). The {@code gamemodes/} directory is created if absent.
+     *
+     * @param absoluteWorldPath absolute path to the source Minecraft world folder on the server
+     * @param displayName       human-readable display name for the new map entry
+     * @return the newly registered {@link MapDescriptor}
+     * @throws IOException if the source path is not a valid directory or the copy fails
+     */
+    public static MapDescriptor importWorldMap(String absoluteWorldPath, String displayName) throws IOException {
+        if (absoluteWorldPath == null || absoluteWorldPath.isBlank()) {
+            throw new IOException("World path must not be blank.");
+        }
+        Path sourceWorld = Path.of(absoluteWorldPath).toAbsolutePath().normalize();
+        if (!Files.isDirectory(sourceWorld)) {
+            throw new IOException("Source path is not a directory: " + sourceWorld);
+        }
+        // Server-side sanity: must look like a real MC world
+        if (!Files.isRegularFile(sourceWorld.resolve("level.dat"))) {
+            throw new IOException("Source folder does not contain level.dat — not a valid Minecraft world.");
+        }
+
+        String finalDisplayName = displayName == null || displayName.isBlank()
+            ? sourceWorld.getFileName().toString()
+            : displayName.trim();
+        String id = MapMetadata.sanitizeId(finalDisplayName);
+
+        // Resolve collision: append _2, _3, ... until we find a free folder
+        Path mapFolder = mapsRoot().resolve(id);
+        int suffix = 2;
+        while (Files.exists(mapFolder)) {
+            mapFolder = mapsRoot().resolve(id + "_" + suffix);
+            suffix++;
+        }
+        String finalId = mapFolder.getFileName().toString();
+
+        Files.createDirectories(mapFolder);
+        Files.createDirectories(mapFolder.resolve("gamemodes"));
+
+        // Copy the source world folder into maps/<id>/world/
+        Path worldTarget = mapFolder.resolve("world");
+        copyDirectory(sourceWorld, worldTarget);
+
+        // Always write (overwrite) map.json with defaults
+        writeJson(mapFolder.resolve("map.json"), MapMetadata.defaults(finalId, finalDisplayName).toJson());
+
+        clearCache();
+        return readDescriptor(mapFolder)
+            .orElseThrow(() -> new IOException("Failed to register imported map: " + finalId));
+    }
+
+
     public static boolean delete(String mapId) {
         Optional<MapDescriptor> map = find(mapId);
         if (map.isEmpty()) return false;

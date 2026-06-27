@@ -67,6 +67,7 @@ public class SessionScreen extends Screen {
         Map.entry("speedrun", SessionScreen::openSpeedrun),
         Map.entry("bountyhunt", SessionScreen::openBountyHunt),
         Map.entry("bridge", SessionScreen::openBridge),
+        Map.entry("bedwars", SessionScreen::openBedwars),
         Map.entry("resource_sprint", SessionScreen::openResourceSprint),
         Map.entry("deathswap", SessionScreen::openDeathSwap),
         Map.entry("infection", SessionScreen::openInfection),
@@ -103,6 +104,7 @@ public class SessionScreen extends Screen {
     }
 
     public static void onServerSnapshot(NbtCompound root) {
+        boolean includesHistory = root.getBoolean("includesHistory");
         List<SessionSnapshotData.SessionSummary> sessions = new ArrayList<>();
         NbtList sessionList = root.getList("sessions", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < sessionList.size(); i++) {
@@ -138,6 +140,14 @@ public class SessionScreen extends Screen {
                 groups,
                 playerNames
             ));
+        }
+        
+        if (!includesHistory) {
+            sessions.addAll(SessionSnapshotData.sessions().stream()
+                .filter(SessionSnapshotData.SessionSummary::retained)
+                .toList());
+        } else {
+            SessionSnapshotData.setHistoryLoaded(true);
         }
 
         List<SessionSnapshotData.RosterEntry> roster = new ArrayList<>();
@@ -196,6 +206,7 @@ public class SessionScreen extends Screen {
                 getStringOrDefault(entry, "description", ""),
                 getStringOrDefault(entry, "folder", ""),
                 getLongOrDefault(entry, "lastModified", 0L),
+                getBooleanOrDefault(entry, "hasWorld", false),
                 gamemodes,
                 validations,
                 tags
@@ -526,6 +537,10 @@ public class SessionScreen extends Screen {
     public void openMapEditorGamemode(String gameId) {
         if ("duels".equals(gameId)) {
             this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
+            return;
+        }
+        if ("bedwars".equals(gameId)) {
+            this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.BedwarsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
             return;
         }
         this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, gameId));
@@ -1390,6 +1405,10 @@ public class SessionScreen extends Screen {
                 this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
                 return;
             }
+            if ("bedwars".equals(this.mapEditorState.selectedGameId)) {
+                this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.BedwarsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
+                return;
+            }
             if (!this.mapEditorState.selectedDefinitionKey.isBlank()) {
                 this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId, this.mapEditorState.selectedDefinitionKey));
             } else {
@@ -1428,6 +1447,10 @@ public class SessionScreen extends Screen {
         this.openWorkspaceView(new BridgeWorkspaceView());
     }
 
+    private void openBedwars() {
+        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.BedwarsWorkspaceView());
+    }
+
     private void openBlockShuffle() {
         this.openWorkspaceView(new BlockShuffleWorkspaceView());
     }
@@ -1450,7 +1473,8 @@ public class SessionScreen extends Screen {
 
     private void requestSnapshot() {
         if (this.client.player != null) {
-            ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload("metadata"));
+            String marker = SessionSnapshotData.historyLoaded() ? "history" : "metadata";
+            ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload(marker));
         }
     }
 

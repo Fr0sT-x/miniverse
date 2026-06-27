@@ -20,7 +20,7 @@ public class SessionManagementNetworkHandler {
     private static final java.util.Set<String> pendingDeletions = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public static void register() {
-        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.REQUEST_SESSIONS_ID, (payload, context) -> handleRequest(context.server(), context.player()));
+        ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.REQUEST_SESSIONS_ID, (payload, context) -> handleRequest(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CREATE_SESSION_ID, (payload, context) -> handleCreate(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.LAUNCH_SESSION_ID, (payload, context) -> handleLaunch(context.server(), context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.STOP_SESSION_ID, (payload, context) -> handleStop(context.server(), context.player(), payload));
@@ -31,11 +31,12 @@ public class SessionManagementNetworkHandler {
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.DELETE_ALL_SESSIONS_ID, (payload, context) -> handleDeleteAll(context.server(), context.player(), payload));
     }
 
-    private static void handleRequest(MinecraftServer server, ServerPlayerEntity player) {
+    private static void handleRequest(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.RequestSessionsPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "view sessions")) {
             return;
         }
-        SessionListSerializer.sendSessionList(server, player);
+        boolean includeHistory = "history".equals(payload.marker());
+        SessionListSerializer.sendSessionList(server, player, includeHistory);
         KitNetworkHandler.syncKitsToPlayer(server, player);
     }
 

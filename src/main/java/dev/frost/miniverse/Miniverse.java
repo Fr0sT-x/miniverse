@@ -65,6 +65,7 @@ public class Miniverse implements ModInitializer {
 		SessionNetwork.register();
 		MapEditorNetwork.register();
 		TransitionTransferCoordinator.register();
+		dev.frost.miniverse.minigame.core.layout.InventoryLayoutService.register();
 
 		LOGGER.info("Miniverse initialized. {} minigame(s) registered.", MinigameRegistry.getDefinitions().size());
 	}

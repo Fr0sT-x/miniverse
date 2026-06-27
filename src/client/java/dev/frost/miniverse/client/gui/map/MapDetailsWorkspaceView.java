@@ -135,6 +135,18 @@ public class MapDetailsWorkspaceView implements WorkspaceView {
                     y += 12;
                 }
             }
+
+            // Warning section shown when the map has no world template
+            if (!map.hasWorld()) {
+                y += 8;
+                context.drawText(textRenderer, Text.literal("⚠ This map has no world template yet."), textX, y, 0xFFFFAA00, false);
+                y += 14;
+                context.drawText(textRenderer, Text.literal("The map editor can still be opened to build a world from scratch,"), textX + 10, y, UiTheme.TEXT_DIM, false);
+                y += 12;
+                context.drawText(textRenderer, Text.literal("but this map cannot be launched as a game session until a world is present."), textX + 10, y, UiTheme.TEXT_DIM, false);
+                y += 12;
+                context.drawText(textRenderer, Text.literal("To add a world: use the \"Import World\" button on the Maps tab."), textX + 10, y, UiTheme.TEXT_DIM, false);
+            }
         }
     }
 

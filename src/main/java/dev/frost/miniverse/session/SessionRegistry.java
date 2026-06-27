@@ -34,6 +34,8 @@ public final class SessionRegistry {
     private static final String SESSION_JSON_FILE_NAME = "session.json";
     private static final String LEGACY_SESSION_FILE_NAME = "session.properties";
 
+    private static List<Snapshot> cachedSnapshots = null;
+
     private SessionRegistry() {
     }
 
@@ -73,6 +75,10 @@ public final class SessionRegistry {
     }
 
     public static synchronized List<Snapshot> loadSnapshots() {
+        if (cachedSnapshots != null) {
+            return cachedSnapshots;
+        }
+
         Path sessionsRoot = sessionsRoot();
         if (!Files.exists(sessionsRoot)) {
             return List.of();
@@ -88,6 +94,7 @@ public final class SessionRegistry {
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to read session registry snapshot", e);
         }
+        cachedSnapshots = snapshots;
         return snapshots;
     }
 
@@ -432,11 +439,13 @@ public final class SessionRegistry {
 
 
     public static synchronized void removeSession(String sessionId) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         deleteRecursively(sessionRoot);
     }
 
     public static synchronized void cleanupSessionsOnStartup() {
+        cachedSnapshots = null;
         if (SessionRuntimeConfig.isSessionServer()) {
             return;
         }
@@ -515,6 +524,7 @@ public final class SessionRegistry {
         );
     }
     private static void writeSessionFile(Path sessionsRoot, GameSession session) throws IOException {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot.resolve(session.getSessionId());
         Files.createDirectories(sessionRoot);
 
@@ -761,6 +771,7 @@ public final class SessionRegistry {
 
 
     private static void updateStopRequested(String sessionId, boolean requested) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         if (!Files.exists(sessionRoot)) {
             return;
@@ -783,6 +794,7 @@ public final class SessionRegistry {
     }
 
     private static void updateReturnComplete(String sessionId, boolean returnComplete) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         if (!Files.exists(sessionRoot)) {
             return;
@@ -805,6 +817,7 @@ public final class SessionRegistry {
     }
 
     private static void updateSeedChangeRequested(String sessionId, boolean seedChangeRequested) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         if (!Files.exists(sessionRoot)) {
             return;
@@ -827,6 +840,7 @@ public final class SessionRegistry {
     }
 
     private static void updatePauseRequested(String sessionId, boolean pauseRequested) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         if (!Files.exists(sessionRoot)) {
             return;
@@ -870,6 +884,7 @@ public final class SessionRegistry {
     }
 
     public static synchronized void writeDisplayMetadata(String sessionId, long updatedAtMillis, long playedMillis) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         if (!Files.exists(sessionRoot)) {
             return;
@@ -894,6 +909,7 @@ public final class SessionRegistry {
     }
 
     private static void updateLifecycleObject(String sessionId, java.util.function.Consumer<JsonObject> updater) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         if (!Files.exists(sessionRoot)) {
             return;
@@ -913,6 +929,7 @@ public final class SessionRegistry {
     }
 
     private static void updateRecoveryObject(String sessionId, java.util.function.Consumer<JsonObject> updater) {
+        cachedSnapshots = null;
         Path sessionRoot = sessionsRoot().resolve(sessionId);
         if (!Files.exists(sessionRoot)) {
             return;

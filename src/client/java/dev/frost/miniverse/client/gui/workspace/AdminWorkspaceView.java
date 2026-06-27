@@ -90,6 +90,9 @@ public final class AdminWorkspaceView implements WorkspaceView {
             this.initLauncherFields();
         } else if (this.mode == Mode.HISTORY) {
             this.initHistoryFields();
+            if (!SessionSnapshotData.historyLoaded()) {
+                ClientPlayNetworking.send(new NetworkConstants.RequestSessionsPayload("history"));
+            }
         } else {
             this.rebuildScrollableButtons();
         }
@@ -350,6 +353,12 @@ public final class AdminWorkspaceView implements WorkspaceView {
     private void renderHistory(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
         context.drawText(textRenderer, Text.literal("Delete sessions older than"), this.listArea.x(), this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
         context.drawText(textRenderer, Text.literal("days (0 to disable)"), this.listArea.x() + 256, this.listArea.y() + 6, UiTheme.TEXT_MUTED, false);
+        
+        if (!SessionSnapshotData.historyLoaded()) {
+            this.renderEmpty(context, textRenderer, "Loading previous sessions...", true);
+            return;
+        }
+        
         List<SessionEntry> entries = this.retainedSessions();
         this.updateScrollBounds(entries, true);
         if (entries.isEmpty()) {

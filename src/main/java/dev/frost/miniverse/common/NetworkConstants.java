@@ -47,6 +47,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<RenameMapPayload> RENAME_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "rename_map"));
     public static final CustomPayload.Id<UpdateMapTagsPayload> UPDATE_MAP_TAGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "update_map_tags"));
     public static final CustomPayload.Id<HideMapEditorOverlayPayload> HIDE_MAP_EDITOR_OVERLAY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "hide_map_editor_overlay"));
+    public static final CustomPayload.Id<ImportWorldMapPayload> IMPORT_WORLD_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_import_world"));
 
     public static final CustomPayload.Id<CreateDuelTypePayload> CREATE_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_duel_type"));
     public static final CustomPayload.Id<EditDuelTypePayload> EDIT_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "edit_duel_type"));
@@ -67,6 +68,8 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<SaveLayoutPayload> SAVE_LAYOUT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "save_layout"));
     public static final CustomPayload.Id<ResetLayoutPayload> RESET_LAYOUT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "reset_layout"));
     public static final CustomPayload.Id<LayoutSupportPayload> LAYOUT_SUPPORT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "layout_support"));
+    public static final CustomPayload.Id<SaveQuickBuyPayload> SAVE_QUICKBUY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "save_quickbuy"));
+    public static final CustomPayload.Id<QuickBuySyncPayload> QUICKBUY_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "quickbuy_sync"));
 
     private static boolean payloadTypesRegistered;
 
@@ -91,6 +94,7 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(INSPECT_SESSION_ID, InspectSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CREATE_VOID_MAP_ID, CreateVoidMapPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(EDIT_MAP_ID, EditMapPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(IMPORT_WORLD_MAP_ID, ImportWorldMapPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(MAP_EDITOR_ACTION_ID, MapEditorActionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(RELAUNCH_SESSION_ID, RelaunchSessionPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DELETE_SESSION_ID, DeleteSessionPayload.CODEC);
@@ -128,6 +132,8 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(SYNC_BUILDER_SELECTION_ID, SyncBuilderSelectionPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MAP_EDITOR_HIDE_ID, MapEditorHidePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(LAYOUT_SUPPORT_ID, LayoutSupportPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(SAVE_QUICKBUY_ID, SaveQuickBuyPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(QUICKBUY_SYNC_ID, QuickBuySyncPayload.CODEC);
 
         PayloadTypeRegistry.playC2S().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
@@ -301,6 +307,27 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return EDIT_MAP_ID;
+        }
+    }
+
+    /**
+     * C2S payload: admin requests the server import an existing Minecraft world folder.
+     *
+     * @param worldAbsolutePath absolute path to the world folder on the server's filesystem
+     * @param displayName       human-readable display name for the new map entry
+     */
+    public record ImportWorldMapPayload(String worldAbsolutePath, String displayName) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, ImportWorldMapPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            ImportWorldMapPayload::worldAbsolutePath,
+            PacketCodecs.STRING,
+            ImportWorldMapPayload::displayName,
+            ImportWorldMapPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return IMPORT_WORLD_MAP_ID;
         }
     }
 
@@ -793,6 +820,34 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return LAYOUT_SUPPORT_ID;
+        }
+    }
+
+    public record SaveQuickBuyPayload(String gamemode, java.util.List<java.util.Optional<String>> slots) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, SaveQuickBuyPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.optional(PacketCodecs.STRING).collect(PacketCodecs.toList()),
+            SaveQuickBuyPayload::slots,
+            PacketCodecs.STRING,
+            SaveQuickBuyPayload::gamemode,
+            (slots, gamemode) -> new SaveQuickBuyPayload(gamemode, slots)
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SAVE_QUICKBUY_ID;
+        }
+    }
+
+    public record QuickBuySyncPayload(java.util.List<java.util.Optional<String>> slots) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, QuickBuySyncPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.optional(PacketCodecs.STRING).collect(PacketCodecs.toList()),
+            QuickBuySyncPayload::slots,
+            QuickBuySyncPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return QUICKBUY_SYNC_ID;
         }
     }
 

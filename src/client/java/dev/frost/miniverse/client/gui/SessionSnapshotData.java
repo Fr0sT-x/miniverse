@@ -15,7 +15,7 @@ public final class SessionSnapshotData {
     public record PendingJoiner(String uuid, String name, long joinedAtMillis) {
     }
 
-    public record MapSummary(String id, String name, String description, String folder, long lastModifiedMillis, List<String> gamemodes, List<MapValidation> validations, List<String> tags) {
+    public record MapSummary(String id, String name, String description, String folder, long lastModifiedMillis, boolean hasWorld, List<String> gamemodes, List<MapValidation> validations, List<String> tags) {
         public boolean supports(String gameId) {
             return this.gamemodes.stream().anyMatch(id -> id.equalsIgnoreCase(gameId));
         }
@@ -127,8 +127,17 @@ public final class SessionSnapshotData {
     private static volatile ServerSettings serverSettings = new ServerSettings(16, 8, false, 0, "easy", true, true, "127.0.0.1");
     private static volatile RetentionSettings retentionSettings = new RetentionSettings(7);
     private static volatile boolean sessionServer = false;
+    private static volatile boolean historyLoaded = false;
 
     private SessionSnapshotData() {
+    }
+
+    public static boolean historyLoaded() {
+        return historyLoaded;
+    }
+
+    public static void setHistoryLoaded(boolean loaded) {
+        historyLoaded = loaded;
     }
 
     public static List<SessionSummary> sessions() {

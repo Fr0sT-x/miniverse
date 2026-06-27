@@ -26,6 +26,10 @@ public class SessionListSerializer {
     }
 
     public static void sendSessionList(MinecraftServer server, ServerPlayerEntity player) {
+        sendSessionList(server, player, true);
+    }
+
+    public static void sendSessionList(MinecraftServer server, ServerPlayerEntity player, boolean includeHistory) {
         NbtCompound root = new NbtCompound();
         NbtList sessions = new NbtList();
 
@@ -35,7 +39,7 @@ public class SessionListSerializer {
                 .ifPresent(sessions::add);
         }
 
-        List<SessionRegistry.Snapshot> snapshots = sessions.isEmpty() ? SessionRegistry.loadSnapshots() : List.of();
+        List<SessionRegistry.Snapshot> snapshots = includeHistory ? SessionRegistry.loadSnapshots() : List.of();
         if (snapshots.isEmpty()) {
             for (GameSession session : sessions.isEmpty() ? SessionManager.getInstance().getSessions() : List.<GameSession>of()) {
                 NbtCompound entry = new NbtCompound();
@@ -84,6 +88,7 @@ public class SessionListSerializer {
         }
 
         root.put("sessions", sessions);
+        root.putBoolean("includesHistory", includeHistory);
 
         NbtList games = new NbtList();
         for (MinigameDefinition definition : MinigameRegistry.getDefinitions()) {

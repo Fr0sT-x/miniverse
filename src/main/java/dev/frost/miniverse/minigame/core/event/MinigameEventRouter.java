@@ -74,10 +74,26 @@ public final class MinigameEventRouter {
                         return ActionResult.FAIL;
                     }
                 }
+                if (active instanceof ItemUseOnBlockAware blockAware) {
+                    ActionResult result = blockAware.onUseBlock(serverPlayer, world, hand, hitResult);
+                    if (result != ActionResult.PASS) {
+                        return result;
+                    }
+                }
             }
             return ActionResult.PASS;
         });
-        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (this.pausedFor(player)) return ActionResult.FAIL;
+            if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
+            if (world instanceof ServerWorld sw && player instanceof ServerPlayerEntity sp) {
+                Minigame active = this.activeMinigame();
+                if (active instanceof EntityInteractAware eia) {
+                    return eia.onEntityInteract(sp, sw, hand, entity);
+                }
+            }
+            return ActionResult.PASS;
+        });
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
@@ -99,6 +115,12 @@ public final class MinigameEventRouter {
         });
         PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, blockEntity) -> {
             MapProtectionManager.onBlockBroken(pos);
+            if (world instanceof ServerWorld sw && player instanceof ServerPlayerEntity sp) {
+                Minigame active = this.activeMinigame();
+                if (active instanceof BlockBreakAware bba) {
+                    bba.onBlockBroken(sp, sw, pos, state);
+                }
+            }
         });
         ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameSessionStore().saveOnShutdown());

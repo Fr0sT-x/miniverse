@@ -8,6 +8,7 @@ public final class BedwarsPlayerToolState {
     private int pickaxeTier = 0;
     private int axeTier     = 0;
     private int armorTier   = 0;
+    private boolean hasKnockbackStick = false;
 
     public void degrade() {
         pickaxeTier = Math.max(0, pickaxeTier - 1);
@@ -21,6 +22,8 @@ public final class BedwarsPlayerToolState {
     public int getPickaxeTier() { return pickaxeTier; }
     public int getAxeTier() { return axeTier; }
     public int getArmorTier() { return armorTier; }
+    public boolean hasKnockbackStick() { return hasKnockbackStick; }
+    public void setHasKnockbackStick(boolean b) { hasKnockbackStick = b; }
 
     public ItemStack buildPickaxe(RegistryWrapper.WrapperLookup reg) {
         return BedwarsToolTier.pickaxeAtTier(pickaxeTier).buildStack(reg);
@@ -34,6 +37,7 @@ public final class BedwarsPlayerToolState {
         obj.addProperty("pickaxeTier", pickaxeTier);
         obj.addProperty("axeTier", axeTier);
         obj.addProperty("armorTier", armorTier);
+        obj.addProperty("hasKnockbackStick", hasKnockbackStick);
         return obj;
     }
 
@@ -43,6 +47,7 @@ public final class BedwarsPlayerToolState {
             if (obj.has("pickaxeTier")) state.pickaxeTier = obj.get("pickaxeTier").getAsInt();
             if (obj.has("axeTier")) state.axeTier = obj.get("axeTier").getAsInt();
             if (obj.has("armorTier")) state.armorTier = obj.get("armorTier").getAsInt();
+            if (obj.has("hasKnockbackStick")) state.hasKnockbackStick = obj.get("hasKnockbackStick").getAsBoolean();
         }
         return state;
     }

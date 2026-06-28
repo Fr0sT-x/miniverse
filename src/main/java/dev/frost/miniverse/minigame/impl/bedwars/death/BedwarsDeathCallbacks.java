@@ -41,6 +41,7 @@ public final class BedwarsDeathCallbacks implements DeathLifecycleCallbacks {
         
         // 2. Clear inventory
         player.getInventory().clear();
+        minigame.equipBaseArmor(player);
         
         // 3. Re-equip armour at purchased tier
         int armorTier = toolState.getArmorTier();
@@ -57,8 +58,10 @@ public final class BedwarsDeathCallbacks implements DeathLifecycleCallbacks {
             player.equipStack(net.minecraft.entity.EquipmentSlot.FEET, new net.minecraft.item.ItemStack(net.minecraft.item.Items.DIAMOND_BOOTS));
         }
         
-        // 4. Re-apply team upgrade enchantments (TODO: PR 8)
-        
+        // 4. Re-apply team upgrade enchantments
+        if (context.victimTeamId() != null) {
+            minigame.getUpgradeManager().applyToPlayer(player, context.victimTeamId());
+        }
         // 5. Give tools at current tier and sword
         player.getInventory().offerOrDrop(new net.minecraft.item.ItemStack(net.minecraft.item.Items.WOODEN_SWORD));
         if (toolState.getPickaxeTier() > 0) {
@@ -66,6 +69,9 @@ public final class BedwarsDeathCallbacks implements DeathLifecycleCallbacks {
         }
         if (toolState.getAxeTier() > 0) {
             player.getInventory().offerOrDrop(toolState.buildAxe(player.getWorld().getRegistryManager()));
+        }
+        if (toolState.hasKnockbackStick()) {
+            player.getInventory().offerOrDrop(dev.frost.miniverse.minigame.impl.bedwars.shop.BedwarsShopItem.KNOCKBACK_STICK.buildStack(player.getWorld().getRegistryManager()));
         }
         
         // 6. Apply hotbar layout preference (F23)

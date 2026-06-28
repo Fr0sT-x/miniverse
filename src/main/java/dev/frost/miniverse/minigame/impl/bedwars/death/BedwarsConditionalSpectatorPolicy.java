@@ -44,6 +44,6 @@ public final class BedwarsConditionalSpectatorPolicy implements DeathSpectatorPo
         }
     }
 
-    @Override public boolean requiresFixedCamera() { return false; }
+    @Override public boolean requiresFixedCamera() { return true; }
     @Override public NoTargetPolicy noTargetPolicy() { return NoTargetPolicy.FREE_FLY; }
 }

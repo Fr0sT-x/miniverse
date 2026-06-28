@@ -67,8 +67,30 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
         refresh.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 80, 20));
         this.components.add(refresh);
 
+        UiButton limitsBtn = new UiButton("Gen Limits", () -> {
+            net.minecraft.client.MinecraftClient.getInstance().setScreen(new dev.frost.miniverse.client.gui.workspace.components.GeneratorLimitPopupScreen(this.screen, limitStr -> {
+                try {
+                    int limit = Integer.parseInt(limitStr);
+                    com.google.gson.JsonObject props = new com.google.gson.JsonObject();
+                    props.addProperty("limit", limit);
+                    this.sendMarkerAction("add_logical", BedwarsDefinition.ID, "global_limits", "", "Global Limits", props.toString());
+                    this.pendingRefreshTicks = 5;
+                } catch (NumberFormatException ignored) {}
+            }));
+        });
+        rightX -= 84;
+        limitsBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 14, 80, 20));
+        this.components.add(limitsBtn);
+
         if (this.selectedTeamId.isBlank()) {
-            UiButton addBtn = new UiButton("Add New Team", () -> this.startAdd("team_config", null));
+            UiButton addBtn = new UiButton("Add New Team", () -> {
+                net.minecraft.client.MinecraftClient.getInstance().setScreen(new dev.frost.miniverse.client.gui.workspace.components.TeamNamePopupScreen(this.screen, (name, color) -> {
+                    com.google.gson.JsonObject props = new com.google.gson.JsonObject();
+                    props.addProperty("color", color.getName());
+                    this.sendMarkerAction("add_logical", BedwarsDefinition.ID, "team_config", "", name, props.toString());
+                    this.pendingRefreshTicks = 5;
+                }));
+            });
             addBtn.setBounds(new UiLayout.Rect(panel.x() + 12, panel.y() + 48, 130, 20));
             this.components.add(addBtn);
         } else {
@@ -114,10 +136,10 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
             context.drawText(textRenderer, Text.literal(arrowStr), crumbX, crumbY, UiTheme.TEXT_DIM, false);
             crumbX += textRenderer.getWidth(arrowStr);
             context.drawText(textRenderer, Text.literal(teamStr), crumbX, crumbY, UiTheme.TEXT, false);
-        }
 
-        if (this.renameField != null && this.renameField.getText().isBlank()) {
-            context.drawText(textRenderer, Text.literal("New name"), this.renameField.getX() + 6, this.renameField.getY() + 6, UiTheme.TEXT_DIM, false);
+            if (this.renameField != null && this.renameField.getText().isBlank()) {
+                context.drawText(textRenderer, Text.literal("New name"), this.renameField.getX() + 6, this.renameField.getY() + 6, UiTheme.TEXT_DIM, false);
+            }
         }
 
         context.enableScissor(this.listArea.x(), this.listArea.y(), this.listArea.x() + this.listArea.width(), this.listArea.y() + this.listArea.height());
@@ -175,6 +197,7 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
         
         // Render Teams
         context.drawText(textRenderer, Text.literal("Teams"), this.listArea.x() + 10, rowY, UiTheme.TEXT, false);
+        renderSmallButton(context, textRenderer, this.listArea.x() + this.listArea.width() - 84, rowY - 5, 74, "Delete All");
         rowY += 16;
         
         List<SessionSnapshotData.EditorMarker> teams = SessionSnapshotData.editorState().markers(BedwarsDefinition.ID, "team_config");
@@ -187,14 +210,8 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
                 UiRenderer.panel(context, row.x(), row.y(), row.width(), row.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
                 context.drawText(textRenderer, Text.literal(team.name()), row.x() + 10, row.y() + 11, UiTheme.TEXT, false);
 
-                renderSmallButton(context, textRenderer, row.x() + row.width() - 226, row.y() + 5, 68, "Rename");
                 renderSmallButton(context, textRenderer, row.x() + row.width() - 74, row.y() + 5, 60, "Delete");
 
-                if (this.editingMarkerId.equals(team.id())) {
-                    this.renameField.setX(row.x() + row.width() - 226);
-                    this.renameField.setY(row.y() + 5);
-                    this.renameField.render(context, 0, 0, 0);
-                }
                 rowY += 34;
             }
         }
@@ -236,28 +253,21 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
     }
 
     private boolean handleGlobalListClick(double mouseX, int adjustedMouseY) {
-        int rowY = this.listArea.y() + 10 + 16;
+        int rowY = this.listArea.y() + 10;
+        UiLayout.Rect deleteAll = new UiLayout.Rect(this.listArea.x() + this.listArea.width() - 84, rowY - 5, 74, 20);
+        if (deleteAll.contains(mouseX, adjustedMouseY)) {
+            this.sendMarkerAction("delete_all", BedwarsDefinition.ID, "all", "all");
+            this.pendingRefreshTicks = 5;
+            return true;
+        }
+
+        rowY += 16;
         List<SessionSnapshotData.EditorMarker> teams = SessionSnapshotData.editorState().markers(BedwarsDefinition.ID, "team_config");
         
         for (SessionSnapshotData.EditorMarker team : teams) {
             UiLayout.Rect row = new UiLayout.Rect(this.listArea.x() + 20, rowY, this.listArea.width() - 20, 30);
-            UiLayout.Rect rename = new UiLayout.Rect(row.x() + row.width() - 226, row.y() + 5, 68, 20);
             UiLayout.Rect delete = new UiLayout.Rect(row.x() + row.width() - 74, row.y() + 5, 60, 20);
 
-            if (rename.contains(mouseX, adjustedMouseY)) {
-                if (this.editingMarkerId.equals(team.id())) {
-                    if (!this.renameField.getText().trim().isBlank()) {
-                        this.sendMarkerAction("rename", BedwarsDefinition.ID, "team_config", team.id(), this.renameField.getText().trim());
-                    }
-                    this.editingMarkerId = "";
-                    this.renameField.setX(-1000);
-                    this.pendingRefreshTicks = 5;
-                } else {
-                    this.editingMarkerId = team.id();
-                    this.renameField.setText(team.name());
-                }
-                return true;
-            }
             if (delete.contains(mouseX, adjustedMouseY)) {
                 this.sendMarkerAction("delete", BedwarsDefinition.ID, "team_config", team.id());
                 this.editingMarkerId = "";
@@ -328,6 +338,21 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
 
         int rowY = this.listArea.y() + 10 - (int) this.scrollY;
 
+        // Render header for the team itself
+        UiLayout.Rect headerRow = new UiLayout.Rect(this.listArea.x() + 20, rowY, this.listArea.width() - 20, 30);
+        UiRenderer.panel(context, headerRow.x(), headerRow.y(), headerRow.width(), headerRow.height(), UiTheme.PANEL_SOFT, UiTheme.BORDER_STRONG);
+        context.drawText(textRenderer, Text.literal("Team Details - " + team.name()), headerRow.x() + 10, headerRow.y() + 11, UiTheme.TEXT, false);
+        
+        renderSmallButton(context, textRenderer, headerRow.x() + headerRow.width() - 74, headerRow.y() + 5, 68, "Rename");
+        if (this.editingMarkerId.equals(team.id())) {
+            this.renameField.setX(headerRow.x() + headerRow.width() - 74);
+            this.renameField.setY(headerRow.y() + 5);
+        } else {
+            this.renameField.setX(-1000);
+        }
+
+        rowY += 40;
+
         rowY = renderTeamSection(context, textRenderer, "Bed", "team_bed", team, rowY);
         rowY = renderTeamSection(context, textRenderer, "Spawns", "team_spawn", team, rowY);
         rowY = renderTeamSection(context, textRenderer, "Iron Generators", "team_island_iron", team, rowY);
@@ -373,7 +398,27 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
         SessionSnapshotData.EditorMarker team = getTeam(this.selectedTeamId);
         if (team == null) return false;
 
-        int[] yRef = new int[]{this.listArea.y() + 10};
+        int rowY = this.listArea.y() + 10;
+        UiLayout.Rect headerRow = new UiLayout.Rect(this.listArea.x() + 20, rowY, this.listArea.width() - 20, 30);
+        UiLayout.Rect rename = new UiLayout.Rect(headerRow.x() + headerRow.width() - 74, headerRow.y() + 5, 68, 20);
+
+        if (rename.contains(mouseX, adjustedMouseY)) {
+            if (this.editingMarkerId.equals(team.id())) {
+                if (!this.renameField.getText().trim().isBlank()) {
+                    this.sendMarkerAction("rename", BedwarsDefinition.ID, "team_config", team.id(), this.renameField.getText().trim());
+                }
+                this.editingMarkerId = "";
+                this.renameField.setX(-1000);
+                this.pendingRefreshTicks = 5;
+            } else {
+                this.editingMarkerId = team.id();
+                this.renameField.setText(team.name());
+            }
+            return true;
+        }
+        
+        rowY += 40;
+        int[] yRef = new int[]{rowY};
 
         if (handleTeamSectionClick(mouseX, adjustedMouseY, "team_bed", team, yRef)) return true;
         if (handleTeamSectionClick(mouseX, adjustedMouseY, "team_spawn", team, yRef)) return true;
@@ -457,16 +502,21 @@ public final class BedwarsMapEditorWorkspaceView implements WorkspaceView {
     }
 
     private void sendMarkerAction(String action, String gameId, String definitionKey, String markerId) {
-        this.sendMarkerAction(action, gameId, definitionKey, markerId, "");
+        this.sendMarkerAction(action, gameId, definitionKey, markerId, "", "{}");
     }
 
     private void sendMarkerAction(String action, String gameId, String definitionKey, String markerId, String name) {
+        this.sendMarkerAction(action, gameId, definitionKey, markerId, name, "{}");
+    }
+
+    private void sendMarkerAction(String action, String gameId, String definitionKey, String markerId, String name, String properties) {
         NbtCompound nbt = new NbtCompound();
         nbt.putString("action", action);
         nbt.putString("gameId", gameId);
         nbt.putString("definitionKey", definitionKey);
         nbt.putString("markerId", markerId == null ? "" : markerId);
         nbt.putString("name", name == null ? "" : name);
+        nbt.putString("properties", properties == null ? "{}" : properties);
         ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
     }
 

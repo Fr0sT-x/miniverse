@@ -59,11 +59,18 @@ public final class BedwarsTeamUpgradeManager {
             if (currentTier < upgrade.tierCosts().length) {
                 tiers[upgrade.ordinal()] = currentTier + 1;
                 
-                // Handle instant upgrade effects
                 if (upgrade == BedwarsTeamUpgrade.FORGE) {
                     double[] modifiers = {1.0, 0.75, 0.5, 0.25, 0.15};
                     if (minigame.getGeneratorManager() != null) {
                         minigame.getGeneratorManager().setTeamForgeMultiplier(teamId, modifiers[currentTier + 1]);
+                    }
+                } else if (upgrade == BedwarsTeamUpgrade.HASTE) {
+                    if (minigame.getContext() != null && minigame.getContext().nullableServer() != null) {
+                        for (ServerPlayerEntity p : minigame.getContext().roster().onlinePlayers(minigame.getContext().nullableServer())) {
+                            if (teamId.equals(minigame.teamManager().teamId(p.getUuid()))) {
+                                applyToPlayer(p, teamId);
+                            }
+                        }
                     }
                 }
             }

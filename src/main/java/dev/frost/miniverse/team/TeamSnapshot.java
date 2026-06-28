@@ -6,7 +6,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import java.util.List;
 import java.util.UUID;
 
-public record TeamSnapshot(String id, String label, List<TeamMembership> members) {
+public record TeamSnapshot(String id, String label, @org.jetbrains.annotations.Nullable net.minecraft.util.Formatting color, List<TeamMembership> members) {
     public TeamSnapshot {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("Team snapshot id cannot be blank.");

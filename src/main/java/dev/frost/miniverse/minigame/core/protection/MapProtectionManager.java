@@ -46,6 +46,13 @@ public final class MapProtectionManager {
             // But per requirements, everything is protected unless tracked.
         }
         
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime != null && runtime.minigame() instanceof dev.frost.miniverse.minigame.core.event.BlockBreakBypassAware bypass) {
+            if (bypass.canBypassProtection(player, pos)) {
+                return true;
+            }
+        }
+        
         if (!isProtected((ServerWorld) player.getWorld(), pos)) {
             return true;
         }

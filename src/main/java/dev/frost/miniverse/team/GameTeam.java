@@ -10,6 +10,7 @@ import java.util.UUID;
 public final class GameTeam {
     private final String id;
     private String label;
+    private net.minecraft.util.Formatting color;
     private final Map<UUID, TeamMembership> members = new LinkedHashMap<>();
 
     GameTeam(String id, String label) {
@@ -30,6 +31,14 @@ public final class GameTeam {
 
     public void setLabel(String label) {
         this.label = normalizeLabel(label, this.id);
+    }
+
+    public net.minecraft.util.Formatting color() {
+        return this.color;
+    }
+
+    public void setColor(net.minecraft.util.Formatting color) {
+        this.color = color;
     }
 
     public void add(ServerPlayerEntity player, TeamRole role) {
@@ -65,7 +74,7 @@ public final class GameTeam {
     }
 
     public TeamSnapshot snapshot() {
-        return new TeamSnapshot(this.id, this.label, this.members());
+        return new TeamSnapshot(this.id, this.label, this.color, this.members());
     }
 
     static String sanitizeId(String value) {

@@ -120,12 +120,17 @@ public final class VanillaTeamAdapter {
 
     public void syncSnapshots(MinecraftServer server, Collection<TeamSnapshot> snapshots, Function<TeamSnapshot, VanillaTeamOptions> optionsFactory) {
         Function<TeamSnapshot, VanillaTeamOptions> resolvedFactory = optionsFactory == null
-            ? ignored -> VanillaTeamOptions.defaults()
+            ? ignored -> {
+                Formatting color = ignored.color() != null ? ignored.color() : this.colorFor(ignored.id());
+                return VanillaTeamOptions.defaults()
+                    .withPrefix(net.minecraft.text.Text.literal(ignored.label() + " ").formatted(color))
+                    .withColor(color);
+            }
             : optionsFactory;
         List<VanillaTeamDescriptor> descriptors = snapshots.stream()
             .map(snapshot -> new VanillaTeamDescriptor(
                 snapshot.id(),
-                net.minecraft.text.Text.literal(TeamColorPalette.displayName(snapshot.id())),
+                net.minecraft.text.Text.literal(snapshot.label()),
                 snapshot.liveMembers(server),
                 resolvedFactory.apply(snapshot)
             ))

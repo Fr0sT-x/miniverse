@@ -42,6 +42,7 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         // Pre-create two teams
         this.teamGrid.clear();
         this.teamGrid.addTeam("");
+        this.teamGrid.addTeam("");
     }
 
     @Override
@@ -159,7 +160,7 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         List<TeamDraft> teams = this.teamGrid.getTeams();
         for (int i = 0; i < teams.size(); i++) {
             TeamDraft team = teams.get(i);
-            String groupId = team.label().isBlank() ? "team_" + i : team.label().toLowerCase().replace(" ", "_");
+            String groupId = "team_" + i;
             String groupLabel = team.label().isBlank() ? "Team " + (i + 1) : team.label();
             
             List<SessionSnapshotData.RosterEntry> members = new ArrayList<>();

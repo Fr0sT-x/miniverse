@@ -20,21 +20,21 @@ public final class BedwarsGeneratorManager {
             String teamId = entry.getKey();
             BedwarsMapConfig.BedwarsTeamConfig teamConfig = entry.getValue();
             for (MapPosition pos : teamConfig.ironGens) {
-                generators.add(new BedwarsResourceGenerator(pos, BedwarsCurrency.IRON, 20, 64, true, teamId));
+                generators.add(new BedwarsResourceGenerator(pos, BedwarsCurrency.IRON, settings.ironGenIntervalTicks(), mapConfig.globalResourceLimit(), true, teamId));
             }
             for (MapPosition pos : teamConfig.goldGens) {
-                generators.add(new BedwarsResourceGenerator(pos, BedwarsCurrency.GOLD, 160, 16, true, teamId));
+                generators.add(new BedwarsResourceGenerator(pos, BedwarsCurrency.GOLD, settings.goldGenIntervalTicks(), mapConfig.globalResourceLimit(), true, teamId));
             }
         }
         
         // Find diamond/emerald generators from markers
         for (MapPosition pos : mapConfig.midDiamondGens()) {
-            BedwarsResourceGenerator gen = new BedwarsResourceGenerator(pos, BedwarsCurrency.DIAMOND, 500, 4, false, null);
+            BedwarsResourceGenerator gen = new BedwarsResourceGenerator(pos, BedwarsCurrency.DIAMOND, settings.diamondGenIntervalTicks(), mapConfig.globalResourceLimit(), false, null);
             gen.setHologramManager(hologramManager);
             generators.add(gen);
         }
         for (MapPosition pos : mapConfig.midEmeraldGens()) {
-            BedwarsResourceGenerator gen = new BedwarsResourceGenerator(pos, BedwarsCurrency.EMERALD, 700, 2, false, null);
+            BedwarsResourceGenerator gen = new BedwarsResourceGenerator(pos, BedwarsCurrency.EMERALD, settings.emeraldGenIntervalTicks(), mapConfig.globalResourceLimit(), false, null);
             gen.setHologramManager(hologramManager);
             generators.add(gen);
         }

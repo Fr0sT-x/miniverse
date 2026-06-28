@@ -83,6 +83,7 @@ public final class BedwarsResourceGenerator {
                 // Split resources among players
                 for (ServerPlayerEntity p : playersNear) {
                     p.getInventory().offerOrDrop(new ItemStack(currency.item(), 1));
+                    p.playSound(net.minecraft.sound.SoundEvents.ENTITY_ITEM_PICKUP, 1.0f, 1.0f);
                 }
                 return;
             }
@@ -100,8 +101,14 @@ public final class BedwarsResourceGenerator {
 
         ItemStack stack = new ItemStack(currency.item(), 1);
         ItemEntity entity = new ItemEntity(world, position.x(), position.y(), position.z(), stack);
-        entity.setVelocity(0, 0, 0);
+        entity.setVelocity(0, 0.2, 0);
         world.spawnEntity(entity);
+        
+        if (isTeamGenerator) {
+            world.playSound(null, position.x(), position.y(), position.z(), net.minecraft.sound.SoundEvents.ENTITY_ITEM_PICKUP, net.minecraft.sound.SoundCategory.BLOCKS, 1.0f, 1.0f);
+        } else {
+            world.playSound(null, position.x(), position.y(), position.z(), net.minecraft.sound.SoundEvents.BLOCK_BEACON_AMBIENT, net.minecraft.sound.SoundCategory.BLOCKS, 1.0f, 1.0f);
+        }
     }
 
     public void setIntervalModifier(double multiplier) {

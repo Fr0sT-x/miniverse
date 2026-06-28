@@ -446,7 +446,7 @@ public class SpeedrunMinigame extends AbstractMinigame implements ServerTickAwar
             .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
 
         List<TeamSnapshot> snapshots = List.of(
-            new TeamSnapshot("runner", "Runner", runners.stream().map(player -> TeamMembership.of(player, TeamRole.RUNNER)).toList())
+            new TeamSnapshot("runner", "Runner", null, runners.stream().map(player -> TeamMembership.of(player, TeamRole.RUNNER)).toList())
         );
         this.vanillaTeams.syncSnapshots(this.server, snapshots, snapshot -> switch (snapshot.id()) {
             case "runner" -> runnerOptions;

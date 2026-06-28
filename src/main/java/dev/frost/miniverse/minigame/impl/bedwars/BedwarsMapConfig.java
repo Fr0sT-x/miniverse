@@ -21,7 +21,8 @@ public record BedwarsMapConfig(
     List<MapPosition> midEmeraldGens,
     List<MapPosition> shopNpcs,
     List<MapPosition> upgradeNpcs,
-    @Nullable MapPosition spectatorSpawn
+    @Nullable MapPosition spectatorSpawn,
+    int globalResourceLimit
 ) {
     public BedwarsMapConfig {
         teams = Map.copyOf(teams);
@@ -34,23 +35,25 @@ public record BedwarsMapConfig(
     public static class BedwarsTeamConfig {
         public String teamId;
         public String name;
+        public net.minecraft.util.Formatting color;
         public List<MapPosition> spawns = new ArrayList<>();
-        public BlockPos bedPos;
+        public net.minecraft.util.math.BlockPos bedPos;
         public List<MapPosition> ironGens = new ArrayList<>();
         public List<MapPosition> goldGens = new ArrayList<>();
 
-        public BedwarsTeamConfig(String teamId, String name) {
+        public BedwarsTeamConfig(String teamId, String name, net.minecraft.util.Formatting color) {
             this.teamId = teamId;
             this.name = name;
+            this.color = color;
         }
     }
 
     public static BedwarsMapConfig fromJson(JsonObject json) {
         if (json == null) {
-            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
+            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
         }
 
-        Map<String, BedwarsTeamConfig> teams = new HashMap<>();
+        Map<String, BedwarsTeamConfig> teams = new java.util.LinkedHashMap<>();
 
         if (json.has("teamConfigs") && json.get("teamConfigs").isJsonArray()) {
             for (JsonElement element : json.getAsJsonArray("teamConfigs")) {
@@ -58,10 +61,17 @@ public record BedwarsMapConfig(
                     JsonObject markerObj = element.getAsJsonObject();
                     String name = markerObj.has("name") ? markerObj.get("name").getAsString() : "Unknown Team";
                     // Generate a safe team ID from the name if the client didn't supply one in properties
-                    String teamId = extractTeamId(markerObj, name.toLowerCase().replaceAll("[^a-z0-9]", "_"));
+                    String teamId = markerObj.has("id") ? markerObj.get("id").getAsString() : extractTeamId(markerObj, name.toLowerCase().replaceAll("[^a-z0-9]", "_"));
                     
                     if (teamId != null && !teamId.isBlank()) {
-                        teams.put(teamId, new BedwarsTeamConfig(teamId, name));
+                        net.minecraft.util.Formatting color = null;
+                        if (markerObj.has("properties")) {
+                            JsonObject props = markerObj.getAsJsonObject("properties");
+                            if (props.has("color")) {
+                                color = net.minecraft.util.Formatting.byName(props.get("color").getAsString());
+                            }
+                        }
+                        teams.put(teamId, new BedwarsTeamConfig(teamId, name, color));
                     }
                 }
             }
@@ -78,16 +88,17 @@ public record BedwarsMapConfig(
             parsePoints(json, "midEmeraldGens"),
             parsePoints(json, "shopNpcs"),
             parsePoints(json, "upgradeNpcs"),
-            parseSinglePoint(json, "spectatorSpawn")
+            parseSinglePoint(json, "spectatorSpawn"),
+            extractGlobalResourceLimit(json)
         );
     }
 
     public static BedwarsMapConfig fromJsonString(String value) {
         try {
             JsonElement element = com.google.gson.JsonParser.parseString(value == null ? "{}" : value);
-            return element.isJsonObject() ? fromJson(element.getAsJsonObject()) : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
+            return element.isJsonObject() ? fromJson(element.getAsJsonObject()) : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
         } catch (IllegalStateException ignored) {
-            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
+            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
         }
     }
 
@@ -99,6 +110,23 @@ public record BedwarsMapConfig(
             }
         }
         return null;
+    }
+
+    private static int extractGlobalResourceLimit(JsonObject root) {
+        if (root.has("global_limits") && root.get("global_limits").isJsonArray()) {
+            for (JsonElement element : root.getAsJsonArray("global_limits")) {
+                if (element.isJsonObject()) {
+                    JsonObject markerObj = element.getAsJsonObject();
+                    if (markerObj.has("properties") && markerObj.get("properties").isJsonObject()) {
+                        JsonObject props = markerObj.getAsJsonObject("properties");
+                        if (props.has("limit")) {
+                            return props.get("limit").getAsInt();
+                        }
+                    }
+                }
+            }
+        }
+        return 64; // Default to 64
     }
 
     private static String extractTeamId(JsonObject markerObj, String fallback) {

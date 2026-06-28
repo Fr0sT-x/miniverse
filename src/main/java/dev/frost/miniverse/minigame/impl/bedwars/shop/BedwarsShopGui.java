@@ -47,7 +47,7 @@ public class BedwarsShopGui {
         List<BedwarsShopItem> categoryItems = new ArrayList<>();
         if (activeCategory == null) {
             // Quick Buy items
-            dev.frost.miniverse.minigame.impl.bedwars.shop.BedwarsQuickBuyService qbs = new dev.frost.miniverse.minigame.impl.bedwars.shop.BedwarsQuickBuyService();
+            dev.frost.miniverse.minigame.impl.bedwars.shop.BedwarsQuickBuyService qbs = manager.getQuickBuyService();
             for (BedwarsShopItem item : qbs.load(player.getUuid())) {
                 if (item != null) {
                     categoryItems.add(item);

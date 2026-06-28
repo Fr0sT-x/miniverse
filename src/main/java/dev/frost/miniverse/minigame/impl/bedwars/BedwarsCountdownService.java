@@ -6,6 +6,10 @@ import net.minecraft.text.Text;
 
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Collection;
+import net.minecraft.server.network.ServerPlayerEntity;
+import dev.frost.miniverse.minigame.core.countdown.CountdownService;
+import net.minecraft.sound.SoundEvents;
 
 public class BedwarsCountdownService {
     private final BedwarsMinigame minigame;
@@ -13,6 +17,7 @@ public class BedwarsCountdownService {
     private final Queue<Phase> phases = new LinkedList<>();
     private Phase currentPhase;
     private int ticksRemainingInPhase;
+    private final CountdownService countdownService = new CountdownService();
 
     public BedwarsCountdownService(BedwarsMinigame minigame, BedwarsGeneratorManager generatorManager) {
         this.minigame = minigame;
@@ -27,22 +32,22 @@ public class BedwarsCountdownService {
         // Bed Destruction (10 mins)
         // Sudden Death (10 mins) -> Game Over
         
-        phases.add(new Phase("Diamond II", 6 * 60 * 20, () -> {
+        phases.add(new Phase("Diamond II", "Diamond generators have been upgraded to Tier II!", 6 * 60 * 20, () -> {
             generatorManager.setDiamondMultiplier(0.5); // Double speed
         }));
-        phases.add(new Phase("Emerald II", 6 * 60 * 20, () -> {
+        phases.add(new Phase("Emerald II", "Emerald generators have been upgraded to Tier II!", 6 * 60 * 20, () -> {
             generatorManager.setEmeraldMultiplier(0.5);
         }));
-        phases.add(new Phase("Diamond III", 6 * 60 * 20, () -> {
+        phases.add(new Phase("Diamond III", "Diamond generators have been upgraded to Tier III!", 6 * 60 * 20, () -> {
             generatorManager.setDiamondMultiplier(0.25); // Quadruple speed
         }));
-        phases.add(new Phase("Emerald III", 6 * 60 * 20, () -> {
+        phases.add(new Phase("Emerald III", "Emerald generators have been upgraded to Tier III!", 6 * 60 * 20, () -> {
             generatorManager.setEmeraldMultiplier(0.25);
         }));
-        phases.add(new Phase("Bed Destruction", 10 * 60 * 20, () -> {
+        phases.add(new Phase("Bed Destruction", "All beds have been destroyed!", 10 * 60 * 20, () -> {
             minigame.destroyAllBeds();
         }));
-        phases.add(new Phase("Sudden Death", 10 * 60 * 20, () -> {
+        phases.add(new Phase("Sudden Death", "Match ended in a draw!", 10 * 60 * 20, () -> {
             // End game in a draw if it gets this far
             minigame.endMatchInDraw();
         }));
@@ -54,6 +59,7 @@ public class BedwarsCountdownService {
         if (!phases.isEmpty()) {
             currentPhase = phases.poll();
             ticksRemainingInPhase = currentPhase.durationTicks;
+            countdownService.reset();
         } else {
             currentPhase = null;
         }
@@ -64,9 +70,17 @@ public class BedwarsCountdownService {
         
         ticksRemainingInPhase--;
         
+        int secondsRemaining = ticksRemainingInPhase / 20;
+        if (ticksRemainingInPhase % 20 == 0 && secondsRemaining <= 10 && secondsRemaining > 0) {
+            if (minigame.getContext() != null && minigame.getContext().nullableServer() != null) {
+                Collection<ServerPlayerEntity> players = minigame.getContext().roster().onlinePlayers(minigame.getContext().nullableServer());
+                countdownService.announceVisibleCountdown(players, secondsRemaining, 5, Text.literal(currentPhase.name), SoundEvents.BLOCK_NOTE_BLOCK_HAT.value());
+            }
+        }
+        
         if (ticksRemainingInPhase <= 0) {
             currentPhase.onComplete.run();
-            minigame.broadcast(Text.literal(currentPhase.name + " has started!").formatted(net.minecraft.util.Formatting.AQUA, net.minecraft.util.Formatting.BOLD));
+            minigame.broadcast(Text.literal(currentPhase.announcement).formatted(net.minecraft.util.Formatting.AQUA, net.minecraft.util.Formatting.BOLD));
             nextPhase();
         }
     }
@@ -81,11 +95,13 @@ public class BedwarsCountdownService {
     
     private static class Phase {
         String name;
+        String announcement;
         int durationTicks;
         Runnable onComplete;
 
-        Phase(String name, int durationTicks, Runnable onComplete) {
+        Phase(String name, String announcement, int durationTicks, Runnable onComplete) {
             this.name = name;
+            this.announcement = announcement;
             this.durationTicks = durationTicks;
             this.onComplete = onComplete;
         }

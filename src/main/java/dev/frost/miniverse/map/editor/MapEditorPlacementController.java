@@ -339,8 +339,12 @@ public final class MapEditorPlacementController {
                 markers.set(0, new MapMarker(route.id(), route.definitionKey(), route.name(), route.type(), points, List.of(), this.properties));
                 this.save(player, markers, "Added point to " + this.definition.displayName() + ".");
             } else {
+                if (markers.size() >= this.definition.maxCount()) {
+                    markers.removeLast();
+                }
+                String name = this.definition.single() ? this.definition.displayName() : this.definition.displayName() + " #" + (markers.size() + 1);
                 String id = java.util.UUID.randomUUID().toString();
-                markers.add(new MapMarker(id, this.definition.key(), this.definition.displayName(), this.definition.type(), List.of(position), List.of(), this.properties));
+                markers.add(new MapMarker(id, this.definition.key(), name, this.definition.type(), List.of(position), List.of(), this.properties));
                 this.save(player, markers, "Placed " + this.definition.displayName() + ".");
             }
         }
@@ -353,7 +357,7 @@ public final class MapEditorPlacementController {
                 markers.removeLast();
             }
             String name = this.definition.single() ? this.definition.displayName() : this.definition.displayName() + " #" + (markers.size() + 1);
-            markers.add(new MapMarker(UUID.randomUUID().toString(), this.definition.key(), name, MarkerType.REGION, List.of(), new ArrayList<>(this.regionParts), new com.google.gson.JsonObject()));
+            markers.add(new MapMarker(UUID.randomUUID().toString(), this.definition.key(), name, MarkerType.REGION, List.of(), new ArrayList<>(this.regionParts), this.properties));
             this.save(player, markers, "Created " + this.definition.displayName() + " with " + this.regionParts.size() + " parts.");
         }
 

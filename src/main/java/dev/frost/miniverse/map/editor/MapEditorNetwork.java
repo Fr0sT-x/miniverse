@@ -47,6 +47,11 @@ public final class MapEditorNetwork {
             player.sendMessage(Text.literal("Unknown map editor gamemode: " + gameId).formatted(Formatting.RED), false);
             return;
         }
+        if (type.equals("delete_all")) {
+            deleteAllMarkers(server, player, mapId, extension.get());
+            return;
+        }
+        
         Optional<MarkerDefinition> definition = extension.get().marker(definitionKey);
         if (definition.isEmpty()) {
             player.sendMessage(Text.literal("Unknown marker definition: " + definitionKey).formatted(Formatting.RED), false);
@@ -102,13 +107,25 @@ public final class MapEditorNetwork {
         }
     }
 
+    private static void deleteAllMarkers(MinecraftServer server, ServerPlayerEntity player, String mapId, MapEditorExtension extension) {
+        try {
+            for (MarkerDefinition def : extension.markers()) {
+                MapEditorMarkerStore.save(mapId, extension, def, List.of());
+            }
+            dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
+            player.sendMessage(Text.literal("Deleted all markers for this map.").formatted(Formatting.GREEN), false);
+        } catch (IOException e) {
+            player.sendMessage(Text.literal("Failed to clear markers: " + e.getMessage()).formatted(Formatting.RED), false);
+        }
+    }
+
     private static void teleportToMarker(ServerPlayerEntity player, String mapId, MapEditorExtension extension, MarkerDefinition definition, String markerId) {
         MapEditorMarkerStore.load(mapId, extension, definition).stream()
             .filter(marker -> marker.id().equals(markerId))
             .findFirst()
             .ifPresentOrElse(marker -> {
                 MapPosition target = marker.points().isEmpty() ? MapPosition.of(0.0D, 100.0D, 0.0D) : marker.points().getFirst();
-                player.teleport(player.getServerWorld(), target.x() + 0.5D, target.y() + 1.0D, target.z() + 0.5D, target.yaw(), target.pitch());
+                player.teleport(player.getServerWorld(), target.x(), target.y(), target.z(), target.yaw(), target.pitch());
             }, () -> player.sendMessage(Text.literal("Marker not found.").formatted(Formatting.RED), false));
     }
 

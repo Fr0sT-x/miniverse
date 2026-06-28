@@ -38,7 +38,7 @@ import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 public class BedwarsMinigame extends AbstractMinigame implements
     DeathAwareMinigame, TeamManagerProvider, BlockBreakAware, EntityInteractAware, 
     SpawnPointAware, RosterAware, PlayerLeaveAware, PersistentMinigame, 
-    ServerTickAware, InventoryLayoutAware, ItemUseAware, ItemUseOnBlockAware {
+    ServerTickAware, InventoryLayoutAware, ItemUseAware, ItemUseOnBlockAware, dev.frost.miniverse.minigame.core.event.BlockBreakBypassAware {
 
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private final TeamManager teamManager = new TeamManager();
@@ -50,8 +50,9 @@ public class BedwarsMinigame extends AbstractMinigame implements
     private dev.frost.miniverse.minigame.impl.bedwars.upgrade.BedwarsTeamUpgradeManager upgradeManager;
     private dev.frost.miniverse.minigame.impl.bedwars.HologramManager hologramManager;
     private dev.frost.miniverse.minigame.impl.bedwars.BedwarsCountdownService countdownService;
+    private dev.frost.miniverse.minigame.impl.bedwars.visibility.BedwarsVisibilityManager visibilityManager;
     private BedwarsSettings settings = BedwarsSettings.fromNbt(null);
-    private BedwarsMapConfig mapConfig = new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
+    private BedwarsMapConfig mapConfig = new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
     
     private final Map<UUID, ScoreboardTemplate> scoreboards = new ConcurrentHashMap<>();
     
@@ -65,6 +66,8 @@ public class BedwarsMinigame extends AbstractMinigame implements
     public void initialize() {
         this.applyVanillaGameRule(net.minecraft.world.GameRules.KEEP_INVENTORY, true);
         this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_IMMEDIATE_RESPAWN, true);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.DO_MOB_SPAWNING, false);
+        this.applyVanillaGameRule(net.minecraft.world.GameRules.ANNOUNCE_ADVANCEMENTS, false);
         this.setState(GameState.WAITING_FOR_PLAYERS);
 
         dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.registerGamemode(
@@ -75,12 +78,14 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
     public void applySettings(BedwarsSettings settings, BedwarsMapConfig mapConfig) {
         this.settings = settings != null ? settings : BedwarsSettings.fromNbt(null);
-        this.mapConfig = mapConfig != null ? mapConfig : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
+        this.mapConfig = mapConfig != null ? mapConfig : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
     }
 
     public void ensureTeamAssignment(ServerPlayerEntity player, String team) {
         if (this.teamManager.teamId(player.getUuid()) == null) {
-            this.teamManager.assign(player, team, team, dev.frost.miniverse.team.TeamRole.MEMBER);
+            BedwarsMapConfig.BedwarsTeamConfig cfg = this.mapConfig.teams().get(team);
+            String label = cfg != null ? cfg.name : team;
+            this.teamManager.assign(player, team, label, dev.frost.miniverse.team.TeamRole.MEMBER);
         }
     }
 
@@ -94,6 +99,30 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
     @Override
     public void onMatchStart() {
+
+        // Remap generic session groups to the actual map teams
+        java.util.List<dev.frost.miniverse.team.TeamSnapshot> activeSessionTeams = this.teamManager.snapshots();
+        java.util.List<String> mapTeamIds = new java.util.ArrayList<>(this.mapConfig.teams().keySet());
+        
+        for (int i = 0; i < Math.min(activeSessionTeams.size(), mapTeamIds.size()); i++) {
+            dev.frost.miniverse.team.TeamSnapshot sessionTeam = activeSessionTeams.get(i);
+            String mapId = mapTeamIds.get(i);
+            BedwarsMapConfig.BedwarsTeamConfig mapTeamConfig = this.mapConfig.teams().get(mapId);
+            this.teamManager.ensureTeam(mapId, mapTeamConfig.name);
+            if (mapTeamConfig.color != null) {
+                this.teamManager.ensureTeam(mapId, mapTeamConfig.name).setColor(mapTeamConfig.color);
+            }
+            
+            for (dev.frost.miniverse.team.TeamMembership member : sessionTeam.members()) {
+                net.minecraft.server.network.ServerPlayerEntity player = this.context.nullableServer().getPlayerManager().getPlayer(member.playerUuid());
+                if (player != null) {
+                    this.teamManager.assign(player, mapId, mapTeamConfig.name, dev.frost.miniverse.team.TeamRole.MEMBER);
+                } else {
+                    this.teamManager.assign(member.playerUuid(), member.playerName(), mapId, mapTeamConfig.name, dev.frost.miniverse.team.TeamRole.MEMBER);
+                }
+            }
+        }
+
         for (String teamId : this.mapConfig.teams().keySet()) {
             this.bedTeamStates.put(teamId, new BedTeamState());
         }
@@ -102,13 +131,15 @@ public class BedwarsMinigame extends AbstractMinigame implements
         this.generatorManager = new dev.frost.miniverse.minigame.impl.bedwars.economy.BedwarsGeneratorManager(this.mapConfig, this.settings, this.hologramManager);
         this.shopManager = new dev.frost.miniverse.minigame.impl.bedwars.shop.BedwarsShopManager(this.mapConfig, this.settings);
         this.upgradeManager = new dev.frost.miniverse.minigame.impl.bedwars.upgrade.BedwarsTeamUpgradeManager(this.mapConfig.teams().keySet(), this);
+        this.visibilityManager = new dev.frost.miniverse.minigame.impl.bedwars.visibility.BedwarsVisibilityManager(this);
         this.countdownService = new dev.frost.miniverse.minigame.impl.bedwars.BedwarsCountdownService(this, this.generatorManager);
         
         // Setup players
         List<ServerPlayerEntity> participants = this.context.roster().onlinePlayers(this.context.nullableServer());
         this.shopManager.initPlayers(participants);
-        this.shopManager.spawnNpcs(this.context.nullableServer().getOverworld(), this.mapConfig.shopNpcs());
-        this.upgradeManager.spawnNpcs(this.context.nullableServer().getOverworld(), this.mapConfig.upgradeNpcs());
+        ServerWorld instanceWorld = participants.isEmpty() ? this.context.nullableServer().getOverworld() : participants.get(0).getServerWorld();
+        this.shopManager.spawnNpcs(instanceWorld, this.mapConfig.shopNpcs());
+        this.upgradeManager.spawnNpcs(instanceWorld, this.mapConfig.upgradeNpcs());
         java.util.Iterator<String> teamIter = this.mapConfig.teams().keySet().iterator();
         
         for (ServerPlayerEntity player : participants) {
@@ -117,10 +148,15 @@ public class BedwarsMinigame extends AbstractMinigame implements
                 String teamId = teamIter.next();
                 this.ensureTeamAssignment(player, teamId);
             }
-            if (this.getState() != GameState.FROZEN) {
-                this.teleportToSpawn(player);
-            }
+            this.teleportToSpawn(player);
+            player.getInventory().clear();
+            this.equipBaseArmor(player);
+            player.getInventory().insertStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.WOODEN_SWORD));
             player.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+        }
+        
+        if (this.context.nullableServer() != null) {
+            this.context.nullableServer().setPvpEnabled(true);
         }
         
         this.deathLifecycleManager = new dev.frost.miniverse.minigame.core.death.DeathLifecycleManager(
@@ -143,6 +179,9 @@ public class BedwarsMinigame extends AbstractMinigame implements
         }
         if (this.hologramManager != null && this.context != null) {
             this.hologramManager.clear(this.context.nullableServer());
+        }
+        if (this.visibilityManager != null && this.context != null) {
+            this.visibilityManager.clear(this.context.nullableServer());
         }
         if (this.context != null && this.context.nullableServer() != null) {
             for (ScoreboardTemplate board : this.scoreboards.values()) {
@@ -207,6 +246,34 @@ public class BedwarsMinigame extends AbstractMinigame implements
     }
 
     @Override
+    public boolean canBypassProtection(ServerPlayerEntity player, BlockPos pos) {
+        String playerTeamId = this.teamManager.teamId(player.getUuid());
+        if (playerTeamId == null) return false;
+
+        net.minecraft.block.BlockState state = player.getServerWorld().getBlockState(pos);
+        if (!(state.getBlock() instanceof net.minecraft.block.BedBlock)) return false;
+
+        String bedTeamId = this.mapConfig.findBedTeam(pos);
+        if (bedTeamId == null) {
+            net.minecraft.util.math.Direction dir = state.get(net.minecraft.block.BedBlock.FACING);
+            net.minecraft.util.math.BlockPos otherHalf = state.get(net.minecraft.block.BedBlock.PART) == net.minecraft.block.enums.BedPart.FOOT 
+                ? pos.offset(dir) 
+                : pos.offset(dir.getOpposite());
+            bedTeamId = this.mapConfig.findBedTeam(otherHalf);
+        }
+
+        if (bedTeamId != null) {
+            if (bedTeamId.equals(playerTeamId)) {
+                player.sendMessage(net.minecraft.text.Text.literal("You cannot break your own bed!").formatted(net.minecraft.util.Formatting.RED), false);
+                return false;
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    @Override
     public void onBlockBroken(ServerPlayerEntity breaker, ServerWorld world, BlockPos pos, BlockState state) {
         if (!(state.getBlock() instanceof net.minecraft.block.BedBlock)) return;
         
@@ -226,11 +293,10 @@ public class BedwarsMinigame extends AbstractMinigame implements
         
         teamState.destroyBed();
         
-        String teamLabel = this.teamManager.ensureTeam(teamId, teamId).label();
         String breakerTeamId = this.teamManager.teamId(breaker.getUuid());
         if (breakerTeamId == null) breakerTeamId = "";
         
-        this.broadcast(net.minecraft.text.Text.literal("Bed destroyed! Team " + teamLabel + " lost their bed to " + breaker.getNameForScoreboard()).formatted(net.minecraft.util.Formatting.RED));
+        notifyBedDestroyed(teamId, breaker.getNameForScoreboard());
         
         this.rebuildScoreboard();
         this.checkWinCondition();
@@ -328,7 +394,39 @@ public class BedwarsMinigame extends AbstractMinigame implements
             BedwarsMapConfig.BedwarsTeamConfig config = this.mapConfig.teams().get(teamId);
             if (config != null && !config.spawns.isEmpty()) {
                 dev.frost.miniverse.map.MapPosition pos = config.spawns.get(0);
-                player.teleport(this.context.nullableServer().getWorld(net.minecraft.world.World.OVERWORLD), pos.x(), pos.y(), pos.z(), pos.yaw(), pos.pitch());
+                if (this.runtime != null && this.context.nullableServer() != null) {
+                    player.teleport(player.getServerWorld(), pos.x() + 0.5, pos.y(), pos.z() + 0.5, java.util.Set.of(), pos.yaw(), pos.pitch());
+                }
+            }
+        }
+    }
+
+    public void equipBaseArmor(ServerPlayerEntity player) {
+        String teamId = this.teamManager.teamId(player.getUuid());
+        if (teamId != null) {
+            BedwarsMapConfig.BedwarsTeamConfig config = this.mapConfig.teams().get(teamId);
+            if (config != null && config.color != null && config.color.getColorValue() != null) {
+                int rgb = config.color.getColorValue();
+                net.minecraft.item.ItemStack helmet = new net.minecraft.item.ItemStack(net.minecraft.item.Items.LEATHER_HELMET);
+                helmet.set(net.minecraft.component.DataComponentTypes.DYED_COLOR, new net.minecraft.component.type.DyedColorComponent(rgb, false));
+                net.minecraft.item.ItemStack chestplate = new net.minecraft.item.ItemStack(net.minecraft.item.Items.LEATHER_CHESTPLATE);
+                chestplate.set(net.minecraft.component.DataComponentTypes.DYED_COLOR, new net.minecraft.component.type.DyedColorComponent(rgb, false));
+                
+                player.equipStack(net.minecraft.entity.EquipmentSlot.HEAD, helmet);
+                player.equipStack(net.minecraft.entity.EquipmentSlot.CHEST, chestplate);
+                
+                dev.frost.miniverse.minigame.impl.bedwars.shop.BedwarsPlayerToolState toolState = this.shopManager != null ? this.shopManager.getToolState(player.getUuid()) : null;
+                int tier = toolState != null ? toolState.getArmorTier() : 0;
+                
+                if (tier == 0) {
+                    net.minecraft.item.ItemStack leggings = new net.minecraft.item.ItemStack(net.minecraft.item.Items.LEATHER_LEGGINGS);
+                    leggings.set(net.minecraft.component.DataComponentTypes.DYED_COLOR, new net.minecraft.component.type.DyedColorComponent(rgb, false));
+                    net.minecraft.item.ItemStack boots = new net.minecraft.item.ItemStack(net.minecraft.item.Items.LEATHER_BOOTS);
+                    boots.set(net.minecraft.component.DataComponentTypes.DYED_COLOR, new net.minecraft.component.type.DyedColorComponent(rgb, false));
+                    
+                    player.equipStack(net.minecraft.entity.EquipmentSlot.LEGS, leggings);
+                    player.equipStack(net.minecraft.entity.EquipmentSlot.FEET, boots);
+                }
             }
         }
     }
@@ -397,6 +495,9 @@ public class BedwarsMinigame extends AbstractMinigame implements
         if (this.countdownService != null && this.context.nullableServer() != null) {
             this.countdownService.tick(this.context.nullableServer());
         }
+        if (this.visibilityManager != null && this.context.nullableServer() != null) {
+            this.visibilityManager.sync(this.context.nullableServer());
+        }
         if (server.getTicks() % 20 == 0) {
             this.rebuildScoreboard();
         }
@@ -406,12 +507,29 @@ public class BedwarsMinigame extends AbstractMinigame implements
         for (Map.Entry<String, BedTeamState> entry : this.bedTeamStates.entrySet()) {
             if (entry.getValue().isBedAlive()) {
                 entry.getValue().destroyBed();
-                String teamLabel = this.teamManager.ensureTeam(entry.getKey(), entry.getKey()).label();
-                this.broadcast(net.minecraft.text.Text.literal("Bed destroyed! Team " + teamLabel + " lost their bed due to bed destruction phase!").formatted(net.minecraft.util.Formatting.RED));
+                notifyBedDestroyed(entry.getKey(), "bed destruction phase");
             }
         }
         this.rebuildScoreboard();
         this.checkWinCondition();
+    }
+
+    private void notifyBedDestroyed(String teamId, String breakerName) {
+        BedwarsMapConfig.BedwarsTeamConfig config = this.mapConfig.teams().get(teamId);
+        String teamLabel = config != null ? config.name : teamId;
+        this.broadcast(net.minecraft.text.Text.literal("Bed destroyed! Team " + teamLabel + " lost their bed to " + breakerName).formatted(net.minecraft.util.Formatting.RED));
+        
+        if (this.getContext() != null && this.getContext().nullableServer() != null) {
+            for (ServerPlayerEntity p : this.getContext().roster().onlinePlayers(this.getContext().nullableServer())) {
+                if (teamId.equals(this.teamManager.teamId(p.getUuid()))) {
+                    p.playSound(net.minecraft.sound.SoundEvents.ENTITY_ENDER_DRAGON_GROWL, 1.0f, 1.0f);
+                    p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.TitleS2CPacket(net.minecraft.text.Text.literal("BED DESTROYED!").formatted(net.minecraft.util.Formatting.RED, net.minecraft.util.Formatting.BOLD)));
+                    p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.SubtitleS2CPacket(net.minecraft.text.Text.literal("You will no longer respawn!").formatted(net.minecraft.util.Formatting.GRAY)));
+                } else {
+                    p.playSound(net.minecraft.sound.SoundEvents.ENTITY_ENDER_DRAGON_GROWL, 0.3f, 1.0f);
+                }
+            }
+        }
     }
 
     public void endMatchInDraw() {
@@ -443,7 +561,8 @@ public class BedwarsMinigame extends AbstractMinigame implements
             for (Map.Entry<String, BedTeamState> entry : this.bedTeamStates.entrySet()) {
                 String teamId = entry.getKey();
                 BedTeamState state = entry.getValue();
-                String teamLabel = this.teamManager.ensureTeam(teamId, teamId).label();
+                BedwarsMapConfig.BedwarsTeamConfig config = this.mapConfig.teams().get(teamId);
+                String teamLabel = config != null ? config.name : teamId;
                 String status = state.isBedAlive() ? "§a✔" : "§c☠";
                 board.addLine(net.minecraft.text.Text.literal("● " + teamLabel + " " + status));
             }

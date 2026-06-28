@@ -27,13 +27,14 @@ public final class BedwarsDefinition implements MinigameDefinition {
             new MarkerDefinition("team_config",      "Team",              MarkerType.POINT,  "teamConfigs",    2, 8,  null, "One per team. Name it (e.g. 'Red Team'). All team markers are associated to a team."),
             new MarkerDefinition("team_spawn",       "Team Spawn",        MarkerType.POINT,  "teamSpawns",     1, Integer.MAX_VALUE, null, "Spawn point for a team (1-4 recommended)."),
             new MarkerDefinition("team_bed",         "Team Bed",          MarkerType.POINT,  "teamBeds",       1, Integer.MAX_VALUE, null, "Bed location for a team. One per team exactly."),
-            new MarkerDefinition("team_island_iron", "Island Iron Gen",   MarkerType.POINT,  "islandIronGens", 1, Integer.MAX_VALUE, null, "Iron generator on a team island."),
-            new MarkerDefinition("team_island_gold", "Island Gold Gen",   MarkerType.POINT,  "islandGoldGens", 0, Integer.MAX_VALUE, null, "Gold generator on a team island."),
-            new MarkerDefinition("mid_diamond_gen",  "Mid Diamond Gen",   MarkerType.POINT,  "midDiamondGens", 0, 4,  null, "Diamond generator at mid island."),
-            new MarkerDefinition("mid_emerald_gen",  "Mid Emerald Gen",   MarkerType.POINT,  "midEmeraldGens", 0, 2,  null, "Emerald generator at mid island (optional)."),
+            new MarkerDefinition("team_island_iron", "Island Iron Gen",   MarkerType.POINT,  "islandIronGens", 1, 64, null, "Iron generator on a team island."),
+            new MarkerDefinition("team_island_gold", "Island Gold Gen",   MarkerType.POINT,  "islandGoldGens", 0, 64, null, "Gold generator on a team island."),
+            new MarkerDefinition("mid_diamond_gen",  "Mid Diamond Gen",   MarkerType.POINT,  "midDiamondGens", 0, 64, null, "Diamond generator at mid island."),
+            new MarkerDefinition("mid_emerald_gen",  "Mid Emerald Gen",   MarkerType.POINT,  "midEmeraldGens", 0, 64, null, "Emerald generator at mid island (optional)."),
             new MarkerDefinition("shop_npc",         "Item Shop NPC",     MarkerType.POINT,  "shopNpcs",       1, Integer.MAX_VALUE, null, "Opens the item shop when interacted with."),
             new MarkerDefinition("upgrade_npc",      "Upgrade NPC",       MarkerType.POINT,  "upgradeNpcs",    0, Integer.MAX_VALUE, null, "Opens the team upgrade shop."),
-            new MarkerDefinition("spectator_spawn",  "Spectator Spawn",   MarkerType.POINT,  "spectatorSpawn", 1, 1,  null, "Camera start for eliminated players.")
+            new MarkerDefinition("spectator_spawn",  "Spectator Spawn",   MarkerType.POINT,  "spectatorSpawn", 1, 1,  null, "Camera start for eliminated players."),
+            new MarkerDefinition("global_limits",  "Global Limits",   MarkerType.POINT, "global_limits", 0, 1, null, "Settings for resource generator limits.")
         ),
         List.of()
     );

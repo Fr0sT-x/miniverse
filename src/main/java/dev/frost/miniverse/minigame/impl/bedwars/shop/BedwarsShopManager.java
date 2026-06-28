@@ -19,6 +19,10 @@ public final class BedwarsShopManager {
     private final Map<UUID, BedwarsPlayerToolState> toolStates = new ConcurrentHashMap<>();
     private final BedwarsQuickBuyService quickBuyService = new BedwarsQuickBuyService();
     private final List<UUID> shopNpcIds = new ArrayList<>();
+
+    public BedwarsQuickBuyService getQuickBuyService() {
+        return quickBuyService;
+    }
     
     public BedwarsShopManager(BedwarsMapConfig config, BedwarsSettings settings) {
     }
@@ -74,12 +78,12 @@ public final class BedwarsShopManager {
                 BedwarsPlayerToolState state = getToolState(player.getUuid());
                 if (item.name().startsWith("PICKAXE")) {
                     state.upgradePickaxe(state.getPickaxeTier() + 1);
-                    player.getInventory().offerOrDrop(state.buildPickaxe(player.getWorld().getRegistryManager()));
+                    replaceOrGiveWeapon(player, state.buildPickaxe(player.getWorld().getRegistryManager()));
                 } else if (item.name().startsWith("AXE")) {
                     state.upgradeAxe(state.getAxeTier() + 1);
-                    player.getInventory().offerOrDrop(state.buildAxe(player.getWorld().getRegistryManager()));
+                    replaceOrGiveWeapon(player, state.buildAxe(player.getWorld().getRegistryManager()));
                 } else {
-                    player.getInventory().offerOrDrop(item.buildStack(player.getWorld().getRegistryManager()));
+                    replaceOrGiveWeapon(player, item.buildStack(player.getWorld().getRegistryManager()));
                 }
             } else if (item.category() == BedwarsShopCategory.ARMOR) {
                 BedwarsPlayerToolState state = getToolState(player.getUuid());
@@ -96,14 +100,44 @@ public final class BedwarsShopManager {
                     player.equipStack(net.minecraft.entity.EquipmentSlot.LEGS, new net.minecraft.item.ItemStack(net.minecraft.item.Items.DIAMOND_LEGGINGS));
                     player.equipStack(net.minecraft.entity.EquipmentSlot.FEET, new net.minecraft.item.ItemStack(net.minecraft.item.Items.DIAMOND_BOOTS));
                 }
+            } else if (item == BedwarsShopItem.KNOCKBACK_STICK) {
+                BedwarsPlayerToolState state = getToolState(player.getUuid());
+                if (!state.hasKnockbackStick()) {
+                    state.setHasKnockbackStick(true);
+                    replaceOrGiveWeapon(player, item.buildStack(player.getWorld().getRegistryManager()));
+                } else {
+                    return false; // Already have it, don't buy again
+                }
             } else {
-                player.getInventory().offerOrDrop(item.buildStack(player.getWorld().getRegistryManager()));
+                replaceOrGiveWeapon(player, item.buildStack(player.getWorld().getRegistryManager()));
             }
             
+            player.playSound(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 1.0f, 2.0f);
             return true;
         }
         
         return false;
+    }
+
+    private void replaceOrGiveWeapon(ServerPlayerEntity player, net.minecraft.item.ItemStack newWeapon) {
+        if (newWeapon.getItem() instanceof net.minecraft.item.SwordItem || 
+            newWeapon.getItem() instanceof net.minecraft.item.PickaxeItem || 
+            newWeapon.getItem() instanceof net.minecraft.item.AxeItem) {
+            
+            for (int i = 0; i < player.getInventory().size(); i++) {
+                net.minecraft.item.ItemStack current = player.getInventory().getStack(i);
+                if (current.isEmpty()) continue;
+                if ((newWeapon.getItem() instanceof net.minecraft.item.SwordItem && current.getItem() instanceof net.minecraft.item.SwordItem) ||
+                    (newWeapon.getItem() instanceof net.minecraft.item.PickaxeItem && current.getItem() instanceof net.minecraft.item.PickaxeItem) ||
+                    (newWeapon.getItem() instanceof net.minecraft.item.AxeItem && current.getItem() instanceof net.minecraft.item.AxeItem)) {
+                    
+                    player.getInventory().setStack(i, newWeapon);
+                    player.getInventory().offerOrDrop(current);
+                    return;
+                }
+            }
+        }
+        player.getInventory().offerOrDrop(newWeapon);
     }
     
     public BedwarsPlayerToolState getToolState(UUID uuid) {

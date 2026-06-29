@@ -33,17 +33,28 @@ public final class BedwarsConditionalSpectatorPolicy implements DeathSpectatorPo
             && bedTeamStates.get(teamId).isBedAlive();
 
         if (bedAlive) {
-            new FixedCameraSpectatorPolicy(
-                spectatorService,
-                SpectatorPolicies.lockedSwitching(),
-                SpectatorTargetProviders.roster(),
+            if (context.location() != null && context.dimension() != null) {
+                net.minecraft.server.world.ServerWorld world = victim.getServer().getWorld(context.dimension());
+                if (world != null) {
+                    double safeY = Math.max(context.location().y, 100.0);
+                    victim.teleport(world, context.location().x, safeY, context.location().z, java.util.Set.of(), context.yawAtDeath(), context.pitchAtDeath());
+                }
+            }
+            this.spectatorService.startSpectating(
+                victim,
+                SpectatorPolicies.unrestricted(),
+                SpectatorTargetProviders.none(),
+                dev.frost.miniverse.minigame.core.spectator.SpectatorMode.STANDARD,
+                null,
+                null,
+                null,
                 NoTargetPolicy.FREEZE
-            ).apply(victim, context);
+            );
         } else {
             new FreeFlySpectatorPolicy(spectatorService).apply(victim, context);
         }
     }
 
-    @Override public boolean requiresFixedCamera() { return true; }
+    @Override public boolean requiresFixedCamera() { return false; }
     @Override public NoTargetPolicy noTargetPolicy() { return NoTargetPolicy.FREE_FLY; }
 }

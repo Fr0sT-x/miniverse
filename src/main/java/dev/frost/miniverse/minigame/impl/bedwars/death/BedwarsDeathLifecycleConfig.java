@@ -28,7 +28,6 @@ public final class BedwarsDeathLifecycleConfig implements DeathLifecycleConfig {
     private final SpectatorService spectatorService;
     private final BedwarsDeathCallbacks callbacks;
     private final BedwarsRespawnStrategy respawnStrategy;
-    private final java.util.Deque<DeathContext> pendingContexts = new java.util.ArrayDeque<>();
 
     public BedwarsDeathLifecycleConfig(BedwarsMinigame minigame, Map<String, BedTeamState> bedTeamStates, BedwarsSettings settings, BedwarsMapConfig mapConfig, SpectatorService spectatorService, Set<UUID> permanentlyEliminated) {
         this.minigame = minigame;
@@ -39,17 +38,14 @@ public final class BedwarsDeathLifecycleConfig implements DeathLifecycleConfig {
         this.respawnStrategy = new BedwarsRespawnStrategy(minigame, mapConfig);
     }
 
-    void setPendingContext(DeathContext ctx) {
-        this.pendingContexts.push(ctx);
-    }
-
-    public boolean interceptsRespawn() {
-        return true;
-    }
-
     @Override
     public DeathPolicy getDeathPolicy() {
-        return new VanillaDeathPolicy();
+        return new VanillaDeathPolicy() {
+            @Override
+            public boolean interceptsRespawn() {
+                return true;
+            }
+        };
     }
 
     @Override
@@ -59,7 +55,11 @@ public final class BedwarsDeathLifecycleConfig implements DeathLifecycleConfig {
 
     @Override
     public PostDeathPolicy createPostDeathPolicy() {
-        DeathContext ctx = this.pendingContexts.poll();
+        return createPostDeathPolicy(null);
+    }
+
+    @Override
+    public PostDeathPolicy createPostDeathPolicy(DeathContext ctx) {
         boolean bedAlive = ctx != null
             && bedTeamStates.containsKey(ctx.victimTeamId())
             && bedTeamStates.get(ctx.victimTeamId()).isBedAlive();

@@ -26,6 +26,10 @@ public interface DeathLifecycleConfig {
      */
     PostDeathPolicy createPostDeathPolicy();
 
+    default PostDeathPolicy createPostDeathPolicy(dev.frost.miniverse.minigame.core.death.DeathContext context) {
+        return createPostDeathPolicy();
+    }
+
     /**
      * @return the strategy used to resolve the respawn location
      */

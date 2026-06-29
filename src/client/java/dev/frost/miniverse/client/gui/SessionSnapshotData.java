@@ -35,7 +35,9 @@ public final class SessionSnapshotData {
     public record EditorExtension(String gameId, String displayName, List<EditorMarkerDefinition> markers) {
     }
 
-    public record EditorMarkerDefinition(String key, String displayName, String type, String configKey, int minCount, int maxCount, String description) {
+    public record EditorMarkerGrouping(String parentKey, String type, String propertyKey) {}
+
+    public record EditorMarkerDefinition(String key, String displayName, String type, String configKey, int minCount, int maxCount, String description, EditorMarkerGrouping grouping) {
         public boolean single() {
             return this.maxCount == 1;
         }

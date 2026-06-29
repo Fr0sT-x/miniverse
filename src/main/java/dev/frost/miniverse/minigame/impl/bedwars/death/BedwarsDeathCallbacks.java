@@ -28,10 +28,7 @@ public final class BedwarsDeathCallbacks implements DeathLifecycleCallbacks {
         this.permanentlyEliminated = permanentlyEliminated;
     }
 
-    @Override
-    public void onDeathProcessed(ServerPlayerEntity player, DeathContext context) {
-        this.config.setPendingContext(context);
-    }
+
 
     @Override
     public void onRespawnComplete(ServerPlayerEntity player, DeathContext context) {

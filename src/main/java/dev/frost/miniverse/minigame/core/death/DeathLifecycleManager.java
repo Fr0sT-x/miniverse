@@ -121,7 +121,7 @@ public class DeathLifecycleManager {
                 }
                 this.config.getSpectatorPolicy().apply(victim, context);
 
-                PostDeathPolicy postDeathPolicy = this.config.createPostDeathPolicy();
+                PostDeathPolicy postDeathPolicy = this.config.createPostDeathPolicy(context);
                 this.activePostDeathPolicies.put(victimId, postDeathPolicy);
                 postDeathPolicy.start(victim, context);
             }
@@ -149,6 +149,7 @@ public class DeathLifecycleManager {
         SpectatorSession liveSession = this.spectatorService.isSpectating(playerId) ? this.spectatorService.session(playerId) : null;
         RespawnStrategy.RespawnLocation location = this.config.getRespawnStrategy().resolve(context, liveSession);
 
+        this.spectatorService.stopSpectating(player, dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason.RESPAWN);
         player.changeGameMode(this.config.resolveRespawnGameMode());
         
         player.setHealth(player.getMaxHealth());
@@ -161,7 +162,6 @@ public class DeathLifecycleManager {
         if (location != null && location.world() != null) {
             player.teleport(location.world(), location.pos().x, location.pos().y, location.pos().z, java.util.Set.of(), location.yaw(), location.pitch());
         }
-        this.spectatorService.stopSpectating(player, dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason.RESPAWN);
 
         if (callbacks != null) {
             callbacks.onRespawnComplete(player, context);
@@ -348,7 +348,8 @@ public class DeathLifecycleManager {
             for (JsonElement el : root.getAsJsonArray("activePolicies")) {
                 JsonObject polObj = el.getAsJsonObject();
                 UUID playerId = UUID.fromString(polObj.get("playerId").getAsString());
-                PostDeathPolicy policy = this.config.createPostDeathPolicy();
+                DeathContext context = this.contexts.get(playerId);
+                PostDeathPolicy policy = this.config.createPostDeathPolicy(context);
                 if (polObj.has("state")) {
                     policy.loadRuntimeState(polObj.getAsJsonObject("state"));
                 }

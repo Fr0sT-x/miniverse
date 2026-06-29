@@ -31,15 +31,17 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     private final boolean isGeneral;
     
     private String editingMarkerId = "";
+    private TextFieldWidget renameField;
+    private int pendingRefreshTicks = -1;
+    private final Set<String> localDeletedMarkerIds = new HashSet<>();
+    private String drillDownParentId = null;
+    private String drillDownParentKey = null;
+    
     private double scrollY = 0;
     private double maxScrollY = 0;
-    private int pendingRefreshTicks = -1;
-    /** Markers removed optimistically — filtered from the list immediately on delete. */
-    private final Set<String> localDeletedMarkerIds = new HashSet<>();
     
     private UiLayout.Rect listArea = new UiLayout.Rect(0, 0, 0, 0);
     private SessionScreen screen;
-    private TextFieldWidget renameField;
     private String status = "";
 
     public MapEditorWorkspaceView(MapEditorState state, Runnable refreshAction) {
@@ -81,56 +83,53 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         UiLayout.Rect panel = workspace.inset(4);
         this.components.clear();
         // Header has 2 rows: row 1 = breadcrumb (y+4..y+16), row 2 = buttons (y+20..y+42)
-        this.listArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 122, panel.width() - 24, panel.height() - 134);
+        this.listArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 86, panel.width() - 24, panel.height() - 98);
         
-        int rightX = panel.x() + panel.width() - 12;
-        
+        int[] topRightX = { panel.x() + panel.width() - 12 };
+        int topY = panel.y() + 44;
+
+        java.util.function.BiConsumer<UiButton, Integer> addTopRightBtn = (btn, width) -> {
+            topRightX[0] -= width;
+            btn.setBounds(new UiLayout.Rect(topRightX[0], topY, width, 20));
+            this.components.add(btn);
+            topRightX[0] -= 4; // padding
+        };
+
         UiButton quitNoSave = new UiButton("Quit (No Save)", () -> {
             net.minecraft.client.MinecraftClient.getInstance().setScreen(new net.minecraft.client.gui.screen.ConfirmScreen((confirmed) -> {
                 if (confirmed) this.sendCommand("miniverse_map_quit");
                 net.minecraft.client.MinecraftClient.getInstance().setScreen(this.screen);
             }, Text.literal("Quit without saving?"), Text.literal("All unsaved changes to this map will be lost.")));
         }).accent(UiTheme.ACCENT_RED);
-        rightX -= 110;
-        quitNoSave.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 110, 20));
-        this.components.add(quitNoSave);
+        addTopRightBtn.accept(quitNoSave, 110);
         
-        rightX -= 104;
         UiButton saveQuit = new UiButton("Save & Quit", () -> {
             net.minecraft.client.MinecraftClient.getInstance().setScreen(new net.minecraft.client.gui.screen.ConfirmScreen((confirmed) -> {
                 if (confirmed) this.sendCommand("miniverse_map_save_and_quit");
                 net.minecraft.client.MinecraftClient.getInstance().setScreen(this.screen);
             }, Text.literal("Save and Quit?"), Text.literal("This will save all changes and exit the map editor.")));
         });
-        saveQuit.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 100, 20));
-        this.components.add(saveQuit);
+        addTopRightBtn.accept(saveQuit, 100);
         
-        rightX -= 96;
         UiButton saveWorld = new UiButton("Save World", () -> {
             net.minecraft.client.MinecraftClient.getInstance().setScreen(new net.minecraft.client.gui.screen.ConfirmScreen((confirmed) -> {
                 if (confirmed) this.sendCommand("miniverse_map_save");
                 net.minecraft.client.MinecraftClient.getInstance().setScreen(this.screen);
             }, Text.literal("Save Map?"), Text.literal("This will overwrite the current map data with your changes.")));
         });
-        saveWorld.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 92, 20));
-        this.components.add(saveWorld);
+        addTopRightBtn.accept(saveWorld, 92);
         
-        rightX -= 84;
         UiButton refresh = new UiButton("Refresh", this.refreshAction);
-        refresh.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 80, 20));
-        this.components.add(refresh);
+        addTopRightBtn.accept(refresh, 80);
 
-        rightX -= 110;
         UiButton thumbnailBtn = new UiButton("Take Thumbnail", () -> {
             this.sendCommand("miniverse_map_thumbnail");
             this.status = "Requested thumbnail capture. Look around to capture the best view.";
         }).accent(UiTheme.ACCENT_BLUE);
-        thumbnailBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 106, 20));
-        this.components.add(thumbnailBtn);
+        addTopRightBtn.accept(thumbnailBtn, 106);
 
         boolean overlaysVisible = !this.state.enabledOverlays.isEmpty();
         String globalOverlayLabel = overlaysVisible ? "Hide Overlays" : "Show Overlays";
-        rightX -= 100;
         UiButton toggleOverlays = new UiButton(globalOverlayLabel, () -> {
             if (overlaysVisible) {
                 this.state.enabledOverlays.clear();
@@ -142,7 +141,6 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 }
             }
             if (this.screen != null) {
-                // Keep the current view but refresh the UI
                 if (this.viewDefinitionKey != null && !this.viewDefinitionKey.isEmpty()) {
                     this.screen.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.state, this.refreshAction, this.viewGameId, this.viewDefinitionKey));
                 } else if (this.viewGameId != null && !this.viewGameId.isEmpty()) {
@@ -152,34 +150,40 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 }
             }
         });
-        toggleOverlays.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 96, 20));
-        this.components.add(toggleOverlays);
+        addTopRightBtn.accept(toggleOverlays, 96);
 
         Selected selected = this.selected();
         if (selected.extension != null && selected.definition == null) {
-            rightX -= 114;
-            UiButton validateBtn = new UiButton("Validate Map", () -> {
-                this.refreshAction.run();
-                this.status = "Validation updated.";
-            }).accent(UiTheme.ACCENT_BLUE);
-            validateBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 110, 20));
-            this.components.add(validateBtn);
+            UiButton clearBtn = new UiButton("Clear Gamemode", () -> {
+                net.minecraft.client.MinecraftClient.getInstance().setScreen(new net.minecraft.client.gui.screen.ConfirmScreen((confirmed) -> {
+                    if (confirmed) {
+                        for (SessionSnapshotData.EditorMarkerDefinition d : selected.extension.markers()) {
+                            java.util.List<SessionSnapshotData.EditorMarker> ms = SessionSnapshotData.editorState().markers(selected.extension.gameId(), d.key());
+                            if (ms != null) {
+                                for (SessionSnapshotData.EditorMarker m : ms) {
+                                    this.sendMarkerAction("delete", selected.extension.gameId(), d.key(), m.id());
+                                    this.localDeletedMarkerIds.add(m.id());
+                                }
+                            }
+                        }
+                        this.refreshAction.run();
+                    }
+                    net.minecraft.client.MinecraftClient.getInstance().setScreen(this.screen);
+                }, net.minecraft.text.Text.literal("Clear All Markers"), net.minecraft.text.Text.literal("Are you sure you want to delete ALL markers for " + selected.extension.displayName() + "? This cannot be undone.")));
+            }).accent(UiTheme.ACCENT_RED);
+            addTopRightBtn.accept(clearBtn, 110);
 
-            rightX -= 90;
             UiButton expandAllBtn = new UiButton("Expand All", () -> {
                 selected.extension.markers().forEach(m -> this.state.expandedMarkers.add(m.key()));
             });
-            expandAllBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 86, 20));
-            this.components.add(expandAllBtn);
+            addTopRightBtn.accept(expandAllBtn, 86);
 
-            rightX -= 90;
             UiButton collapseAllBtn = new UiButton("Collapse All", () -> {
                 this.state.expandedMarkers.clear();
                 this.editingMarkerId = "";
                 this.renameField.setX(-1000);
             });
-            collapseAllBtn.setBounds(new UiLayout.Rect(rightX, panel.y() + 74, 86, 20));
-            this.components.add(collapseAllBtn);
+            addTopRightBtn.accept(collapseAllBtn, 86);
         }
 
         this.renameField = new TextFieldWidget(net.minecraft.client.MinecraftClient.getInstance().textRenderer, -1000, -1000, 150, 20, Text.literal("New marker name"));
@@ -194,18 +198,16 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 default -> "Add " + selected.definition.displayName();
             };
             UiButton addBtn = new UiButton(addLabel, () -> this.startAdd(selected.extension, selected.definition));
-            addBtn.setBounds(new UiLayout.Rect(panel.x() + 12, panel.y() + 78, 130, 20));
+            addBtn.setBounds(new UiLayout.Rect(panel.x() + 12, topY, 130, 20));
             this.components.add(addBtn);
 
-            // Toggle overlay button for this specific marker definition
             boolean overlayOn = this.state.isOverlayEnabled(selected.extension.gameId(), selected.definition.key());
             String overlayLabel = overlayOn ? "\u25C9 Overlay ON" : "\u25CB Overlay OFF";
             UiButton toggleOverlay = new UiButton(overlayLabel, () -> {
                 this.state.toggleOverlay(selected.extension.gameId(), selected.definition.key());
                 if (this.screen != null) this.screen.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.state, this.refreshAction, selected.extension.gameId(), selected.definition.key()));
             });
-            toggleOverlay.setBounds(new UiLayout.Rect(panel.x() + panel.width() - 132, panel.y() + 78, 120, 20));
-            this.components.add(toggleOverlay);
+            addTopRightBtn.accept(toggleOverlay, 100);
         } else if (selected.extension != null) {
             // Auto-expand validation failures
             SessionSnapshotData.EditorGameState gameState = SessionSnapshotData.editorState().games().stream()
@@ -285,7 +287,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         } else if (selected.definition == null) {
             contentBottom = renderGamemodeOverview(context, textRenderer, panel, selected);
         } else {
-            contentBottom = renderMarkerEditor(context, textRenderer, panel, selected);
+            this.maxScrollY = Math.max(0, renderMarkerEditor(context, textRenderer, panel, selected, mouseX, mouseY) - panel.y() - panel.height() + 10);
         }
         
         context.disableScissor();
@@ -371,12 +373,34 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 rowY += 10;
             }
             
+            if (selected.extension.markers().isEmpty()) {
+                return false;
+            }
+
+            if (this.drillDownParentId != null) {
+                UiLayout.Rect backBtn = new UiLayout.Rect(this.listArea.x(), rowY, 100, 20);
+                if (backBtn.contains(mouseX, adjustedMouseY)) {
+                    this.drillDownParentId = null;
+                    this.drillDownParentKey = null;
+                    return true;
+                }
+                rowY += 30;
+            }
+            
             for (SessionSnapshotData.EditorMarkerDefinition marker : selected.extension.markers()) {
+                boolean isChild = marker.grouping() != null && marker.grouping().parentKey() != null;
+                if (this.drillDownParentId == null && isChild) continue;
+                if (this.drillDownParentId != null && (!isChild || !marker.grouping().parentKey().equals(this.drillDownParentKey))) continue;
+
                 boolean expanded = this.state.expandedMarkers.contains(marker.key());
                 int headerHeight = 36;
                 UiLayout.Rect headerRow = new UiLayout.Rect(this.listArea.x(), rowY, this.listArea.width(), headerHeight);
                 
-                List<SessionSnapshotData.EditorMarker> placedMarkers = SessionSnapshotData.editorState().markers(selected.extension.gameId(), marker.key());
+                SessionSnapshotData.EditorMarker drillDownParentMarker = this.drillDownParentId != null ? SessionSnapshotData.editorState().markers(selected.extension.gameId(), this.drillDownParentKey).stream().filter(m -> m.id().equals(this.drillDownParentId)).findFirst().orElse(null) : null;
+                
+                List<SessionSnapshotData.EditorMarker> placedMarkers = SessionSnapshotData.editorState().markers(selected.extension.gameId(), marker.key()).stream()
+                    .filter(p -> drillDownParentMarker == null || belongsToParent(p, marker.grouping(), drillDownParentMarker))
+                    .toList();
                 int count = placedMarkers.size();
                 String countText = marker.maxCount() < 0 ? count + " / \u221E" : count + " / " + marker.maxCount();
                 String statusText = "✓ Valid";
@@ -428,6 +452,19 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                             UiLayout.Rect teleport = new UiLayout.Rect(row.x() + row.width() - 150, row.y() + 10, 68, 20);
                             UiLayout.Rect delete = new UiLayout.Rect(row.x() + row.width() - 74, row.y() + 10, 60, 20);
                             
+                            boolean isHidden = this.state.hiddenIndividualMarkers.contains(placed.id());
+                            String toggleLabel = isHidden ? "Show" : "Hide";
+                            
+                            boolean isParent = selected.extension.markers().stream().anyMatch(m -> m.grouping() != null && marker.key().equals(m.grouping().parentKey()));
+                            if (isParent && this.drillDownParentId == null) {
+                                UiLayout.Rect configureBtn = new UiLayout.Rect(row.x() + row.width() - 392, row.y() + 10, 84, 20);
+                                if (configureBtn.contains(mouseX, adjustedMouseY)) {
+                                    this.drillDownParentId = placed.id();
+                                    this.drillDownParentKey = marker.key();
+                                    return true;
+                                }
+                            }
+                            
                             if (toggle.contains(mouseX, adjustedMouseY)) {
                                 if (!this.state.hiddenIndividualMarkers.remove(placed.id())) {
                                     this.state.hiddenIndividualMarkers.add(placed.id());
@@ -464,6 +501,28 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                                 this.pendingRefreshTicks = 2;
                                 return true;
                             }
+                            MapEditorCustomRenderer customRenderer = MapEditorCustomRendererRegistry.get(marker.key());
+                            if (customRenderer != null) {
+                                // Just call it to see if it consumes the click by checking its bounds
+                                int rendererHeight = customRenderer.renderProperties(null, null, placed, indentX + 10, rowY + rowHeight + 4, innerWidth - 20, (int)mouseX, (int)adjustedMouseY, true, (m, props) -> {
+                                    NbtCompound nbt = new NbtCompound();
+                                    nbt.putString("action", "update_properties");
+                                    nbt.putString("gameId", selected.extension.gameId());
+                                    nbt.putString("definitionKey", marker.key());
+                                    nbt.putString("markerId", m.id());
+                                    nbt.putString("properties", props.toString());
+                                    net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
+                                    this.pendingRefreshTicks = 2;
+                                });
+                                // If the click is within the renderer's bounds, assume it was handled
+                                if (rendererHeight > 0 && mouseX >= indentX + 10 && mouseX <= indentX + 10 + innerWidth - 20 && adjustedMouseY >= rowY + rowHeight + 4 && adjustedMouseY <= rowY + rowHeight + 4 + rendererHeight) {
+                                    return true;
+                                }
+                                if (rendererHeight > 0) {
+                                    rowHeight += rendererHeight + 4;
+                                }
+                            }
+                            
                             if (isRegion) {
                                 int cx = row.x() + 10;
                                 int pillY = row.y() + 36;
@@ -487,9 +546,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         }
         
         List<SessionSnapshotData.EditorMarker> markers = SessionSnapshotData.editorState().markers(selected.extension.gameId(), selected.definition.key());
-        int rowY = this.screen != null ? this.screen.height / 2 - 200 + 52 : 52; // Fallback calculation, but panel is actually bounded differently
-        // Wait, listArea doesn't represent panel.y() directly. Let's just calculate from listArea since we know it's there
-        rowY = this.listArea.y() - 86 + 52; 
+        int rowY = this.listArea.y() + 10 - (int) this.scrollY;
         int indentX = this.listArea.x() + 20;
         int innerWidth = this.listArea.width() - 20;
         
@@ -655,8 +712,19 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             context.drawText(textRenderer, Text.literal("Create the required markers to make this map playable."), this.listArea.x(), rowY + 24, UiTheme.TEXT_DIM, false);
             return rowY;
         }
-        
+
+        if (this.drillDownParentId != null) {
+            UiLayout.Rect backBtn = new UiLayout.Rect(this.listArea.x(), rowY, 100, 20);
+            UiRenderer.panel(context, backBtn.x(), backBtn.y(), backBtn.width(), backBtn.height(), UiTheme.PANEL_RAISED, UiTheme.BORDER_SUBTLE);
+            context.drawText(textRenderer, Text.literal("\u25C0 Back"), backBtn.x() + 30, backBtn.y() + 6, UiTheme.TEXT, false);
+            rowY += 30;
+        }
+
         for (SessionSnapshotData.EditorMarkerDefinition marker : selected.extension.markers()) {
+            boolean isChild = marker.grouping() != null && marker.grouping().parentKey() != null;
+            if (this.drillDownParentId == null && isChild) continue;
+            if (this.drillDownParentId != null && (!isChild || !marker.grouping().parentKey().equals(this.drillDownParentKey))) continue;
+
             boolean expanded = this.state.expandedMarkers.contains(marker.key());
             int headerHeight = 36;
             UiLayout.Rect row = new UiLayout.Rect(this.listArea.x(), rowY, this.listArea.width(), headerHeight);
@@ -666,7 +734,11 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             context.drawText(textRenderer, Text.literal(expandIcon), row.x() + 10, row.y() + 14, UiTheme.TEXT_DIM, false);
             context.drawText(textRenderer, Text.literal(marker.displayName()), row.x() + 26, row.y() + 14, UiTheme.TEXT, false);
             
-            List<SessionSnapshotData.EditorMarker> placedMarkers = SessionSnapshotData.editorState().markers(selected.extension.gameId(), marker.key());
+            SessionSnapshotData.EditorMarker drillDownParentMarker = this.drillDownParentId != null ? SessionSnapshotData.editorState().markers(selected.extension.gameId(), this.drillDownParentKey).stream().filter(m -> m.id().equals(this.drillDownParentId)).findFirst().orElse(null) : null;
+            
+            List<SessionSnapshotData.EditorMarker> placedMarkers = SessionSnapshotData.editorState().markers(selected.extension.gameId(), marker.key()).stream()
+                .filter(p -> drillDownParentMarker == null || belongsToParent(p, marker.grouping(), drillDownParentMarker))
+                .toList();
             int count = placedMarkers.size();
             String countText = marker.maxCount() < 0 ? count + " / \u221E" : count + " / " + marker.maxCount();
             
@@ -691,14 +763,14 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             rowY += headerHeight;
             
             if (expanded) {
-                rowY = renderMarkerEditorInline(context, textRenderer, selected.extension, marker, rowY, placedMarkers);
+                rowY = renderMarkerEditorInline(context, textRenderer, selected.extension, marker, rowY, placedMarkers, -1, -1, false);
             }
             rowY += 10;
         }
         return rowY + (int) this.scrollY;
     }
 
-    private int renderMarkerEditorInline(DrawContext context, TextRenderer textRenderer, SessionSnapshotData.EditorExtension extension, SessionSnapshotData.EditorMarkerDefinition definition, int startY, List<SessionSnapshotData.EditorMarker> markers) {
+    private int renderMarkerEditorInline(DrawContext context, TextRenderer textRenderer, SessionSnapshotData.EditorExtension extension, SessionSnapshotData.EditorMarkerDefinition definition, int startY, List<SessionSnapshotData.EditorMarker> markers, int mouseX, int adjustedMouseY, boolean clicked) {
         int rowY = startY;
         int indentX = this.listArea.x() + 20;
         int innerWidth = this.listArea.width() - 20;
@@ -727,6 +799,12 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             
             boolean isHidden = this.state.hiddenIndividualMarkers.contains(marker.id());
             String toggleLabel = isHidden ? "Show" : "Hide";
+            
+            boolean isParent = extension.markers().stream().anyMatch(m -> m.grouping() != null && marker.definitionKey().equals(m.grouping().parentKey()));
+            if (isParent && this.drillDownParentId == null) {
+                renderSmallButton(context, textRenderer, row.x() + row.width() - 392, row.y() + 10, 84, "Configure...");
+            }
+            
             renderSmallButton(context, textRenderer, row.x() + row.width() - 302, row.y() + 10, 68, toggleLabel);
             renderSmallButton(context, textRenderer, row.x() + row.width() - 226, row.y() + 10, 68, "Rename");
             renderSmallButton(context, textRenderer, row.x() + row.width() - 150, row.y() + 10, 68, "Teleport");
@@ -735,6 +813,27 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             if (this.editingMarkerId.equals(marker.id())) {
                 this.renameField.setX(row.x() + row.width() - 226);
                 this.renameField.setY(row.y() + 10);
+            }
+            MapEditorCustomRenderer customRenderer = MapEditorCustomRendererRegistry.get(definition.key());
+            if (customRenderer != null) {
+                int rendererHeight = customRenderer.renderProperties(context, textRenderer, marker, indentX + 10, rowY + rowHeight + 4, innerWidth - 20, mouseX, adjustedMouseY, clicked, (m, props) -> {
+                    NbtCompound nbt = new NbtCompound();
+                    nbt.putString("action", "update_properties");
+                    nbt.putString("gameId", extension.gameId());
+                    nbt.putString("definitionKey", definition.key());
+                    nbt.putString("markerId", m.id());
+                    nbt.putString("properties", props.toString());
+                    net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
+                    this.pendingRefreshTicks = 2;
+                });
+                if (rendererHeight > 0) {
+                    rowHeight += rendererHeight + 4;
+                    // Update the panel height to encompass the new content
+                    UiRenderer.panel(context, row.x(), row.y(), row.width(), rowHeight, UiTheme.CARD, UiTheme.BORDER_SUBTLE);
+                    // Re-draw text since we just overwrote it with the panel
+                    context.drawText(textRenderer, Text.literal(index + ". " + marker.name()), row.x() + 10, row.y() + 8, UiTheme.TEXT, false);
+                    context.drawText(textRenderer, Text.literal(locationText(marker)), row.x() + 10, row.y() + 22, UiTheme.TEXT_DIM, false);
+                }
             }
             
             if (isRegion) {
@@ -764,10 +863,10 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         return rowY;
     }
 
-    private int renderMarkerEditor(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel, Selected selected) {
+    private int renderMarkerEditor(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel, Selected selected, int mouseX, int adjustedMouseY) {
         int rowY = panel.y() + 52 - (int) this.scrollY;
         List<SessionSnapshotData.EditorMarker> markers = SessionSnapshotData.editorState().markers(selected.extension.gameId(), selected.definition.key());
-        return renderMarkerEditorInline(context, textRenderer, selected.extension, selected.definition, rowY, markers) + (int) this.scrollY;
+        return renderMarkerEditorInline(context, textRenderer, selected.extension, selected.definition, rowY, markers, mouseX, adjustedMouseY, false) + (int) this.scrollY;
     }
 
     private static void renderSmallButton(DrawContext context, TextRenderer textRenderer, int x, int y, int width, String label) {
@@ -818,8 +917,59 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     }
 
     private void startAdd(SessionSnapshotData.EditorExtension extension, SessionSnapshotData.EditorMarkerDefinition definition) {
+        if (this.drillDownParentId != null && definition.grouping() != null && "LOGICAL".equals(definition.grouping().type()) && definition.grouping().propertyKey() != null) {
+            com.google.gson.JsonObject defaultProps = new com.google.gson.JsonObject();
+            defaultProps.addProperty(definition.grouping().propertyKey(), this.drillDownParentId);
+            
+            NbtCompound nbt = new NbtCompound();
+            nbt.putString("action", "start_add");
+            nbt.putString("gameId", extension.gameId());
+            nbt.putString("definitionKey", definition.key());
+            nbt.putString("markerId", "");
+            nbt.putString("name", "");
+            nbt.putString("properties", defaultProps.toString());
+            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
+            this.status = "Placement mode started. Close the screen and left click a block; right click cancels.";
+            return;
+        }
+
         this.sendMarkerAction("start_add", extension.gameId(), definition.key(), "");
         this.status = "Placement mode started. Close the screen and left click a block; right click cancels.";
+    }
+
+    private boolean belongsToParent(SessionSnapshotData.EditorMarker child, SessionSnapshotData.EditorMarkerGrouping grouping, SessionSnapshotData.EditorMarker parent) {
+        if (grouping == null || parent == null) return true;
+        if ("SPATIAL".equals(grouping.type())) {
+            return isInside(child, parent);
+        }
+        if ("LOGICAL".equals(grouping.type())) {
+            if (grouping.propertyKey() != null && child.properties() != null && child.properties().has(grouping.propertyKey())) {
+                return child.properties().get(grouping.propertyKey()).getAsString().equals(parent.id());
+            }
+        }
+        return false;
+    }
+
+    private boolean isInside(SessionSnapshotData.EditorMarker pointMarker, SessionSnapshotData.EditorMarker regionMarker) {
+        if (pointMarker.points().isEmpty()) return false;
+        SessionSnapshotData.EditorPoint p = pointMarker.points().getFirst();
+
+        if (regionMarker.regions() == null) return false;
+        for (SessionSnapshotData.EditorRegionPart part : regionMarker.regions()) {
+            double minX = Math.min(part.min().x(), part.max().x());
+            double maxX = Math.max(part.min().x(), part.max().x());
+            double minY = Math.min(part.min().y(), part.max().y());
+            double maxY = Math.max(part.min().y(), part.max().y());
+            double minZ = Math.min(part.min().z(), part.max().z());
+            double maxZ = Math.max(part.min().z(), part.max().z());
+            
+            if (p.x() >= minX && p.x() <= maxX &&
+                p.y() >= minY && p.y() <= maxY &&
+                p.z() >= minZ && p.z() <= maxZ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void sendMarkerAction(String action, String gameId, String definitionKey, String markerId) {
@@ -833,7 +983,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         nbt.putString("definitionKey", definitionKey);
         nbt.putString("markerId", markerId == null ? "" : markerId);
         nbt.putString("name", name == null ? "" : name);
-        ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
     }
 
     private void sendCommand(String command) {

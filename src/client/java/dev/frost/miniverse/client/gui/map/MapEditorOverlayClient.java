@@ -20,8 +20,13 @@ import java.util.List;
  * per-definition overlay toggles are enabled.
  */
 public final class MapEditorOverlayClient {
-    private static final float SPAWN_R = 0.6F, SPAWN_G = 0.1F, SPAWN_B = 0.9F, SPAWN_A = 0.85F; // Purple for spawns
-    private static final float REGION_R = 1.0F, REGION_G = 0.85F, REGION_B = 0.0F, REGION_A = 0.55F; // Yellow for regions
+    private static final float REGION_A = 0.55F;
+
+    public static int getMarkerColor(String definitionKey) {
+        int hash = definitionKey.hashCode();
+        float hue = Math.abs(hash % 360) / 360.0f;
+        return java.awt.Color.HSBtoRGB(hue, 0.8f, 0.9f) & 0xFFFFFF;
+    }
 
     private MapEditorOverlayClient() {
     }
@@ -157,6 +162,138 @@ public final class MapEditorOverlayClient {
                 index++;
             }
         });
+        
+        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register((drawContext, tickDeltaManager) -> {
+            MapEditorState state = MapEditorState.INSTANCE;
+            if (!state.editorActive || dev.frost.miniverse.client.MiniverseClient.isScreenshotPending()) return;
+
+            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+            if (client.world == null || client.player == null || client.getWindow() == null || lastProjMatrix == null || lastModelViewMatrix == null) return;
+            
+            int screenW = client.getWindow().getScaledWidth();
+            int screenH = client.getWindow().getScaledHeight();
+            int cx = screenW / 2;
+            int cy = screenH / 2;
+
+            class HoveredMarker {
+                final SessionSnapshotData.EditorMarker marker;
+                final SessionSnapshotData.EditorMarkerDefinition def;
+                final SessionSnapshotData.EditorExtension ext;
+                final double worldDist;
+                HoveredMarker(SessionSnapshotData.EditorMarker marker, SessionSnapshotData.EditorMarkerDefinition def, SessionSnapshotData.EditorExtension ext, double worldDist) {
+                    this.marker = marker; this.def = def; this.ext = ext; this.worldDist = worldDist;
+                }
+            }
+            java.util.List<HoveredMarker> hovered = new java.util.ArrayList<>();
+
+            net.minecraft.client.render.Camera camera = client.gameRenderer.getCamera();
+            net.minecraft.util.math.Vec3d camPos = camera.getPos();
+
+            for (SessionSnapshotData.EditorExtension extension : SessionSnapshotData.editorExtensions()) {
+                for (SessionSnapshotData.EditorMarkerDefinition def : extension.markers()) {
+                    if (!state.isOverlayEnabled(extension.gameId(), def.key())) continue;
+
+                    List<SessionSnapshotData.EditorMarker> markers = SessionSnapshotData.editorState().markers(extension.gameId(), def.key());
+                    if (markers == null || markers.isEmpty()) continue;
+
+                    for (SessionSnapshotData.EditorMarker marker : markers) {
+                        if (state.hiddenIndividualMarkers.contains(marker.id())) continue;
+
+                        double px, py, pz;
+                        if ("REGION".equalsIgnoreCase(marker.type()) && marker.regions() != null && !marker.regions().isEmpty()) {
+                            SessionSnapshotData.EditorRegionPart part = marker.regions().get(0);
+                            px = (Math.floor(part.min().x()) + Math.floor(part.max().x()) + 1.0) / 2.0;
+                            py = Math.floor(Math.max(part.min().y(), part.max().y())) + 1.0;
+                            pz = (Math.floor(part.min().z()) + Math.floor(part.max().z()) + 1.0) / 2.0;
+                        } else if (marker.points() != null && !marker.points().isEmpty()) {
+                            px = Math.floor(marker.points().get(0).x()) + 0.5;
+                            py = Math.floor(marker.points().get(0).y()); // exact top face
+                            pz = Math.floor(marker.points().get(0).z()) + 0.5;
+                        } else continue;
+
+                        double wx = px - camPos.x;
+                        double wy = py - camPos.y;
+                        double wz = pz - camPos.z;
+                        double worldDist = Math.sqrt(wx*wx + wy*wy + wz*wz);
+
+                        org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
+                        lastModelViewMatrix.transform(clip);
+                        lastProjMatrix.transform(clip);
+                        if (clip.w <= 0.0f) continue;
+
+                        float ndcX = clip.x / clip.w;
+                        float ndcY = clip.y / clip.w;
+                        if (Math.abs(ndcX) > 1.2f || Math.abs(ndcY) > 1.2f) continue;
+
+                        int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
+                        int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
+
+                        double distSq = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy);
+                        if (distSq < 400) { // tight 20px radius
+                            hovered.add(new HoveredMarker(marker, def, extension, worldDist));
+                        }
+                    }
+                }
+            }
+
+            if (!hovered.isEmpty()) {
+                hovered.sort(java.util.Comparator.comparingDouble(h -> h.worldDist));
+
+                int boxX = cx + 15;
+                int boxY = cy + 15;
+                int padding = 6;
+                int lineHeight = 10;
+                
+                int width = 0;
+                int height = padding * 2;
+                
+                java.util.List<String> renderedLines = new java.util.ArrayList<>();
+                java.util.List<Integer> lineColors = new java.util.ArrayList<>();
+
+                for (HoveredMarker h : hovered) {
+                    String title = h.ext.displayName() + " \u2192 " + h.def.displayName();
+                    String nameLine = h.marker.name();
+                    String distLine = "Distance: " + String.format("%.1f", h.worldDist) + "m";
+                    String coordLine = "";
+                    if ("REGION".equalsIgnoreCase(h.marker.type()) && h.marker.regions() != null && !h.marker.regions().isEmpty()) {
+                        SessionSnapshotData.EditorRegionPart p = h.marker.regions().get(0);
+                        coordLine = "Min: (" + Math.round(p.min().x()) + ", " + Math.round(p.min().y()) + ", " + Math.round(p.min().z()) + ") Max: (" + Math.round(p.max().x()) + ", " + Math.round(p.max().y()) + ", " + Math.round(p.max().z()) + ")";
+                    } else if (h.marker.points() != null && !h.marker.points().isEmpty()) {
+                        SessionSnapshotData.EditorPoint p = h.marker.points().get(0);
+                        coordLine = "Coords: (" + Math.round(p.x()) + ", " + Math.round(p.y()) + ", " + Math.round(p.z()) + ")";
+                    }
+                    
+                    renderedLines.add(title); lineColors.add(getMarkerColor(h.marker.definitionKey()));
+                    renderedLines.add(nameLine); lineColors.add(0xFFEEEEEE);
+                    renderedLines.add(distLine); lineColors.add(0xFFAAAAAA);
+                    renderedLines.add(coordLine); lineColors.add(0xFF777777);
+                    renderedLines.add(""); lineColors.add(0);
+                }
+                
+                if (!renderedLines.isEmpty()) {
+                    renderedLines.remove(renderedLines.size() - 1);
+                    lineColors.remove(lineColors.size() - 1);
+                }
+
+                for (String l : renderedLines) {
+                    width = Math.max(width, client.textRenderer.getWidth(l));
+                }
+                height += renderedLines.size() * lineHeight;
+
+                drawContext.fill(boxX, boxY, boxX + width + (padding * 2), boxY + height, 0xCC000000);
+                drawContext.drawBorder(boxX, boxY, width + (padding * 2), height, getMarkerColor(hovered.get(0).marker.definitionKey()) | 0xFF000000);
+                
+                int textY = boxY + padding;
+                for (int i = 0; i < renderedLines.size(); i++) {
+                    String text = renderedLines.get(i);
+                    int color = lineColors.get(i);
+                    if (!text.isEmpty()) {
+                        drawContext.drawText(client.textRenderer, net.minecraft.text.Text.literal(text).withColor(color), boxX + padding, textY, 0xFFFFFFFF, false);
+                    }
+                    textY += lineHeight;
+                }
+            }
+        });
     }
 
     /** Captured each frame from WorldRenderContext for use in the HUD projection. */
@@ -165,25 +302,30 @@ public final class MapEditorOverlayClient {
 
     private static void drawSpawnPoint(MatrixStack matrices, Tessellator tessellator, SessionSnapshotData.EditorMarker marker) {
         SessionSnapshotData.EditorPoint p = marker.points().get(0);
-        // The point position is where the player would stand (on top of the block).
-        // Render the overlay AT the stored Y coordinate (which is the block top surface).
         float x = (float) Math.floor(p.x());
-        float y = (float) p.y() + 0.001F; // Slightly above to avoid z-fighting
+        float y = (float) p.y() + 0.001F;
         float z = (float) Math.floor(p.z());
+
+        int color = getMarkerColor(marker.definitionKey());
+        float r = ((color >> 16) & 0xFF) / 255.0F;
+        float g = ((color >> 8) & 0xFF) / 255.0F;
+        float b = (color & 0xFF) / 255.0F;
+        float a = 0.85F;
 
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         var buffer = tessellator.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
-        buffer.vertex(matrix, x, y, z).color(SPAWN_R, SPAWN_G, SPAWN_B, SPAWN_A);
-        buffer.vertex(matrix, x, y, z + 1.0F).color(SPAWN_R, SPAWN_G, SPAWN_B, SPAWN_A);
-        buffer.vertex(matrix, x + 1.0F, y, z + 1.0F).color(SPAWN_R, SPAWN_G, SPAWN_B, SPAWN_A);
-        buffer.vertex(matrix, x + 1.0F, y, z).color(SPAWN_R, SPAWN_G, SPAWN_B, SPAWN_A);
+        buffer.vertex(matrix, x, y, z).color(r, g, b, a);
+        buffer.vertex(matrix, x, y, z + 1.0F).color(r, g, b, a);
+        buffer.vertex(matrix, x + 1.0F, y, z + 1.0F).color(r, g, b, a);
+        buffer.vertex(matrix, x + 1.0F, y, z).color(r, g, b, a);
         BufferRenderer.drawWithGlobalProgram(buffer.end());
     }
 
     private static void drawRegion(MatrixStack matrices, Tessellator tessellator, SessionSnapshotData.EditorMarker marker) {
-        float r = REGION_R;
-        float g = REGION_G;
-        float b = REGION_B;
+        int baseColor = getMarkerColor(marker.definitionKey());
+        float r = ((baseColor >> 16) & 0xFF) / 255.0F;
+        float g = ((baseColor >> 8) & 0xFF) / 255.0F;
+        float b = (baseColor & 0xFF) / 255.0F;
         
         if (marker.properties() != null && marker.properties().has("restrictions")) {
             com.google.gson.JsonArray arr = marker.properties().getAsJsonArray("restrictions");

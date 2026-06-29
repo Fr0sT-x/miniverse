@@ -13,6 +13,7 @@ public record MarkerDefinition(
     int minCount,
     int maxCount,
     List<TriggerType> triggers,
+    MarkerGrouping grouping,
     String description
 ) {
     public MarkerDefinition {
@@ -27,6 +28,19 @@ public record MarkerDefinition(
         }
         triggers = triggers == null ? List.of() : List.copyOf(triggers);
         description = description == null ? "" : description.trim();
+    }
+
+    public MarkerDefinition(
+        String key,
+        String displayName,
+        MarkerType type,
+        String configKey,
+        int minCount,
+        int maxCount,
+        List<TriggerType> triggers,
+        String description
+    ) {
+        this(key, displayName, type, configKey, minCount, maxCount, triggers, null, description);
     }
 
     public boolean single() {

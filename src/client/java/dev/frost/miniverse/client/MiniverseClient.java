@@ -50,6 +50,7 @@ public class MiniverseClient implements ClientModInitializer {
 		SessionLaunchStatus.register();
 		InventoryLayoutClient.register();
 		dev.frost.miniverse.client.gui.map.MapEditorOverlayClient.register();
+		dev.frost.miniverse.client.gui.map.DuelsEditorClient.register();
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.miniverse.open_gui",

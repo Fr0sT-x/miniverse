@@ -26,11 +26,21 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
     private IntFieldWidget diamondGenField;
     private IntFieldWidget emeraldGenField;
 
+    private IntFieldWidget ironCapField;
+    private IntFieldWidget goldCapField;
+    private IntFieldWidget diamondCapField;
+    private IntFieldWidget emeraldCapField;
+
     private int respawnDelay = 5;
     private int ironGenTicks = 20;
     private int goldGenTicks = 160;
     private int diamondGenTicks = 500;
     private int emeraldGenTicks = 700;
+    
+    private int ironCap = 64;
+    private int goldCap = 32;
+    private int diamondCap = 8;
+    private int emeraldCap = 4;
 
     public BedwarsWorkspaceView() {
         super("bedwars");
@@ -77,6 +87,24 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
                     this.emeraldGenField = this.addIntField(s, x, y, this.emeraldGenTicks, w, "Emerald Gen Interval", val -> "Emerald generates every " + val + " ticks.");
                 }
             );
+
+            this.rulesLayout.addRow(
+                "Iron Cap", (s, x, y, w) -> {
+                    this.ironCapField = this.addIntField(s, x, y, this.ironCap, w, "Iron Cap", val -> "Max Iron: " + val);
+                },
+                "Gold Cap", (s, x, y, w) -> {
+                    this.goldCapField = this.addIntField(s, x, y, this.goldCap, w, "Gold Cap", val -> "Max Gold: " + val);
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Diamond Cap", (s, x, y, w) -> {
+                    this.diamondCapField = this.addIntField(s, x, y, this.diamondCap, w, "Diamond Cap", val -> "Max Diamond: " + val);
+                },
+                "Emerald Cap", (s, x, y, w) -> {
+                    this.emeraldCapField = this.addIntField(s, x, y, this.emeraldCap, w, "Emerald Cap", val -> "Max Emerald: " + val);
+                }
+            );
         }
     }
 
@@ -116,6 +144,10 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.goldGenTicks = readClamped(this.goldGenField, this.goldGenTicks, 1, 1000);
             this.diamondGenTicks = readClamped(this.diamondGenField, this.diamondGenTicks, 1, 2000);
             this.emeraldGenTicks = readClamped(this.emeraldGenField, this.emeraldGenTicks, 1, 2000);
+            this.ironCap = readClamped(this.ironCapField, this.ironCap, 1, 256);
+            this.goldCap = readClamped(this.goldCapField, this.goldCap, 1, 256);
+            this.diamondCap = readClamped(this.diamondCapField, this.diamondCap, 1, 64);
+            this.emeraldCap = readClamped(this.emeraldCapField, this.emeraldCap, 1, 64);
         }
     }
 
@@ -153,6 +185,10 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putInt("goldGenIntervalTicks", this.goldGenTicks);
         builder.settings().putInt("diamondGenIntervalTicks", this.diamondGenTicks);
         builder.settings().putInt("emeraldGenIntervalTicks", this.emeraldGenTicks);
+        builder.settings().putInt("ironGenCap", this.ironCap);
+        builder.settings().putInt("goldGenCap", this.goldCap);
+        builder.settings().putInt("diamondGenCap", this.diamondCap);
+        builder.settings().putInt("emeraldGenCap", this.emeraldCap);
     }
 
     @Override

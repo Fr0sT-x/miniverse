@@ -32,6 +32,15 @@ public final class MapEditorNbt {
                     triggerList.add(net.minecraft.nbt.NbtString.of(trigger.name()));
                 }
                 marker.put("triggers", triggerList);
+                if (definition.grouping() != null) {
+                    NbtCompound grouping = new NbtCompound();
+                    grouping.putString("parentKey", definition.grouping().parentKey());
+                    grouping.putString("type", definition.grouping().type().name());
+                    if (definition.grouping().propertyKey() != null) {
+                        grouping.putString("propertyKey", definition.grouping().propertyKey());
+                    }
+                    marker.put("grouping", grouping);
+                }
                 markers.add(marker);
             }
             entry.put("markers", markers);

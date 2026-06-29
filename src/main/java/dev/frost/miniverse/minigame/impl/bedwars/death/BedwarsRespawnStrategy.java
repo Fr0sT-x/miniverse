@@ -25,10 +25,10 @@ public final class BedwarsRespawnStrategy implements RespawnStrategy {
         if (teamId != null) {
             BedwarsMapConfig.BedwarsTeamConfig teamConfig = mapConfig.teams().get(teamId);
             if (teamConfig != null && !teamConfig.spawns.isEmpty()) {
-                MapPosition pos = teamConfig.spawns.get(0);
+                MapPosition pos = teamConfig.spawns.get(new java.util.Random().nextInt(teamConfig.spawns.size()));
                 ServerWorld world = minigame.getContext().nullableServer().getWorld(net.minecraft.world.World.OVERWORLD);
                 if (world != null) {
-                    return new RespawnLocation(world, new Vec3d(pos.x(), pos.y(), pos.z()), pos.yaw(), pos.pitch());
+                    return new RespawnLocation(world, new Vec3d(pos.x() + 0.5, pos.y(), pos.z() + 0.5), pos.yaw(), pos.pitch());
                 }
             }
         }

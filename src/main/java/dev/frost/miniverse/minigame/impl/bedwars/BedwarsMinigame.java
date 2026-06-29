@@ -52,10 +52,12 @@ public class BedwarsMinigame extends AbstractMinigame implements
     private dev.frost.miniverse.minigame.impl.bedwars.BedwarsCountdownService countdownService;
     private dev.frost.miniverse.minigame.impl.bedwars.visibility.BedwarsVisibilityManager visibilityManager;
     private BedwarsSettings settings = BedwarsSettings.fromNbt(null);
-    private BedwarsMapConfig mapConfig = new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
+    private BedwarsMapConfig mapConfig = new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
     
     private final Map<UUID, ScoreboardTemplate> scoreboards = new ConcurrentHashMap<>();
     
+    private ServerWorld instanceWorld;
+
     // For F05 integration later:
     // private BedwarsDeathLifecycleConfig deathConfig;
     
@@ -78,7 +80,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
     public void applySettings(BedwarsSettings settings, BedwarsMapConfig mapConfig) {
         this.settings = settings != null ? settings : BedwarsSettings.fromNbt(null);
-        this.mapConfig = mapConfig != null ? mapConfig : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
+        this.mapConfig = mapConfig != null ? mapConfig : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
     }
 
     public void ensureTeamAssignment(ServerPlayerEntity player, String team) {
@@ -89,18 +91,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
         }
     }
 
-    public MapValidationResult startValidation() {
-        return MapValidationResult.ok();
-    }
-
-    public boolean canStartMatch() {
-        return true;
-    }
-
-    @Override
-    public void onMatchStart() {
-
-        // Remap generic session groups to the actual map teams
+    private void mapSessionTeams() {
         java.util.List<dev.frost.miniverse.team.TeamSnapshot> activeSessionTeams = this.teamManager.snapshots();
         java.util.List<String> mapTeamIds = new java.util.ArrayList<>(this.mapConfig.teams().keySet());
         
@@ -122,7 +113,25 @@ public class BedwarsMinigame extends AbstractMinigame implements
                 }
             }
         }
+    }
 
+    public MapValidationResult startValidation() {
+        MapValidationResult configResult = this.mapConfig.validate();
+        if (!configResult.valid()) return configResult;
+
+        long activeSessionTeams = this.teamManager.snapshots().stream().filter(t -> !t.members().isEmpty()).count();
+        if (activeSessionTeams > this.mapConfig.teams().size()) {
+             return MapValidationResult.builder().error("Too many teams configured! This map only supports " + this.mapConfig.teams().size() + " teams.").build();
+        }
+        return MapValidationResult.ok();
+    }
+
+    public boolean canStartMatch() {
+        return true;
+    }
+
+    @Override
+    public void onMatchStart() {
         for (String teamId : this.mapConfig.teams().keySet()) {
             this.bedTeamStates.put(teamId, new BedTeamState());
         }
@@ -137,9 +146,9 @@ public class BedwarsMinigame extends AbstractMinigame implements
         // Setup players
         List<ServerPlayerEntity> participants = this.context.roster().onlinePlayers(this.context.nullableServer());
         this.shopManager.initPlayers(participants);
-        ServerWorld instanceWorld = participants.isEmpty() ? this.context.nullableServer().getOverworld() : participants.get(0).getServerWorld();
-        this.shopManager.spawnNpcs(instanceWorld, this.mapConfig.shopNpcs());
-        this.upgradeManager.spawnNpcs(instanceWorld, this.mapConfig.upgradeNpcs());
+        this.instanceWorld = participants.isEmpty() ? this.context.nullableServer().getOverworld() : participants.get(0).getServerWorld();
+        this.shopManager.spawnNpcs(this.instanceWorld, this.mapConfig.shopNpcs());
+        this.upgradeManager.spawnNpcs(this.instanceWorld, this.mapConfig.upgradeNpcs());
         java.util.Iterator<String> teamIter = this.mapConfig.teams().keySet().iterator();
         
         for (ServerPlayerEntity player : participants) {
@@ -148,7 +157,6 @@ public class BedwarsMinigame extends AbstractMinigame implements
                 String teamId = teamIter.next();
                 this.ensureTeamAssignment(player, teamId);
             }
-            this.teleportToSpawn(player);
             player.getInventory().clear();
             this.equipBaseArmor(player);
             player.getInventory().insertStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.WOODEN_SWORD));
@@ -210,13 +218,28 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
     @Override
     public void setState(dev.frost.miniverse.minigame.core.GameState state) {
+        dev.frost.miniverse.minigame.core.GameState oldState = this.getState();
         this.state = state;
+
+        if (oldState != dev.frost.miniverse.minigame.core.GameState.FROZEN && this.getState() == dev.frost.miniverse.minigame.core.GameState.FROZEN) {
+            this.mapSessionTeams();
+            if (this.context != null && this.context.nullableServer() != null) {
+                for (net.minecraft.server.network.ServerPlayerEntity player : this.context.roster().onlinePlayers(this.context.nullableServer())) {
+                    this.teleportToSpawn(player);
+                }
+            }
+        }
     }
 
     @Override
     public dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState checkProgression(SessionRoster roster) {
-        if (roster.size() < 2) {
-            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, net.minecraft.text.Text.literal("Not enough players"), null);
+        long distinctTeams = roster.allParticipants().stream()
+            .map(this.teamManager::teamId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .count();
+        if (distinctTeams < 2) {
+            return new dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState(true, net.minecraft.text.Text.literal("Not enough teams with players"), null);
         }
         return dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator.ProgressionState.valid();
     }
@@ -247,6 +270,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
     @Override
     public boolean canBypassProtection(ServerPlayerEntity player, BlockPos pos) {
+        if (this.getState() != GameState.RUNNING) return false;
         String playerTeamId = this.teamManager.teamId(player.getUuid());
         if (playerTeamId == null) return false;
 
@@ -267,7 +291,20 @@ public class BedwarsMinigame extends AbstractMinigame implements
                 player.sendMessage(net.minecraft.text.Text.literal("You cannot break your own bed!").formatted(net.minecraft.util.Formatting.RED), false);
                 return false;
             }
-            return true;
+            // Manually break the block here to avoid item drops, and return false to cancel vanilla break
+            net.minecraft.server.world.ServerWorld world = player.getServerWorld();
+            
+            net.minecraft.util.math.Direction dir = state.get(net.minecraft.block.BedBlock.FACING);
+            net.minecraft.util.math.BlockPos otherHalf = state.get(net.minecraft.block.BedBlock.PART) == net.minecraft.block.enums.BedPart.FOOT 
+                ? pos.offset(dir) 
+                : pos.offset(dir.getOpposite());
+                
+            world.setBlockState(pos, net.minecraft.block.Blocks.AIR.getDefaultState(), 35);
+            world.setBlockState(otherHalf, net.minecraft.block.Blocks.AIR.getDefaultState(), 35);
+            world.playSound(null, pos, net.minecraft.sound.SoundEvents.BLOCK_WOOD_BREAK, net.minecraft.sound.SoundCategory.BLOCKS, 1.0f, 1.0f);
+            
+            this.onBlockBroken(player, world, pos, state);
+            return false;
         }
 
         return false;
@@ -303,6 +340,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
     }
 
     public void checkWinCondition() {
+        if (this.getState() != GameState.RUNNING || this.bedTeamStates.isEmpty()) return;
         List<String> alive = this.bedTeamStates.entrySet().stream()
             .filter(e -> isTeamAlive(e.getKey(), e.getValue()))
             .map(Map.Entry::getKey)
@@ -393,7 +431,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
         if (teamId != null) {
             BedwarsMapConfig.BedwarsTeamConfig config = this.mapConfig.teams().get(teamId);
             if (config != null && !config.spawns.isEmpty()) {
-                dev.frost.miniverse.map.MapPosition pos = config.spawns.get(0);
+                dev.frost.miniverse.map.MapPosition pos = config.spawns.get(new java.util.Random().nextInt(config.spawns.size()));
                 if (this.runtime != null && this.context.nullableServer() != null) {
                     player.teleport(player.getServerWorld(), pos.x() + 0.5, pos.y(), pos.z() + 0.5, java.util.Set.of(), pos.yaw(), pos.pitch());
                 }
@@ -490,7 +528,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
     @Override
     public void onGameTick(MinecraftServer server) {
         if (this.generatorManager != null && this.context.nullableServer() != null) {
-            this.generatorManager.tick(this.context.nullableServer().getOverworld());
+            this.generatorManager.tick(this.instanceWorld != null ? this.instanceWorld : this.context.nullableServer().getOverworld());
         }
         if (this.countdownService != null && this.context.nullableServer() != null) {
             this.countdownService.tick(this.context.nullableServer());
@@ -500,6 +538,17 @@ public class BedwarsMinigame extends AbstractMinigame implements
         }
         if (server.getTicks() % 20 == 0) {
             this.rebuildScoreboard();
+        }
+
+        if (this.mapConfig.voidLevelRef() != null && this.context != null && this.context.roster() != null) {
+            int voidY = this.mapConfig.voidLevelRef();
+            for (net.minecraft.server.network.ServerPlayerEntity p : this.context.roster().onlinePlayers(server)) {
+                if (p.getY() <= voidY && p.getHealth() > 0 && (this.deathLifecycleManager == null || this.deathLifecycleManager.getContext(p.getUuid()) == null)) {
+                    if (this.deathLifecycleManager != null) {
+                        this.deathLifecycleManager.handleFatalDamage(p, p.getDamageSources().outOfWorld());
+                    }
+                }
+            }
         }
     }
 
@@ -580,5 +629,10 @@ public class BedwarsMinigame extends AbstractMinigame implements
     @Override
     public String inventoryLayoutGamemodeId() {
         return BedwarsDefinition.ID;
+    }
+
+    @Override
+    public boolean isTeamBased() {
+        return false;
     }
 }

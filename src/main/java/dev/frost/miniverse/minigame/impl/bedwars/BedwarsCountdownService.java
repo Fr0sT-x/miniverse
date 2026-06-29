@@ -79,8 +79,8 @@ public class BedwarsCountdownService {
         }
         
         if (ticksRemainingInPhase <= 0) {
-            currentPhase.onComplete.run();
             minigame.broadcast(Text.literal(currentPhase.announcement).formatted(net.minecraft.util.Formatting.AQUA, net.minecraft.util.Formatting.BOLD));
+            currentPhase.onComplete.run();
             nextPhase();
         }
     }

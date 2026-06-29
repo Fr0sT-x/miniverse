@@ -21,8 +21,7 @@ public record BedwarsMapConfig(
     List<MapPosition> midEmeraldGens,
     List<MapPosition> shopNpcs,
     List<MapPosition> upgradeNpcs,
-    @Nullable MapPosition spectatorSpawn,
-    int globalResourceLimit
+    Integer voidLevelRef
 ) {
     public BedwarsMapConfig {
         teams = Map.copyOf(teams);
@@ -50,7 +49,7 @@ public record BedwarsMapConfig(
 
     public static BedwarsMapConfig fromJson(JsonObject json) {
         if (json == null) {
-            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
+            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
         }
 
         Map<String, BedwarsTeamConfig> teams = new java.util.LinkedHashMap<>();
@@ -88,45 +87,32 @@ public record BedwarsMapConfig(
             parsePoints(json, "midEmeraldGens"),
             parsePoints(json, "shopNpcs"),
             parsePoints(json, "upgradeNpcs"),
-            parseSinglePoint(json, "spectatorSpawn"),
-            extractGlobalResourceLimit(json)
+            parseVoidLevelRef(json, "voidLevel")
         );
     }
 
     public static BedwarsMapConfig fromJsonString(String value) {
         try {
             JsonElement element = com.google.gson.JsonParser.parseString(value == null ? "{}" : value);
-            return element.isJsonObject() ? fromJson(element.getAsJsonObject()) : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
+            return element.isJsonObject() ? fromJson(element.getAsJsonObject()) : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
         } catch (IllegalStateException ignored) {
-            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null, 64);
+            return new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
         }
     }
 
     @Nullable
     public String findBedTeam(BlockPos pos) {
         for (BedwarsTeamConfig config : teams.values()) {
-            if (config.bedPos != null && config.bedPos.equals(pos)) {
-                return config.teamId;
-            }
-        }
-        return null;
-    }
-
-    private static int extractGlobalResourceLimit(JsonObject root) {
-        if (root.has("global_limits") && root.get("global_limits").isJsonArray()) {
-            for (JsonElement element : root.getAsJsonArray("global_limits")) {
-                if (element.isJsonObject()) {
-                    JsonObject markerObj = element.getAsJsonObject();
-                    if (markerObj.has("properties") && markerObj.get("properties").isJsonObject()) {
-                        JsonObject props = markerObj.getAsJsonObject("properties");
-                        if (props.has("limit")) {
-                            return props.get("limit").getAsInt();
-                        }
-                    }
+            if (config.bedPos != null) {
+                int dx = Math.abs(config.bedPos.getX() - pos.getX());
+                int dy = Math.abs(config.bedPos.getY() - pos.getY());
+                int dz = Math.abs(config.bedPos.getZ() - pos.getZ());
+                if (dx <= 2 && dy <= 2 && dz <= 2) {
+                    return config.teamId;
                 }
             }
         }
-        return 64; // Default to 64
+        return null;
     }
 
     private static String extractTeamId(JsonObject markerObj, String fallback) {
@@ -206,10 +192,58 @@ public record BedwarsMapConfig(
                 builder.error("Team '" + team.name + "' is missing a bed.");
             }
         }
-        if (this.spectatorSpawn == null) {
-            builder.error("Missing Spectator Spawn");
+        if (this.voidLevelRef == null) {
+            builder.error("Missing Void Death Level Reference");
         }
         return builder.build();
+    }
+
+    private static Integer parseVoidLevelRef(JsonObject json, String key) {
+        if (!json.has(key)) {
+            return null;
+        }
+        JsonElement value = json.get(key);
+
+        // Single object format: { "x": ..., "y": ..., "z": ... }
+        if (value.isJsonObject()) {
+            JsonObject obj = value.getAsJsonObject();
+            if (obj.has("points")) {
+                JsonElement pointsArray = obj.get("points");
+                if (pointsArray.isJsonArray() && !pointsArray.getAsJsonArray().isEmpty()) {
+                    JsonElement firstPoint = pointsArray.getAsJsonArray().get(0);
+                    if (firstPoint.isJsonObject()) {
+                        MapPosition pos = MapPosition.fromJson(firstPoint.getAsJsonObject(), MapPosition.of(0.0D, 100.0D, 0.0D));
+                        return (int) pos.y();
+                    }
+                }
+            } else {
+                MapPosition pos = MapPosition.fromJson(obj, MapPosition.of(0.0D, 100.0D, 0.0D));
+                return (int) pos.y();
+            }
+        }
+
+        // Array format: [ { ... }, ... ]
+        if (value.isJsonArray()) {
+            for (JsonElement element : value.getAsJsonArray()) {
+                if (element.isJsonObject()) {
+                    JsonObject obj = element.getAsJsonObject();
+                    if (obj.has("points")) {
+                        JsonElement pointsArray = obj.get("points");
+                        if (pointsArray.isJsonArray() && !pointsArray.getAsJsonArray().isEmpty()) {
+                            JsonElement firstPoint = pointsArray.getAsJsonArray().get(0);
+                            if (firstPoint.isJsonObject()) {
+                                MapPosition pos = MapPosition.fromJson(firstPoint.getAsJsonObject(), MapPosition.of(0.0D, 100.0D, 0.0D));
+                                return (int) pos.y();
+                            }
+                        }
+                    } else {
+                        MapPosition pos = MapPosition.fromJson(obj, MapPosition.of(0.0D, 100.0D, 0.0D));
+                        return (int) pos.y();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public static MapValidationResult validateEditor(MapDescriptor map, JsonObject config) {

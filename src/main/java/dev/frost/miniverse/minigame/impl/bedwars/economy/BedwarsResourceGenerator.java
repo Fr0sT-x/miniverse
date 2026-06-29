@@ -9,11 +9,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import java.util.List;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
+
 
 public final class BedwarsResourceGenerator {
     private final MapPosition position;
@@ -27,7 +23,7 @@ public final class BedwarsResourceGenerator {
     private final boolean isTeamGenerator;
     private final String teamId;
     private dev.frost.miniverse.minigame.impl.bedwars.HologramManager hologramManager;
-    private net.minecraft.entity.decoration.ArmorStandEntity hologramEntity;
+    private java.util.UUID hologramId;
 
     public BedwarsResourceGenerator(MapPosition position, BedwarsCurrency currency, int defaultInterval, int maxStack, boolean isTeamGenerator, String teamId) {
         this.position = position;
@@ -55,12 +51,16 @@ public final class BedwarsResourceGenerator {
         this.ticksElapsed++;
         
         if (this.hologramManager != null && !this.isTeamGenerator) {
-            if (this.hologramEntity == null) {
-                this.hologramEntity = this.hologramManager.createHologram(world, position.x() + 0.5, position.y() + 2.0, position.z() + 0.5, net.minecraft.text.Text.literal(""));
+            if (this.hologramId == null) {
+                net.minecraft.entity.decoration.ArmorStandEntity hologramEntity = this.hologramManager.createHologram(world, position.x() + 0.5, position.y() + 2.0, position.z() + 0.5, net.minecraft.text.Text.literal(""));
+                this.hologramId = hologramEntity.getUuid();
             }
             int secondsLeft = (this.currentInterval - this.ticksElapsed) / 20;
             String text = "Spawns in " + secondsLeft + "s";
-            this.hologramEntity.setCustomName(net.minecraft.text.Text.literal(text).formatted(this.currency.formatting()));
+            net.minecraft.entity.Entity entity = world.getEntity(this.hologramId);
+            if (entity instanceof net.minecraft.entity.decoration.ArmorStandEntity hologramEntity) {
+                hologramEntity.setCustomName(net.minecraft.text.Text.literal(text).formatted(this.currency.formatting()));
+            }
         }
         
         if (this.ticksElapsed >= this.currentInterval) {

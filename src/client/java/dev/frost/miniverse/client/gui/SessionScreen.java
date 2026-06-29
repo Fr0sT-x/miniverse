@@ -340,6 +340,15 @@ public class SessionScreen extends Screen {
             NbtList markerList = entry.getList("markers", NbtElement.COMPOUND_TYPE);
             for (int markerIndex = 0; markerIndex < markerList.size(); markerIndex++) {
                 NbtCompound marker = markerList.getCompound(markerIndex);
+                SessionSnapshotData.EditorMarkerGrouping grouping = null;
+                if (marker.contains("grouping", NbtElement.COMPOUND_TYPE)) {
+                    NbtCompound groupingNbt = marker.getCompound("grouping");
+                    grouping = new SessionSnapshotData.EditorMarkerGrouping(
+                        getStringOrDefault(groupingNbt, "parentKey", ""),
+                        getStringOrDefault(groupingNbt, "type", "LOGICAL"),
+                        getStringOrDefault(groupingNbt, "propertyKey", null)
+                    );
+                }
                 markers.add(new SessionSnapshotData.EditorMarkerDefinition(
                     getStringOrDefault(marker, "key", ""),
                     getStringOrDefault(marker, "displayName", ""),
@@ -347,7 +356,8 @@ public class SessionScreen extends Screen {
                     getStringOrDefault(marker, "configKey", ""),
                     getIntOrDefault(marker, "minCount", 0),
                     getIntOrDefault(marker, "maxCount", -1),
-                    getStringOrDefault(marker, "description", "")
+                    getStringOrDefault(marker, "description", ""),
+                    grouping
                 ));
             }
             extensions.add(new SessionSnapshotData.EditorExtension(
@@ -535,14 +545,8 @@ public class SessionScreen extends Screen {
     }
 
     public void openMapEditorGamemode(String gameId) {
-        if ("duels".equals(gameId)) {
-            this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
-            return;
-        }
-        if ("bedwars".equals(gameId)) {
-            this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.BedwarsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
-            return;
-        }
+        this.mapEditorState.selectedGameId = gameId;
+        this.mapEditorState.selectedDefinitionKey = "";
         this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, gameId));
     }
 
@@ -1000,7 +1004,7 @@ public class SessionScreen extends Screen {
                             }
                         }
                         int accent = this.accentFor(extension.gameId(), rows.size());
-                        rows.add(SidebarRow.item(new SidebarChild(">", extension.displayName(), () -> this.openMapEditorGamemode(extension.gameId()), () -> (this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId())) || (this.workspaceView instanceof dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView && extension.gameId().equals("duels")), 8, accent)));
+                        rows.add(SidebarRow.item(new SidebarChild(">", extension.displayName(), () -> this.openMapEditorGamemode(extension.gameId()), () -> (this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId())), 8, accent)));
                         if (this.workspaceView instanceof MapEditorWorkspaceView editor && editor.gameSelected(extension.gameId())) {
                             for (SessionSnapshotData.EditorMarkerDefinition marker : extension.markers()) {
                                 rows.add(SidebarRow.item(new SidebarChild("+", marker.displayName(), () -> this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, extension.gameId(), marker.key())), () -> editor.markerSelected(extension.gameId(), marker.key()), MODULE_ITEM_INDENT, accent)));
@@ -1400,16 +1404,8 @@ public class SessionScreen extends Screen {
 
     private void openMapEditorWorkspace() {
         // Restore the last-viewed screen if user had one selected
-        if (!this.mapEditorState.selectedGameId.isBlank()) {
-            if ("duels".equals(this.mapEditorState.selectedGameId)) {
-                this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.DuelsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
-                return;
-            }
-            if ("bedwars".equals(this.mapEditorState.selectedGameId)) {
-                this.openWorkspaceView(new dev.frost.miniverse.client.gui.map.BedwarsMapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
-                return;
-            }
-            if (!this.mapEditorState.selectedDefinitionKey.isBlank()) {
+        if (this.mapEditorState.selectedGameId != null && !this.mapEditorState.selectedGameId.isBlank()) {
+            if (this.mapEditorState.selectedDefinitionKey != null && !this.mapEditorState.selectedDefinitionKey.isBlank()) {
                 this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId, this.mapEditorState.selectedDefinitionKey));
             } else {
                 this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId));

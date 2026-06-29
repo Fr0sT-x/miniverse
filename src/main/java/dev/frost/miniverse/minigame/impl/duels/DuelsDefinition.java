@@ -30,10 +30,10 @@ public final class DuelsDefinition implements MinigameDefinition {
         ID,
         DISPLAY_NAME,
         List.of(
-            new MarkerDefinition(ARENA, "Duel Arena", MarkerType.REGION, "arenas", 1, Integer.MAX_VALUE, null, "A region defining a single 1v1 arena. Use properties menu to configure supported duel types and restrictions."),
-            new MarkerDefinition(PLAYER_1_SPAWN, "Player 1 Spawn", MarkerType.POINT, "player1Spawns", 1, Integer.MAX_VALUE, null, "Spawn point for Player 1. Place exactly one inside each Duel Arena."),
-            new MarkerDefinition(PLAYER_2_SPAWN, "Player 2 Spawn", MarkerType.POINT, "player2Spawns", 1, Integer.MAX_VALUE, null, "Spawn point for Player 2. Place exactly one inside each Duel Arena."),
-            new MarkerDefinition(SPECTATOR_SPAWN, "Spectator Spawn", MarkerType.POINT, "spectatorSpawns", 1, Integer.MAX_VALUE, null, "Spawn point for Spectators. Place exactly one inside each Duel Arena.")
+            new MarkerDefinition(ARENA, "Duel Arena", MarkerType.REGION, "arenas", 1, Integer.MAX_VALUE, null, null, "A region defining a single 1v1 arena. Use properties menu to configure supported duel types and restrictions."),
+            new MarkerDefinition(PLAYER_1_SPAWN, "Player 1 Spawn", MarkerType.POINT, "player1Spawns", 1, Integer.MAX_VALUE, null, dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA), "Spawn point for Player 1. Place exactly one inside each Duel Arena."),
+            new MarkerDefinition(PLAYER_2_SPAWN, "Player 2 Spawn", MarkerType.POINT, "player2Spawns", 1, Integer.MAX_VALUE, null, dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA), "Spawn point for Player 2. Place exactly one inside each Duel Arena."),
+            new MarkerDefinition(SPECTATOR_SPAWN, "Spectator Spawn", MarkerType.POINT, "spectatorSpawns", 1, Integer.MAX_VALUE, null, dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA), "Spawn point for Spectators. Place exactly one inside each Duel Arena.")
         ),
         List.of(DuelsMapConfig::validateArenas)
     );

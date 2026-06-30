@@ -2,6 +2,9 @@
 	"key.miniverse.night_vision": "Night vision",
 	"miniverse.night_vision.on": "On",
 	"miniverse.night_vision.off": "Off",
-	"miniverse.night_vision.message": "Night vision: %s"
+	"miniverse.night_vision.message": "Night vision: %s",
+	"category.miniverse.miniverse": "Miniverse",
+	"key.miniverse.open_gui": "Open Miniverse GUI",
+	"key.miniverse.toggle_editor": "Toggle Map Editor Mode"
 }
 

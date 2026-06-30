@@ -116,6 +116,59 @@ public final class MapEditorOverlayClient {
 
                 matrices.pop();
             }
+
+            // Draw Gizmo
+            if (!state.clipboard.isEmpty()) {
+                Camera camera = context.camera();
+                Vec3d cameraPos = camera.getPos();
+                MatrixStack matrices = context.matrixStack();
+
+                matrices.push();
+                matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
+
+                double cx = state.selectionCenterX + state.transX;
+                double cy = state.selectionCenterY + state.transY;
+                double cz = state.selectionCenterZ + state.transZ;
+
+                var tessellator = Tessellator.getInstance();
+
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                RenderSystem.disableCull();
+                RenderSystem.disableDepthTest();
+                RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+
+                int colorX = state.hoveredAxis == 1 ? 0xFFFFAAAA : 0xFFFF0000;
+                int colorY = state.hoveredAxis == 2 ? 0xFFAAFFAA : 0xFF00FF00;
+                int colorZ = state.hoveredAxis == 3 ? 0xFFAAAAFF : 0xFF0000FF;
+
+                if (state.gizmoMode == 0) { // Translate
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorX, 1, 0, 0);
+                    GizmoRenderer.drawCone(matrices, tessellator, cx + 2.0, cy, cz, 0.5, 0.15, 8, colorX, 1, 0, 0);
+
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorY, 0, 1, 0);
+                    GizmoRenderer.drawCone(matrices, tessellator, cx, cy + 2.0, cz, 0.5, 0.15, 8, colorY, 0, 1, 0);
+
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorZ, 0, 0, 1);
+                    GizmoRenderer.drawCone(matrices, tessellator, cx, cy, cz + 2.0, 0.5, 0.15, 8, colorZ, 0, 0, 1);
+                } else if (state.gizmoMode == 1) { // Rotate (Simple Circle)
+                    // We only implement Y rotation for now, maybe draw a torus or simple circle
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1, cy, cz - 1, 2.0, 0.05, 8, colorY, 1, 0, 0);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1, cy, cz + 1, 2.0, 0.05, 8, colorY, 1, 0, 0);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1, cy, cz - 1, 2.0, 0.05, 8, colorY, 0, 0, 1);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx + 1, cy, cz - 1, 2.0, 0.05, 8, colorY, 0, 0, 1);
+                } else if (state.gizmoMode == 2) { // Scale
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorX, 1, 0, 0);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorY, 0, 1, 0);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorZ, 0, 0, 1);
+                }
+
+                RenderSystem.enableDepthTest();
+                RenderSystem.enableCull();
+                RenderSystem.disableBlend();
+
+                matrices.pop();
+            }
         });
 
         // 2D HUD indicator for active point placements (no particles - screen-space only)

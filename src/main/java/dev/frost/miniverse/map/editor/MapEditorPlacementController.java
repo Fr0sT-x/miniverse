@@ -363,6 +363,7 @@ public final class MapEditorPlacementController {
 
         private void save(ServerPlayerEntity player, List<MapMarker> markers, String success) {
             try {
+                MapEditorUndoManager.push(this.mapId, this.extension.gameId());
                 MapEditorMarkerStore.save(this.mapId, this.extension, this.definition, markers);
                 player.sendMessage(Text.literal(success).formatted(Formatting.GREEN), false);
                 if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.HIDE_MAP_EDITOR_OVERLAY_ID)) {

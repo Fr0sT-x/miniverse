@@ -16,10 +16,24 @@ public class MapEditorState {
     public final Set<String> hiddenIndividualMarkers = new HashSet<>();
     /** Which marker definitions are currently expanded in the UI. */
     public final Set<String> expandedMarkers = new HashSet<>();
-    /** The currently unsaved region parts being built by the user. */
     public final java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart> currentBuilderSelection = new java.util.ArrayList<>();
-    /** Placed point positions in the current placement session for the 2D HUD indicator. Cleared when placement ends. */
+
+    public record SelectedMarkerData(dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker marker, String gameId, String definitionKey) {}
+    public record ClipboardMarkerData(SelectedMarkerData data, double relX, double relY, double relZ, int copyYawSteps) {}
+    
+    public final java.util.List<ClipboardMarkerData> clipboard = new java.util.ArrayList<>();
     public final java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint> placementPoints = new java.util.ArrayList<>();
+
+    // Gizmo state
+    public int hoveredAxis = 0; // 0=None, 1=X, 2=Y, 3=Z
+    public int gizmoMode = 0; // 0=Translate, 1=Rotate, 2=Scale
+    public double transX = 0, transY = 0, transZ = 0;
+    public double scaleX = 1, scaleY = 1, scaleZ = 1;
+    public double rotY = 0; // in degrees
+    
+    public double selectionCenterX = 0, selectionCenterY = 0, selectionCenterZ = 0;
+    
+    public String selectedTeam = "";
 
     public void clear() {
         this.selectedGameId = "";
@@ -30,6 +44,11 @@ public class MapEditorState {
         this.expandedMarkers.clear();
         this.currentBuilderSelection.clear();
         this.placementPoints.clear();
+        this.clipboard.clear();
+        this.hoveredAxis = 0;
+        this.transX = 0; this.transY = 0; this.transZ = 0;
+        this.scaleX = 1; this.scaleY = 1; this.scaleZ = 1;
+        this.rotY = 0;
     }
 
     public boolean isOverlayEnabled(String gameId, String definitionKey) {

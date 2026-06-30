@@ -29,6 +29,7 @@ import org.lwjgl.glfw.GLFW;
 
 public class MiniverseClient implements ClientModInitializer {
 	public static KeyBinding OPEN_GUI_KEY;
+	public static KeyBinding TOGGLE_EDITOR_KEY;
 	private static boolean pendingSessionOpen;
 	private static int pendingScreenshotTicks = 0;
 	private static java.io.File pendingScreenshotDir = null;
@@ -50,6 +51,7 @@ public class MiniverseClient implements ClientModInitializer {
 		SessionLaunchStatus.register();
 		InventoryLayoutClient.register();
 		dev.frost.miniverse.client.gui.map.MapEditorOverlayClient.register();
+		dev.frost.miniverse.client.gui.map.MapEditorRenderIntegration.register();
 		dev.frost.miniverse.client.gui.map.DuelsEditorClient.register();
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -59,9 +61,23 @@ public class MiniverseClient implements ClientModInitializer {
 			"category." + NetworkConstants.MOD_ID + ".miniverse"
 		));
 
+		TOGGLE_EDITOR_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+			"key.miniverse.toggle_editor",
+			InputUtil.Type.KEYSYM,
+			GLFW.GLFW_KEY_F5,
+			"category." + NetworkConstants.MOD_ID + ".miniverse"
+		));
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (OPEN_GUI_KEY.wasPressed()) {
 				openGui();
+			}
+			while (TOGGLE_EDITOR_KEY.wasPressed()) {
+				if (client.currentScreen instanceof dev.frost.miniverse.client.gui.map.MapEditorWorkspaceScreen) {
+					client.setScreen(null);
+				} else {
+					client.setScreen(new dev.frost.miniverse.client.gui.map.MapEditorWorkspaceScreen());
+				}
 			}
 			if (pendingScreenshotTicks > 0) {
 				pendingScreenshotTicks--;

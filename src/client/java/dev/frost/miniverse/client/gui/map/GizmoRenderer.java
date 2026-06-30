@@ -102,8 +102,76 @@ public class GizmoRenderer {
     }
 
     public static void drawSolidCube(MatrixStack matrices, Tessellator tessellator, double minX, double minY, double minZ, double maxX, double maxY, double maxZ, int color) {
-        // Simple AABB drawing with proper shading...
-        // We can port over our previous drawAABB code here.
-        // For brevity, we will implement it fully later, but this serves as the scaffold.
+        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        BufferBuilder buffer = tessellator.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+
+        float a = (color >> 24 & 255) / 255.0F;
+        float r = (color >> 16 & 255) / 255.0F;
+        float g = (color >> 8 & 255) / 255.0F;
+        float b = (color & 255) / 255.0F;
+        if (a == 0.0f) a = 1.0f;
+        
+        float x1 = (float)minX, y1 = (float)minY, z1 = (float)minZ;
+        float x2 = (float)maxX, y2 = (float)maxY, z2 = (float)maxZ;
+
+        // Front
+        buffer.vertex(matrix, x1, y1, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y2, z2).color(r, g, b, a);
+        // Back
+        buffer.vertex(matrix, x1, y2, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y2, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y1, z1).color(r, g, b, a);
+        // Left
+        buffer.vertex(matrix, x1, y1, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y1, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y2, z1).color(r, g, b, a);
+        // Right
+        buffer.vertex(matrix, x2, y2, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z1).color(r, g, b, a);
+        // Top
+        buffer.vertex(matrix, x1, y2, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y2, z1).color(r, g, b, a);
+        // Bottom
+        buffer.vertex(matrix, x1, y1, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y1, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z2).color(r, g, b, a);
+
+        BufferRenderer.drawWithGlobalProgram(buffer.end());
+    }
+
+    public static void drawQuad(MatrixStack matrices, Tessellator tessellator, double minX, double minY, double minZ, double maxX, double maxY, double maxZ, int color) {
+        Matrix4f matrix = matrices.peek().getPositionMatrix();
+        BufferBuilder buffer = tessellator.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
+
+        float a = (color >> 24 & 255) / 255.0F;
+        float r = (color >> 16 & 255) / 255.0F;
+        float g = (color >> 8 & 255) / 255.0F;
+        float b = (color & 255) / 255.0F;
+        if (a == 0.0f) a = 1.0f;
+        
+        float x1 = (float)minX, y1 = (float)minY, z1 = (float)minZ;
+        float x2 = (float)maxX, y2 = (float)maxY, z2 = (float)maxZ;
+
+        // Front (double-sided)
+        buffer.vertex(matrix, x1, y1, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y2, z2).color(r, g, b, a);
+
+        buffer.vertex(matrix, x1, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y2, z2).color(r, g, b, a);
+        buffer.vertex(matrix, x2, y1, z1).color(r, g, b, a);
+        buffer.vertex(matrix, x1, y1, z1).color(r, g, b, a);
+
+        BufferRenderer.drawWithGlobalProgram(buffer.end());
     }
 }

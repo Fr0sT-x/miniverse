@@ -138,11 +138,23 @@ public final class MapEditorOverlayClient {
                 RenderSystem.disableDepthTest();
                 RenderSystem.setShader(GameRenderer::getPositionColorProgram);
 
-                int colorX = state.hoveredAxis == 1 ? 0xFFFFAAAA : 0xFFFF0000;
-                int colorY = state.hoveredAxis == 2 ? 0xFFAAFFAA : 0xFF00FF00;
-                int colorZ = state.hoveredAxis == 3 ? 0xFFAAAAFF : 0xFF0000FF;
+                int colorX = (state.hoveredTarget == MapEditorState.GizmoTarget.TRANSLATE_X || state.hoveredTarget == MapEditorState.GizmoTarget.SCALE_X) ? 0xFFFFAAAA : 0xFFFF0000;
+                int colorY = (state.hoveredTarget == MapEditorState.GizmoTarget.TRANSLATE_Y || state.hoveredTarget == MapEditorState.GizmoTarget.SCALE_Y || state.hoveredTarget == MapEditorState.GizmoTarget.ROTATE_Y) ? 0xFFAAFFAA : 0xFF00FF00;
+                int colorZ = (state.hoveredTarget == MapEditorState.GizmoTarget.TRANSLATE_Z || state.hoveredTarget == MapEditorState.GizmoTarget.SCALE_Z) ? 0xFFAAAAFF : 0xFF0000FF;
+
+                int colorXY = state.hoveredTarget == MapEditorState.GizmoTarget.TRANSLATE_XY ? 0x88AAAAFF : 0x440000FF;
+                int colorYZ = state.hoveredTarget == MapEditorState.GizmoTarget.TRANSLATE_YZ ? 0x88FFAAAA : 0x44FF0000;
+                int colorZX = state.hoveredTarget == MapEditorState.GizmoTarget.TRANSLATE_ZX ? 0x88AAFFAA : 0x4400FF00;
+                
+                int colorCenter = (state.hoveredTarget == MapEditorState.GizmoTarget.TRANSLATE_XYZ || state.hoveredTarget == MapEditorState.GizmoTarget.SCALE_XYZ) ? 0xFFFFFFFF : 0xFFAAAAAA;
 
                 if (state.gizmoMode == 0) { // Translate
+                    GizmoRenderer.drawSolidCube(matrices, tessellator, cx - 0.2, cy - 0.2, cz - 0.2, cx + 0.2, cy + 0.2, cz + 0.2, colorCenter);
+
+                    GizmoRenderer.drawQuad(matrices, tessellator, cx, cy, cz, cx + 0.7, cy + 0.7, cz, colorXY);
+                    GizmoRenderer.drawQuad(matrices, tessellator, cx, cy, cz, cx, cy + 0.7, cz + 0.7, colorYZ);
+                    GizmoRenderer.drawQuad(matrices, tessellator, cx, cy, cz, cx + 0.7, cy, cz + 0.7, colorZX);
+
                     GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorX, 1, 0, 0);
                     GizmoRenderer.drawCone(matrices, tessellator, cx + 2.0, cy, cz, 0.5, 0.15, 8, colorX, 1, 0, 0);
 
@@ -151,16 +163,23 @@ public final class MapEditorOverlayClient {
 
                     GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorZ, 0, 0, 1);
                     GizmoRenderer.drawCone(matrices, tessellator, cx, cy, cz + 2.0, 0.5, 0.15, 8, colorZ, 0, 0, 1);
-                } else if (state.gizmoMode == 1) { // Rotate (Simple Circle)
-                    // We only implement Y rotation for now, maybe draw a torus or simple circle
-                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1, cy, cz - 1, 2.0, 0.05, 8, colorY, 1, 0, 0);
-                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1, cy, cz + 1, 2.0, 0.05, 8, colorY, 1, 0, 0);
-                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1, cy, cz - 1, 2.0, 0.05, 8, colorY, 0, 0, 1);
-                    GizmoRenderer.drawCylinder(matrices, tessellator, cx + 1, cy, cz - 1, 2.0, 0.05, 8, colorY, 0, 0, 1);
+                } else if (state.gizmoMode == 1) { // Rotate
+                    // Only Y implemented for now
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1.5, cy, cz - 1.5, 3.0, 0.05, 8, colorY, 1, 0, 0);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1.5, cy, cz + 1.5, 3.0, 0.05, 8, colorY, 1, 0, 0);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx - 1.5, cy, cz - 1.5, 3.0, 0.05, 8, colorY, 0, 0, 1);
+                    GizmoRenderer.drawCylinder(matrices, tessellator, cx + 1.5, cy, cz - 1.5, 3.0, 0.05, 8, colorY, 0, 0, 1);
                 } else if (state.gizmoMode == 2) { // Scale
+                    GizmoRenderer.drawSolidCube(matrices, tessellator, cx - 0.2, cy - 0.2, cz - 0.2, cx + 0.2, cy + 0.2, cz + 0.2, colorCenter);
+
                     GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorX, 1, 0, 0);
+                    GizmoRenderer.drawSolidCube(matrices, tessellator, cx + 1.8, cy - 0.2, cz - 0.2, cx + 2.2, cy + 0.2, cz + 0.2, colorX);
+
                     GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorY, 0, 1, 0);
+                    GizmoRenderer.drawSolidCube(matrices, tessellator, cx - 0.2, cy + 1.8, cz - 0.2, cx + 0.2, cy + 2.2, cz + 0.2, colorY);
+
                     GizmoRenderer.drawCylinder(matrices, tessellator, cx, cy, cz, 2.0, 0.05, 8, colorZ, 0, 0, 1);
+                    GizmoRenderer.drawSolidCube(matrices, tessellator, cx - 0.2, cy - 0.2, cz + 1.8, cx + 0.2, cy + 0.2, cz + 2.2, colorZ);
                 }
 
                 RenderSystem.enableDepthTest();

@@ -25,7 +25,24 @@ public class MapEditorState {
     public final java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint> placementPoints = new java.util.ArrayList<>();
 
     // Gizmo state
-    public int hoveredAxis = 0; // 0=None, 1=X, 2=Y, 3=Z
+    public enum GizmoTarget {
+        NONE,
+        TRANSLATE_X, TRANSLATE_Y, TRANSLATE_Z,
+        TRANSLATE_XY, TRANSLATE_YZ, TRANSLATE_ZX,
+        TRANSLATE_XYZ,
+        ROTATE_X, ROTATE_Y, ROTATE_Z,
+        SCALE_X, SCALE_Y, SCALE_Z, SCALE_XYZ
+    }
+
+    public GizmoTarget hoveredTarget = GizmoTarget.NONE;
+    public GizmoTarget clickedTarget = GizmoTarget.NONE;
+    
+    // Drag state
+    public org.joml.Vector3d dragStartIntersection = null;
+    public double initialTransX, initialTransY, initialTransZ;
+    public double initialRotY;
+    public double initialScaleX, initialScaleY, initialScaleZ;
+
     public int gizmoMode = 0; // 0=Translate, 1=Rotate, 2=Scale
     public double transX = 0, transY = 0, transZ = 0;
     public double scaleX = 1, scaleY = 1, scaleZ = 1;
@@ -45,7 +62,9 @@ public class MapEditorState {
         this.currentBuilderSelection.clear();
         this.placementPoints.clear();
         this.clipboard.clear();
-        this.hoveredAxis = 0;
+        this.hoveredTarget = GizmoTarget.NONE;
+        this.clickedTarget = GizmoTarget.NONE;
+        this.dragStartIntersection = null;
         this.transX = 0; this.transY = 0; this.transZ = 0;
         this.scaleX = 1; this.scaleY = 1; this.scaleZ = 1;
         this.rotY = 0;

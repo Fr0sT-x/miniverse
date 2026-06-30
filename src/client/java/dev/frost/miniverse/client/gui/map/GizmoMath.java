@@ -66,6 +66,19 @@ public class GizmoMath {
         return ptSeg;
     }
 
+    public static Vector3d intersectRayPlane(Vector3d rayOrigin, Vector3d rayDir, Vector3d planePoint, Vector3d planeNormal) {
+        Vector3d intersection = new Vector3d();
+        double d = -(planeNormal.x * planePoint.x + planeNormal.y * planePoint.y + planeNormal.z * planePoint.z);
+        if (Intersectiond.intersectLineSegmentPlane(
+                rayOrigin.x, rayOrigin.y, rayOrigin.z,
+                rayOrigin.x + rayDir.x * 2000.0, rayOrigin.y + rayDir.y * 2000.0, rayOrigin.z + rayDir.z * 2000.0,
+                planeNormal.x, planeNormal.y, planeNormal.z, d, intersection
+        )) {
+            return intersection;
+        }
+        return null;
+    }
+
     public static org.joml.Vector2d project3DTo2D(MinecraftClient client, double x, double y, double z) {
         if (MapEditorRenderIntegration.lastProjMatrix == null || MapEditorRenderIntegration.lastModelViewMatrix == null) return null;
 

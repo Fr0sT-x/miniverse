@@ -69,7 +69,58 @@ public class MapEditorWorkspaceScreen extends Screen {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true; // Clicked on UI
         }
+        
+        MapEditorState state = MapEditorState.INSTANCE;
         if (button == 0 && client != null && client.player != null) { // Left click in 3D world
+            if (!state.clipboard.isEmpty() && state.hoveredTarget != MapEditorState.GizmoTarget.NONE) {
+                state.clickedTarget = state.hoveredTarget;
+                state.initialTransX = state.transX;
+                state.initialTransY = state.transY;
+                state.initialTransZ = state.transZ;
+                state.initialRotY = state.rotY;
+                state.initialScaleX = state.scaleX;
+                state.initialScaleY = state.scaleY;
+                state.initialScaleZ = state.scaleZ;
+                
+                org.joml.Vector3d rayDir = GizmoMath.unprojectMouseToRay(client, mouseX, mouseY);
+                if (rayDir != null) {
+                    net.minecraft.util.math.Vec3d origin = client.player.getCameraPosVec(1.0f);
+                    org.joml.Vector3d rayOrigin = new org.joml.Vector3d(origin.x, origin.y, origin.z);
+                    double cx = state.selectionCenterX + state.transX;
+                    double cy = state.selectionCenterY + state.transY;
+                    double cz = state.selectionCenterZ + state.transZ;
+                    org.joml.Vector3d center = new org.joml.Vector3d(cx, cy, cz);
+                    
+                    switch (state.clickedTarget) {
+                        case TRANSLATE_X: case SCALE_X:
+                            state.dragStartIntersection = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
+                            break;
+                        case TRANSLATE_Y: case SCALE_Y:
+                            state.dragStartIntersection = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+                            break;
+                        case TRANSLATE_Z: case SCALE_Z:
+                            state.dragStartIntersection = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
+                            break;
+                        case TRANSLATE_XY:
+                            state.dragStartIntersection = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
+                            break;
+                        case TRANSLATE_YZ:
+                            state.dragStartIntersection = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
+                            break;
+                        case TRANSLATE_ZX: case ROTATE_Y:
+                            state.dragStartIntersection = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+                            break;
+                        case TRANSLATE_XYZ: case SCALE_XYZ:
+                            net.minecraft.util.math.Vec3d look = client.player.getRotationVec(1.0f);
+                            state.dragStartIntersection = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(-look.x, -look.y, -look.z).normalize());
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                return true;
+            }
+
             if ("SELECT".equals(activeTool)) {
                 isSelecting = true;
                 selectionStartX = mouseX;
@@ -382,11 +433,132 @@ public class MapEditorWorkspaceScreen extends Screen {
             }
             return true;
         }
+        if (button == 0) {
+            MapEditorState.INSTANCE.clickedTarget = MapEditorState.GizmoTarget.NONE;
+        }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        MapEditorState state = MapEditorState.INSTANCE;
+        if (button == 0 && state.clickedTarget != MapEditorState.GizmoTarget.NONE && state.dragStartIntersection != null && client != null && client.player != null) {
+            org.joml.Vector3d rayDir = GizmoMath.unprojectMouseToRay(client, mouseX, mouseY);
+            if (rayDir != null) {
+                net.minecraft.util.math.Vec3d origin = client.player.getCameraPosVec(1.0f);
+                org.joml.Vector3d rayOrigin = new org.joml.Vector3d(origin.x, origin.y, origin.z);
+                
+                double cx = state.selectionCenterX + state.initialTransX;
+                double cy = state.selectionCenterY + state.initialTransY;
+                double cz = state.selectionCenterZ + state.initialTransZ;
+                org.joml.Vector3d center = new org.joml.Vector3d(cx, cy, cz);
+                
+                switch (state.clickedTarget) {
+                    case TRANSLATE_X: {
+                        org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
+                        state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
+                        break;
+                    }
+                    case TRANSLATE_Y: {
+                        org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+                        state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
+                        break;
+                    }
+                    case TRANSLATE_Z: {
+                        org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
+                        state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                        break;
+                    }
+                    case TRANSLATE_XY: {
+                        org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
+                        if (currentHit != null) {
+                            state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
+                            state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
+                        }
+                        break;
+                    }
+                    case TRANSLATE_YZ: {
+                        org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
+                        if (currentHit != null) {
+                            state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
+                            state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                        }
+                        break;
+                    }
+                    case TRANSLATE_ZX: {
+                        org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+                        if (currentHit != null) {
+                            state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
+                            state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                        }
+                        break;
+                    }
+                    case TRANSLATE_XYZ: {
+                        net.minecraft.util.math.Vec3d look = client.player.getRotationVec(1.0f);
+                        org.joml.Vector3d planeNormal = new org.joml.Vector3d(-look.x, -look.y, -look.z).normalize();
+                        org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, planeNormal);
+                        if (currentHit != null) {
+                            state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
+                            state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
+                            state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                        }
+                        break;
+                    }
+                    case ROTATE_Y: {
+                        org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+                        if (currentHit != null) {
+                            double startAngle = Math.atan2(state.dragStartIntersection.z - cz, state.dragStartIntersection.x - cx);
+                            double currentAngle = Math.atan2(currentHit.z - cz, currentHit.x - cx);
+                            double angleDiff = Math.toDegrees(currentAngle - startAngle);
+                            // Snap to 45 degrees
+                            angleDiff = Math.round(angleDiff / 45.0) * 45.0;
+                            state.rotY = state.initialRotY + angleDiff;
+                        }
+                        break;
+                    }
+                    case SCALE_X: {
+                        org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
+                        double distStart = state.dragStartIntersection.x - cx;
+                        double distCurrent = currentHit.x - cx;
+                        if (distStart != 0) state.scaleX = state.initialScaleX * (distCurrent / distStart);
+                        break;
+                    }
+                    case SCALE_Y: {
+                        org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+                        double distStart = state.dragStartIntersection.y - cy;
+                        double distCurrent = currentHit.y - cy;
+                        if (distStart != 0) state.scaleY = state.initialScaleY * (distCurrent / distStart);
+                        break;
+                    }
+                    case SCALE_Z: {
+                        org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
+                        double distStart = state.dragStartIntersection.z - cz;
+                        double distCurrent = currentHit.z - cz;
+                        if (distStart != 0) state.scaleZ = state.initialScaleZ * (distCurrent / distStart);
+                        break;
+                    }
+                    case SCALE_XYZ: {
+                        net.minecraft.util.math.Vec3d look = client.player.getRotationVec(1.0f);
+                        org.joml.Vector3d planeNormal = new org.joml.Vector3d(-look.x, -look.y, -look.z).normalize();
+                        org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, planeNormal);
+                        if (currentHit != null) {
+                            double distStart = state.dragStartIntersection.distance(center);
+                            double distCurrent = currentHit.distance(center);
+                            if (distStart != 0) {
+                                double scale = distCurrent / distStart;
+                                if (currentHit.y < center.y) scale = 1.0 / scale; // Basic directional scaling
+                                state.scaleX = state.initialScaleX * scale;
+                                state.scaleY = state.initialScaleY * scale;
+                                state.scaleZ = state.initialScaleZ * scale;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            return true;
+        }
+
         if (button == 0 && isSelecting) {
             selectionCurrentX = mouseX;
             selectionCurrentY = mouseY;
@@ -416,45 +588,60 @@ public class MapEditorWorkspaceScreen extends Screen {
                 double cz = state.selectionCenterZ + state.transZ;
                 org.joml.Vector3d center = new org.joml.Vector3d(cx, cy, cz);
 
-                // Distance to each axis
-                double distX = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx + 2.5, cy, cz));
-                double distY = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy + 2.5, cz));
-                double distZ = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy, cz + 2.5));
-
+                state.hoveredTarget = MapEditorState.GizmoTarget.NONE;
                 double threshold = 0.2;
-                state.hoveredAxis = 0;
-                if (distX < threshold && distX < distY && distX < distZ) state.hoveredAxis = 1;
-                else if (distY < threshold && distY < distX && distY < distZ) state.hoveredAxis = 2;
-                else if (distZ < threshold && distZ < distX && distZ < distY) state.hoveredAxis = 3;
+
+                if (state.gizmoMode == 0 || state.gizmoMode == 2) {
+                    // Check Center
+                    double distCenter = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, center);
+                    if (distCenter < threshold) {
+                        state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_XYZ : MapEditorState.GizmoTarget.SCALE_XYZ;
+                        return;
+                    }
+
+                    // Check Planes (only Translate)
+                    if (state.gizmoMode == 0) {
+                        org.joml.Vector3d hitXY = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
+                        org.joml.Vector3d hitYZ = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
+                        org.joml.Vector3d hitZX = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+
+                        if (hitXY != null && hitXY.x >= cx && hitXY.x <= cx + 0.7 && hitXY.y >= cy && hitXY.y <= cy + 0.7) {
+                            state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_XY;
+                            return;
+                        }
+                        if (hitYZ != null && hitYZ.y >= cy && hitYZ.y <= cy + 0.7 && hitYZ.z >= cz && hitYZ.z <= cz + 0.7) {
+                            state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_YZ;
+                            return;
+                        }
+                        if (hitZX != null && hitZX.x >= cx && hitZX.x <= cx + 0.7 && hitZX.z >= cz && hitZX.z <= cz + 0.7) {
+                            state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_ZX;
+                            return;
+                        }
+                    }
+
+                    // Check Axes
+                    double distX = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx + 2.5, cy, cz));
+                    double distY = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy + 2.5, cz));
+                    double distZ = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy, cz + 2.5));
+
+                    if (distX < threshold && distX < distY && distX < distZ) state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_X : MapEditorState.GizmoTarget.SCALE_X;
+                    else if (distY < threshold && distY < distX && distY < distZ) state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_Y : MapEditorState.GizmoTarget.SCALE_Y;
+                    else if (distZ < threshold && distZ < distX && distZ < distY) state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_Z : MapEditorState.GizmoTarget.SCALE_Z;
+                } else if (state.gizmoMode == 1) { // Rotate
+                    // Only Y for now
+                    org.joml.Vector3d hitXZ = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+                    if (hitXZ != null) {
+                        double distToCenter = Math.sqrt(Math.pow(hitXZ.x - cx, 2) + Math.pow(hitXZ.z - cz, 2));
+                        if (distToCenter >= 1.3 && distToCenter <= 1.7) {
+                            state.hoveredTarget = MapEditorState.GizmoTarget.ROTATE_Y;
+                        }
+                    }
+                }
             }
         }
     }
 
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        MapEditorState state = MapEditorState.INSTANCE;
-        if (!state.clipboard.isEmpty() && state.hoveredAxis != 0) {
-            double amount = verticalAmount > 0 ? 0.5 : -0.5;
-            
-            if (state.gizmoMode == 0) { // Translate
-                if (state.hoveredAxis == 1) state.transX += amount;
-                else if (state.hoveredAxis == 2) state.transY += amount;
-                else if (state.hoveredAxis == 3) state.transZ += amount;
-            } else if (state.gizmoMode == 1) { // Rotate
-                // Rotate by 90 degrees steps for now
-                if (state.hoveredAxis == 2) { // Y axis
-                    state.rotY += (verticalAmount > 0 ? 90 : -90);
-                }
-            } else if (state.gizmoMode == 2) { // Scale
-                double scaleFactor = verticalAmount > 0 ? 1.1 : 0.9;
-                if (state.hoveredAxis == 1) state.scaleX *= scaleFactor;
-                else if (state.hoveredAxis == 2) state.scaleY *= scaleFactor;
-                else if (state.hoveredAxis == 3) state.scaleZ *= scaleFactor;
-            }
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
-    }
+
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {

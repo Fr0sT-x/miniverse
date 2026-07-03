@@ -10,7 +10,7 @@ public class LeftToolPalette extends SidebarWidget {
         initWidgets();
     }
 
-    private int currentGameModeIndex = 0;
+    private int currentGameModeIndex = -1;
 
     private boolean isDropdownOpen = false;
 
@@ -27,10 +27,17 @@ public class LeftToolPalette extends SidebarWidget {
         }
 
         if (!gameModes.isEmpty()) {
-            if (currentGameModeIndex >= gameModes.size()) currentGameModeIndex = 0;
-            String currentMode = gameModes.get(currentGameModeIndex);
+            if (currentGameModeIndex >= gameModes.size()) currentGameModeIndex = -1;
+            String currentMode = currentGameModeIndex >= 0 ? gameModes.get(currentGameModeIndex) : "Select Gamemode";
+            if (currentGameModeIndex < 0) {
+                MapEditorState.INSTANCE.selectedGameId = "";
+            }
+            net.minecraft.text.MutableText modeText = Text.literal("Mode: " + currentMode + (isDropdownOpen ? " \u25B2" : " \u25BC"));
+            if (currentGameModeIndex < 0) {
+                modeText.formatted(net.minecraft.util.Formatting.RED);
+            }
             
-            this.addWidget(ButtonWidget.builder(Text.literal("Mode: " + currentMode + (isDropdownOpen ? " \u25B2" : " \u25BC")), b -> {
+            this.addWidget(ButtonWidget.builder(modeText, b -> {
                 isDropdownOpen = !isDropdownOpen;
                 initWidgets();
             }).dimensions(this.getX() + padding, this.getY() + currentY, btnWidth, btnHeight).build());
@@ -49,24 +56,13 @@ public class LeftToolPalette extends SidebarWidget {
                 }
                 currentY += 5;
             }
-            MapEditorState.INSTANCE.selectedGameId = gameModes.get(currentGameModeIndex);
         }
 
         this.addWidget(ButtonWidget.builder(Text.literal("Select Tool"), b -> selectTool("SELECT"))
                 .dimensions(this.getX() + padding, this.getY() + currentY, btnWidth, btnHeight).build());
         currentY += btnHeight + 5;
 
-        this.addWidget(ButtonWidget.builder(Text.literal("Gizmo: " + (MapEditorState.INSTANCE.gizmoMode == 0 ? "Translate" : MapEditorState.INSTANCE.gizmoMode == 1 ? "Rotate" : "Scale")), b -> {
-            MapEditorState.INSTANCE.gizmoMode = (MapEditorState.INSTANCE.gizmoMode + 1) % 3;
-            initWidgets();
-        }).dimensions(this.getX() + padding, this.getY() + currentY, btnWidth, btnHeight).build());
-        currentY += btnHeight + 5;
-
-        this.addWidget(ButtonWidget.builder(Text.literal("Paste Clipboard"), b -> selectTool("PASTE"))
-                .dimensions(this.getX() + padding, this.getY() + currentY, btnWidth, btnHeight).build());
-        currentY += btnHeight + 5;
-
-        this.addWidget(ButtonWidget.builder(Text.literal("Place Marker"), b -> selectTool("PLACE"))
+        this.addWidget(ButtonWidget.builder(Text.literal("Paste Preview"), b -> selectTool("PASTE"))
                 .dimensions(this.getX() + padding, this.getY() + currentY, btnWidth, btnHeight).build());
     }
 

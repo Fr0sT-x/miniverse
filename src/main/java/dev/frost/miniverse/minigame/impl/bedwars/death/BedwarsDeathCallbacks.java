@@ -4,6 +4,7 @@ import dev.frost.miniverse.minigame.core.death.CancellationReason;
 import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.DeathState;
 import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleCallbacks;
+import dev.frost.miniverse.minigame.core.visibility.TeamGlowVisibility;
 import dev.frost.miniverse.minigame.impl.bedwars.BedTeamState;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsDefinition;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsMinigame;
@@ -76,10 +77,13 @@ public final class BedwarsDeathCallbacks implements DeathLifecycleCallbacks {
         
         // 7. Brief invincibility
         player.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 60, 4, false, false));
+        TeamGlowVisibility.resyncFor(player);
     }
 
     @Override
     public void onSpectatorEnter(ServerPlayerEntity player, DeathContext context) {
+        TeamGlowVisibility.resyncFor(player);
+
         String teamId = context.victimTeamId();
         boolean bedGone = teamId != null
             && bedTeamStates.containsKey(teamId)

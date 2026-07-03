@@ -52,14 +52,15 @@ public class BedwarsVisibilityManager {
                 entry.getValue(),
                 options
             ));
-            
-            // Give glowing effect to teammates
+        }
+
+        teamAdapter.sync(server, descriptors);
+
+        for (Map.Entry<String, List<ServerPlayerEntity>> entry : grouped.entrySet()) {
             for (ServerPlayerEntity p : entry.getValue()) {
                 p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.GLOWING, 60, 0, false, false, false));
             }
         }
-        
-        teamAdapter.sync(server, descriptors);
     }
 
     public void clear(MinecraftServer server) {

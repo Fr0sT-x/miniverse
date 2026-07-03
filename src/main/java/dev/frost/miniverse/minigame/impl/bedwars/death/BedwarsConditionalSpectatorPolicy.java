@@ -4,11 +4,11 @@ import dev.frost.miniverse.minigame.core.SessionRoster;
 import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.NoTargetPolicy;
 import dev.frost.miniverse.minigame.core.death.policy.DeathSpectatorPolicy;
-import dev.frost.miniverse.minigame.core.death.policy.impl.FixedCameraSpectatorPolicy;
 import dev.frost.miniverse.minigame.core.death.policy.impl.FreeFlySpectatorPolicy;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorTargetProviders;
 import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
+import dev.frost.miniverse.minigame.core.visibility.TeamGlowVisibility;
 import dev.frost.miniverse.minigame.impl.bedwars.BedTeamState;
 import net.minecraft.server.network.ServerPlayerEntity;
 
@@ -50,8 +50,10 @@ public final class BedwarsConditionalSpectatorPolicy implements DeathSpectatorPo
                 null,
                 NoTargetPolicy.FREEZE
             );
+            TeamGlowVisibility.resyncFor(victim);
         } else {
             new FreeFlySpectatorPolicy(spectatorService).apply(victim, context);
+            TeamGlowVisibility.resyncFor(victim);
         }
     }
 

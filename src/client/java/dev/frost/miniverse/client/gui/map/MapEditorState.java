@@ -21,6 +21,7 @@ public class MapEditorState {
     public record SelectedMarkerData(dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker marker, String gameId, String definitionKey) {}
     public record ClipboardMarkerData(SelectedMarkerData data, double relX, double relY, double relZ, int copyYawSteps) {}
     
+    public final java.util.List<SelectedMarkerData> selectedMarkers = new java.util.ArrayList<>();
     public final java.util.List<ClipboardMarkerData> clipboard = new java.util.ArrayList<>();
     public final java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint> placementPoints = new java.util.ArrayList<>();
 
@@ -49,6 +50,7 @@ public class MapEditorState {
     public double rotY = 0; // in degrees
     
     public double selectionCenterX = 0, selectionCenterY = 0, selectionCenterZ = 0;
+    public boolean pastePreviewActive = false;
     
     public String selectedTeam = "";
 
@@ -60,8 +62,10 @@ public class MapEditorState {
         this.hiddenIndividualMarkers.clear();
         this.expandedMarkers.clear();
         this.currentBuilderSelection.clear();
+        this.selectedMarkers.clear();
         this.placementPoints.clear();
         this.clipboard.clear();
+        this.pastePreviewActive = false;
         this.hoveredTarget = GizmoTarget.NONE;
         this.clickedTarget = GizmoTarget.NONE;
         this.dragStartIntersection = null;

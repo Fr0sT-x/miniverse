@@ -117,6 +117,9 @@ public final class SessionConfigJson {
             JsonObject team = new JsonObject();
             team.addProperty("label", group.getGroupLabel());
             team.addProperty("displayName", group.getDisplayName());
+            if (group.getPlannedTeam().hasGameTeamId()) {
+                team.addProperty("gameTeamId", group.getPlannedTeam().gameTeamId());
+            }
             team.addProperty("state", group.getState().name());
             team.addProperty("playerCount", group.getPlayerCount());
 
@@ -286,6 +289,8 @@ public final class SessionConfigJson {
                 }
                 JsonObject team = teamElement.getAsJsonObject();
                 String label = string(team, "label", properties.getProperty("groupLabel", "Team"));
+                String displayName = string(team, "displayName", "");
+                String gameTeamId = string(team, "gameTeamId", string(team, "teamId", ""));
                 JsonElement members = team.get("members");
                 if (members == null || !members.isJsonArray()) {
                     continue;
@@ -302,6 +307,12 @@ public final class SessionConfigJson {
                     properties.setProperty("player." + uuid, "true");
                     properties.setProperty("player." + uuid + ".name", string(member, "name", ""));
                     properties.setProperty("player." + uuid + ".team", label);
+                    if (!gameTeamId.isBlank()) {
+                        properties.setProperty("player." + uuid + ".gameTeamId", gameTeamId);
+                    }
+                    if (!displayName.isBlank()) {
+                        properties.setProperty("player." + uuid + ".teamDisplayName", displayName);
+                    }
                     String role = string(member, "role", "");
                     if (!role.isBlank()) {
                         properties.setProperty(properties.getProperty("game") + ".role." + uuid, role);

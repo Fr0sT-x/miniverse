@@ -100,7 +100,7 @@ public final class GameSession {
         List<SessionMembership> members = new ArrayList<>(existing.getPlannedTeam().members());
         members.removeIf(member -> member.playerUuid().equals(membership.playerUuid()));
         members.add(membership);
-        SessionGroup replacement = existing.withPlannedTeam(new PlannedTeam(existing.getGroupLabel(), members));
+        SessionGroup replacement = existing.withPlannedTeam(existing.getPlannedTeam().withMembers(members));
         for (SessionGroup group : this.groups) {
             if (group == existing) {
                 rebuiltGroups.add(replacement);
@@ -179,7 +179,7 @@ public final class GameSession {
         if (members.isEmpty()) {
             return null;
         }
-        return group.withPlannedTeam(new PlannedTeam(group.getGroupLabel(), members));
+        return group.withPlannedTeam(group.getPlannedTeam().withMembers(members));
     }
 
     public synchronized boolean isEmpty() {

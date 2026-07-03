@@ -39,8 +39,20 @@ public final class BedwarsSessionBootstrap {
 
             @Override
             public void onPlayerJoin(BedwarsMinigame minigame, net.minecraft.server.network.ServerPlayerEntity player, Properties properties) {
+                String gameTeamKey = "player." + player.getUuid() + ".gameTeamId";
                 String teamKey = "player." + player.getUuid() + ".team";
-                String team = properties.getProperty(teamKey, "").trim();
+                String displayKey = "player." + player.getUuid() + ".teamDisplayName";
+                String gameTeamId = properties.getProperty(gameTeamKey, "").trim();
+                if (!gameTeamId.isBlank()) {
+                    if (!minigame.assignConfiguredMapTeam(player, gameTeamId)) {
+                        dev.frost.miniverse.Miniverse.LOGGER.warn("Bedwars could not assign {} to configured map team '{}'. Falling back to legacy team labels.",
+                            player.getName().getString(), gameTeamId);
+                    } else {
+                        return;
+                    }
+                }
+
+                String team = properties.getProperty(displayKey, properties.getProperty(teamKey, "")).trim();
                 if (!team.isBlank()) {
                     minigame.ensureTeamAssignment(player, team);
                 }

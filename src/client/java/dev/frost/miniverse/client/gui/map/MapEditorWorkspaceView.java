@@ -917,6 +917,31 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     }
 
     private void startAdd(SessionSnapshotData.EditorExtension extension, SessionSnapshotData.EditorMarkerDefinition definition) {
+        if ("team_config".equalsIgnoreCase(definition.key())) {
+            net.minecraft.client.MinecraftClient.getInstance().setScreen(new dev.frost.miniverse.client.gui.workspace.components.TeamNamePopupScreen(
+                net.minecraft.client.MinecraftClient.getInstance().currentScreen,
+                (name, color) -> {
+                    com.google.gson.JsonObject props = new com.google.gson.JsonObject();
+                    props.addProperty("color", color.getName());
+
+                    if (this.drillDownParentId != null && definition.grouping() != null && "LOGICAL".equals(definition.grouping().type()) && definition.grouping().propertyKey() != null) {
+                        props.addProperty(definition.grouping().propertyKey(), this.drillDownParentId);
+                    }
+
+                    NbtCompound nbt = new NbtCompound();
+                    nbt.putString("action", "start_add");
+                    nbt.putString("gameId", extension.gameId());
+                    nbt.putString("definitionKey", definition.key());
+                    nbt.putString("markerId", "");
+                    nbt.putString("name", name);
+                    nbt.putString("properties", props.toString());
+                    net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
+                    this.status = "Placement mode started. Close the screen and left click a block; right click cancels.";
+                }
+            ));
+            return;
+        }
+
         if (this.drillDownParentId != null && definition.grouping() != null && "LOGICAL".equals(definition.grouping().type()) && definition.grouping().propertyKey() != null) {
             com.google.gson.JsonObject defaultProps = new com.google.gson.JsonObject();
             defaultProps.addProperty(definition.grouping().propertyKey(), this.drillDownParentId);

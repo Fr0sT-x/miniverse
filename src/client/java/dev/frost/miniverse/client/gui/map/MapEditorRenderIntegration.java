@@ -16,7 +16,7 @@ public class MapEditorRenderIntegration {
             if (client.currentScreen instanceof MapEditorWorkspaceScreen) {
                 Camera camera = context.camera();
                 lastProjMatrix = new Matrix4f(context.projectionMatrix());
-                lastModelViewMatrix = new Matrix4f(context.matrixStack().peek().getPositionMatrix());
+                lastModelViewMatrix = new Matrix4f(context.positionMatrix());
 
                 // TODO: Render markers
                 // TODO: Render Extruded Gizmo

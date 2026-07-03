@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import org.joml.Intersectiond;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
+import org.joml.Vector2d;
 import org.joml.Vector4f;
 
 public class GizmoMath {
@@ -79,30 +80,47 @@ public class GizmoMath {
         return null;
     }
 
-    public static org.joml.Vector2d project3DTo2D(MinecraftClient client, double x, double y, double z) {
+    public record ProjectedPoint(Vector2d screen, Vector4f clip) {
+        public boolean inFront() {
+            return clip.w > 1.0E-5f;
+        }
+
+        public boolean insideFrustum() {
+            return inFront()
+                    && clip.x >= -clip.w && clip.x <= clip.w
+                    && clip.y >= -clip.w && clip.y <= clip.w
+                    && clip.z >= -clip.w && clip.z <= clip.w;
+        }
+    }
+
+    public static ProjectedPoint project3D(MinecraftClient client, double x, double y, double z) {
         if (MapEditorRenderIntegration.lastProjMatrix == null || MapEditorRenderIntegration.lastModelViewMatrix == null) return null;
 
         net.minecraft.client.render.Camera camera = client.gameRenderer.getCamera();
         net.minecraft.util.math.Vec3d camPos = camera.getPos();
 
-        Vector4f pos = new Vector4f((float)(x - camPos.x), (float)(y - camPos.y), (float)(z - camPos.z), 1.0f);
-        MapEditorRenderIntegration.lastModelViewMatrix.transform(pos);
-        MapEditorRenderIntegration.lastProjMatrix.transform(pos);
+        Vector4f clip = new Vector4f((float)(x - camPos.x), (float)(y - camPos.y), (float)(z - camPos.z), 1.0f);
+        new Matrix4f(MapEditorRenderIntegration.lastModelViewMatrix).transform(clip);
+        new Matrix4f(MapEditorRenderIntegration.lastProjMatrix).transform(clip);
 
-        if (pos.w <= 0.0f) {
-            return null; // Behind camera
+        if (clip.w <= 1.0E-5f) {
+            return null;
         }
-        
-        pos.x /= pos.w;
-        pos.y /= pos.w;
 
-        int w = client.getWindow().getFramebufferWidth();
-        int h = client.getWindow().getFramebufferHeight();
-        double scale = client.getWindow().getScaleFactor();
+        float ndcX = clip.x / clip.w;
+        float ndcY = clip.y / clip.w;
 
-        double mouseX = ((pos.x + 1.0) * 0.5 * w) / scale;
-        double mouseY = ((1.0 - pos.y) * 0.5 * h) / scale;
+        int w = client.getWindow().getScaledWidth();
+        int h = client.getWindow().getScaledHeight();
 
-        return new org.joml.Vector2d(mouseX, mouseY);
+        double mouseX = (ndcX + 1.0) * 0.5 * w;
+        double mouseY = (1.0 - ndcY) * 0.5 * h;
+
+        return new ProjectedPoint(new Vector2d(mouseX, mouseY), clip);
+    }
+
+    public static org.joml.Vector2d project3DTo2D(MinecraftClient client, double x, double y, double z) {
+        ProjectedPoint projected = project3D(client, x, y, z);
+        return projected != null && projected.insideFrustum() ? projected.screen() : null;
     }
 }

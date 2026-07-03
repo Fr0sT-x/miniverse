@@ -7,9 +7,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-public record PlannedTeam(String label, List<SessionMembership> members) {
+public record PlannedTeam(String label, String gameTeamId, String displayName, List<SessionMembership> members) {
+    public PlannedTeam(String label, List<SessionMembership> members) {
+        this(label, "", "", members);
+    }
+
     public PlannedTeam {
         label = label == null || label.isBlank() ? "Team" : label.trim();
+        gameTeamId = gameTeamId == null ? "" : gameTeamId.trim();
+        displayName = displayName == null || displayName.isBlank() ? TeamColorPalette.displayName(label) : displayName.trim();
         members = members == null ? List.of() : List.copyOf(deduplicate(members));
         if (members.isEmpty()) {
             throw new IllegalArgumentException("Planned teams must contain at least one member.");
@@ -32,8 +38,12 @@ public record PlannedTeam(String label, List<SessionMembership> members) {
         return this.members.stream().anyMatch(member -> member.playerUuid().equals(playerUuid));
     }
 
-    public String displayName() {
-        return TeamColorPalette.displayName(this.label);
+    public boolean hasGameTeamId() {
+        return !this.gameTeamId.isBlank();
+    }
+
+    public PlannedTeam withMembers(List<SessionMembership> members) {
+        return new PlannedTeam(this.label, this.gameTeamId, this.displayName, members);
     }
 
     private static List<SessionMembership> deduplicate(List<SessionMembership> memberships) {

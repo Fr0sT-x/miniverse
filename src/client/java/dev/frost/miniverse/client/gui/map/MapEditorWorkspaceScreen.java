@@ -3,6 +3,7 @@ package dev.frost.miniverse.client.gui.map;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
+import org.lwjgl.glfw.GLFW;
 
 public class MapEditorWorkspaceScreen extends Screen {
 
@@ -33,16 +34,69 @@ public class MapEditorWorkspaceScreen extends Screen {
     }
 
     public void setActiveTool(String tool) {
+        if ("PASTE".equals(tool)) {
+            startPastePreview();
+            return;
+        }
         this.activeTool = tool;
-        // TODO: Update visual state
     }
 
     public void confirmPaste() {
         commitTransform();
     }
 
+    public void copySelection() {
+        copySelectedMarkersToClipboard();
+    }
+
+    public void startPastePreview() {
+        MapEditorState state = MapEditorState.INSTANCE;
+        if (state.clipboard.isEmpty()) {
+            if (client != null) {
+                client.inGameHud.getChatHud().addMessage(Text.literal("Clipboard is empty."));
+            }
+            return;
+        }
+        this.activeTool = "PASTE";
+        state.pastePreviewActive = true;
+        state.clickedTarget = MapEditorState.GizmoTarget.NONE;
+        state.hoveredTarget = MapEditorState.GizmoTarget.NONE;
+        net.minecraft.util.math.Vec3d target = pasteTargetFromCrosshair();
+        state.transX = snapTranslation(target.x - state.selectionCenterX);
+        state.transY = snapTranslation(target.y - state.selectionCenterY);
+        state.transZ = snapTranslation(target.z - state.selectionCenterZ);
+        state.rotY = 0;
+        state.scaleX = 1;
+        state.scaleY = 1;
+        state.scaleZ = 1;
+        if (rightSidebar != null) {
+            rightSidebar.update();
+        }
+    }
+
+    public void removeClipboardMarker(int index) {
+        MapEditorState state = MapEditorState.INSTANCE;
+        if (index < 0 || index >= state.clipboard.size()) return;
+        state.clipboard.remove(index);
+        if (state.clipboard.isEmpty()) {
+            state.pastePreviewActive = false;
+            this.activeTool = "SELECT";
+        }
+        if (rightSidebar != null) {
+            rightSidebar.update();
+        }
+    }
+
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_C) {
+            copySelectedMarkersToClipboard();
+            return true;
+        }
+        if (Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_V) {
+            startPastePreview();
+            return true;
+        }
         if (super.keyPressed(keyCode, scanCode, modifiers)) return true;
         net.minecraft.client.option.KeyBinding.setKeyPressed(net.minecraft.client.util.InputUtil.fromKeyCode(keyCode, scanCode), true);
         net.minecraft.client.option.KeyBinding.onKeyPressed(net.minecraft.client.util.InputUtil.fromKeyCode(keyCode, scanCode));
@@ -72,7 +126,7 @@ public class MapEditorWorkspaceScreen extends Screen {
         
         MapEditorState state = MapEditorState.INSTANCE;
         if (button == 0 && client != null && client.player != null) { // Left click in 3D world
-            if (!state.clipboard.isEmpty() && state.hoveredTarget != MapEditorState.GizmoTarget.NONE) {
+            if (state.pastePreviewActive && !state.clipboard.isEmpty() && state.hoveredTarget != MapEditorState.GizmoTarget.NONE) {
                 state.clickedTarget = state.hoveredTarget;
                 state.initialTransX = state.transX;
                 state.initialTransY = state.transY;
@@ -92,13 +146,13 @@ public class MapEditorWorkspaceScreen extends Screen {
                     org.joml.Vector3d center = new org.joml.Vector3d(cx, cy, cz);
                     
                     switch (state.clickedTarget) {
-                        case TRANSLATE_X: case SCALE_X:
+                        case TRANSLATE_X:
                             state.dragStartIntersection = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
                             break;
-                        case TRANSLATE_Y: case SCALE_Y:
+                        case TRANSLATE_Y:
                             state.dragStartIntersection = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
                             break;
-                        case TRANSLATE_Z: case SCALE_Z:
+                        case TRANSLATE_Z:
                             state.dragStartIntersection = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
                             break;
                         case TRANSLATE_XY:
@@ -107,10 +161,10 @@ public class MapEditorWorkspaceScreen extends Screen {
                         case TRANSLATE_YZ:
                             state.dragStartIntersection = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
                             break;
-                        case TRANSLATE_ZX: case ROTATE_Y:
+                        case TRANSLATE_ZX:
                             state.dragStartIntersection = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
                             break;
-                        case TRANSLATE_XYZ: case SCALE_XYZ:
+                        case TRANSLATE_XYZ:
                             net.minecraft.util.math.Vec3d look = client.player.getRotationVec(1.0f);
                             state.dragStartIntersection = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(-look.x, -look.y, -look.z).normalize());
                             break;
@@ -189,13 +243,18 @@ public class MapEditorWorkspaceScreen extends Screen {
     }
 
     public void rotatePaste() {
-        MapEditorState.INSTANCE.rotY += 90.0;
+        MapEditorState state = MapEditorState.INSTANCE;
+        if (!state.clipboard.isEmpty()) {
+            state.pastePreviewActive = true;
+            this.activeTool = "PASTE";
+            state.rotY = (state.rotY + 90.0) % 360.0;
+        }
     }
 
     public void commitTransform() {
         if (this.client == null) return;
         MapEditorState state = MapEditorState.INSTANCE;
-        if (state.clipboard.isEmpty()) return;
+        if (state.clipboard.isEmpty() || !state.pastePreviewActive) return;
 
         double cx = state.selectionCenterX;
         double cy = state.selectionCenterY;
@@ -209,8 +268,6 @@ public class MapEditorWorkspaceScreen extends Screen {
         double sy = state.scaleY;
         double sz = state.scaleZ;
 
-        boolean isPaste = "PASTE".equals(this.activeTool);
-        
         com.google.gson.JsonArray bulkMarkers = new com.google.gson.JsonArray();
         
         for (MapEditorState.ClipboardMarkerData cmd : state.clipboard) {
@@ -243,24 +300,32 @@ public class MapEditorWorkspaceScreen extends Screen {
             
             com.google.gson.JsonArray newRegions = new com.google.gson.JsonArray();
             for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart r : m.regions()) {
-                double minx = r.min().x() - cx, miny = r.min().y() - cy, minz = r.min().z() - cz;
-                minx *= sx; miny *= sy; minz *= sz;
-                double minrx = minx * Math.cos(radY) + minz * Math.sin(radY);
-                double minrz = -minx * Math.sin(radY) + minz * Math.cos(radY);
-                double fminx = minrx + cx + tx, fminy = miny + cy + ty, fminz = minrz + cz + tz;
-                
-                double maxx = r.max().x() - cx, maxy = r.max().y() - cy, maxz = r.max().z() - cz;
-                maxx *= sx; maxy *= sy; maxz *= sz;
-                double maxrx = maxx * Math.cos(radY) + maxz * Math.sin(radY);
-                double maxrz = -maxx * Math.sin(radY) + maxz * Math.cos(radY);
-                double fmaxx = maxrx + cx + tx, fmaxy = maxy + cy + ty, fmaxz = maxrz + cz + tz;
+                double[][] corners = regionCorners(r);
+                double boxMinX = Double.MAX_VALUE, boxMinY = Double.MAX_VALUE, boxMinZ = Double.MAX_VALUE;
+                double boxMaxX = -Double.MAX_VALUE, boxMaxY = -Double.MAX_VALUE, boxMaxZ = -Double.MAX_VALUE;
+
+                for (double[] corner : corners) {
+                    double px = (corner[0] - cx) * sx;
+                    double py = (corner[1] - cy) * sy;
+                    double pz = (corner[2] - cz) * sz;
+
+                    double rx = px * Math.cos(radY) + pz * Math.sin(radY);
+                    double rz = -px * Math.sin(radY) + pz * Math.cos(radY);
+
+                    double nx = rx + cx + tx;
+                    double ny = py + cy + ty;
+                    double nz = rz + cz + tz;
+
+                    boxMinX = Math.min(boxMinX, nx); boxMinY = Math.min(boxMinY, ny); boxMinZ = Math.min(boxMinZ, nz);
+                    boxMaxX = Math.max(boxMaxX, nx); boxMaxY = Math.max(boxMaxY, ny); boxMaxZ = Math.max(boxMaxZ, nz);
+                }
                 
                 com.google.gson.JsonObject rmin = new com.google.gson.JsonObject();
-                rmin.addProperty("x", Math.min(fminx, fmaxx)); rmin.addProperty("y", Math.min(fminy, fmaxy)); rmin.addProperty("z", Math.min(fminz, fmaxz));
+                rmin.addProperty("x", boxMinX); rmin.addProperty("y", boxMinY); rmin.addProperty("z", boxMinZ);
                 rmin.addProperty("yaw", r.min().yaw()); rmin.addProperty("pitch", r.min().pitch());
                 
                 com.google.gson.JsonObject rmax = new com.google.gson.JsonObject();
-                rmax.addProperty("x", Math.max(fminx, fmaxx)); rmax.addProperty("y", Math.max(fminy, fmaxy)); rmax.addProperty("z", Math.max(fminz, fmaxz));
+                rmax.addProperty("x", boxMaxX); rmax.addProperty("y", boxMaxY); rmax.addProperty("z", boxMaxZ);
                 rmax.addProperty("yaw", r.max().yaw()); rmax.addProperty("pitch", r.max().pitch());
                 
                 com.google.gson.JsonObject ro = new com.google.gson.JsonObject();
@@ -269,46 +334,32 @@ public class MapEditorWorkspaceScreen extends Screen {
                 newRegions.add(ro);
             }
             
-            if (isPaste) {
-                com.google.gson.JsonObject mo = new com.google.gson.JsonObject();
-                mo.addProperty("definitionKey", m.definitionKey());
-                mo.addProperty("name", m.name());
-                com.google.gson.JsonObject newProps = m.properties() != null ? m.properties().deepCopy() : new com.google.gson.JsonObject();
-                if (!state.selectedTeam.isEmpty()) {
-                    newProps.addProperty("teamId", state.selectedTeam);
-                }
-                mo.add("properties", newProps);
-                mo.add("points", newPoints);
-                mo.add("regions", newRegions);
-                bulkMarkers.add(mo);
-            } else { // MOVE
-                net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
-                nbt.putString("action", "move_marker");
-                nbt.putString("gameId", cmd.data().gameId());
-                nbt.putString("definitionKey", m.definitionKey());
-                nbt.putString("markerId", m.id());
-                nbt.putString("points", newPoints.toString());
-                nbt.putString("regions", newRegions.toString());
-                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
+            com.google.gson.JsonObject mo = new com.google.gson.JsonObject();
+            mo.addProperty("definitionKey", m.definitionKey());
+            mo.addProperty("name", m.name());
+            com.google.gson.JsonObject newProps = m.properties() != null ? m.properties().deepCopy() : new com.google.gson.JsonObject();
+            if (!state.selectedTeam.isEmpty() && !"team_config".equalsIgnoreCase(m.definitionKey())) {
+                newProps.addProperty("teamId", state.selectedTeam);
             }
+            mo.add("properties", newProps);
+            mo.add("points", newPoints);
+            mo.add("regions", newRegions);
+            bulkMarkers.add(mo);
         }
         
-        if (isPaste) {
-            net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
-            nbt.putString("action", "add_spatial_bulk");
-            nbt.putString("gameId", state.selectedGameId); // Assumption: paste into same game mode
-            nbt.putString("markers", bulkMarkers.toString());
-            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
-            client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Pasted " + bulkMarkers.size() + " markers."));
-        } else {
-            client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Moved " + state.clipboard.size() + " markers."));
-            // Keep clipboard for subsequent moves, but update selection center and reset transforms
-            state.selectionCenterX += tx;
-            state.selectionCenterY += ty;
-            state.selectionCenterZ += tz;
-            state.transX = 0; state.transY = 0; state.transZ = 0;
-            state.rotY = 0;
-            state.scaleX = 1; state.scaleY = 1; state.scaleZ = 1;
+        net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
+        nbt.putString("action", "add_spatial_bulk");
+        nbt.putString("gameId", pasteGameId(state));
+        nbt.putString("markers", bulkMarkers.toString());
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(nbt));
+        client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Pasted " + bulkMarkers.size() + " markers."));
+        state.pastePreviewActive = false;
+        state.transX = 0; state.transY = 0; state.transZ = 0;
+        state.rotY = 0;
+        state.scaleX = 1; state.scaleY = 1; state.scaleZ = 1;
+        this.activeTool = "SELECT";
+        if (rightSidebar != null) {
+            rightSidebar.update();
         }
     }
     @Override
@@ -335,21 +386,7 @@ public class MapEditorWorkspaceScreen extends Screen {
                             boolean inside = false;
                             if ("REGION".equalsIgnoreCase(marker.type())) {
                                 for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart region : marker.regions()) {
-                                    double[] xs = {region.min().x(), region.max().x()};
-                                    double[] ys = {region.min().y(), region.max().y()};
-                                    double[] zs = {region.min().z(), region.max().z()};
-                                    for (double x : xs) {
-                                        for (double y : ys) {
-                                            for (double z : zs) {
-                                                org.joml.Vector2d proj = GizmoMath.project3DTo2D(client, x, y, z);
-                                                if (proj != null && proj.x >= minX && proj.x <= maxX && proj.y >= minY && proj.y <= maxY) {
-                                                    inside = true; break;
-                                                }
-                                            }
-                                            if (inside) break;
-                                        }
-                                        if (inside) break;
-                                    }
+                                    inside = projectedRegionIntersectsSelection(region, minX, minY, maxX, maxY);
                                     if (inside) break;
                                 }
                             } else if ("POINT".equalsIgnoreCase(marker.type())) {
@@ -404,27 +441,16 @@ public class MapEditorWorkspaceScreen extends Screen {
                     MapEditorState.INSTANCE.scaleY = 1;
                     MapEditorState.INSTANCE.scaleZ = 1;
                     MapEditorState.INSTANCE.rotY = 0;
-
-                    MapEditorState.INSTANCE.clipboard.clear();
-                    for (MapEditorState.SelectedMarkerData smd : selected) {
-                        double relX = 0, relY = 0, relZ = 0;
-                        if ("REGION".equalsIgnoreCase(smd.marker().type()) && !smd.marker().regions().isEmpty()) {
-                            dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart r = smd.marker().regions().get(0);
-                            relX = ((r.min().x() + r.max().x()) / 2.0) - centerX;
-                            relY = ((r.min().y() + r.max().y()) / 2.0) - centerY;
-                            relZ = ((r.min().z() + r.max().z()) / 2.0) - centerZ;
-                        } else if ("POINT".equalsIgnoreCase(smd.marker().type()) && !smd.marker().points().isEmpty()) {
-                            dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint p = smd.marker().points().get(0);
-                            relX = p.x() - centerX;
-                            relY = p.y() - centerY;
-                            relZ = p.z() - centerZ;
-                        }
-                        MapEditorState.INSTANCE.clipboard.add(new MapEditorState.ClipboardMarkerData(smd, relX, relY, relZ, 0));
-                    }
-                    client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Selected " + selected.size() + " markers."));
+                    MapEditorState.INSTANCE.pastePreviewActive = false;
+                    MapEditorState.INSTANCE.selectedMarkers.clear();
+                    MapEditorState.INSTANCE.selectedMarkers.addAll(selected);
+                    MapEditorState.INSTANCE.selectedTeam = commonTeamId(selected);
+                    client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Selected " + selected.size() + " markers. Press Ctrl+C or Copy Selection."));
                 } else {
                     MapEditorState.INSTANCE.currentBuilderSelection.clear();
-                    MapEditorState.INSTANCE.clipboard.clear();
+                    MapEditorState.INSTANCE.selectedMarkers.clear();
+                    MapEditorState.INSTANCE.pastePreviewActive = false;
+                    MapEditorState.INSTANCE.selectedTeam = "";
                 }
                 
                 if (rightSidebar != null) {
@@ -456,40 +482,40 @@ public class MapEditorWorkspaceScreen extends Screen {
                 switch (state.clickedTarget) {
                     case TRANSLATE_X: {
                         org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
-                        state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
+                        state.transX = snapTranslation(state.initialTransX + (currentHit.x - state.dragStartIntersection.x));
                         break;
                     }
                     case TRANSLATE_Y: {
                         org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
-                        state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
+                        state.transY = snapTranslation(state.initialTransY + (currentHit.y - state.dragStartIntersection.y));
                         break;
                     }
                     case TRANSLATE_Z: {
                         org.joml.Vector3d currentHit = GizmoMath.getClosestPointOnAxis(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
-                        state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                        state.transZ = snapTranslation(state.initialTransZ + (currentHit.z - state.dragStartIntersection.z));
                         break;
                     }
                     case TRANSLATE_XY: {
                         org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
                         if (currentHit != null) {
-                            state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
-                            state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
+                            state.transX = snapTranslation(state.initialTransX + (currentHit.x - state.dragStartIntersection.x));
+                            state.transY = snapTranslation(state.initialTransY + (currentHit.y - state.dragStartIntersection.y));
                         }
                         break;
                     }
                     case TRANSLATE_YZ: {
                         org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
                         if (currentHit != null) {
-                            state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
-                            state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                            state.transY = snapTranslation(state.initialTransY + (currentHit.y - state.dragStartIntersection.y));
+                            state.transZ = snapTranslation(state.initialTransZ + (currentHit.z - state.dragStartIntersection.z));
                         }
                         break;
                     }
                     case TRANSLATE_ZX: {
                         org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
                         if (currentHit != null) {
-                            state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
-                            state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                            state.transX = snapTranslation(state.initialTransX + (currentHit.x - state.dragStartIntersection.x));
+                            state.transZ = snapTranslation(state.initialTransZ + (currentHit.z - state.dragStartIntersection.z));
                         }
                         break;
                     }
@@ -498,9 +524,9 @@ public class MapEditorWorkspaceScreen extends Screen {
                         org.joml.Vector3d planeNormal = new org.joml.Vector3d(-look.x, -look.y, -look.z).normalize();
                         org.joml.Vector3d currentHit = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, planeNormal);
                         if (currentHit != null) {
-                            state.transX = state.initialTransX + (currentHit.x - state.dragStartIntersection.x);
-                            state.transY = state.initialTransY + (currentHit.y - state.dragStartIntersection.y);
-                            state.transZ = state.initialTransZ + (currentHit.z - state.dragStartIntersection.z);
+                            state.transX = snapTranslation(state.initialTransX + (currentHit.x - state.dragStartIntersection.x));
+                            state.transY = snapTranslation(state.initialTransY + (currentHit.y - state.dragStartIntersection.y));
+                            state.transZ = snapTranslation(state.initialTransZ + (currentHit.z - state.dragStartIntersection.z));
                         }
                         break;
                     }
@@ -577,7 +603,8 @@ public class MapEditorWorkspaceScreen extends Screen {
         super.mouseMoved(mouseX, mouseY);
         // Gizmo Hover Detection
         MapEditorState state = MapEditorState.INSTANCE;
-        if (!state.clipboard.isEmpty() && client != null && client.player != null) {
+        state.hoveredTarget = MapEditorState.GizmoTarget.NONE;
+        if (state.pastePreviewActive && !state.clipboard.isEmpty() && client != null && client.player != null) {
             org.joml.Vector3d rayDir = GizmoMath.unprojectMouseToRay(client, mouseX, mouseY);
             if (rayDir != null) {
                 net.minecraft.util.math.Vec3d origin = client.player.getCameraPosVec(1.0f);
@@ -588,56 +615,185 @@ public class MapEditorWorkspaceScreen extends Screen {
                 double cz = state.selectionCenterZ + state.transZ;
                 org.joml.Vector3d center = new org.joml.Vector3d(cx, cy, cz);
 
-                state.hoveredTarget = MapEditorState.GizmoTarget.NONE;
                 double threshold = 0.2;
 
-                if (state.gizmoMode == 0 || state.gizmoMode == 2) {
-                    // Check Center
-                    double distCenter = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, center);
-                    if (distCenter < threshold) {
-                        state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_XYZ : MapEditorState.GizmoTarget.SCALE_XYZ;
-                        return;
-                    }
-
-                    // Check Planes (only Translate)
-                    if (state.gizmoMode == 0) {
-                        org.joml.Vector3d hitXY = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
-                        org.joml.Vector3d hitYZ = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
-                        org.joml.Vector3d hitZX = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
-
-                        if (hitXY != null && hitXY.x >= cx && hitXY.x <= cx + 0.7 && hitXY.y >= cy && hitXY.y <= cy + 0.7) {
-                            state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_XY;
-                            return;
-                        }
-                        if (hitYZ != null && hitYZ.y >= cy && hitYZ.y <= cy + 0.7 && hitYZ.z >= cz && hitYZ.z <= cz + 0.7) {
-                            state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_YZ;
-                            return;
-                        }
-                        if (hitZX != null && hitZX.x >= cx && hitZX.x <= cx + 0.7 && hitZX.z >= cz && hitZX.z <= cz + 0.7) {
-                            state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_ZX;
-                            return;
-                        }
-                    }
-
-                    // Check Axes
-                    double distX = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx + 2.5, cy, cz));
-                    double distY = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy + 2.5, cz));
-                    double distZ = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy, cz + 2.5));
-
-                    if (distX < threshold && distX < distY && distX < distZ) state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_X : MapEditorState.GizmoTarget.SCALE_X;
-                    else if (distY < threshold && distY < distX && distY < distZ) state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_Y : MapEditorState.GizmoTarget.SCALE_Y;
-                    else if (distZ < threshold && distZ < distX && distZ < distY) state.hoveredTarget = state.gizmoMode == 0 ? MapEditorState.GizmoTarget.TRANSLATE_Z : MapEditorState.GizmoTarget.SCALE_Z;
-                } else if (state.gizmoMode == 1) { // Rotate
-                    // Only Y for now
-                    org.joml.Vector3d hitXZ = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
-                    if (hitXZ != null) {
-                        double distToCenter = Math.sqrt(Math.pow(hitXZ.x - cx, 2) + Math.pow(hitXZ.z - cz, 2));
-                        if (distToCenter >= 1.3 && distToCenter <= 1.7) {
-                            state.hoveredTarget = MapEditorState.GizmoTarget.ROTATE_Y;
-                        }
-                    }
+                double distCenter = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, center);
+                if (distCenter < threshold) {
+                    state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_XYZ;
+                    return;
                 }
+
+                org.joml.Vector3d hitXY = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 0, 1));
+                org.joml.Vector3d hitYZ = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(1, 0, 0));
+                org.joml.Vector3d hitZX = GizmoMath.intersectRayPlane(rayOrigin, rayDir, center, new org.joml.Vector3d(0, 1, 0));
+
+                if (hitXY != null && hitXY.x >= cx && hitXY.x <= cx + 0.7 && hitXY.y >= cy && hitXY.y <= cy + 0.7) {
+                    state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_XY;
+                    return;
+                }
+                if (hitYZ != null && hitYZ.y >= cy && hitYZ.y <= cy + 0.7 && hitYZ.z >= cz && hitYZ.z <= cz + 0.7) {
+                    state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_YZ;
+                    return;
+                }
+                if (hitZX != null && hitZX.x >= cx && hitZX.x <= cx + 0.7 && hitZX.z >= cz && hitZX.z <= cz + 0.7) {
+                    state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_ZX;
+                    return;
+                }
+
+                double distX = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx + 2.5, cy, cz));
+                double distY = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy + 2.5, cz));
+                double distZ = GizmoMath.distanceToSegment(rayOrigin, rayDir, center, new org.joml.Vector3d(cx, cy, cz + 2.5));
+
+                if (distX < threshold && distX < distY && distX < distZ) state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_X;
+                else if (distY < threshold && distY < distX && distY < distZ) state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_Y;
+                else if (distZ < threshold && distZ < distX && distZ < distY) state.hoveredTarget = MapEditorState.GizmoTarget.TRANSLATE_Z;
             }
+        }
+    }
+
+    private String pasteGameId(MapEditorState state) {
+        if (state.selectedGameId != null && !state.selectedGameId.isBlank()) {
+            return state.selectedGameId;
+        }
+        String gameId = "";
+        for (MapEditorState.ClipboardMarkerData entry : state.clipboard) {
+            String current = entry.data().gameId();
+            if (current == null || current.isBlank()) continue;
+            if (gameId.isBlank()) {
+                gameId = current;
+            } else if (!gameId.equalsIgnoreCase(current)) {
+                return "";
+            }
+        }
+        return gameId;
+    }
+
+    private net.minecraft.util.math.Vec3d pasteTargetFromCrosshair() {
+        if (this.client == null || this.client.player == null) {
+            return new net.minecraft.util.math.Vec3d(MapEditorState.INSTANCE.selectionCenterX, MapEditorState.INSTANCE.selectionCenterY, MapEditorState.INSTANCE.selectionCenterZ);
+        }
+        if (this.client.crosshairTarget instanceof net.minecraft.util.hit.BlockHitResult blockHit
+                && blockHit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
+            net.minecraft.util.math.BlockPos pos = blockHit.getBlockPos().offset(blockHit.getSide());
+            return new net.minecraft.util.math.Vec3d(pos.getX(), pos.getY(), pos.getZ());
+        }
+
+        net.minecraft.util.math.Vec3d origin = this.client.player.getCameraPosVec(1.0f);
+        net.minecraft.util.math.Vec3d look = this.client.player.getRotationVec(1.0f);
+        return origin.add(look.multiply(8.0));
+    }
+
+    private static double snapTranslation(double value) {
+        return Math.rint(value);
+    }
+
+    private void copySelectedMarkersToClipboard() {
+        MapEditorState state = MapEditorState.INSTANCE;
+        if (state.selectedMarkers.isEmpty()) {
+            if (client != null) {
+                client.inGameHud.getChatHud().addMessage(Text.literal("No selected markers to copy."));
+            }
+            return;
+        }
+
+        state.clipboard.clear();
+        for (MapEditorState.SelectedMarkerData smd : state.selectedMarkers) {
+            double relX = 0, relY = 0, relZ = 0;
+            if ("REGION".equalsIgnoreCase(smd.marker().type()) && smd.marker().regions() != null && !smd.marker().regions().isEmpty()) {
+                dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart r = smd.marker().regions().get(0);
+                relX = ((r.min().x() + r.max().x()) / 2.0) - state.selectionCenterX;
+                relY = ((r.min().y() + r.max().y()) / 2.0) - state.selectionCenterY;
+                relZ = ((r.min().z() + r.max().z()) / 2.0) - state.selectionCenterZ;
+            } else if ("POINT".equalsIgnoreCase(smd.marker().type()) && smd.marker().points() != null && !smd.marker().points().isEmpty()) {
+                dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint p = smd.marker().points().get(0);
+                relX = p.x() - state.selectionCenterX;
+                relY = p.y() - state.selectionCenterY;
+                relZ = p.z() - state.selectionCenterZ;
+            }
+            state.clipboard.add(new MapEditorState.ClipboardMarkerData(smd, relX, relY, relZ, 0));
+        }
+
+        state.pastePreviewActive = false;
+        state.transX = 0;
+        state.transY = 0;
+        state.transZ = 0;
+        state.rotY = 0;
+        state.selectedTeam = commonTeamId(state.selectedMarkers);
+        if (client != null) {
+            client.inGameHud.getChatHud().addMessage(Text.literal("Copied " + state.clipboard.size() + " markers."));
+        }
+        if (rightSidebar != null) {
+            rightSidebar.update();
+        }
+    }
+
+    private boolean projectedRegionIntersectsSelection(dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart region,
+                                                       double minX, double minY, double maxX, double maxY) {
+        if (this.client == null) return false;
+
+        double screenMinX = Double.MAX_VALUE;
+        double screenMinY = Double.MAX_VALUE;
+        double screenMaxX = -Double.MAX_VALUE;
+        double screenMaxY = -Double.MAX_VALUE;
+        boolean anyProjected = false;
+
+        for (double[] corner : regionCorners(region)) {
+            GizmoMath.ProjectedPoint projected = GizmoMath.project3D(this.client, corner[0], corner[1], corner[2]);
+            if (projected == null || !projected.inFront()) continue;
+
+            org.joml.Vector2d screen = projected.screen();
+            screenMinX = Math.min(screenMinX, screen.x);
+            screenMinY = Math.min(screenMinY, screen.y);
+            screenMaxX = Math.max(screenMaxX, screen.x);
+            screenMaxY = Math.max(screenMaxY, screen.y);
+            anyProjected = true;
+        }
+
+        return anyProjected && rectanglesIntersect(screenMinX, screenMinY, screenMaxX, screenMaxY, minX, minY, maxX, maxY);
+    }
+
+    private static boolean rectanglesIntersect(double aMinX, double aMinY, double aMaxX, double aMaxY,
+                                               double bMinX, double bMinY, double bMaxX, double bMaxY) {
+        return aMaxX >= bMinX && aMinX <= bMaxX && aMaxY >= bMinY && aMinY <= bMaxY;
+    }
+
+    private static double[][] regionCorners(dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart region) {
+        double minX = Math.min(region.min().x(), region.max().x());
+        double minY = Math.min(region.min().y(), region.max().y());
+        double minZ = Math.min(region.min().z(), region.max().z());
+        double maxX = Math.max(region.min().x(), region.max().x());
+        double maxY = Math.max(region.min().y(), region.max().y());
+        double maxZ = Math.max(region.min().z(), region.max().z());
+        return new double[][]{
+                {minX, minY, minZ}, {minX, minY, maxZ},
+                {minX, maxY, minZ}, {minX, maxY, maxZ},
+                {maxX, minY, minZ}, {maxX, minY, maxZ},
+                {maxX, maxY, minZ}, {maxX, maxY, maxZ}
+        };
+    }
+
+    private static String commonTeamId(java.util.List<MapEditorState.SelectedMarkerData> selected) {
+        String common = null;
+        for (MapEditorState.SelectedMarkerData data : selected) {
+            String teamId = markerTeamId(data.marker());
+            if (teamId == null || teamId.isBlank()) continue;
+            if (common == null) {
+                common = teamId;
+            } else if (!common.equals(teamId)) {
+                return "";
+            }
+        }
+        return common == null ? "" : common;
+    }
+
+    private static String markerTeamId(dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker marker) {
+        if (marker.properties() == null || !marker.properties().has("teamId")) {
+            return "";
+        }
+        try {
+            return marker.properties().get("teamId").getAsString();
+        } catch (RuntimeException ignored) {
+            return "";
         }
     }
 

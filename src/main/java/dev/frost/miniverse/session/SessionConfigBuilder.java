@@ -44,9 +44,15 @@ public class SessionConfigBuilder {
         List<SessionGroup> groupsForConfig = launcher.groupsForConfig(session, group);
         for (SessionGroup sessionGroup : groupsForConfig) {
             String teamLabel = sessionGroup.getGroupLabel();
+            String displayName = sessionGroup.getDisplayName();
+            String gameTeamId = sessionGroup.getPlannedTeam().gameTeamId();
             for (UUID playerUuid : sessionGroup.getPlayerUuids()) {
                 properties.setProperty("player." + playerUuid, "true");
                 properties.setProperty("player." + playerUuid + ".team", teamLabel);
+                if (!gameTeamId.isBlank()) {
+                    properties.setProperty("player." + playerUuid + ".gameTeamId", gameTeamId);
+                }
+                properties.setProperty("player." + playerUuid + ".teamDisplayName", displayName);
             }
         }
 

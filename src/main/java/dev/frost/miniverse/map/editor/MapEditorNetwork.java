@@ -56,6 +56,11 @@ public final class MapEditorNetwork {
             deleteAllMarkers(server, player, mapId, extension.get());
             return;
         }
+        if (type.equals("add_spatial_bulk")) {
+            MapEditorUndoManager.push(mapId, extension.get().gameId());
+            addSpatialBulkMarker(server, player, mapId, extension.get(), action);
+            return;
+        }
         
         Optional<MarkerDefinition> definition = extension.get().marker(definitionKey);
         if (definition.isEmpty()) {
@@ -63,14 +68,13 @@ public final class MapEditorNetwork {
             return;
         }
         switch (type) {
-            case "start_add" -> MapEditorPlacementController.start(player, mapId, extension.get(), definition.get(), string(action, "properties", "{}"));
+            case "start_add" -> MapEditorPlacementController.start(player, mapId, extension.get(), definition.get(), string(action, "name", ""), string(action, "properties", "{}"));
             case "teleport" -> teleportToMarker(player, mapId, extension.get(), definition.get(), string(action, "markerId", ""));
-            case "add_logical", "add_spatial", "add_spatial_bulk", "delete", "rename", "update_properties", "move_marker" -> {
+            case "add_logical", "add_spatial", "delete", "rename", "update_properties", "move_marker" -> {
                 MapEditorUndoManager.push(mapId, extension.get().gameId());
                 switch (type) {
                     case "add_logical" -> addLogicalMarker(server, player, mapId, extension.get(), definition.get(), string(action, "name", "New"), string(action, "properties", "{}"));
                     case "add_spatial" -> addSpatialMarker(server, player, mapId, extension.get(), definition.get(), action);
-                    case "add_spatial_bulk" -> addSpatialBulkMarker(server, player, mapId, extension.get(), action);
                     case "delete" -> deleteMarker(player, mapId, extension.get(), definition.get(), string(action, "markerId", ""));
                     case "rename" -> renameMarker(server, player, mapId, extension.get(), definition.get(), string(action, "markerId", ""), string(action, "name", ""));
                     case "update_properties" -> updateProperties(server, player, mapId, extension.get(), definition.get(), string(action, "markerId", ""), string(action, "properties", "{}"));
@@ -139,7 +143,6 @@ public final class MapEditorNetwork {
                 MarkerDefinition def = extension.marker(defKey).orElse(null);
                 if (def == null) continue;
                 
-                String name = obj.get("name").getAsString();
                 com.google.gson.JsonObject properties = obj.has("properties") ? obj.getAsJsonObject("properties") : new com.google.gson.JsonObject();
                 
                 List<MapPosition> points = new ArrayList<>();
@@ -164,6 +167,7 @@ public final class MapEditorNetwork {
                 }
                 
                 List<MapMarker> markers = cache.computeIfAbsent(defKey, k -> new ArrayList<>(MapEditorMarkerStore.load(mapId, extension, def)));
+                String name = nextBulkMarkerName(def, markers.size() + 1, obj.has("name") ? obj.get("name").getAsString() : "");
                 String id = properties.has("_forceId") ? properties.remove("_forceId").getAsString() : java.util.UUID.randomUUID().toString();
                 markers.add(new MapMarker(id, def.key(), name, def.type(), points, regions, properties));
             }
@@ -178,6 +182,16 @@ public final class MapEditorNetwork {
         } catch (Exception e) {
             player.sendMessage(Text.literal("Failed to process bulk markers.").formatted(Formatting.RED), false);
         }
+    }
+
+    private static String nextBulkMarkerName(MarkerDefinition definition, int index, String requestedName) {
+        if ("team_config".equalsIgnoreCase(definition.key()) && requestedName != null && !requestedName.isBlank()) {
+            return requestedName;
+        }
+        if (definition.single()) {
+            return definition.displayName();
+        }
+        return definition.displayName() + " #" + Math.max(1, index);
     }
 
     private static void addLogicalMarker(MinecraftServer server, ServerPlayerEntity player, String mapId, MapEditorExtension extension, MarkerDefinition definition, String name, String propertiesJson) {

@@ -22,9 +22,13 @@ public class SessionPayloadBuilder {
     }
 
     public void addGroup(String groupId, String groupName, Iterable<SessionSnapshotData.RosterEntry> members) {
+        this.addGroup(groupId, groupName, "", members);
+    }
+
+    public void addGroup(String groupId, String groupName, String gameTeamId, Iterable<SessionSnapshotData.RosterEntry> members) {
         java.util.Map<String, Iterable<SessionSnapshotData.RosterEntry>> map = new java.util.HashMap<>();
         map.put(null, members);
-        this.addGroupWithRoles(groupId, groupName, map);
+        this.addGroupWithRoles(groupId, groupName, gameTeamId, map);
     }
 
     public void addGroupWithRole(String groupId, String groupName, Iterable<SessionSnapshotData.RosterEntry> members, String role) {
@@ -34,9 +38,16 @@ public class SessionPayloadBuilder {
     }
 
     public void addGroupWithRoles(String groupId, String groupName, java.util.Map<String, Iterable<SessionSnapshotData.RosterEntry>> rolesToMembers) {
+        this.addGroupWithRoles(groupId, groupName, "", rolesToMembers);
+    }
+
+    public void addGroupWithRoles(String groupId, String groupName, String gameTeamId, java.util.Map<String, Iterable<SessionSnapshotData.RosterEntry>> rolesToMembers) {
         NbtCompound group = new NbtCompound();
         group.putString("id", groupId);
         group.putString("name", groupName);
+        if (gameTeamId != null && !gameTeamId.isBlank()) {
+            group.putString("gameTeamId", gameTeamId.trim());
+        }
         
         NbtList memberList = new NbtList();
         NbtList roleList = new NbtList();

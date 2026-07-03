@@ -681,6 +681,8 @@ public final class SessionRegistry {
             }
             JsonObject teamObject = teamElement.getAsJsonObject();
             String label = SessionConfigJson.string(teamObject, "label", SessionConfigJson.string(teamObject, "displayName", "Team-" + index));
+            String gameTeamId = SessionConfigJson.string(teamObject, "gameTeamId", SessionConfigJson.string(teamObject, "teamId", ""));
+            String displayName = SessionConfigJson.string(teamObject, "displayName", "");
             JsonArray membersJson = teamObject.has("members") && teamObject.get("members").isJsonArray()
                 ? teamObject.getAsJsonArray("members")
                 : new JsonArray();
@@ -705,7 +707,7 @@ public final class SessionRegistry {
                 members.add(new SessionMembership(uuid, name.isBlank() ? uuidText : name, role));
             }
             if (!members.isEmpty()) {
-                teams.add(new PlannedTeam(label, members));
+                teams.add(new PlannedTeam(label, gameTeamId, displayName, members));
             }
             index++;
         }

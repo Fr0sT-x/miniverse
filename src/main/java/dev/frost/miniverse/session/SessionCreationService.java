@@ -6,6 +6,8 @@ import dev.frost.miniverse.map.MapStore;
 import dev.frost.miniverse.map.MapValidationResult;
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
+import dev.frost.miniverse.minigame.impl.bedwars.BedwarsDefinition;
+import dev.frost.miniverse.minigame.impl.bedwars.BedwarsMapConfig;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.nbt.NbtCompound;
@@ -100,14 +102,14 @@ public final class SessionCreationService {
         }
 
         for (TeamPlan team : plan.teams()) {
-            PlannedTeam plannedTeam = this.resolveOnlineTeam(server, team);
+            PlannedTeam plannedTeam = this.resolveOnlineTeam(server, team, gameType, plan);
             if (plannedTeam != null) {
                 this.sessionManager.createGroup(session.getSessionId(), plannedTeam);
             }
         }
     }
 
-    private PlannedTeam resolveOnlineTeam(MinecraftServer server, TeamPlan team) {
+    private PlannedTeam resolveOnlineTeam(MinecraftServer server, TeamPlan team, SessionGameDescriptor gameType, SessionPlan plan) {
         List<SessionMembership> memberships = new ArrayList<>();
         for (dev.frost.miniverse.session.plan.PlayerRef member : team.members()) {
             ServerPlayerEntity resolvedPlayer = server.getPlayerManager().getPlayer(member.uuid());
@@ -119,7 +121,12 @@ public final class SessionCreationService {
                 ));
             }
         }
-        return memberships.isEmpty() ? null : new PlannedTeam(team.label(), memberships);
+        if (memberships.isEmpty()) {
+            return null;
+        }
+
+        TeamIdentity identity = this.resolveTeamIdentity(gameType, plan, team);
+        return new PlannedTeam(team.label(), identity.gameTeamId(), identity.displayName(), memberships);
     }
 
     private PlannedTeam plannedTeamFromRoleSettings(MinecraftServer server, SessionPlan plan, SessionGameDescriptor gameType) {
@@ -162,6 +169,47 @@ public final class SessionCreationService {
         }
 
         return new PlannedTeam(gameType.getDisplayName(), new ArrayList<>(members.values()));
+    }
+
+    private TeamIdentity resolveTeamIdentity(SessionGameDescriptor gameType, SessionPlan plan, TeamPlan team) {
+        String displayName = !team.displayName().isBlank() ? team.displayName() : team.label();
+        if (!team.gameTeamId().isBlank()) {
+            return new TeamIdentity(team.gameTeamId(), displayName);
+        }
+
+        if (!BedwarsDefinition.ID.equalsIgnoreCase(gameType.getCommandName())) {
+            return new TeamIdentity("", displayName);
+        }
+
+        List<BedwarsMapConfig.BedwarsTeamConfig> mapTeams = bedwarsMapTeams(plan);
+        int index = plan.teams().indexOf(team);
+        if (index >= 0 && index < mapTeams.size()) {
+            BedwarsMapConfig.BedwarsTeamConfig mapTeam = mapTeams.get(index);
+            return new TeamIdentity(mapTeam.teamId, mapTeam.name);
+        }
+        return new TeamIdentity("", displayName);
+    }
+
+    private static List<BedwarsMapConfig.BedwarsTeamConfig> bedwarsMapTeams(SessionPlan plan) {
+        NbtCompound settings = plan.settings();
+        if (!settings.contains("mapId", NbtElement.STRING_TYPE)) {
+            return List.of();
+        }
+        String mapId = settings.getString("mapId").trim();
+        if (mapId.isBlank()) {
+            return List.of();
+        }
+        return MapStore.readGamemodeConfig(mapId, BedwarsDefinition.ID)
+            .map(BedwarsMapConfig::fromJson)
+            .<List<BedwarsMapConfig.BedwarsTeamConfig>>map(config -> new ArrayList<>(config.teams().values()))
+            .orElseGet(List::of);
+    }
+
+    private record TeamIdentity(String gameTeamId, String displayName) {
+        private TeamIdentity {
+            gameTeamId = gameTeamId == null ? "" : gameTeamId.trim();
+            displayName = displayName == null ? "" : displayName.trim();
+        }
     }
 
     public record CreateResult(GameSession session, SessionGameDescriptor gameType, boolean autoLaunch, String errorMessage) {

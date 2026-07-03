@@ -1,5 +1,6 @@
 package dev.frost.miniverse.mixin;
 
+import dev.frost.miniverse.minigame.core.visibility.TeamGlowVisibility;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.network.packet.Packet;
@@ -7,7 +8,6 @@ import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
@@ -16,18 +16,21 @@ import java.util.List;
 
 @Mixin(net.minecraft.server.network.ServerCommonNetworkHandler.class)
 public abstract class GlowingFilterMixin {
-
     @ModifyVariable(method = "sendPacket(Lnet/minecraft/network/packet/Packet;)V", at = @At("HEAD"), argsOnly = true)
     private Packet<?> miniverse$filterGlowing(Packet<?> packet) {
         if (packet instanceof EntityTrackerUpdateS2CPacket metadataPacket && (Object) this instanceof ServerPlayNetworkHandler playHandler) {
             Entity target = playHandler.player.getWorld().getEntityById(metadataPacket.id());
-            
-            if (target != null && target != playHandler.player && !playHandler.player.isTeammate(target)) {
+
+            if (target instanceof ServerPlayerEntity targetPlayer
+                    && targetPlayer != playHandler.player
+                    && !TeamGlowVisibility.canViewerSeeGlowing(playHandler.player, targetPlayer)) {
                 List<DataTracker.SerializedEntry<?>> entries = metadataPacket.trackedValues();
                 if (entries != null) {
                     boolean needsClone = false;
                     for (DataTracker.SerializedEntry<?> entry : entries) {
-                        if (entry.value() instanceof Byte b && (b & 0x40) != 0) { // 0x40 is GLOWING flag
+                        if (entry.id() == TeamGlowVisibility.ENTITY_FLAGS_TRACKED_DATA_ID
+                                && entry.value() instanceof Byte b
+                                && (b & TeamGlowVisibility.GLOWING_FLAG) != 0) {
                             needsClone = true;
                             break;
                         }
@@ -36,8 +39,10 @@ public abstract class GlowingFilterMixin {
                     if (needsClone) {
                         List<DataTracker.SerializedEntry<?>> newEntries = new ArrayList<>();
                         for (DataTracker.SerializedEntry<?> entry : entries) {
-                            if (entry.value() instanceof Byte b && (b & 0x40) != 0) {
-                                byte newFlags = (byte) (b & ~0x40);
+                            if (entry.id() == TeamGlowVisibility.ENTITY_FLAGS_TRACKED_DATA_ID
+                                    && entry.value() instanceof Byte b
+                                    && (b & TeamGlowVisibility.GLOWING_FLAG) != 0) {
+                                byte newFlags = (byte) (b & ~TeamGlowVisibility.GLOWING_FLAG);
                                 @SuppressWarnings("unchecked")
                                 DataTracker.SerializedEntry<Byte> cloned = new DataTracker.SerializedEntry<>(
                                     entry.id(),

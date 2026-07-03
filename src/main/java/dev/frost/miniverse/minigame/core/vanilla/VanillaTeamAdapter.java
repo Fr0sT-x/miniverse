@@ -62,7 +62,7 @@ public final class VanillaTeamAdapter {
 
             VanillaTeamOptions options = descriptor.options();
             team.setDisplayName(descriptor.displayName());
-            team.setColor(options.color());
+            team.setColor(options.color() == null ? Formatting.WHITE : options.color());
             team.setPrefix(options.prefix());
             team.setSuffix(options.suffix());
             team.setFriendlyFireAllowed(options.friendlyFireAllowed() && this.friendlyFireAllowed);
@@ -122,6 +122,9 @@ public final class VanillaTeamAdapter {
         Function<TeamSnapshot, VanillaTeamOptions> resolvedFactory = optionsFactory == null
             ? ignored -> {
                 Formatting color = ignored.color() != null ? ignored.color() : this.colorFor(ignored.id());
+                if (color == null) {
+                    color = Formatting.WHITE;
+                }
                 return VanillaTeamOptions.defaults()
                     .withPrefix(net.minecraft.text.Text.literal(ignored.label() + " ").formatted(color))
                     .withColor(color);

@@ -9,9 +9,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public record TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> roles) {
+public record TeamPlan(String label, String gameTeamId, String displayName, List<PlayerRef> members, List<PlayerRole> roles) {
+    public TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> roles) {
+        this(label, "", "", members, roles);
+    }
+
     public TeamPlan {
         label = label == null || label.isBlank() ? "Team" : label.trim();
+        gameTeamId = gameTeamId == null ? "" : gameTeamId.trim();
+        displayName = displayName == null ? "" : displayName.trim();
         members = members == null ? List.of() : List.copyOf(members);
         roles = roles == null ? List.of() : List.copyOf(roles);
     }
@@ -23,6 +29,8 @@ public record TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> r
         } else if (nbt.contains("label", NbtElement.STRING_TYPE)) {
             label = nbt.getString("label");
         }
+        String gameTeamId = getFirstString(nbt, "gameTeamId", "teamId", "mapTeamId", "selectedTeamId");
+        String displayName = getFirstString(nbt, "displayName", "name");
         
         List<PlayerRef> members = new ArrayList<>();
         NbtList memberList = nbt.getList("members", NbtElement.COMPOUND_TYPE);
@@ -36,7 +44,7 @@ public record TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> r
             PlayerRole.fromNbt(roleList.getCompound(i)).ifPresent(roles::add);
         }
 
-        return new TeamPlan(label, members, roles);
+        return new TeamPlan(label, gameTeamId, displayName, members, roles);
     }
 
     public boolean isEmpty() {
@@ -53,6 +61,12 @@ public record TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> r
     public NbtCompound toNbt() {
         NbtCompound nbt = new NbtCompound();
         nbt.putString("label", this.label);
+        if (!this.gameTeamId.isBlank()) {
+            nbt.putString("gameTeamId", this.gameTeamId);
+        }
+        if (!this.displayName.isBlank()) {
+            nbt.putString("displayName", this.displayName);
+        }
 
         NbtList memberList = new NbtList();
         for (PlayerRef member : this.members) {
@@ -69,5 +83,17 @@ public record TeamPlan(String label, List<PlayerRef> members, List<PlayerRole> r
         }
 
         return nbt;
+    }
+
+    private static String getFirstString(NbtCompound nbt, String... keys) {
+        for (String key : keys) {
+            if (nbt.contains(key, NbtElement.STRING_TYPE)) {
+                String value = nbt.getString(key).trim();
+                if (!value.isBlank()) {
+                    return value;
+                }
+            }
+        }
+        return "";
     }
 }

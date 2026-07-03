@@ -43,6 +43,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private final TeamManager teamManager = new TeamManager();
     private final Map<String, BedTeamState> bedTeamStates = new ConcurrentHashMap<>();
+    private final Set<String> activeTeamIds = ConcurrentHashMap.newKeySet();
     private final Set<UUID> permanentlyEliminated = ConcurrentHashMap.newKeySet();
     private DeathLifecycleManager deathLifecycleManager;
     private dev.frost.miniverse.minigame.impl.bedwars.economy.BedwarsGeneratorManager generatorManager;
@@ -84,20 +85,45 @@ public class BedwarsMinigame extends AbstractMinigame implements
     }
 
     public void ensureTeamAssignment(ServerPlayerEntity player, String team) {
-        if (this.teamManager.teamId(player.getUuid()) == null) {
-            BedwarsMapConfig.BedwarsTeamConfig cfg = this.mapConfig.teams().get(team);
-            String label = cfg != null ? cfg.name : team;
-            this.teamManager.assign(player, team, label, dev.frost.miniverse.team.TeamRole.MEMBER);
+        String mapTeamId = this.resolveMapTeamId(team);
+        if (mapTeamId != null) {
+            this.assignToMapTeam(player, mapTeamId);
+            return;
         }
+        String fallback = team == null || team.isBlank() ? player.getName().getString() : team;
+        this.teamManager.assign(player, fallback, fallback, dev.frost.miniverse.team.TeamRole.MEMBER);
+    }
+
+    public boolean assignConfiguredMapTeam(ServerPlayerEntity player, String teamId) {
+        if (player == null || teamId == null || teamId.isBlank() || !this.mapConfig.teams().containsKey(teamId)) {
+            return false;
+        }
+        this.assignToMapTeam(player, teamId);
+        return true;
     }
 
     private void mapSessionTeams() {
         java.util.List<dev.frost.miniverse.team.TeamSnapshot> activeSessionTeams = this.teamManager.snapshots();
         java.util.List<String> mapTeamIds = new java.util.ArrayList<>(this.mapConfig.teams().keySet());
+        java.util.Set<String> assignedMapTeams = new java.util.LinkedHashSet<>();
+        int fallbackIndex = 0;
         
-        for (int i = 0; i < Math.min(activeSessionTeams.size(), mapTeamIds.size()); i++) {
+        for (int i = 0; i < activeSessionTeams.size() && !mapTeamIds.isEmpty(); i++) {
             dev.frost.miniverse.team.TeamSnapshot sessionTeam = activeSessionTeams.get(i);
-            String mapId = mapTeamIds.get(i);
+            String mapId = this.resolveMapTeamId(sessionTeam.id());
+            if (mapId == null) {
+                mapId = this.resolveMapTeamId(sessionTeam.label());
+            }
+            if (mapId == null || assignedMapTeams.contains(mapId)) {
+                while (fallbackIndex < mapTeamIds.size() && assignedMapTeams.contains(mapTeamIds.get(fallbackIndex))) {
+                    fallbackIndex++;
+                }
+                if (fallbackIndex >= mapTeamIds.size()) {
+                    break;
+                }
+                mapId = mapTeamIds.get(fallbackIndex++);
+            }
+            assignedMapTeams.add(mapId);
             BedwarsMapConfig.BedwarsTeamConfig mapTeamConfig = this.mapConfig.teams().get(mapId);
             this.teamManager.ensureTeam(mapId, mapTeamConfig.name);
             if (mapTeamConfig.color != null) {
@@ -113,6 +139,80 @@ public class BedwarsMinigame extends AbstractMinigame implements
                 }
             }
         }
+    }
+
+    private void mapPlayersToBedwarsTeams(List<ServerPlayerEntity> participants) {
+        java.util.List<String> mapTeamIds = new java.util.ArrayList<>(this.mapConfig.teams().keySet());
+        java.util.Set<String> assignedTeams = new java.util.LinkedHashSet<>();
+        int fallbackIndex = 0;
+
+        for (ServerPlayerEntity player : participants) {
+            String teamId = this.resolvePlayerMapTeamId(player);
+            if (teamId != null && assignedTeams.contains(teamId)) {
+                teamId = null;
+            }
+            if (teamId == null && !mapTeamIds.isEmpty()) {
+                while (fallbackIndex < mapTeamIds.size() && assignedTeams.contains(mapTeamIds.get(fallbackIndex))) {
+                    fallbackIndex++;
+                }
+                teamId = fallbackIndex < mapTeamIds.size()
+                    ? mapTeamIds.get(fallbackIndex++)
+                    : mapTeamIds.get(Math.floorMod(player.getUuid().hashCode(), mapTeamIds.size()));
+            }
+            if (teamId != null) {
+                this.assignToMapTeam(player, teamId);
+                this.activeTeamIds.add(teamId);
+                assignedTeams.add(teamId);
+            }
+        }
+    }
+
+    private void assignToMapTeam(ServerPlayerEntity player, String teamId) {
+        BedwarsMapConfig.BedwarsTeamConfig cfg = this.mapConfig.teams().get(teamId);
+        if (cfg == null) {
+            return;
+        }
+        this.teamManager.assign(player, teamId, cfg.name, dev.frost.miniverse.team.TeamRole.MEMBER);
+        if (cfg.color != null) {
+            this.teamManager.ensureTeam(teamId, cfg.name).setColor(cfg.color);
+        }
+    }
+
+    private String resolvePlayerMapTeamId(ServerPlayerEntity player) {
+        String currentTeamId = this.teamManager.teamId(player.getUuid());
+        String resolved = this.resolveMapTeamId(currentTeamId);
+        if (resolved != null) {
+            return resolved;
+        }
+        return this.resolveMapTeamId(this.teamManager.teamLabel(player.getUuid(), ""));
+    }
+
+    private String resolveMapTeamId(String requestedTeam) {
+        if (requestedTeam == null || requestedTeam.isBlank()) {
+            return null;
+        }
+        if (this.mapConfig.teams().containsKey(requestedTeam)) {
+            return requestedTeam;
+        }
+
+        String requestedAlias = teamAlias(requestedTeam);
+        for (Map.Entry<String, BedwarsMapConfig.BedwarsTeamConfig> entry : this.mapConfig.teams().entrySet()) {
+            BedwarsMapConfig.BedwarsTeamConfig config = entry.getValue();
+            if (teamAlias(entry.getKey()).equals(requestedAlias)
+                    || teamAlias(config.name).equals(requestedAlias)
+                    || (config.color != null && teamAlias(config.color.getName()).equals(requestedAlias))) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    private static String teamAlias(String value) {
+        if (value == null) {
+            return "";
+        }
+        String alias = value.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return alias.endsWith("team") ? alias.substring(0, alias.length() - 4) : alias;
     }
 
     public MapValidationResult startValidation() {
@@ -132,14 +232,12 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
     @Override
     public void onMatchStart() {
-        for (String teamId : this.mapConfig.teams().keySet()) {
-            this.bedTeamStates.put(teamId, new BedTeamState());
-        }
+        this.bedTeamStates.clear();
+        this.activeTeamIds.clear();
         
         this.hologramManager = new dev.frost.miniverse.minigame.impl.bedwars.HologramManager();
         this.generatorManager = new dev.frost.miniverse.minigame.impl.bedwars.economy.BedwarsGeneratorManager(this.mapConfig, this.settings, this.hologramManager);
         this.shopManager = new dev.frost.miniverse.minigame.impl.bedwars.shop.BedwarsShopManager(this.mapConfig, this.settings);
-        this.upgradeManager = new dev.frost.miniverse.minigame.impl.bedwars.upgrade.BedwarsTeamUpgradeManager(this.mapConfig.teams().keySet(), this);
         this.visibilityManager = new dev.frost.miniverse.minigame.impl.bedwars.visibility.BedwarsVisibilityManager(this);
         this.countdownService = new dev.frost.miniverse.minigame.impl.bedwars.BedwarsCountdownService(this, this.generatorManager);
         
@@ -148,20 +246,21 @@ public class BedwarsMinigame extends AbstractMinigame implements
         this.shopManager.initPlayers(participants);
         this.instanceWorld = participants.isEmpty() ? this.context.nullableServer().getOverworld() : participants.get(0).getServerWorld();
         this.shopManager.spawnNpcs(this.instanceWorld, this.mapConfig.shopNpcs());
-        this.upgradeManager.spawnNpcs(this.instanceWorld, this.mapConfig.upgradeNpcs());
-        java.util.Iterator<String> teamIter = this.mapConfig.teams().keySet().iterator();
+        this.mapPlayersToBedwarsTeams(participants);
         
         for (ServerPlayerEntity player : participants) {
-            if (!teamIter.hasNext()) teamIter = this.mapConfig.teams().keySet().iterator();
-            if (teamIter.hasNext()) {
-                String teamId = teamIter.next();
-                this.ensureTeamAssignment(player, teamId);
-            }
             player.getInventory().clear();
             this.equipBaseArmor(player);
             player.getInventory().insertStack(new net.minecraft.item.ItemStack(net.minecraft.item.Items.WOODEN_SWORD));
             player.changeGameMode(net.minecraft.world.GameMode.SURVIVAL);
+            this.teleportToSpawn(player);
         }
+
+        for (String teamId : this.activeTeamIds) {
+            this.bedTeamStates.put(teamId, new BedTeamState());
+        }
+        this.upgradeManager = new dev.frost.miniverse.minigame.impl.bedwars.upgrade.BedwarsTeamUpgradeManager(this.activeTeamIds, this);
+        this.upgradeManager.spawnNpcs(this.instanceWorld, this.mapConfig.upgradeNpcs());
         
         if (this.context.nullableServer() != null) {
             this.context.nullableServer().setPvpEnabled(true);
@@ -222,9 +321,10 @@ public class BedwarsMinigame extends AbstractMinigame implements
         this.state = state;
 
         if (oldState != dev.frost.miniverse.minigame.core.GameState.FROZEN && this.getState() == dev.frost.miniverse.minigame.core.GameState.FROZEN) {
-            this.mapSessionTeams();
             if (this.context != null && this.context.nullableServer() != null) {
-                for (net.minecraft.server.network.ServerPlayerEntity player : this.context.roster().onlinePlayers(this.context.nullableServer())) {
+                List<ServerPlayerEntity> players = this.context.roster().onlinePlayers(this.context.nullableServer());
+                this.mapPlayersToBedwarsTeams(players);
+                for (net.minecraft.server.network.ServerPlayerEntity player : players) {
                     this.teleportToSpawn(player);
                 }
             }
@@ -427,16 +527,33 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
     @Override
     public void teleportToSpawn(ServerPlayerEntity player) {
-        String teamId = this.teamManager.teamId(player.getUuid());
-        if (teamId != null) {
-            BedwarsMapConfig.BedwarsTeamConfig config = this.mapConfig.teams().get(teamId);
-            if (config != null && !config.spawns.isEmpty()) {
-                dev.frost.miniverse.map.MapPosition pos = config.spawns.get(new java.util.Random().nextInt(config.spawns.size()));
-                if (this.runtime != null && this.context.nullableServer() != null) {
-                    player.teleport(player.getServerWorld(), pos.x() + 0.5, pos.y(), pos.z() + 0.5, java.util.Set.of(), pos.yaw(), pos.pitch());
-                }
-            }
+        String rawTeamId = this.teamManager.teamId(player.getUuid());
+        String teamId = this.resolvePlayerMapTeamId(player);
+        if (teamId != null && !teamId.equals(rawTeamId)) {
+            this.assignToMapTeam(player, teamId);
         }
+        if (teamId == null) {
+            dev.frost.miniverse.Miniverse.LOGGER.warn("Bedwars spawn skipped for {}: no map team resolved from teamId='{}' label='{}'. Map teams={}",
+                player.getName().getString(), rawTeamId, this.teamManager.teamLabel(player.getUuid(), ""), this.mapConfig.teams().keySet());
+            return;
+        }
+
+        BedwarsMapConfig.BedwarsTeamConfig config = this.mapConfig.teams().get(teamId);
+        if (config == null) {
+            dev.frost.miniverse.Miniverse.LOGGER.warn("Bedwars spawn skipped for {}: resolved team '{}' has no config. Map teams={}",
+                player.getName().getString(), teamId, this.mapConfig.teams().keySet());
+            return;
+        }
+        if (config.spawns.isEmpty()) {
+            dev.frost.miniverse.Miniverse.LOGGER.warn("Bedwars spawn skipped for {}: team '{}' ({}) has no teamSpawns. Team definition point is not used as spawn.",
+                player.getName().getString(), teamId, config.name);
+            return;
+        }
+
+        dev.frost.miniverse.map.MapPosition pos = config.spawns.get(Math.floorMod(player.getUuid().hashCode(), config.spawns.size()));
+        player.teleport(player.getServerWorld(), pos.x() + 0.5, pos.y(), pos.z() + 0.5, java.util.Set.of(), pos.yaw(), pos.pitch());
+        dev.frost.miniverse.Miniverse.LOGGER.info("Bedwars spawned {} on team '{}' ({}) at team_spawn {},{},{}.",
+            player.getName().getString(), teamId, config.name, pos.x(), pos.y(), pos.z());
     }
 
     public void equipBaseArmor(ServerPlayerEntity player) {

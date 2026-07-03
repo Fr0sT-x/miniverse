@@ -12,7 +12,8 @@
 		"protection.FireBlockMixin",
 		"protection.FlowableFluidMixin",
 		"protection.FallingBlockMixin",
-		"WorldArenaTrackerMixin"
+		"WorldArenaTrackerMixin",
+		"GlowingFilterMixin"
 	],
 	"client": [
 		"ProtectedItemClientHandledScreenMixin",

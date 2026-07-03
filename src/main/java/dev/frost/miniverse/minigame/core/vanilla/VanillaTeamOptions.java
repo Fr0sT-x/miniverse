@@ -15,6 +15,15 @@ public record VanillaTeamOptions(
     AbstractTeam.VisibilityRule deathMessageVisibility,
     boolean showFriendlyInvisibles
 ) {
+    public VanillaTeamOptions {
+        color = color == null ? Formatting.WHITE : color;
+        prefix = prefix == null ? Text.empty() : prefix;
+        suffix = suffix == null ? Text.empty() : suffix;
+        collisionRule = collisionRule == null ? AbstractTeam.CollisionRule.NEVER : collisionRule;
+        nameTagVisibility = nameTagVisibility == null ? AbstractTeam.VisibilityRule.ALWAYS : nameTagVisibility;
+        deathMessageVisibility = deathMessageVisibility == null ? AbstractTeam.VisibilityRule.ALWAYS : deathMessageVisibility;
+    }
+
     public static VanillaTeamOptions defaults() {
         return new VanillaTeamOptions(
             Formatting.WHITE,
@@ -29,7 +38,7 @@ public record VanillaTeamOptions(
     }
 
     public VanillaTeamOptions withColor(Formatting color) {
-        return new VanillaTeamOptions(color, this.prefix, this.suffix, this.friendlyFireAllowed, this.collisionRule, this.nameTagVisibility, this.deathMessageVisibility, this.showFriendlyInvisibles);
+        return new VanillaTeamOptions(color == null ? Formatting.WHITE : color, this.prefix, this.suffix, this.friendlyFireAllowed, this.collisionRule, this.nameTagVisibility, this.deathMessageVisibility, this.showFriendlyInvisibles);
     }
 
     public VanillaTeamOptions withPrefix(@Nullable Text prefix) {

@@ -24,7 +24,7 @@ public record BedwarsMapConfig(
     Integer voidLevelRef
 ) {
     public BedwarsMapConfig {
-        teams = Map.copyOf(teams);
+        teams = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(teams));
         midDiamondGens = List.copyOf(midDiamondGens);
         midEmeraldGens = List.copyOf(midEmeraldGens);
         shopNpcs = List.copyOf(shopNpcs);

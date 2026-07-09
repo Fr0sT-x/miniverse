@@ -34,6 +34,11 @@ final class BountyHuntSessionBootstrap {
             }
 
             @Override
+            public void onPlayerJoin(BountyHuntMinigame minigame, ServerPlayerEntity player, Properties properties) {
+                minigame.addParticipantMidGame(player, "", "");
+            }
+
+            @Override
             public MatchLifecycleOptions lifecycleOptions(BountyHuntMinigame minigame, Properties properties) {
                 BountyHuntSettings settings = minigame.getSettings();
                 return MatchLifecycleOptions.defaults(minigame.getName())

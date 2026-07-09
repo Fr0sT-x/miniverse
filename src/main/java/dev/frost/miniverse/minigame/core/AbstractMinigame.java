@@ -27,7 +27,7 @@ import java.util.function.Supplier;
  */
 public abstract class AbstractMinigame implements Minigame, RuntimeContextAware, ServerTickAware,
     ItemUseAware, PlayerDamageAware, EntityDeathAware, PlayerJoinAware, PlayerLeaveAware,
-    PlayerRegionAware, PlayerRespawnAware, PersistentMinigame, PauseAwareMinigame, DynamicParticipantMinigame {
+    PlayerRegionAware, PlayerRespawnAware, PersistentMinigame, PauseAwareMinigame, DynamicParticipantMinigame, BlockAttackAware {
 
     protected MinigameRuntime runtime;
     protected MinigameContext context;
@@ -239,6 +239,11 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     @Override
     public boolean allowDamage(ServerPlayerEntity player, DamageSource source, float amount) {
         return true;
+    }
+
+    @Override
+    public net.minecraft.util.ActionResult onAttackBlock(ServerPlayerEntity player, net.minecraft.world.World world, net.minecraft.util.Hand hand, net.minecraft.util.math.BlockPos pos, net.minecraft.util.math.Direction direction) {
+        return net.minecraft.util.ActionResult.PASS;
     }
 
     @Override

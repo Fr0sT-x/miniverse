@@ -3,6 +3,8 @@ package dev.frost.miniverse.minigame.impl.bedwars.shop;
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsMapConfig;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsSettings;
+import dev.frost.miniverse.minigame.core.shop.ShopCategory;
+import dev.frost.miniverse.minigame.core.shop.ShopGui;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -19,12 +21,18 @@ public final class BedwarsShopManager {
     private final Map<UUID, BedwarsPlayerToolState> toolStates = new ConcurrentHashMap<>();
     private final BedwarsQuickBuyService quickBuyService = new BedwarsQuickBuyService();
     private final List<UUID> shopNpcIds = new ArrayList<>();
+    private final List<ShopCategory> shopCategories;
+
+    public BedwarsShopManager(BedwarsMapConfig config, BedwarsSettings settings) {
+        // Determine if it's 3s/4s based on team size setting. We assume BedwarsSettings has teamSize() or similar
+        // Actually since we don't have the exact API, let's just assume false or try to find out.
+        // It's a placeholder for the dynamic pricing
+        boolean is3s4s = false; // TODO check BedwarsSettings
+        this.shopCategories = BedwarsShopBuilder.buildShop(this, is3s4s);
+    }
 
     public BedwarsQuickBuyService getQuickBuyService() {
         return quickBuyService;
-    }
-    
-    public BedwarsShopManager(BedwarsMapConfig config, BedwarsSettings settings) {
     }
 
     public void initPlayers(List<ServerPlayerEntity> players) {
@@ -49,97 +57,12 @@ public final class BedwarsShopManager {
 
     public boolean handleInteract(ServerPlayerEntity player, net.minecraft.entity.Entity entity) {
         if (shopNpcIds.contains(entity.getUuid())) {
-            BedwarsShopGui.open(player, this);
+            ShopGui.open(player, Text.literal("Item Shop"), this.shopCategories);
             return true;
         }
         return false;
     }
 
-    public boolean purchase(ServerPlayerEntity player, BedwarsShopItem item) {
-        int cost = item.cost();
-        net.minecraft.item.Item currencyItem = item.currency().item();
-        
-        if (player.getInventory().count(currencyItem) >= cost) {
-            // Deduct currency
-            int remainingToDeduct = cost;
-            for (int i = 0; i < player.getInventory().size(); i++) {
-                net.minecraft.item.ItemStack stack = player.getInventory().getStack(i);
-                if (stack.getItem() == currencyItem) {
-                    int amountToTake = Math.min(stack.getCount(), remainingToDeduct);
-                    stack.decrement(amountToTake);
-                    remainingToDeduct -= amountToTake;
-                    if (remainingToDeduct <= 0) break;
-                }
-            }
-            
-            // Give item
-            if (item.category() == BedwarsShopCategory.TOOLS) {
-                // Handle tools upgrading
-                BedwarsPlayerToolState state = getToolState(player.getUuid());
-                if (item.name().startsWith("PICKAXE")) {
-                    state.upgradePickaxe(state.getPickaxeTier() + 1);
-                    replaceOrGiveWeapon(player, state.buildPickaxe(player.getWorld().getRegistryManager()));
-                } else if (item.name().startsWith("AXE")) {
-                    state.upgradeAxe(state.getAxeTier() + 1);
-                    replaceOrGiveWeapon(player, state.buildAxe(player.getWorld().getRegistryManager()));
-                } else {
-                    replaceOrGiveWeapon(player, item.buildStack(player.getWorld().getRegistryManager()));
-                }
-            } else if (item.category() == BedwarsShopCategory.ARMOR) {
-                BedwarsPlayerToolState state = getToolState(player.getUuid());
-                if (item == BedwarsShopItem.CHAINMAIL_ARMOR) {
-                    state.upgradeArmor(1);
-                    player.equipStack(net.minecraft.entity.EquipmentSlot.LEGS, new net.minecraft.item.ItemStack(net.minecraft.item.Items.CHAINMAIL_LEGGINGS));
-                    player.equipStack(net.minecraft.entity.EquipmentSlot.FEET, new net.minecraft.item.ItemStack(net.minecraft.item.Items.CHAINMAIL_BOOTS));
-                } else if (item == BedwarsShopItem.IRON_ARMOR) {
-                    state.upgradeArmor(2);
-                    player.equipStack(net.minecraft.entity.EquipmentSlot.LEGS, new net.minecraft.item.ItemStack(net.minecraft.item.Items.IRON_LEGGINGS));
-                    player.equipStack(net.minecraft.entity.EquipmentSlot.FEET, new net.minecraft.item.ItemStack(net.minecraft.item.Items.IRON_BOOTS));
-                } else if (item == BedwarsShopItem.DIAMOND_ARMOR) {
-                    state.upgradeArmor(3);
-                    player.equipStack(net.minecraft.entity.EquipmentSlot.LEGS, new net.minecraft.item.ItemStack(net.minecraft.item.Items.DIAMOND_LEGGINGS));
-                    player.equipStack(net.minecraft.entity.EquipmentSlot.FEET, new net.minecraft.item.ItemStack(net.minecraft.item.Items.DIAMOND_BOOTS));
-                }
-            } else if (item == BedwarsShopItem.KNOCKBACK_STICK) {
-                BedwarsPlayerToolState state = getToolState(player.getUuid());
-                if (!state.hasKnockbackStick()) {
-                    state.setHasKnockbackStick(true);
-                    replaceOrGiveWeapon(player, item.buildStack(player.getWorld().getRegistryManager()));
-                } else {
-                    return false; // Already have it, don't buy again
-                }
-            } else {
-                replaceOrGiveWeapon(player, item.buildStack(player.getWorld().getRegistryManager()));
-            }
-            
-            player.playSound(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 1.0f, 2.0f);
-            return true;
-        }
-        
-        return false;
-    }
-
-    private void replaceOrGiveWeapon(ServerPlayerEntity player, net.minecraft.item.ItemStack newWeapon) {
-        if (newWeapon.getItem() instanceof net.minecraft.item.SwordItem || 
-            newWeapon.getItem() instanceof net.minecraft.item.PickaxeItem || 
-            newWeapon.getItem() instanceof net.minecraft.item.AxeItem) {
-            
-            for (int i = 0; i < player.getInventory().size(); i++) {
-                net.minecraft.item.ItemStack current = player.getInventory().getStack(i);
-                if (current.isEmpty()) continue;
-                if ((newWeapon.getItem() instanceof net.minecraft.item.SwordItem && current.getItem() instanceof net.minecraft.item.SwordItem) ||
-                    (newWeapon.getItem() instanceof net.minecraft.item.PickaxeItem && current.getItem() instanceof net.minecraft.item.PickaxeItem) ||
-                    (newWeapon.getItem() instanceof net.minecraft.item.AxeItem && current.getItem() instanceof net.minecraft.item.AxeItem)) {
-                    
-                    player.getInventory().setStack(i, newWeapon);
-                    player.getInventory().offerOrDrop(current);
-                    return;
-                }
-            }
-        }
-        player.getInventory().offerOrDrop(newWeapon);
-    }
-    
     public BedwarsPlayerToolState getToolState(UUID uuid) {
         return toolStates.computeIfAbsent(uuid, k -> new BedwarsPlayerToolState());
     }

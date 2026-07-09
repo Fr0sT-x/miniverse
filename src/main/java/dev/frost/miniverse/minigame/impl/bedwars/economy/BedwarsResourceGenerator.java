@@ -52,14 +52,13 @@ public final class BedwarsResourceGenerator {
         
         if (this.hologramManager != null && !this.isTeamGenerator) {
             if (this.hologramId == null) {
-                net.minecraft.entity.decoration.ArmorStandEntity hologramEntity = this.hologramManager.createHologram(world, position.x() + 0.5, position.y() + 2.0, position.z() + 0.5, net.minecraft.text.Text.literal(""));
+                net.minecraft.entity.decoration.ArmorStandEntity hologramEntity = this.hologramManager.createHologram(world, position.x(), position.y() + 2.0, position.z(), net.minecraft.text.Text.literal(""));
                 this.hologramId = hologramEntity.getUuid();
             }
-            int secondsLeft = (this.currentInterval - this.ticksElapsed) / 20;
-            String text = "Spawns in " + secondsLeft + "s";
             net.minecraft.entity.Entity entity = world.getEntity(this.hologramId);
             if (entity instanceof net.minecraft.entity.decoration.ArmorStandEntity hologramEntity) {
-                hologramEntity.setCustomName(net.minecraft.text.Text.literal(text).formatted(this.currency.formatting()));
+                String text = this.currency.getName().getString() + " Spawner";
+                hologramEntity.setCustomName(net.minecraft.text.Text.literal(text).formatted(this.currency.getFormatting()));
             }
         }
         

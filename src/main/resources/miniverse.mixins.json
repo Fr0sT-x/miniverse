@@ -13,7 +13,8 @@
 		"protection.FlowableFluidMixin",
 		"protection.FallingBlockMixin",
 		"WorldArenaTrackerMixin",
-		"GlowingFilterMixin"
+		"GlowingFilterMixin",
+		"bedwars.BridgeEggEntityMixin"
 	],
 	"client": [
 		"ProtectedItemClientHandledScreenMixin",

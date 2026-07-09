@@ -35,7 +35,7 @@ final class ResourceSprintSessionBootstrap {
 
             @Override
             public void onPlayerJoin(ResourceSprintMinigame minigame, ServerPlayerEntity player, Properties properties) {
-                minigame.setPlayerTeam(player, properties.getProperty("player." + player.getUuid() + ".team", properties.getProperty("groupLabel", "Team")));
+                minigame.addParticipantMidGame(player, properties.getProperty("player." + player.getUuid() + ".team", properties.getProperty("groupLabel", "Team")), "");
             }
 
             @Override

@@ -16,8 +16,9 @@
 ## Index
 
 | ID | Title | Status | Date |
-|| D16 | F07 Global Match Rules Framework Removed | DECIDED | 2026-06-26 |
-----|-------|--------|------|
+|----|-------|--------|------|
+| D16 | F07 Global Match Rules Framework Removed | DECIDED | 2026-06-26 |
+| D17 | Create F24 Shop Framework | DECIDED | 2026-07-04 |
 | D01 | AbstractMinigame as universal base class | DECIDED | 2026-06-20 |
 | D02 | Framework-first: opt-in interfaces over identity checks | DECIDED | 2026-06-20 |
 | D03 | GameState enum consolidation required | DECIDED | 2026-06-20 |
@@ -436,3 +437,17 @@ Copy this template and append it to the file:
 
 **Supersedes:** Nothing.
 
+---
+
+### D17 — Create F24 Shop Framework
+
+**Status:** DECIDED
+**Date:** 2026-07-04
+
+**Decision:** Create a unified `F24 Shop Framework` to handle item pricing, dynamic pricing, shop categories, and player purchases across minigames.
+
+**Reason:** Currently, gamemodes like Bedwars and MurderMystery independently implement hardcoded GUI builders and massive `if/else` purchase logic blocks. Creating a unified framework extracts these cross-cutting concerns, providing reusable `ShopGui`, `ShopItem`, and `ShopCategory` interfaces that can be instantiated dynamically without singleton patterns.
+
+**Constraints this imposes:** Any new shop implementation must use the F24 interfaces instead of writing custom raw `GenericContainerScreenHandler` code. Purchase logic must be encapsulated in the `ShopItem.onPurchase` method.
+
+**Supersedes:** Nothing.

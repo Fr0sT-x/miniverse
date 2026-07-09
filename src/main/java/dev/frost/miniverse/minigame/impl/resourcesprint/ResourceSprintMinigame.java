@@ -68,7 +68,6 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
     private final Map<UUID, ScoreboardLine> timeLines = new HashMap<>();
     private final dev.frost.miniverse.minigame.core.countdown.CountdownService countdowns = new dev.frost.miniverse.minigame.core.countdown.CountdownService();
     private final ResourceSprintEventMessenger eventMessenger = new ResourceSprintEventMessenger(this::getParticipants);
-    private final VanillaTeamAdapter vanillaTeams = new VanillaTeamAdapter("resourcesprint");
 
     private static final class TeamProgress {
         private int currentObjectiveIndex;
@@ -126,8 +125,6 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
     public ResourceSprintMinigame() {
         this.state = GameState.WAITING_FOR_PLAYERS;
         this.settings = ResourceSprintSettings.defaults();
-        this.vanillaTeams.setFriendlyFireAllowed(false);
-        this.vanillaTeams.setTeammateCollisionAllowed(false);
     }
 
 
@@ -137,18 +134,22 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
     }
 
     public void setVanillaFriendlyFireAllowed(boolean allowed) {
-        this.vanillaTeams.setFriendlyFireAllowed(allowed);
-        this.syncVanillaTeams();
+        if (this.getVanillaTeams() != null) {
+            this.getVanillaTeams().setFriendlyFireAllowed(allowed);
+            this.syncVanillaTeams();
+        }
     }
 
     @Override
     protected boolean isTeamBased() {
-        return false;
+        return true;
     }
 
     public void setVanillaTeammateCollisionAllowed(boolean allowed) {
-        this.vanillaTeams.setTeammateCollisionAllowed(allowed);
-        this.syncVanillaTeams();
+        if (this.getVanillaTeams() != null) {
+            this.getVanillaTeams().setTeammateCollisionAllowed(allowed);
+            this.syncVanillaTeams();
+        }
     }
 
     public void setTeamLabel(String teamLabel) {
@@ -205,6 +206,15 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
             return;
         }
 
+        if (this.server == null && this.context != null) {
+            this.server = this.context.nullableServer();
+        }
+
+        if (this.getVanillaTeams() != null) {
+            this.getVanillaTeams().setFriendlyFireAllowed(false);
+            this.getVanillaTeams().setTeammateCollisionAllowed(false);
+        }
+
         if (!this.canStartMatch()) {
             this.broadcastMessage(Text.literal("Cannot start Resource Sprint: no valid objectives or participants are assigned.").formatted(Formatting.RED));
             return;
@@ -245,7 +255,6 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         if (this.server != null && this.baseScoreboard != null) {
             this.baseScoreboard.cleanup(this.server);
         }
-        this.clearVanillaTeams();
         this.server = null;
         if (this.context != null) {
             this.context.roster().clear();
@@ -625,7 +634,6 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
         }
 
         this.startStandardEndSequence(winningTeam);
-        this.onMatchEnd();
     }
 
     private void startStandardEndSequence(String winningTeam) {
@@ -763,25 +771,18 @@ public class ResourceSprintMinigame extends AbstractMinigame implements TeamMana
 
     @Override
     protected void syncVanillaTeams() {
-        if (this.server == null) {
+        if (this.server == null || this.getVanillaTeams() == null) {
             return;
         }
 
-        this.vanillaTeams.syncSnapshots(this.server, this.teams.snapshots(this.teamProgress.keySet()), snapshot -> {
-            Formatting color = this.vanillaTeams.colorFor(snapshot.id());
+        this.getVanillaTeams().syncSnapshots(this.server, this.teams.snapshots(this.teamProgress.keySet()), snapshot -> {
+            Formatting color = this.getVanillaTeams().colorFor(snapshot.id());
             return VanillaTeamOptions.defaults()
                 .withColor(color)
                 .withPrefix(Text.literal("[" + TeamColorPalette.labelFor(snapshot.id()) + "] ").formatted(color))
                 .withFriendlyFireAllowed(false)
                 .withCollisionRule(AbstractTeam.CollisionRule.NEVER);
         });
-    }
-
-    @Override
-    protected void clearVanillaTeams() {
-        if (this.server != null) {
-            this.vanillaTeams.clear(this.server);
-        }
     }
 
     private int lastTeamCompletionTick(TeamProgress progress) {

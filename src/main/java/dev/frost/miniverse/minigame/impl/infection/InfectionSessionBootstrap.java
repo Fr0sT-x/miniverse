@@ -36,6 +36,11 @@ final class InfectionSessionBootstrap {
             }
 
             @Override
+            public void onPlayerJoin(InfectionMinigame minigame, net.minecraft.server.network.ServerPlayerEntity player, Properties properties) {
+                minigame.addParticipantMidGame(player, "", "");
+            }
+
+            @Override
             public MatchLifecycleOptions lifecycleOptions(InfectionMinigame minigame, Properties properties) {
                 return MatchLifecycleOptions.defaults(minigame.getName())
                     .withFreezeEnabled(true)

@@ -33,6 +33,11 @@ public final class BlockShuffleSessionBootstrap {
             }
 
             @Override
+            public void onPlayerJoin(BlockShuffleMinigame minigame, net.minecraft.server.network.ServerPlayerEntity player, Properties properties) {
+                minigame.addParticipantMidGame(player, "", "");
+            }
+
+            @Override
             public MatchLifecycleOptions lifecycleOptions(BlockShuffleMinigame minigame, Properties properties) {
                 return MatchLifecycleOptions.defaults(minigame.getName())
                     .withFreezeEnabled(true)

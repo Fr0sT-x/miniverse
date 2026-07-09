@@ -401,7 +401,12 @@ public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwar
             player.changeGameMode(GameMode.ADVENTURE);
             teleportToRandomSpawn(player);
         }
-        visibilityManager.sync(server);
+        if (this.server == null && this.context != null) {
+            this.server = this.context.nullableServer();
+        }
+        if (this.server != null) {
+            visibilityManager.sync(server);
+        }
     }
 
     @Override

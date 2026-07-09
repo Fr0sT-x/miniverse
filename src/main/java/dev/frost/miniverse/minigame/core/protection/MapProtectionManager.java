@@ -53,11 +53,21 @@ public final class MapProtectionManager {
             }
         }
         
+        net.minecraft.block.BlockState targetState = ((net.minecraft.server.world.ServerWorld) player.getWorld()).getBlockState(pos);
+        if (targetState.getBlock() == net.minecraft.block.Blocks.FIRE || targetState.getBlock() == net.minecraft.block.Blocks.SOUL_FIRE) {
+            return true;
+        }
+
         if (!isProtected((ServerWorld) player.getWorld(), pos)) {
             return true;
         }
 
         if (sendMessage) {
+            // Bed blocks: the minigame's canBypassProtection already handles all player-facing
+            // messaging for bed interactions. Sending this generic message would produce duplicates.
+            if (((net.minecraft.server.world.ServerWorld) player.getWorld()).getBlockState(pos).getBlock() instanceof net.minecraft.block.BedBlock) {
+                return false;
+            }
             player.sendMessage(Text.literal("You cannot break that block.").formatted(Formatting.RED), false);
         }
         return false;

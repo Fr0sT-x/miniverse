@@ -424,6 +424,15 @@ intentionally not needed (so the silence is intentional, not forgotten).
 
 ---
 
+### C08 — Migrate MurderMystery Shop to F24 Shop Framework
+
+**Status:** `[ ] Not started`
+**Preconditions:** F24 Shop Framework implemented (during Bedwars development)
+
+**What:** MurderMystery currently uses a bespoke `ShopManager` with hardcoded `GenericContainerScreenHandler` GUI builders and a massive `if/else` block for purchases. Once F24 is built, MurderMystery must migrate its shop items to `ShopItem` and its shop layout to `ShopGui`.
+
+---
+
 ## Phase D — New Frameworks (Future)
 
 These are planned frameworks that do not exist yet. Add detail here when work begins.

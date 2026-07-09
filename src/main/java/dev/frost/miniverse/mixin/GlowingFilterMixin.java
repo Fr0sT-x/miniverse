@@ -61,4 +61,18 @@ public abstract class GlowingFilterMixin {
         }
         return packet;
     }
+
+    @org.spongepowered.asm.mixin.injection.Inject(method = "sendPacket(Lnet/minecraft/network/packet/Packet;)V", at = @At("HEAD"), cancellable = true)
+    private void miniverse$cancelGlowingEffect(Packet<?> packet, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+        if (packet instanceof net.minecraft.network.packet.s2c.play.EntityStatusEffectS2CPacket effectPacket && (Object) this instanceof ServerPlayNetworkHandler playHandler) {
+            if (effectPacket.getEffectId().equals(net.minecraft.entity.effect.StatusEffects.GLOWING)) {
+                Entity target = playHandler.player.getWorld().getEntityById(effectPacket.getEntityId());
+                if (target instanceof ServerPlayerEntity targetPlayer 
+                        && targetPlayer != playHandler.player 
+                        && !TeamGlowVisibility.canViewerSeeGlowing(playHandler.player, targetPlayer)) {
+                    ci.cancel();
+                }
+            }
+        }
+    }
 }

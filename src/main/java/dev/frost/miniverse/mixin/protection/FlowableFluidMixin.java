@@ -18,6 +18,11 @@ public class FlowableFluidMixin {
     @Inject(method = "canFill", at = @At("HEAD"), cancellable = true)
     private void onCanFill(BlockView world, BlockPos pos, BlockState state, Fluid fluid, CallbackInfoReturnable<Boolean> cir) {
         if (world instanceof ServerWorld serverWorld) {
+            // Allow fluids to flow into Air blocks.
+            if (state.getBlock() == net.minecraft.block.Blocks.AIR || state.getBlock() == net.minecraft.block.Blocks.CAVE_AIR || state.getBlock() == net.minecraft.block.Blocks.VOID_AIR) {
+                return;
+            }
+
             if (MapProtectionManager.isProtected(serverWorld, pos)) {
                 // If it's a protected block, don't let fluid fill/destroy it
                 cir.setReturnValue(false);

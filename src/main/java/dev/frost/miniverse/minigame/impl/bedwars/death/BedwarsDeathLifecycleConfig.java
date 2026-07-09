@@ -21,7 +21,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-public final class BedwarsDeathLifecycleConfig implements DeathLifecycleConfig {
+import dev.frost.miniverse.minigame.core.death.ImmediateRespawnNotifier;
+
+public final class BedwarsDeathLifecycleConfig implements DeathLifecycleConfig, ImmediateRespawnNotifier {
     private final BedwarsMinigame minigame;
     private final Map<String, BedTeamState> bedTeamStates;
     private final BedwarsSettings settings;
@@ -91,5 +93,16 @@ public final class BedwarsDeathLifecycleConfig implements DeathLifecycleConfig {
     @Override
     public @Nullable String resolveMatchIdentifier() {
         return minigame.getName();
+    }
+
+    @Override
+    public net.minecraft.text.Text getDeathTitle(net.minecraft.server.network.ServerPlayerEntity victim, net.minecraft.entity.damage.DamageSource source) {
+        return net.minecraft.text.Text.literal("YOU DIED!").formatted(net.minecraft.util.Formatting.RED);
+    }
+
+    @Override
+    public net.minecraft.text.Text getDeathSubtitle(net.minecraft.server.network.ServerPlayerEntity victim, net.minecraft.entity.damage.DamageSource source, int ticksRemaining) {
+        int seconds = (int) Math.ceil(ticksRemaining / 20.0);
+        return net.minecraft.text.Text.literal("Respawning in " + seconds + "s...").formatted(net.minecraft.util.Formatting.YELLOW);
     }
 }

@@ -2,6 +2,7 @@ package dev.frost.miniverse.minigame.impl.murdermystery;
 
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import net.minecraft.server.network.ServerPlayerEntity;
 
 import java.util.Properties;
 
@@ -28,6 +29,11 @@ public class MurderMysterySessionBootstrap {
                 MurderMysterySettings settings = MurderMysterySettings.fromProperties(properties);
                 String preSerializedMapConfig = properties.getProperty("murdermystery.mapConfig", "");
                 minigame.applySettings(settings, preSerializedMapConfig);
+            }
+
+            @Override
+            public void onPlayerJoin(MurderMysteryMinigame minigame, ServerPlayerEntity player, Properties properties) {
+                minigame.addParticipantMidGame(player, "", "");
             }
 
             @Override

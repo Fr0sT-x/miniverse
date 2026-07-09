@@ -39,6 +39,7 @@
    - [F21 Derangement/Swap Framework](#f21-derangementswap-framework)
    - [F22 Respawn Policy Framework](#f22-respawn-policy-framework)
    - [F23 Inventory Layout Framework](#f23-inventory-layout-framework)
+   - [F24 Shop Framework](#f24-shop-framework)
 5. [Confirmed Bugs](#5-confirmed-bugs)
 6. [Known Framework Interactions](#6-known-framework-interactions)
 7. [Adding a New Framework](#7-adding-a-new-framework)
@@ -647,6 +648,27 @@ POINTS respawn modes). Predates `DeathLifecycleManager`.
 **Purpose:** Persists and restores per-player hotbar layout preferences per gamemode.
 
 **Key interface:** `InventoryLayoutAware` — `inventoryLayoutGamemodeId()`, `inventoryLayoutProfileId()`
+
+---
+
+### F24 Shop Framework
+
+**Status:** Prototype
+**Adoption:** 0/11
+
+**Purpose:** Unified minigame shop UI and logic (item pricing, dynamic pricing, categories, quick buy).
+
+**Key classes:**
+| Class | Role |
+|-------|------|
+| `ShopCategory` | Interface defining icon and name |
+| `ShopItem` | Interface defining cost, currency, icon, and onPurchase |
+| `ShopCurrency` | Interface for processing payments |
+| `ShopGui` | Builds unified multi-page chest GUIs for shops |
+
+**Lifecycle:** Instantiated dynamically when opening a shop interface. Should not use singletons.
+
+**To adopt:** Implement `ShopItem` and `ShopCategory` specifically for the minigame, then use `ShopGui` to render the inventory to players.
 
 ---
 

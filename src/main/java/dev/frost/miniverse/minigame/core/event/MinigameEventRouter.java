@@ -94,7 +94,7 @@ public final class MinigameEventRouter {
             }
             return ActionResult.PASS;
         });
-        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
+        AttackBlockCallback.EVENT.register(this::onAttackBlock);
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> this.pausedFor(player) ? ActionResult.FAIL : ActionResult.PASS);
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
             if (this.pausedFor(player)) return false;
@@ -173,18 +173,29 @@ public final class MinigameEventRouter {
         return TypedActionResult.pass(player.getStackInHand(hand));
     }
 
-    private boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
-        if (!(entity instanceof ServerPlayerEntity player)) {
-            return true;
-        }
-
-        if (this.pausedFor(player)) {
-            return false;
-        }
-
+    private ActionResult onAttackBlock(net.minecraft.entity.player.PlayerEntity player, World world, Hand hand, net.minecraft.util.math.BlockPos pos, net.minecraft.util.math.Direction direction) {
+        if (this.pausedFor(player)) return ActionResult.FAIL;
         Minigame active = this.activeMinigame();
-        if (active instanceof PlayerDamageAware damageAware) {
-            return damageAware.allowDamage(player, source, amount);
+        if (active instanceof BlockAttackAware aware && player instanceof ServerPlayerEntity serverPlayer) {
+            return aware.onAttackBlock(serverPlayer, world, hand, pos, direction);
+        }
+        return ActionResult.PASS;
+    }
+
+    private boolean onAllowDamage(LivingEntity entity, DamageSource source, float amount) {
+        Minigame active = this.activeMinigame();
+
+        if (entity instanceof ServerPlayerEntity player) {
+            if (this.pausedFor(player)) {
+                return false;
+            }
+            if (active instanceof PlayerDamageAware damageAware) {
+                return damageAware.allowDamage(player, source, amount);
+            }
+        } else {
+            if (active instanceof EntityDamageAware damageAware) {
+                return damageAware.allowEntityDamage(entity, source, amount);
+            }
         }
 
         return true;

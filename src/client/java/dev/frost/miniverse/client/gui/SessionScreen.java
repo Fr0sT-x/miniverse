@@ -74,7 +74,8 @@ public class SessionScreen extends Screen {
         Map.entry("block_shuffle", SessionScreen::openBlockShuffle),
         Map.entry("death_shuffle", SessionScreen::openDeathShuffle),
         Map.entry("murdermystery", SessionScreen::openMurderMystery),
-        Map.entry("duels", SessionScreen::openDuels)
+        Map.entry("duels", SessionScreen::openDuels),
+        Map.entry("pillarsoffortune", SessionScreen::openPillarsOfFortune)
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -1461,6 +1462,10 @@ public class SessionScreen extends Screen {
 
     private void openDuels() {
         this.openWorkspaceView(new DuelsWorkspaceView());
+    }
+
+    private void openPillarsOfFortune() {
+        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.PillarsOfFortuneWorkspaceView());
     }
 
     public void openGenericSetup(MinigameEntry entry) {

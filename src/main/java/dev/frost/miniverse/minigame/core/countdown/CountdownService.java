@@ -34,6 +34,17 @@ public final class CountdownService {
         Text title,
         @Nullable SoundEvent sound
     ) {
+        return announceVisibleCountdown(players, secondsRemaining, visibleAtSeconds, title, Text.literal(secondsRemaining + "s").formatted(Formatting.YELLOW), sound);
+    }
+
+    public boolean announceVisibleCountdown(
+        Collection<ServerPlayerEntity> players,
+        int secondsRemaining,
+        int visibleAtSeconds,
+        Text title,
+        @Nullable Text chatMessage,
+        @Nullable SoundEvent sound
+    ) {
         if (secondsRemaining <= 0 || secondsRemaining > visibleAtSeconds || !this.announcedSeconds.add(secondsRemaining)) {
             return false;
         }
@@ -42,7 +53,9 @@ public final class CountdownService {
         for (ServerPlayerEntity player : players) {
             player.networkHandler.sendPacket(new SubtitleS2CPacket(subtitle));
             player.networkHandler.sendPacket(new TitleS2CPacket(title.copy().formatted(Formatting.GOLD, Formatting.BOLD)));
-            player.sendMessage(Text.literal(secondsRemaining + "s").formatted(Formatting.YELLOW), true);
+            if (chatMessage != null) {
+                player.sendMessage(chatMessage, true); // true = actionbar
+            }
             if (sound != null) {
                 player.playSound(sound, 1.0F, 1.0F);
             }

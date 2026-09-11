@@ -12,6 +12,8 @@ import dev.frost.miniverse.minigame.impl.blockshuffle.BlockShuffleDefinition;
 import dev.frost.miniverse.minigame.impl.deathshuffle.DeathShuffleDefinition;
 import dev.frost.miniverse.minigame.impl.speedrun.SpeedrunDefinition;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsDefinition;
+import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
+import dev.frost.miniverse.minigame.impl.pillarsoffortune.PillarsOfFortuneDefinition;
 
 public final class MiniverseGames {
     private static boolean registered;
@@ -33,10 +35,10 @@ public final class MiniverseGames {
         MinigameRegistry.register(new BridgeDefinition());
         MinigameRegistry.register(new BlockShuffleDefinition());
         MinigameRegistry.register(new DeathShuffleDefinition());
-        MinigameRegistry.register(new dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition());
+        MinigameRegistry.register(new MurderMysteryDefinition());
         MinigameRegistry.register(new DuelsDefinition());
         MinigameRegistry.register(new BedwarsDefinition());
-        dev.frost.miniverse.minigame.impl.murdermystery.MurderMysterySessionBootstrap.bootstrap();
+        MinigameRegistry.register(new PillarsOfFortuneDefinition());
         registered = true;
     }
 }

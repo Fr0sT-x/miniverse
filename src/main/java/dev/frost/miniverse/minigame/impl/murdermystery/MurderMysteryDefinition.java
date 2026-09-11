@@ -80,5 +80,6 @@ public final class MurderMysteryDefinition implements MinigameDefinition {
             List.of()
         ));
         MurderMysteryGameEvents.register();
+        MurderMysterySessionBootstrap.bootstrap();
     }
 }

@@ -44,6 +44,7 @@ public class ShopGui {
                                                 currency.deduct((ServerPlayerEntity) p2, cost);
                                                 p2.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
                                                 updateInventory(inventory, (ServerPlayerEntity) p2, categories, this.activeCategory);
+                                                this.sendContentUpdates();
                                                 return;
                                             } else {
                                                 p2.playSound(SoundEvents.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
@@ -56,11 +57,14 @@ public class ShopGui {
                                 }
                             } else if (slotIndex == 53) {
                                 ((ServerPlayerEntity) p2).closeHandledScreen();
+                                return;
                             }
                         }
                         this.sendContentUpdates();
+                        return;
                     } else if (actionType == net.minecraft.screen.slot.SlotActionType.QUICK_MOVE || actionType == net.minecraft.screen.slot.SlotActionType.SWAP) {
                         this.sendContentUpdates();
+                        return;
                     } else {
                         super.onSlotClick(slotIndex, button, actionType, p2);
                     }

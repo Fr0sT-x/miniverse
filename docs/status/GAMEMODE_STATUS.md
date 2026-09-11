@@ -13,33 +13,33 @@
 
 **Legend:** ✅ Fully Used · ⚠️ Partially Used · ❌ Not Used · 🔄 Migration In Progress
 
-| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection |
-|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|
-| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
-| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
-| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ |
-| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** |
+| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune |
+|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|
+| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
+| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
+| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ | ❌ |
+| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** | **N/A** |
 
 ---
 
@@ -378,26 +378,33 @@ When adding a new gamemode, copy the template below and fill it in before writin
 any code. Add the gamemode column to the matrix above.
 
 ```markdown
-### GamemodeName
+### Pillars of Fortune
 
-**Main class:** `GamemodeNameMinigame`
-**Status:** [Prototype | In Progress | Production-near | Production]
-**Compliance:** X%
-**Last reviewed:** YYYY-MM-DD
+**Main class:** `PillarsOfFortuneMinigame`
+**Status:** Prototype
+**Compliance:** N/A
+**Last reviewed:** 2026-07-09
 
-**Gamerules:** `keepInventory=X`, `doImmediateRespawn=X`, other overrides if any
+**Gamerules:** `doImmediateRespawn=false`
 
 **Frameworks actively used:**
-- List frameworks with brief reason
+- F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
+- F05 Death Lifecycle (Death handling and spectate forever policy)
+- F06 Persistence / F20 Player Snapshot (Crash recovery for timers and game state)
+- F09 Map Protection (Protects map blocks from destruction natively)
+- F11 Map Editor (SPAWN_POINT markers)
+- F12 Scoreboard (Displays remaining players and loot timer)
+- F19 Countdown Service (Used by LootDropModule for announcing loot drops)
 
 **Frameworks NOT used:**
-- List frameworks with brief reason why not
+- F08 Team — (Free for all)
 
 **Known issues / debt:**
-- List known issues
+- None.
 
-**Migration target:** What frameworks to adopt and when
+**Migration target:** None currently
 
-**Notes for AI sessions working on GamemodeName:**
-> Key context needed for consistent AI-assisted work on this gamemode.
+**Notes for AI sessions working on Pillars of Fortune:**
+> Map pillars are not dynamically generated; they must be built in the map with SPAWN_POINT markers placed on them.
+
 ```

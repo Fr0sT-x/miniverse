@@ -20,6 +20,12 @@ public final class MapProtectionTracker {
         this.placedBlocks.remove(pos);
     }
 
+    public void movePlacedBlock(BlockPos from, BlockPos to) {
+        if (this.placedBlocks.remove(from)) {
+            this.placedBlocks.add(to.toImmutable());
+        }
+    }
+
     public boolean isPlacedBlock(BlockPos pos) {
         return this.placedBlocks.contains(pos);
     }

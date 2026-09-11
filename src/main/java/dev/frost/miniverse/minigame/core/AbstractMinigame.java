@@ -42,6 +42,13 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
         }
     }
 
+    public void bindRuntime(MinigameRuntime runtime) {
+        this.runtime = runtime;
+        if (runtime != null) {
+            this.context = runtime.context();
+        }
+    }
+
     // --- Mandatory Lifecycle Hooks ---
 
     @Override
@@ -305,7 +312,7 @@ public abstract class AbstractMinigame implements Minigame, RuntimeContextAware,
     }
 
     @Nullable
-    protected VanillaTeamAdapter getVanillaTeams() {
+    public VanillaTeamAdapter getVanillaTeams() {
         return this.vanillaTeamAdapter;
     }
 

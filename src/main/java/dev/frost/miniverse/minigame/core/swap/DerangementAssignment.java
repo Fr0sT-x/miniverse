@@ -78,12 +78,12 @@ public final class DerangementAssignment<T> {
     }
 
     private static <T> Map<T, T> cycleDerangement(List<T> sources) {
-        List<T> targets = new ArrayList<>(sources);
-        Collections.shuffle(targets, ThreadLocalRandom.current());
-        Collections.rotate(targets, 1);
+        List<T> ring = new ArrayList<>(sources);
+        Collections.shuffle(ring, ThreadLocalRandom.current());
         Map<T, T> assignment = new LinkedHashMap<>();
-        for (int i = 0; i < sources.size(); i++) {
-            assignment.put(sources.get(i), targets.get(i));
+        int n = ring.size();
+        for (int i = 0; i < n; i++) {
+            assignment.put(ring.get(i), ring.get((i + 1) % n));
         }
         return assignment;
     }

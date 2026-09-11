@@ -43,6 +43,10 @@ public class RuntimeMarkerCache {
         }
     }
 
+    public boolean hasRegions() {
+        return !this.regionIndex.isEmpty();
+    }
+
     public List<MapMarker> getRegionsIntersecting(ChunkPos pos) {
         return this.regionIndex.getOrDefault(pos, Collections.emptyList());
     }

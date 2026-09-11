@@ -282,9 +282,6 @@ public final class MinigameEventRouter {
                 rosterAware.onRosterChanged(runtime.context().roster());
             }
         }
-        if (this.pausedFor(player)) {
-            return;
-        }
         Minigame active = this.activeMinigame();
         if (active instanceof PlayerLeaveAware leaveAware) {
             leaveAware.onPlayerLeave(player);

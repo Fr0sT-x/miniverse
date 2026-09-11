@@ -153,6 +153,15 @@ public final class VanillaTeamAdapter {
         this.logicalToScoreboardName.clear();
     }
 
+    public static void unregisterAll(Scoreboard scoreboard) {
+        if (scoreboard == null) {
+            return;
+        }
+        for (Team team : new ArrayList<>(scoreboard.getTeams())) {
+            scoreboard.removeTeam(team);
+        }
+    }
+
     public void pruneNamespaceTeams(MinecraftServer server) {
         Scoreboard scoreboard = server.getScoreboard();
         String prefix = this.namespace + "_";

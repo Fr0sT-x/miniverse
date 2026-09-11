@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.chat.ChatRouter;
 import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
@@ -12,6 +13,7 @@ import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
 import dev.frost.miniverse.minigame.core.freeze.FreezeService;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.network.TransitionTransferCoordinator;
 import dev.frost.miniverse.session.SessionPermissions;
 import dev.frost.miniverse.session.SessionRegistry;
@@ -93,6 +95,9 @@ public final class MatchLifecycleController {
     }
 
     public synchronized boolean endMatch(MinigameRuntime runtime, MatchEndResult result, MatchLifecycleOptions options) {
+        if (runtime == null || runtime.state() == GameState.ENDING || runtime.state() == GameState.STOPPED) {
+            return false;
+        }
         if (this.phase == Phase.END_RETURN || this.phase == Phase.ENDED || this.phase == Phase.START_FREEZE) {
             return false;
         }
@@ -551,6 +556,7 @@ public final class MatchLifecycleController {
         this.pendingReturnPlayerIds.clear();
         this.returnCompletionTicksRemaining = 0;
         this.unfreezeParticipants();
+        this.cleanupTeams();
         this.lifecyclePlayers.clear();
         this.startCallback = null;
         this.endResult = null;
@@ -564,10 +570,23 @@ public final class MatchLifecycleController {
         this.lastAnnouncedSecond = -1;
         this.startOverlayReleased = false;
         this.unfreezeParticipants();
+        this.cleanupTeams();
         this.lifecyclePlayers.clear();
         this.startCallback = null;
         this.endResult = null;
         this.runtime = null;
+    }
+
+    private void cleanupTeams() {
+        if (this.runtime != null && this.runtime.context().nullableServer() != null) {
+            MinecraftServer server = this.runtime.context().nullableServer();
+            if (this.runtime.minigame() instanceof AbstractMinigame abstractMinigame) {
+                VanillaTeamAdapter adapter = abstractMinigame.getVanillaTeams();
+                if (adapter != null) {
+                    adapter.clear(server);
+                }
+            }
+        }
     }
 
     private enum Phase {

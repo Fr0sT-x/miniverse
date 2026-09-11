@@ -119,15 +119,8 @@ public class Arena {
         trackedBlocks.clear();
 
         // Clean up entities
-        for (Entity entity : world.iterateEntities()) {
-            if (entity instanceof PlayerEntity) continue;
-            if (bounds.contains(entity.getPos())) {
-                if (entity instanceof ItemEntity || entity instanceof ProjectileEntity) {
-                    entity.discard();
-                } else {
-                    entity.discard();
-                }
-            }
+        for (Entity entity : world.getOtherEntities(null, this.bounds, e -> !(e instanceof PlayerEntity))) {
+            entity.discard();
         }
 
         if (validateResetCompletion()) {
@@ -141,16 +134,14 @@ public class Arena {
     }
 
     private boolean validateResetCompletion() {
-        for (Entity entity : world.iterateEntities()) {
-            if (bounds.contains(entity.getPos())) {
-                if (entity instanceof PlayerEntity) {
-                    System.err.println("Validation failed for Arena " + id + ": Player " + entity.getUuid() + " still in arena.");
-                    return false;
-                }
-                if (!entity.isRemoved()) {
-                    System.err.println("Validation failed for Arena " + id + ": Entity " + entity.getUuid() + " still in arena.");
-                    return false;
-                }
+        for (Entity entity : world.getOtherEntities(null, this.bounds)) {
+            if (entity instanceof PlayerEntity) {
+                System.err.println("Validation failed for Arena " + id + ": Player " + entity.getUuid() + " still in arena.");
+                return false;
+            }
+            if (!entity.isRemoved()) {
+                System.err.println("Validation failed for Arena " + id + ": Entity " + entity.getUuid() + " still in arena.");
+                return false;
             }
         }
         return true;

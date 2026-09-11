@@ -98,16 +98,23 @@ public final class BedwarsDeathCallbacks implements DeathLifecycleCallbacks {
         
         // 2. Gather items to give
         java.util.List<net.minecraft.item.ItemStack> itemsToGive = new java.util.ArrayList<>();
-        itemsToGive.add(new net.minecraft.item.ItemStack(net.minecraft.item.Items.WOODEN_SWORD));
+        net.minecraft.item.ItemStack sword = new net.minecraft.item.ItemStack(net.minecraft.item.Items.WOODEN_SWORD);
+        dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.tagKitItem(sword, "BEDWARS_SWORD");
+        itemsToGive.add(sword);
         if (toolState.getPickaxeTier() > 0) {
-            itemsToGive.add(toolState.buildPickaxe(player.getWorld().getRegistryManager()));
+            net.minecraft.item.ItemStack pickaxe = toolState.buildPickaxe(player.getWorld().getRegistryManager());
+            dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.tagKitItem(pickaxe, "BEDWARS_PICKAXE");
+            itemsToGive.add(pickaxe);
         }
         if (toolState.getAxeTier() > 0) {
-            itemsToGive.add(toolState.buildAxe(player.getWorld().getRegistryManager()));
+            net.minecraft.item.ItemStack axe = toolState.buildAxe(player.getWorld().getRegistryManager());
+            dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.tagKitItem(axe, "BEDWARS_AXE");
+            itemsToGive.add(axe);
         }
         if (toolState.hasKnockbackStick()) {
             net.minecraft.item.ItemStack stick = new net.minecraft.item.ItemStack(net.minecraft.item.Items.STICK);
             stick.addEnchantment(player.getWorld().getRegistryManager().get(net.minecraft.registry.RegistryKeys.ENCHANTMENT).getEntry(net.minecraft.enchantment.Enchantments.KNOCKBACK).get(), 1);
+            dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.tagKitItem(stick, "BEDWARS_STICK");
             itemsToGive.add(stick);
         }
         

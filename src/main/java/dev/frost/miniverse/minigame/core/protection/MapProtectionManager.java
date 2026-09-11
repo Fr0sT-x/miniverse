@@ -82,4 +82,14 @@ public final class MapProtectionManager {
             runtime.context().protectionTracker().removePlacedBlock(pos);
         }
     }
+
+    /**
+     * Called when a placed block is moved (e.g. by a piston) to update its position in the tracker.
+     */
+    public static void onBlockMoved(BlockPos from, BlockPos to) {
+        MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
+        if (runtime != null) {
+            runtime.context().protectionTracker().movePlacedBlock(from, to);
+        }
+    }
 }

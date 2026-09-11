@@ -50,6 +50,20 @@ public final class FreezeService {
     }
 
     public synchronized void clearAll() {
+        dev.frost.miniverse.minigame.core.MinigameContext context = dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getContext();
+        net.minecraft.server.MinecraftServer server = context == null ? null : context.nullableServer();
+        this.clearAll(server);
+    }
+
+    public synchronized void clearAll(net.minecraft.server.MinecraftServer server) {
+        if (server != null) {
+            for (UUID uuid : this.reasonsByPlayer.keySet()) {
+                ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
+                if (player != null) {
+                    this.sendFreezeState(player, false);
+                }
+            }
+        }
         this.reasonsByPlayer.clear();
     }
 

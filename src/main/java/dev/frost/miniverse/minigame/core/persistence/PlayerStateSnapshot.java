@@ -160,6 +160,7 @@ public record PlayerStateSnapshot(
 
     private void restoreInventory(ServerPlayerEntity player) {
         try {
+            player.getInventory().clear();
             NbtCompound root = net.minecraft.nbt.StringNbtReader.parse(this.inventorySnbt);
             NbtList inventory = root.getList("items", net.minecraft.nbt.NbtElement.COMPOUND_TYPE);
             player.getInventory().readNbt(inventory);

@@ -80,10 +80,23 @@ public final class MapEditorMarkerStore {
         return result;
     }
 
+    private static final java.util.concurrent.ExecutorService IO_EXECUTOR = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "Miniverse-MapEditorMarkerStore-IO");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     public static void save(String mapId, MapEditorExtension extension, MarkerDefinition definition, List<MapMarker> markers) throws IOException {
         JsonObject config = MapStore.readGamemodeConfig(mapId, extension.gameId()).orElseGet(JsonObject::new);
         write(config, definition, markers == null ? List.of() : markers);
-        MapStore.writeGamemodeConfig(mapId, extension.gameId(), config);
+        JsonObject snapshot = config.deepCopy();
+        IO_EXECUTOR.submit(() -> {
+            try {
+                MapStore.writeGamemodeConfig(mapId, extension.gameId(), snapshot);
+            } catch (IOException e) {
+                dev.frost.miniverse.Miniverse.LOGGER.error("Failed to asynchronously save map editor markers for map '{}', game '{}'", mapId, extension.gameId(), e);
+            }
+        });
     }
 
     public static void write(JsonObject config, MarkerDefinition definition, List<MapMarker> markers) {

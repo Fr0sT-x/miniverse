@@ -25,6 +25,10 @@ public class ScoreboardLine {
         this.text = text;
     }
 
+    public String getScoreHolderName() {
+        return this.scoreHolderName;
+    }
+
     public void update(ServerPlayerEntity player) {
         if (this.template.isViewing(player)) {
             player.networkHandler.sendPacket(this.createUpdatePacket());

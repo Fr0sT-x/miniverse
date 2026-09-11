@@ -88,7 +88,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
 
         dev.frost.miniverse.minigame.core.layout.InventoryLayoutFramework.registerGamemode(
             BedwarsDefinition.ID,
-            Set.of("BEDWARS_SWORD", "BEDWARS_PICKAXE", "BEDWARS_AXE", "BEDWARS_BLOCKS")
+            Set.of("BEDWARS_SWORD", "BEDWARS_PICKAXE", "BEDWARS_AXE", "BEDWARS_BLOCKS", "BEDWARS_STICK")
         );
     }
 
@@ -975,7 +975,7 @@ public class BedwarsMinigame extends AbstractMinigame implements
             board.addLine(net.minecraft.text.Text.literal("Diamond: §f" + player.getInventory().count(dev.frost.miniverse.minigame.impl.bedwars.economy.BedwarsCurrency.DIAMOND.item())).formatted(net.minecraft.util.Formatting.GRAY));
             board.addLine(net.minecraft.text.Text.literal("Emerald: §f" + player.getInventory().count(dev.frost.miniverse.minigame.impl.bedwars.economy.BedwarsCurrency.EMERALD.item())).formatted(net.minecraft.util.Formatting.GRAY));
             
-            board.resendStructure();
+            board.sendLineUpdates();
         }
     }
 

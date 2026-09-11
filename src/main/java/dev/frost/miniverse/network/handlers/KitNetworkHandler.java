@@ -23,11 +23,36 @@ public class KitNetworkHandler {
     private static void handleCreateKit(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.CreateKitPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "manage kits")) return;
         try {
+            if (payload.displayName() == null || payload.displayName().isBlank() || payload.displayName().length() > 64) {
+                player.sendMessage(Text.literal("Invalid kit display name (must be 1-64 characters).").formatted(Formatting.RED), false);
+                return;
+            }
+            if (payload.categories() != null && payload.categories().length() > 256) {
+                player.sendMessage(Text.literal("Categories string is too long.").formatted(Formatting.RED), false);
+                return;
+            }
             java.util.Set<String> categories = new java.util.HashSet<>();
-            for (String c : payload.categories().split(",")) {
-                if (!c.trim().isEmpty()) categories.add(c.trim());
+            if (payload.categories() != null) {
+                for (String c : payload.categories().split(",")) {
+                    String trimmed = c.trim();
+                    if (!trimmed.isEmpty()) {
+                        if (trimmed.length() > 64) {
+                            player.sendMessage(Text.literal("Category name too long (max 64 chars).").formatted(Formatting.RED), false);
+                            return;
+                        }
+                        categories.add(trimmed);
+                    }
+                }
+            }
+            if (categories.size() > 20) {
+                player.sendMessage(Text.literal("Too many categories (max 20).").formatted(Formatting.RED), false);
+                return;
             }
             String rawId = payload.id() == null ? "" : payload.id().trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+            if (rawId.isBlank() || rawId.length() > 64) {
+                player.sendMessage(Text.literal("Invalid kit id (must be 1-64 characters).").formatted(Formatting.RED), false);
+                return;
+            }
             net.minecraft.util.Identifier kitId = net.minecraft.util.Identifier.tryParse(rawId.contains(":") ? rawId : "miniverse:" + rawId);
             if (kitId == null || kitId.getPath().isBlank()) {
                 player.sendMessage(Text.literal("Invalid kit id.").formatted(Formatting.RED), false);
@@ -65,6 +90,10 @@ public class KitNetworkHandler {
 
     private static void handleRenameKit(MinecraftServer server, ServerPlayerEntity player, NetworkConstants.RenameKitPayload payload) {
         if (!SessionPermissions.checkCanManageSessions(player, "manage kits")) return;
+        if (payload.newName() == null || payload.newName().isBlank() || payload.newName().length() > 64) {
+            player.sendMessage(Text.literal("Invalid kit name (must be 1-64 characters).").formatted(Formatting.RED), false);
+            return;
+        }
         net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(payload.kitId());
         if (id == null) return;
         dev.frost.miniverse.minigame.core.kit.KitRegistry.get(id).ifPresent(kit -> {

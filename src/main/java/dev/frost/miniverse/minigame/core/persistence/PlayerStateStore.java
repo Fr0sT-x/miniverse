@@ -136,7 +136,6 @@ public final class PlayerStateStore {
             || state == GameState.STARTING
             || state == GameState.FROZEN
             || state == GameState.RUNNING
-            || state == GameState.RUNNING
             || state == GameState.ENDING
             || state == GameState.STOPPED;
     }

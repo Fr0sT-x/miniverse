@@ -48,6 +48,10 @@ public class RegionTriggerService {
 
         dev.frost.miniverse.map.runtime.RuntimeMarkerCache.getInstance().tick();
 
+        if (!dev.frost.miniverse.map.runtime.RuntimeMarkerCache.getInstance().hasRegions()) {
+            return;
+        }
+
         boolean dispatchEvents = active instanceof PlayerRegionAware;
         PlayerRegionAware regionAware = dispatchEvents ? (PlayerRegionAware) active : null;
 

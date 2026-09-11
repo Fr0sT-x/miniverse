@@ -19,6 +19,9 @@ public final class MinigameRuntime {
         if (minigame instanceof RuntimeContextAware contextAware) {
             contextAware.attachContext(this.context);
         }
+        if (minigame instanceof AbstractMinigame abstractMinigame) {
+            abstractMinigame.bindRuntime(this);
+        }
         this.state = GameState.WAITING_FOR_PLAYERS;
     }
 

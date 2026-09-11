@@ -9,8 +9,16 @@ import com.google.gson.JsonObject;
 
 public final class SessionRuntimeConfig {
     private static Properties config;
+    private static JsonObject cachedSessionJson;
+    private static boolean sessionJsonLoaded = false;
 
     private SessionRuntimeConfig() {
+    }
+
+    public static synchronized void invalidateCache() {
+        config = null;
+        cachedSessionJson = null;
+        sessionJsonLoaded = false;
     }
 
     public static synchronized Optional<String> getSessionId() {
@@ -75,12 +83,21 @@ public final class SessionRuntimeConfig {
     }
 
     public static synchronized Optional<JsonObject> getSessionJson() {
+        if (sessionJsonLoaded) {
+            return Optional.ofNullable(cachedSessionJson);
+        }
+
         String configPath = System.getProperty("miniverse.session.config", "");
         if (configPath.isBlank() || !configPath.endsWith(".json")) {
+            sessionJsonLoaded = true;
+            cachedSessionJson = null;
             return Optional.empty();
         }
 
-        return SessionConfigJson.read(Paths.get(configPath));
+        Optional<JsonObject> read = SessionConfigJson.read(Paths.get(configPath));
+        cachedSessionJson = read.orElse(null);
+        sessionJsonLoaded = true;
+        return read;
     }
 
     private static synchronized Properties getConfig() {

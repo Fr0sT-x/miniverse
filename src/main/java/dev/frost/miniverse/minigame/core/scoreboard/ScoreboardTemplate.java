@@ -3,6 +3,8 @@ package dev.frost.miniverse.minigame.core.scoreboard;
 import dev.frost.miniverse.minigame.core.FrameworkModule;
 import net.minecraft.network.packet.s2c.play.ScoreboardDisplayS2CPacket;
 import net.minecraft.network.packet.s2c.play.ScoreboardObjectiveUpdateS2CPacket;
+import net.minecraft.network.packet.s2c.play.ScoreboardScoreResetS2CPacket;
+import net.minecraft.network.packet.s2c.play.ScoreboardScoreUpdateS2CPacket;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardCriterion;
 import net.minecraft.scoreboard.ScoreboardDisplaySlot;
@@ -129,9 +131,24 @@ public class ScoreboardTemplate implements FrameworkModule {
     }
 
     public void clearLines() {
+        for (ScoreboardLine line : this.lines) {
+            ScoreboardScoreResetS2CPacket resetPacket = new ScoreboardScoreResetS2CPacket(line.getScoreHolderName(), this.objectiveName);
+            for (ServerPlayerEntity player : this.viewers) {
+                player.networkHandler.sendPacket(resetPacket);
+            }
+        }
         this.lines.clear();
         this.lineCounter = 0;
         this.nextScore = 99;
+    }
+
+    public void sendLineUpdates() {
+        for (ScoreboardLine line : this.lines) {
+            ScoreboardScoreUpdateS2CPacket packet = line.createUpdatePacket();
+            for (ServerPlayerEntity player : this.viewers) {
+                player.networkHandler.sendPacket(packet);
+            }
+        }
     }
 
     public void resendStructure() {

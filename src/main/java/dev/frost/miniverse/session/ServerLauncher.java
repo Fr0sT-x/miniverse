@@ -29,10 +29,42 @@ import java.util.function.Consumer;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class ServerLauncher {
+    private static final java.util.Set<Process> ACTIVE_PROCESSES = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final java.util.Set<Integer> ALLOCATED_PORTS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            for (Process process : ACTIVE_PROCESSES) {
+                if (process.isAlive()) {
+                    try {
+                        process.destroyForcibly();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        }, "Miniverse-ChildProcess-ShutdownHook"));
+    }
+
     private final WorkingDirectorySetup setup = new WorkingDirectorySetup();
     private final SessionConfigBuilder configBuilder = new SessionConfigBuilder(this);
     private static final int DEFAULT_SESSION_MAX_PLAYERS = 20;
     private static final int MIN_LATE_JOIN_HEADROOM = 8;
+
+    private static void trackProcess(Process process, int port) {
+        ACTIVE_PROCESSES.add(process);
+        process.onExit().thenRun(() -> {
+            ACTIVE_PROCESSES.remove(process);
+            ALLOCATED_PORTS.remove(port);
+        });
+    }
+
+    private static void handleBootFailure(Process process, int port) {
+        ACTIVE_PROCESSES.remove(process);
+        ALLOCATED_PORTS.remove(port);
+        if (process.isAlive()) {
+            process.destroyForcibly();
+        }
+    }
 
     public record LaunchResult(SessionGroup group, Process process, int port, Path workingDirectory) {
     }
@@ -124,11 +156,13 @@ public final class ServerLauncher {
         builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
+        trackProcess(process, port);
         progress.accept(new LaunchProgress("Waiting for boot", "Backend is starting", 70));
 
         // 6. Wait for the server to boot and mark it as running
         boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
         if (!booted) {
+            handleBootFailure(process, port);
             int exitCode = process.isAlive() ? -1 : process.exitValue();
             throw new IOException("Server failed to boot. Exit code: " + exitCode);
         }
@@ -214,11 +248,13 @@ public final class ServerLauncher {
         builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
+        trackProcess(process, port);
         progress.accept(new LaunchProgress("Waiting for boot", "Backend is starting", 70));
 
         // 6. Wait for the server to boot and mark it as running
         boolean booted = waitForServerBoot(workingDirectory.resolve("stdout.log"), process);
         if (!booted) {
+            handleBootFailure(process, port);
             int exitCode = process.isAlive() ? -1 : process.exitValue();
             throw new IOException("Server failed to boot. Exit code: " + exitCode);
         }
@@ -308,7 +344,9 @@ public final class ServerLauncher {
         builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
+        trackProcess(process, port);
         if (!waitForServerBoot(workingDirectory.resolve("stdout.log"), process)) {
+            handleBootFailure(process, port);
             int exitCode = process.isAlive() ? -1 : process.exitValue();
             throw new IOException("Inspection server failed to boot. Exit code: " + exitCode);
         }
@@ -367,7 +405,9 @@ public final class ServerLauncher {
         builder.redirectError(workingDirectory.resolve("stderr.log").toFile());
 
         Process process = builder.start();
+        trackProcess(process, port);
         if (!waitForServerBoot(workingDirectory.resolve("stdout.log"), process)) {
+            handleBootFailure(process, port);
             int exitCode = process.isAlive() ? -1 : process.exitValue();
             throw new IOException("Map editor server failed to boot. Exit code: " + exitCode);
         }
@@ -471,7 +511,7 @@ public final class ServerLauncher {
         SessionLauncherConfig config = SessionLauncherConfig.getInstance();
         if (config.hasSessionPortRange()) {
             for (int port = config.sessionPortStart(); port <= config.sessionPortEnd(); port++) {
-                if (this.isPortAvailable(port)) {
+                if (this.isPortAvailable(port) && ALLOCATED_PORTS.add(port)) {
                     return port;
                 }
             }
@@ -480,13 +520,22 @@ public final class ServerLauncher {
                 + ". Increase config/miniverse/session-launcher.json sessionPortStart/sessionPortEnd or stop an active session.");
         }
 
-        try (ServerSocket socket = new ServerSocket(0)) {
-            socket.setReuseAddress(true);
-            return socket.getLocalPort();
+        for (int attempts = 0; attempts < 50; attempts++) {
+            try (ServerSocket socket = new ServerSocket(0)) {
+                socket.setReuseAddress(true);
+                int port = socket.getLocalPort();
+                if (ALLOCATED_PORTS.add(port)) {
+                    return port;
+                }
+            }
         }
+        throw new IOException("Failed to allocate an available backend session port after 50 attempts.");
     }
 
     private boolean isPortAvailable(int port) {
+        if (ALLOCATED_PORTS.contains(port)) {
+            return false;
+        }
         try (ServerSocket socket = new ServerSocket(port)) {
             socket.setReuseAddress(true);
             return true;

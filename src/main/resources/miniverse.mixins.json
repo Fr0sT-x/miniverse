@@ -9,6 +9,7 @@
 		"protection.BlockItemMixin",
 		"protection.ExplosionMixin",
 		"protection.PistonHandlerMixin",
+		"protection.PistonBlockEntityMixin",
 		"protection.FireBlockMixin",
 		"protection.FlowableFluidMixin",
 		"protection.FallingBlockMixin",

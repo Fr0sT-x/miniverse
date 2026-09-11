@@ -23,7 +23,11 @@ public final class CountdownService {
         if (secondsRemaining < 0 || !this.announcedSeconds.add(secondsRemaining)) {
             return false;
         }
-        players.forEach(player -> player.sendMessage(actionbarText, true));
+        players.forEach(player -> {
+            if (player != null && !player.isDisconnected()) {
+                player.sendMessage(actionbarText, true);
+            }
+        });
         return true;
     }
 
@@ -51,6 +55,9 @@ public final class CountdownService {
 
         Text subtitle = Text.literal(Integer.toString(secondsRemaining)).formatted(Formatting.YELLOW, Formatting.BOLD);
         for (ServerPlayerEntity player : players) {
+            if (player == null || player.isDisconnected()) {
+                continue;
+            }
             player.networkHandler.sendPacket(new SubtitleS2CPacket(subtitle));
             player.networkHandler.sendPacket(new TitleS2CPacket(title.copy().formatted(Formatting.GOLD, Formatting.BOLD)));
             if (chatMessage != null) {

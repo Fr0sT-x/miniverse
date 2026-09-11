@@ -65,7 +65,9 @@ public final class InventoryLayoutFramework {
             }
         }
 
-        player.getInventory().clear();
+        for (int i = 0; i < 36; i++) {
+            player.getInventory().setStack(i, ItemStack.EMPTY);
+        }
 
         for (int i = 0; i < 9; i++) {
             if (hotbar[i] != null) {

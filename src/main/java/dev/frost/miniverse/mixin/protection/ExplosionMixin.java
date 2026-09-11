@@ -26,4 +26,13 @@ public abstract class ExplosionMixin {
             this.getAffectedBlocks().removeIf(pos -> MapProtectionManager.isProtected(serverWorld, pos));
         }
     }
+
+    @Inject(method = "affectWorld", at = @At("RETURN"))
+    private void onAffectWorldPost(boolean particles, CallbackInfo ci) {
+        if (!this.world.isClient && this.world instanceof ServerWorld) {
+            for (BlockPos pos : this.getAffectedBlocks()) {
+                MapProtectionManager.onBlockBroken(pos);
+            }
+        }
+    }
 }

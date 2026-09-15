@@ -28,6 +28,12 @@ public final class MapProtectionManager {
             return false;
         }
 
+        if (runtime.minigame() instanceof BlockProtectionProvider provider) {
+            if (provider.isBlockProtected(world, pos)) {
+                return true;
+            }
+        }
+
         String gameId = System.getProperty("miniverse.session.game", "").trim().toLowerCase(java.util.Locale.ROOT);
         if (!gameId.isEmpty() && dev.frost.miniverse.map.MapGamemodeRegistry.get(gameId).isEmpty()) {
             return false;

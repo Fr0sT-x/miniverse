@@ -430,14 +430,13 @@ public final class MatchLifecycleController {
             boolean winner = result != null && result.isWinner(player);
             Text title = winner ? this.options.winTitle() : this.options.loseTitle();
             if (result != null) {
-                player.networkHandler.sendPacket(new SubtitleS2CPacket(
-                    Text.literal("Winner: ").formatted(Formatting.GOLD).append(result.winnerLabel())
-                ));
+                Text subtitle = result.winners().isEmpty()
+                    ? result.winnerLabel()
+                    : Text.literal("Winner: ").formatted(Formatting.GOLD).append(result.winnerLabel());
+                player.networkHandler.sendPacket(new SubtitleS2CPacket(subtitle));
+                player.sendMessage(subtitle, true);
             }
             player.networkHandler.sendPacket(new TitleS2CPacket(title.copy().formatted(winner ? Formatting.GREEN : Formatting.RED, Formatting.BOLD)));
-            if (result != null) {
-                player.sendMessage(Text.literal("Winner: ").formatted(Formatting.GOLD).append(result.winnerLabel()), true);
-            }
             if (this.options.endSound() != null) {
                 player.playSound(this.options.endSound(), 0.8F, winner ? 1.2F : 0.8F);
             }

@@ -13,33 +13,33 @@
 
 **Legend:** ✅ Fully Used · ⚠️ Partially Used · ❌ Not Used · 🔄 Migration In Progress
 
-| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune |
-|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|
-| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
-| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ | ❌ |
-| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** | **N/A** |
+| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune | HordeSurvival |
+|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|:-------------:|
+| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
+| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ | ❌ | ✅ |
+| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** | **N/A** | **75%** |
 
 ---
 
@@ -377,7 +377,6 @@
 When adding a new gamemode, copy the template below and fill it in before writing
 any code. Add the gamemode column to the matrix above.
 
-```markdown
 ### Pillars of Fortune
 
 **Main class:** `PillarsOfFortuneMinigame`
@@ -407,4 +406,63 @@ any code. Add the gamemode column to the matrix above.
 **Notes for AI sessions working on Pillars of Fortune:**
 > Map pillars are not dynamically generated; they must be built in the map with SPAWN_POINT markers placed on them.
 
+---
+
+### Horde Survival
+
+**Main class:** `HordeSurvivalMinigame`
+**Status:** Production-ready · **Compliance:** 75%
+**Last reviewed:** 2026-09-11
+
+**Gamerules:** `keepInventory=false`, `doImmediateRespawn=true`
+
+**Frameworks actively used:**
+- F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
+- F05 Death Lifecycle (Single-life with spectator transition, match loss on squad wipe)
+- F06 Persistence / F20 Player Snapshot (Full round state, wave number, coins, campfire fuel recovery)
+- F08 Team (TeamManager + VanillaTeamAdapter with unified "Survivors" team, friendly fire disabled)
+- F09 Map Protection (Barricade break control, dynamic world border shrinking / expansion)
+- F12 Scoreboard (Sidebar display of Current Wave, Remaining Mobs, Extraction Timer, Player Coin Balance)
+- F24 Shop Framework (Integrated ShopGui with VirtualCoinCurrency and HordeShopProvider)
+
+**Key Mechanics & Modules:**
+- **Zero-Map Requirement**: Operates in any natural world; dynamically computes surface spawns and relocation sites.
+- **Dynamic Wave Engine**: Batch mob spawning 25-45m from survivors, mob scaling per round, and custom anti-camping siege mobs (Miner Zombie, Harpoon Drowned, Sapper Creeper).
+- **Nomad Beacon & Hallowed Campfire**: Wandering merchant with vertical sky beam relocating every 2 waves; safe campfire sanctuary fueled by sacrificing mob drops.
+- **Intermission Supply Meteors**: Supply drops landing during intermissions with bonus ammo, defense blocks, and supplies.
+- **Climax Extraction Run**: Final wave objective (default Wave 15) triggering an LZ marker 350m away with a 3-minute sprint and 10-second hold-the-zone helicopter extraction.
+- **DeathSwap-Style Workspace View**: Full client GUI with team assignment ("Available" to "Survivors"), configurable round counts (15, 20, 30), intermission durations, and campfire fuels.
+
+**Known issues / debt:**
+- None.
+
+**Migration target:** None currently.
+
+---
+
+## Adding a New Gamemode
+
+When adding a new gamemode, copy the template below and fill it in before writing
+any code. Add the gamemode column to the matrix above.
+
+```markdown
+### [Gamemode Name]
+
+**Main class:** `[Name]Minigame`
+**Status:** Draft / In Development / Production-near / Production-ready
+**Compliance:** XX%
+**Last reviewed:** YYYY-MM-DD
+
+**Gamerules:** `rule=value`
+
+**Frameworks actively used:**
+- ...
+
+**Frameworks NOT used:**
+- ...
+
+**Known issues / debt:**
+- ...
+
+**Migration target:** ...
 ```

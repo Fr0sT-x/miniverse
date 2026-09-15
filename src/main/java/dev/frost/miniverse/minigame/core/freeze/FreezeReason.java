@@ -6,5 +6,6 @@ public enum FreezeReason {
     MANHUNT_LEAD,
     ADMIN_PAUSE,
     ROUND_RESET,
-    SPECTATOR_NO_TARGET
+    SPECTATOR_NO_TARGET,
+    DOWNED_PLAYER
 }

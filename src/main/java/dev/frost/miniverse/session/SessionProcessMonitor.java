@@ -188,6 +188,7 @@ public class SessionProcessMonitor {
                     group.getDisplayName(),
                     error
                 );
+                SessionCrashTracker.handleBackendCrash(server, session, group, exitCode);
             }
 
             Text message = Text.literal("Session backend stopped unexpectedly. Please create or launch a new session.").formatted(Formatting.RED);

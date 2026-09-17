@@ -76,7 +76,9 @@ public class SessionScreen extends Screen {
         Map.entry("murdermystery", SessionScreen::openMurderMystery),
         Map.entry("duels", SessionScreen::openDuels),
         Map.entry("pillarsoffortune", SessionScreen::openPillarsOfFortune),
-        Map.entry("horde_survival", SessionScreen::openHordeSurvival)
+        Map.entry("horde_survival", SessionScreen::openHordeSurvival),
+        Map.entry("zombies_dead_end", SessionScreen::openZombies),
+        Map.entry("zombies", SessionScreen::openZombies)
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -1471,6 +1473,10 @@ public class SessionScreen extends Screen {
 
     private void openHordeSurvival() {
         this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.HordeSurvivalWorkspaceView());
+    }
+
+    private void openZombies() {
+        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.ZombiesWorkspaceView());
     }
 
     public void openGenericSetup(MinigameEntry entry) {

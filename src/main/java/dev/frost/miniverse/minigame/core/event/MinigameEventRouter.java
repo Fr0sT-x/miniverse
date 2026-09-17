@@ -62,6 +62,12 @@ public final class MinigameEventRouter {
             if (this.pausedFor(player)) return ActionResult.FAIL;
             if (player instanceof ServerPlayerEntity serverPlayer) {
                 Minigame active = this.activeMinigame();
+                if (active instanceof ItemUseOnBlockAware blockAware) {
+                    ActionResult result = blockAware.onUseBlock(serverPlayer, world, hand, hitResult);
+                    if (result != ActionResult.PASS) {
+                        return result;
+                    }
+                }
                 if (active != null && !active.canBuild() && player.getStackInHand(hand).getItem() instanceof net.minecraft.item.BlockItem) {
                     serverPlayer.sendMessage(net.minecraft.text.Text.literal("Building is disabled in this match.").formatted(net.minecraft.util.Formatting.RED), true);
                     return ActionResult.FAIL;
@@ -72,12 +78,6 @@ public final class MinigameEventRouter {
                     if (dev.frost.miniverse.minigame.core.region.RegionRestrictionService.getInstance().hasRestriction(box, dev.frost.miniverse.minigame.core.region.RegionRestriction.BUILD_DENIED)) {
                         serverPlayer.sendMessage(net.minecraft.text.Text.literal("You cannot build there").formatted(net.minecraft.util.Formatting.RED), false);
                         return ActionResult.FAIL;
-                    }
-                }
-                if (active instanceof ItemUseOnBlockAware blockAware) {
-                    ActionResult result = blockAware.onUseBlock(serverPlayer, world, hand, hitResult);
-                    if (result != ActionResult.PASS) {
-                        return result;
                     }
                 }
             }

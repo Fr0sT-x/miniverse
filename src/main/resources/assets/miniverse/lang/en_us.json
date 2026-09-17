@@ -5,6 +5,7 @@
 	"miniverse.night_vision.message": "Night vision: %s",
 	"category.miniverse.miniverse": "Miniverse",
 	"key.miniverse.open_gui": "Open Miniverse GUI",
-	"key.miniverse.toggle_editor": "Toggle Map Editor Mode"
+	"key.miniverse.toggle_editor": "Toggle Map Editor Mode",
+	"key.miniverse.reload_weapon": "Reload Weapon"
 }
 

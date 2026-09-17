@@ -36,6 +36,8 @@ public class Miniverse implements ModInitializer {
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
 
+		NetworkConstants.registerPayloadTypes();
+
 		dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjectiveRegistry.register();
 		MiniverseGames.registerAll();
 		SessionRegistry.cleanupSessionsOnStartup();
@@ -60,7 +62,6 @@ public class Miniverse implements ModInitializer {
 		});
 
 		// Register shared session GUI payloads and server-side receivers.
-		NetworkConstants.registerPayloadTypes();
 		ClientConnectionHosts.register();
 		SessionNetwork.register();
 		MapEditorNetwork.register();

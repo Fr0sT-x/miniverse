@@ -23,6 +23,7 @@ public abstract class ProtectedItemScreenHandlerMixin {
             (ScreenHandler) (Object) this, slotId, button, actionType)) {
             ProtectedItemFeedback.sendRuleBlockedMessage(serverPlayer);
             serverPlayer.currentScreenHandler.syncState();
+            serverPlayer.playerScreenHandler.sendContentUpdates();
             ci.cancel();
         }
     }

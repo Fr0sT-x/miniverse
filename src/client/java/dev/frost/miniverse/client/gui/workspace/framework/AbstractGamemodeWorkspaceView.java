@@ -32,9 +32,13 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
     private TeamSelectionGrid rosterGrid;
     private MapThumbnailGrid mapGrid;
-    private String selectedMapId = "";
+    protected String selectedMapId = "";
     private UiLayout.Rect selectAllButtonRect;
     private UiLayout.Rect clearButtonRect;
+
+    public String getSelectedMapId() {
+        return this.selectedMapId;
+    }
 
     public AbstractGamemodeWorkspaceView(String defaultSessionNamePrefix) {
         this.sessionName = defaultSessionNamePrefix + "-" + System.currentTimeMillis();

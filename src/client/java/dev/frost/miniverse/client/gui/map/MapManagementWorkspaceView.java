@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
@@ -34,6 +33,7 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
     private String status = "";
     /** Separate status line for import-specific feedback. */
     private String importStatus = "";
+    private int scrollOffset = 0;
 
     public MapManagementWorkspaceView(Runnable refreshAction) {
         this.refreshAction = refreshAction == null ? () -> {
@@ -46,46 +46,77 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
         this.screen = screen;
         UiLayout.Rect panel = workspace.inset(4);
-        // Shift list area down to make room for two toolbar rows (void map + import world)
-        this.listArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 116, panel.width() - 24, panel.height() - 128);
-        this.mapNameField = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, panel.x() + 12, panel.y() + 18, 156, 22, Text.literal("Map name"));
+
+        // List area takes the bulk of the panel below the single toolbar row
+        this.listArea = new UiLayout.Rect(panel.x() + 12, panel.y() + 46, panel.width() - 24, panel.height() - 72);
+        this.components.clear();
+
+        // ── Single Toolbar Row ──────────────────────────────────────────────
+        int toolY = panel.y() + 12;
+        int curX = panel.x() + 12;
+
+        this.mapNameField = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, curX, toolY, 136, 22, Text.literal("Map name"));
         this.mapNameField.setMaxLength(48);
         this.mapNameField.setText("new-map-" + System.currentTimeMillis());
         screen.addWorkspaceChild(this.mapNameField);
+        curX += 144;
 
-        // ── Row 1: Create Void Map ──────────────────────────────────────────
-        UiButton createVoid = new UiButton("Create Void Map", this::createVoidMap);
-        createVoid.setBounds(new UiLayout.Rect(panel.x() + 176, panel.y() + 18, 116, 22));
+        UiButton createVoid = new UiButton("Create Void", this::createVoidMap);
+        createVoid.setBounds(new UiLayout.Rect(curX, toolY, 96, 22));
         this.components.add(createVoid);
+        curX += 102;
 
-        UiButton openFolder = new UiButton("Open Map Folder", () -> this.status = "Map folder: " + this.mapRootHint());
-        openFolder.setBounds(new UiLayout.Rect(panel.x() + 300, panel.y() + 18, 124, 22));
+        UiButton importWorld = new UiButton("Import World", this::startImport);
+        importWorld.setBounds(new UiLayout.Rect(curX, toolY, 96, 22));
+        this.components.add(importWorld);
+        curX += 102;
+
+        UiButton openFolder = new UiButton("Open Maps Folder", () -> this.status = "Map folder: " + this.mapRootHint());
+        openFolder.setBounds(new UiLayout.Rect(curX, toolY, 120, 22));
         this.components.add(openFolder);
+        curX += 126;
 
         UiButton refresh = new UiButton("Refresh", () -> {
             ThumbnailManager.invalidateAll();
             this.refreshAction.run();
         });
-        refresh.setBounds(new UiLayout.Rect(panel.x() + 432, panel.y() + 18, 76, 22));
+        refresh.setBounds(new UiLayout.Rect(curX, toolY, 68, 22));
         this.components.add(refresh);
+    }
 
-        // ── Row 2: Import World ─────────────────────────────────────────────
-        UiButton importWorld = new UiButton("Import World", this::startImport);
-        importWorld.setBounds(new UiLayout.Rect(panel.x() + 12, panel.y() + 50, 116, 22));
-        this.components.add(importWorld);
+    private int maxScroll() {
+        List<SessionSnapshotData.MapSummary> maps = SessionSnapshotData.maps();
+        if (maps.isEmpty()) return 0;
+        int columns = this.listArea.width() >= 720 ? 3 : this.listArea.width() >= 460 ? 2 : 1;
+        int cardWidth = (this.listArea.width() - 8 - CARD_GAP * (columns - 1)) / columns;
+        int imgHeight = (int) (cardWidth * 9.0 / 16.0);
+        int cardHeight = imgHeight + 42;
+        int rows = (int) Math.ceil((double) maps.size() / columns);
+        int totalContentHeight = rows * (cardHeight + CARD_GAP) - CARD_GAP;
+        return Math.max(0, totalContentHeight - this.listArea.height() + 8);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (this.listArea.contains((int) mouseX, (int) mouseY)) {
+            int maxScroll = this.maxScroll();
+            if (maxScroll > 0) {
+                this.scrollOffset = Math.clamp(this.scrollOffset - (int) (verticalAmount * 28), 0, maxScroll);
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public void renderBackground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
         UiLayout.Rect panel = workspace.inset(4);
         UiRenderer.panel(context, panel.x(), panel.y(), panel.width(), panel.height(), UiTheme.PANEL, UiTheme.BORDER_SUBTLE);
-        context.fill(panel.x() + 1, panel.y() + 1, panel.x() + panel.width() - 1, panel.y() + 80, 0x701B3428);
+        context.fill(panel.x() + 1, panel.y() + 1, panel.x() + panel.width() - 1, panel.y() + 40, 0x701B3428);
 
         if (this.mapNameField != null && this.mapNameField.getText().isBlank()) {
             context.drawText(textRenderer, Text.literal("Map name"), this.mapNameField.getX() + 6, this.mapNameField.getY() + 7, UiTheme.TEXT_DIM, false);
         }
-        context.drawText(textRenderer, Text.literal("Create a temporary creative void world, then run /miniverse_map_save in that server."), panel.x() + 12, panel.y() + 46, UiTheme.TEXT_DIM, false);
-        context.drawText(textRenderer, Text.literal("Import an existing Minecraft world folder directly as a map."), panel.x() + 136, panel.y() + 57, UiTheme.TEXT_DIM, false);
 
         this.renderCards(context, textRenderer, mouseX, mouseY);
 
@@ -95,11 +126,11 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
 
         // Status lines
         if (!this.status.isBlank()) {
-            context.drawText(textRenderer, Text.literal(this.status), panel.x() + 12, panel.y() + panel.height() - 30, UiTheme.TEXT_DIM, false);
+            context.drawText(textRenderer, Text.literal(this.status), panel.x() + 12, panel.y() + panel.height() - 24, UiTheme.TEXT_DIM, false);
         }
         if (!this.importStatus.isBlank()) {
             int color = this.importStatus.startsWith("✗") ? UiTheme.ACCENT_RED : UiTheme.TEXT_DIM;
-            context.drawText(textRenderer, Text.literal(this.importStatus), panel.x() + 12, panel.y() + panel.height() - 18, color, false);
+            context.drawText(textRenderer, Text.literal(this.importStatus), panel.x() + 12, panel.y() + panel.height() - 12, color, false);
         }
     }
 
@@ -110,14 +141,7 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
                 return true;
             }
         }
-        if (button == 1) {
-            SessionSnapshotData.MapSummary map = this.mapAt(mouseX, mouseY);
-            if (map != null) {
-                this.openDetails(map.id());
-                return true;
-            }
-        }
-        if (button == 0) {
+        if (button == 0 || button == 1) {
             SessionSnapshotData.MapSummary map = this.mapAt(mouseX, mouseY);
             if (map != null) {
                 this.openDetails(map.id());
@@ -145,15 +169,31 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
             context.drawText(textRenderer, Text.literal("Expected layout: .minecraft/miniverse/maps/<map>/world + map.json + gamemodes/<game>.json"), this.listArea.x() + 12, this.listArea.y() + 34, UiTheme.TEXT_DIM, false);
             return;
         }
+
         int columns = this.listArea.width() >= 720 ? 3 : this.listArea.width() >= 460 ? 2 : 1;
-        int cardWidth = (this.listArea.width() - CARD_GAP * (columns - 1)) / columns;
+        int cardWidth = (this.listArea.width() - 8 - CARD_GAP * (columns - 1)) / columns;
         int imgHeight = (int)(cardWidth * 9.0 / 16.0);
         int cardHeight = imgHeight + 42;
 
+        int maxScroll = this.maxScroll();
+        this.scrollOffset = Math.clamp(this.scrollOffset, 0, maxScroll);
+
+        context.enableScissor(this.listArea.x(), this.listArea.y(), this.listArea.x() + this.listArea.width(), this.listArea.y() + this.listArea.height());
+
         for (int i = 0; i < maps.size(); i++) {
             SessionSnapshotData.MapSummary map = maps.get(i);
-            UiLayout.Rect card = UiLayout.grid(this.listArea, i, columns, cardHeight, CARD_GAP);
-            boolean hovered = card.contains(mouseX, mouseY);
+            int row = i / columns;
+            int col = i % columns;
+            int cardX = this.listArea.x() + col * (cardWidth + CARD_GAP);
+            int cardY = this.listArea.y() + row * (cardHeight + CARD_GAP) - this.scrollOffset;
+
+            // Viewport culling
+            if (cardY + cardHeight < this.listArea.y() || cardY > this.listArea.y() + this.listArea.height()) {
+                continue;
+            }
+
+            UiLayout.Rect card = new UiLayout.Rect(cardX, cardY, cardWidth, cardHeight);
+            boolean hovered = card.contains(mouseX, mouseY) && this.listArea.contains(mouseX, mouseY);
             boolean hasWorld = map.hasWorld();
 
             // Cards without a world get a grey border; cards with a world get the normal green accent.
@@ -175,6 +215,21 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
             context.drawText(textRenderer, Text.literal(map.name()), card.x() + 10, textY, UiTheme.TEXT, false);
             context.drawText(textRenderer, Text.literal(map.gamemodes().size() + " Supported Modes"), card.x() + 10, textY + 14, UiTheme.TEXT_MUTED, false);
         }
+
+        context.disableScissor();
+
+        // Vertical scrollbar indicator
+        if (maxScroll > 0) {
+            int barWidth = 4;
+            int barX = this.listArea.x() + this.listArea.width() - barWidth;
+            context.fill(barX, this.listArea.y(), barX + barWidth, this.listArea.y() + this.listArea.height(), 0x20FFFFFF);
+            int totalRows = (int) Math.ceil((double) maps.size() / columns);
+            int totalContentHeight = totalRows * (cardHeight + CARD_GAP) - CARD_GAP;
+            float ratio = (float) this.listArea.height() / (totalContentHeight);
+            int thumbHeight = Math.max(20, (int) (this.listArea.height() * ratio));
+            int thumbY = this.listArea.y() + (int) ((float) this.scrollOffset / maxScroll * (this.listArea.height() - thumbHeight));
+            context.fill(barX, thumbY, barX + barWidth, thumbY + thumbHeight, 0x9000AA66);
+        }
     }
 
     private SessionSnapshotData.MapSummary mapAt(double mouseX, double mouseY) {
@@ -183,13 +238,18 @@ public final class MapManagementWorkspaceView implements WorkspaceView {
             return null;
         }
         int columns = this.listArea.width() >= 720 ? 3 : this.listArea.width() >= 460 ? 2 : 1;
-        int cardWidth = (this.listArea.width() - CARD_GAP * (columns - 1)) / columns;
+        int cardWidth = (this.listArea.width() - 8 - CARD_GAP * (columns - 1)) / columns;
         int imgHeight = (int)(cardWidth * 9.0 / 16.0);
         int cardHeight = imgHeight + 42;
 
+        int adjustedY = (int) mouseY + this.scrollOffset;
         for (int i = 0; i < maps.size(); i++) {
-            UiLayout.Rect card = UiLayout.grid(this.listArea, i, columns, cardHeight, CARD_GAP);
-            if (card.contains(mouseX, mouseY)) {
+            int row = i / columns;
+            int col = i % columns;
+            int cardX = this.listArea.x() + col * (cardWidth + CARD_GAP);
+            int cardY = this.listArea.y() + row * (cardHeight + CARD_GAP);
+            UiLayout.Rect card = new UiLayout.Rect(cardX, cardY, cardWidth, cardHeight);
+            if (card.contains((int) mouseX, adjustedY)) {
                 return maps.get(i);
             }
         }

@@ -48,6 +48,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<UpdateMapTagsPayload> UPDATE_MAP_TAGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "update_map_tags"));
     public static final CustomPayload.Id<HideMapEditorOverlayPayload> HIDE_MAP_EDITOR_OVERLAY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "hide_map_editor_overlay"));
     public static final CustomPayload.Id<ImportWorldMapPayload> IMPORT_WORLD_MAP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "map_import_world"));
+    public static final CustomPayload.Id<ZombiesReloadPayload> ZOMBIES_RELOAD_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "zombies_reload"));
 
     public static final CustomPayload.Id<CreateDuelTypePayload> CREATE_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "create_duel_type"));
     public static final CustomPayload.Id<EditDuelTypePayload> EDIT_DUEL_TYPE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "edit_duel_type"));
@@ -137,6 +138,7 @@ public final class NetworkConstants {
 
         PayloadTypeRegistry.playC2S().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(ZOMBIES_RELOAD_ID, ZombiesReloadPayload.CODEC);
         
         payloadTypesRegistered = true;
     }
@@ -999,6 +1001,15 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return SYNC_KITS_ID;
+        }
+    }
+
+    public record ZombiesReloadPayload() implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, ZombiesReloadPayload> CODEC = PacketCodec.unit(new ZombiesReloadPayload());
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ZOMBIES_RELOAD_ID;
         }
     }
 }

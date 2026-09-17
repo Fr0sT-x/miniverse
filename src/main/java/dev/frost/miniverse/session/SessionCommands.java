@@ -1,6 +1,7 @@
 package dev.frost.miniverse.session;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -25,6 +26,10 @@ public final class SessionCommands {
         SessionManager.getInstance().getSessions().stream()
             .map(GameSession::getSessionId)
             .forEach(builder::suggest);
+        return builder.buildFuture();
+    };
+    private static final SuggestionProvider<ServerCommandSource> CRASHED_SESSION_SUGGESTIONS = (context, builder) -> {
+        SessionCrashTracker.getCrashedSessionIds().forEach(builder::suggest);
         return builder.buildFuture();
     };
 
@@ -56,6 +61,19 @@ public final class SessionCommands {
                         .suggests(SESSION_ID_SUGGESTIONS)
                         .executes(SessionCommands::info)))
                 .then(literal("list").executes(SessionCommands::listSessions))
+                .then(literal("crash")
+                    .requires(source -> source.hasPermissionLevel(2))
+                    .executes(ctx -> showCrash(ctx, null))
+                    .then(argument("session", StringArgumentType.word())
+                        .suggests(CRASHED_SESSION_SUGGESTIONS)
+                        .executes(ctx -> showCrash(ctx, StringArgumentType.getString(ctx, "session")))))
+                .then(literal("logs")
+                    .requires(source -> source.hasPermissionLevel(2))
+                    .then(argument("session", StringArgumentType.word())
+                        .suggests(SESSION_ID_SUGGESTIONS)
+                        .executes(ctx -> showLogs(ctx, StringArgumentType.getString(ctx, "session"), 20))
+                        .then(argument("lines", IntegerArgumentType.integer(1, 100))
+                            .executes(ctx -> showLogs(ctx, StringArgumentType.getString(ctx, "session"), IntegerArgumentType.getInteger(ctx, "lines"))))))
         );
     }
 
@@ -208,4 +226,11 @@ public final class SessionCommands {
         return 1;
     }
 
+    private static int showCrash(CommandContext<ServerCommandSource> context, String sessionId) {
+        return SessionCrashTracker.showCrashSummary(context.getSource(), sessionId);
+    }
+
+    private static int showLogs(CommandContext<ServerCommandSource> context, String sessionId, int lines) {
+        return SessionCrashTracker.showSessionLogs(context.getSource(), sessionId, lines);
+    }
 }

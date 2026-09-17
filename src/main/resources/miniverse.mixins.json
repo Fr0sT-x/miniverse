@@ -3,9 +3,11 @@
 	"package": "dev.frost.miniverse.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"ExampleMixin",
 		"ProtectedItemScreenHandlerMixin",
 		"ProtectedItemPlayerDropMixin",
+		"ProtectedItemServerPlayerEntityMixin",
+		"ProtectedItemOffhandMixin",
+		"ProtectedItemBlockUseMixin",
 		"protection.BlockItemMixin",
 		"protection.ExplosionMixin",
 		"protection.PistonHandlerMixin",
@@ -15,7 +17,10 @@
 		"protection.FallingBlockMixin",
 		"WorldArenaTrackerMixin",
 		"GlowingFilterMixin",
-		"bedwars.BridgeEggEntityMixin"
+		"bedwars.BridgeEggEntityMixin",
+		"DisplayEntityAccessor",
+		"TextDisplayEntityAccessor",
+		"SlimeEntityMixin"
 	],
 	"client": [
 		"ProtectedItemClientHandledScreenMixin",

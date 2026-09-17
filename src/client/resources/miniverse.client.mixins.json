@@ -4,13 +4,13 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"ConnectScreenTransitionOverlayMixin",
-		"ExampleClientMixin",
 		"LevelLoadingScreenTransitionOverlayMixin",
 		"LivingEntityNightVisionMixin",
 		"MiniverseScreenBackgroundMixin",
 		"ProgressScreenTransitionOverlayMixin",
 		"ScreenTransitionOverlayMixin",
-		"InventoryScreenMixin"
+		"InventoryScreenMixin",
+		"ChatHudMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -59,6 +59,29 @@ public final class ProtectedItemService {
         return rule.preventDrop() || rule.preventDeletion();
     }
 
+    public boolean shouldCancelOffhandSwap(ServerPlayerEntity player) {
+        if (player == null) {
+            return false;
+        }
+        ItemStack main = player.getMainHandStack();
+        ItemStack off = player.getOffHandStack();
+        ProtectedItemRule mainRule = ruleFor(main);
+        if (mainRule != null && (!mainRule.allowOffhandSwap() || !mainRule.allowRearrange())) {
+            return true;
+        }
+        ProtectedItemRule offRule = ruleFor(off);
+        if (offRule != null && (!offRule.allowOffhandSwap() || !offRule.allowRearrange())) {
+            return true;
+        }
+        if (ProtectedItemTags.isProtected(main) && (!ProtectedItemTags.canOffhandSwap(main) || !ProtectedItemTags.canRearrange(main))) {
+            return true;
+        }
+        if (ProtectedItemTags.isProtected(off) && (!ProtectedItemTags.canOffhandSwap(off) || !ProtectedItemTags.canRearrange(off))) {
+            return true;
+        }
+        return false;
+    }
+
     public boolean shouldCancelInventoryAction(ServerPlayerEntity player, ScreenHandler handler, int slotId, int button, SlotActionType actionType) {
         ItemStack cursorStack = handler.getCursorStack();
         Slot slot = null;
@@ -71,6 +94,47 @@ public final class ProtectedItemService {
 
         ProtectedItemRule cursorRule = ruleFor(cursorStack);
         ProtectedItemRule slotRule = ruleFor(slotStack);
+
+        if (actionType == SlotActionType.SWAP) {
+            boolean slotIsPlayer = slotValid && slot != null && slot.inventory == player.getInventory();
+            boolean externalSlot = !slotIsPlayer;
+
+            if (button >= 0 && button < 9) {
+                ItemStack hotbarStack = player.getInventory().getStack(button);
+                ProtectedItemRule hotbarRule = ruleFor(hotbarStack);
+                if (hotbarRule != null) {
+                    if (!hotbarRule.allowRearrange()) {
+                        return true;
+                    }
+                    if (externalSlot && hotbarRule.preventExternalStorage()) {
+                        return true;
+                    }
+                }
+            } else if (button == 40) {
+                ItemStack offhandStack = player.getOffHandStack();
+                ProtectedItemRule offhandRule = ruleFor(offhandStack);
+                if (offhandRule != null) {
+                    if (!offhandRule.allowOffhandSwap() || !offhandRule.allowRearrange()) {
+                        return true;
+                    }
+                    if (externalSlot && offhandRule.preventExternalStorage()) {
+                        return true;
+                    }
+                }
+            }
+            if (slotRule != null) {
+                if (button == 40 && (!slotRule.allowOffhandSwap() || !slotRule.allowRearrange())) {
+                    return true;
+                }
+                if (button >= 0 && button < 9 && !slotRule.allowRearrange()) {
+                    return true;
+                }
+                if (externalSlot && slotRule.preventExternalStorage()) {
+                    return true;
+                }
+            }
+        }
+
         if (cursorRule == null && slotRule == null) {
             return false;
         }
@@ -269,35 +333,33 @@ public final class ProtectedItemService {
         }
 
         if (actionType == SlotActionType.QUICK_MOVE) {
-            if (slotIsPlayer) {
-                if (!rule.allowRearrange()) {
-                    return true;
-                }
-                if (rule.preventExternalStorage()) {
-                    return true;
-                }
+            if (!rule.allowRearrange()) {
+                return true;
+            }
+            if (rule.preventExternalStorage()) {
+                return true;
             }
             return false;
         }
 
         if (actionType == SlotActionType.SWAP) {
-            if (button == 40 && !rule.allowOffhandSwap()) {
+            if (button == 40 && (!rule.allowOffhandSwap() || !rule.allowRearrange())) {
                 return true;
             }
-            if (!rule.allowRearrange() && slotIsPlayer) {
+            if (!rule.allowRearrange()) {
                 return true;
             }
             return rule.preventExternalStorage() && externalSlot;
         }
 
         if (actionType == SlotActionType.QUICK_CRAFT) {
-            if (!rule.allowRearrange() && slotIsPlayer) {
+            if (!rule.allowRearrange()) {
                 return true;
             }
             return rule.preventExternalStorage() && externalSlot;
         }
 
-        if (!rule.allowRearrange() && slotIsPlayer) {
+        if (!rule.allowRearrange()) {
             return true;
         }
 

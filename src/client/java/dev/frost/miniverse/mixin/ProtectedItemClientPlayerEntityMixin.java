@@ -15,7 +15,7 @@ public abstract class ProtectedItemClientPlayerEntityMixin {
     private void miniverse$blockProtectedSelectedItemDrop(boolean entireStack, CallbackInfoReturnable<Boolean> cir) {
         ClientPlayerEntity player = (ClientPlayerEntity) (Object) this;
         ItemStack selectedStack = player.getInventory().getMainHandStack();
-        if (ProtectedItemTags.isProtected(selectedStack)) {
+        if (ProtectedItemTags.isProtected(selectedStack) && !ProtectedItemTags.canDrop(selectedStack)) {
             ProtectedItemFeedback.sendRuleBlockedMessage(player);
             cir.setReturnValue(false);
         }

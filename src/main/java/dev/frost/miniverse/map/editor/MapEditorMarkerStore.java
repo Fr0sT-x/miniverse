@@ -26,6 +26,9 @@ public final class MapEditorMarkerStore {
 
     public static List<MapMarker> load(JsonObject config, MarkerDefinition definition) {
         List<MapMarker> markers = new ArrayList<>();
+        if (config != null && config.has("startArea") && config.has("doors") && !config.has("areaConfigs")) {
+            config = dev.frost.miniverse.minigame.impl.zombies.map.ZombiesMapConfig.fromLegacyTemplateJson(config).toMarkerJson();
+        }
         if (config == null || !config.has(definition.configKey())) {
             return markers;
         }

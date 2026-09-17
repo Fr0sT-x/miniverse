@@ -30,6 +30,7 @@ import org.lwjgl.glfw.GLFW;
 public class MiniverseClient implements ClientModInitializer {
 	public static KeyBinding OPEN_GUI_KEY;
 	public static KeyBinding TOGGLE_EDITOR_KEY;
+	public static KeyBinding RELOAD_WEAPON_KEY;
 	private static boolean pendingSessionOpen;
 	private static int pendingScreenshotTicks = 0;
 	private static java.io.File pendingScreenshotDir = null;
@@ -54,6 +55,22 @@ public class MiniverseClient implements ClientModInitializer {
 		dev.frost.miniverse.client.gui.map.MapEditorRenderIntegration.register();
 		dev.frost.miniverse.client.gui.map.DuelsEditorClient.register();
 
+		net.fabricmc.fabric.api.event.player.UseItemCallback.EVENT.register((player, world, hand) -> {
+			if (player == null) {
+				return net.minecraft.util.TypedActionResult.pass(net.minecraft.item.ItemStack.EMPTY);
+			}
+			net.minecraft.item.ItemStack stack = player.getStackInHand(hand);
+			int slot = player.getInventory().selectedSlot;
+			if (slot >= 6 && slot <= 8) {
+				return net.minecraft.util.TypedActionResult.fail(stack);
+			}
+			if (dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PERK)
+				|| dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PLACEHOLDER)) {
+				return net.minecraft.util.TypedActionResult.fail(stack);
+			}
+			return net.minecraft.util.TypedActionResult.pass(stack);
+		});
+
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 			"key.miniverse.open_gui",
 			InputUtil.Type.KEYSYM,
@@ -68,6 +85,13 @@ public class MiniverseClient implements ClientModInitializer {
 			"category." + NetworkConstants.MOD_ID + ".miniverse"
 		));
 
+		RELOAD_WEAPON_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+			"key.miniverse.reload_weapon",
+			InputUtil.Type.KEYSYM,
+			GLFW.GLFW_KEY_R,
+			"category." + NetworkConstants.MOD_ID + ".miniverse"
+		));
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (OPEN_GUI_KEY.wasPressed()) {
 				openGui();
@@ -77,6 +101,11 @@ public class MiniverseClient implements ClientModInitializer {
 					client.setScreen(null);
 				} else {
 					client.setScreen(new dev.frost.miniverse.client.gui.map.MapEditorWorkspaceScreen());
+				}
+			}
+			while (RELOAD_WEAPON_KEY.wasPressed()) {
+				if (client.player != null && client.getNetworkHandler() != null) {
+					net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new NetworkConstants.ZombiesReloadPayload());
 				}
 			}
 			if (pendingScreenshotTicks > 0) {

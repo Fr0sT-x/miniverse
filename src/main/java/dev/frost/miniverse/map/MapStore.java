@@ -197,7 +197,18 @@ public final class MapStore {
     }
 
     public static Optional<JsonObject> readGamemodeConfig(MapDescriptor map, String gameId) {
-        return readJson(map.folder().resolve("gamemodes").resolve(normalizeGameId(gameId) + ".json"));
+        Path path = map.folder().resolve("gamemodes").resolve(normalizeGameId(gameId) + ".json");
+        if (Files.exists(path)) {
+            return readJson(path);
+        }
+        if ("zombies_dead_end".equalsIgnoreCase(gameId)) {
+            Path alias = map.folder().resolve("gamemodes").resolve("zombies.json");
+            if (Files.exists(alias)) return readJson(alias);
+        } else if ("zombies".equalsIgnoreCase(gameId)) {
+            Path alias = map.folder().resolve("gamemodes").resolve("zombies_dead_end.json");
+            if (Files.exists(alias)) return readJson(alias);
+        }
+        return Optional.empty();
     }
 
     public static void writeGamemodeConfig(String mapId, String gameId, JsonObject config) throws IOException {
@@ -317,6 +328,34 @@ public final class MapStore {
 
     private static Optional<MapDescriptor> readDescriptor(Path folder) {
         String folderId = folder.getFileName().toString();
+        if ("dead_end".equalsIgnoreCase(folderId) || "deadend".equalsIgnoreCase(folderId)) {
+            Path gmDir = folder.resolve("gamemodes");
+            Path zDeadEnd = gmDir.resolve("zombies_dead_end.json");
+            Path zLegacy = gmDir.resolve("zombies.json");
+            boolean needsMigration = !Files.exists(zDeadEnd) || !Files.exists(zLegacy);
+            if (!needsMigration) {
+                Optional<JsonObject> existing = readJson(zDeadEnd);
+                if (existing.isEmpty() || !existing.get().has("areaConfigs")) {
+                    needsMigration = true;
+                }
+            }
+            if (needsMigration) {
+                try {
+                    Files.createDirectories(gmDir);
+                    Optional<JsonObject> legacyJson = readJson(zLegacy);
+                    dev.frost.miniverse.minigame.impl.zombies.map.ZombiesMapConfig config;
+                    if (legacyJson.isPresent() && legacyJson.get().has("doors") && !legacyJson.get().has("areaConfigs")) {
+                        config = dev.frost.miniverse.minigame.impl.zombies.map.ZombiesMapConfig.fromLegacyTemplateJson(legacyJson.get());
+                    } else {
+                        config = dev.frost.miniverse.minigame.impl.zombies.map.ZombiesMapConfig.loadDefaultTemplate();
+                    }
+                    JsonObject markerJson = config.toMarkerJson();
+                    writeJson(zDeadEnd, markerJson);
+                    writeJson(zLegacy, markerJson);
+                } catch (Exception ignored) {
+                }
+            }
+        }
         Optional<JsonObject> json = readJson(folder.resolve("map.json"));
         MapMetadata metadata = json.map(value -> MapMetadata.fromJson(folderId, value)).orElseGet(() -> MapMetadata.defaults(folderId, folderId));
         Path world = folder.resolve("world");
@@ -343,6 +382,11 @@ public final class MapStore {
             }
         } catch (IOException e) {
             Miniverse.LOGGER.warn("Failed to scan map gamemode configs at {}", gamemodesFolder, e);
+        }
+        if (ids.contains("zombies") && !ids.contains("zombies_dead_end")) {
+            ids.add("zombies_dead_end");
+        } else if (ids.contains("zombies_dead_end") && !ids.contains("zombies")) {
+            ids.add("zombies");
         }
         ids.sort(String.CASE_INSENSITIVE_ORDER);
         return ids;

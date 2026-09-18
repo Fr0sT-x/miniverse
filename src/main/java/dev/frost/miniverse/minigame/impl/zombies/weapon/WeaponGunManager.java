@@ -214,6 +214,7 @@ public class WeaponGunManager {
         this.activeReloads.put(player.getUuid(), new ReloadTask(player.getUuid(), stack, type, reloadTicks));
         WeaponItemHelper.updateStackLore(stack, type, currentClip, reserve, true);
 
+        player.sendMessage(Text.literal("Reloading...").formatted(Formatting.RED), true);
         this.world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.BLOCK_PISTON_CONTRACT, SoundCategory.PLAYERS, 0.8f, 1.2f);
     }
 
@@ -230,6 +231,7 @@ public class WeaponGunManager {
         task.stack.setCount(Math.max(1, newClip));
         WeaponItemHelper.setAmmo(task.stack, task.type, newClip, newReserve, false);
         this.world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.BLOCK_PISTON_EXTEND, SoundCategory.PLAYERS, 0.8f, 1.4f);
+        player.sendMessage(Text.empty(), true);
     }
 
     public boolean handleWeaponFire(ServerPlayerEntity player, ItemStack stack) {
@@ -308,7 +310,9 @@ public class WeaponGunManager {
         Box targetBox = player.getBoundingBox().stretch(look.multiply(3.0)).expand(1.0);
         for (Entity e : this.world.getOtherEntities(player, targetBox)) {
             if (e instanceof MobEntity mob && this.mobManager.isZombieMob(mob) && mob.isAlive()) {
-                float dmg = this.instantKillSupplier.get() ? 9999.0f : data.damage();
+                var active = this.mobManager.getActiveMob(mob);
+                boolean isBoss = active != null && active.type != null && active.type.isBoss();
+                float dmg = (this.instantKillSupplier.get() && !isBoss) ? 9999.0f : data.damage();
                 boolean wasAlive = mob.isAlive();
                 mob.damage(this.world.getDamageSources().playerAttack(player), dmg);
 
@@ -370,9 +374,11 @@ public class WeaponGunManager {
                 m -> this.mobManager.isZombieMob(m) && m.isAlive() && m.squaredDistanceTo(finalHitPos) <= radiusSq
             );
 
-            float damage = (this.instantKillSupplier != null && this.instantKillSupplier.get()) ? 9999.0f : data.damage();
-
             for (MobEntity mob : nearbyMobs) {
+                var active = this.mobManager.getActiveMob(mob);
+                boolean isBoss = active != null && active.type != null && active.type.isBoss();
+                float damage = (this.instantKillSupplier != null && this.instantKillSupplier.get() && !isBoss) ? 9999.0f : data.damage();
+
                 boolean wasAlive = mob.isAlive();
                 mob.damage(this.world.getDamageSources().playerAttack(player), damage);
                 if (wasAlive && (!mob.isAlive() || mob.getHealth() <= 0.0f) && this.killTracker != null) {
@@ -454,7 +460,10 @@ public class WeaponGunManager {
                     this.world.spawnParticles(ParticleTypes.FLAME, hit.pos().x, hit.pos().y, hit.pos().z, 4, 0.2, 0.2, 0.2, 0.02);
                 }
                 if (this.instantKillSupplier.get()) {
-                    finalDamage = 9999.0f;
+                    var active = this.mobManager.getActiveMob(mob);
+                    if (active == null || active.type == null || !active.type.isBoss()) {
+                        finalDamage = 9999.0f;
+                    }
                 }
 
                 boolean wasAlive = mob.isAlive();

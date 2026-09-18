@@ -8,8 +8,10 @@ import dev.frost.miniverse.minigame.core.MinigameSessionStore;
 import dev.frost.miniverse.minigame.core.SessionBootstrapper;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
+import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
 import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
 import dev.frost.miniverse.minigame.core.freeze.FreezeService;
+import net.minecraft.entity.EntityPose;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.protection.MapProtectionManager;
 import dev.frost.miniverse.minigame.core.region.RegionTriggerService;
@@ -270,6 +272,8 @@ public final class MinigameEventRouter {
     }
 
     private void onPlayerLeave(ServerPlayerEntity player) {
+        DownedPlayerTracker.setDowned(player.getUuid(), false);
+        player.setPose(EntityPose.STANDING);
         SpectatorService.getInstance().onPlayerLeave(player);
         MinigameRuntime runtime = MinigameManager.getInstance().getRuntime();
         if (runtime != null) {

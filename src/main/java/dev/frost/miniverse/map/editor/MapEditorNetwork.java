@@ -247,10 +247,21 @@ public final class MapEditorNetwork {
 
     private static void teleportToMarker(ServerPlayerEntity player, String mapId, MapEditorExtension extension, MarkerDefinition definition, String markerId) {
         MapEditorMarkerStore.load(mapId, extension, definition).stream()
-            .filter(marker -> marker.id().equals(markerId))
+            .filter(marker -> marker.id().equals(markerId) || marker.name().equalsIgnoreCase(markerId))
             .findFirst()
             .ifPresentOrElse(marker -> {
-                MapPosition target = marker.points().isEmpty() ? MapPosition.of(0.0D, 100.0D, 0.0D) : marker.points().getFirst();
+                MapPosition target;
+                if (!marker.points().isEmpty()) {
+                    target = marker.points().getFirst();
+                } else if (!marker.regions().isEmpty()) {
+                    RegionPart r = marker.regions().getFirst();
+                    double cx = (r.min().x() + r.max().x()) / 2.0;
+                    double cy = Math.min(r.min().y(), r.max().y());
+                    double cz = (r.min().z() + r.max().z()) / 2.0;
+                    target = MapPosition.of(cx, cy, cz);
+                } else {
+                    target = MapPosition.of(0.0D, 100.0D, 0.0D);
+                }
                 player.teleport(player.getServerWorld(), target.x(), target.y(), target.z(), target.yaw(), target.pitch());
             }, () -> player.sendMessage(Text.literal("Marker not found.").formatted(Formatting.RED), false));
     }

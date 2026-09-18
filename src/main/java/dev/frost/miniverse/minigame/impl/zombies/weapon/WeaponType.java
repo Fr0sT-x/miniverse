@@ -21,12 +21,13 @@ public enum WeaponType {
         .build()),
 
     SHOTGUN(WeaponData.builder("Shotgun", Items.IRON_HOE)
-        .damage(1.5f)
-        .bullets(10, 0.85)
+        .damage(2.8f)
+        .bullets(10, 1.15)
         .ammo(5, 65)
-        .delay(28)
+        .delay(22)
         .reload(30)
         .gold(8)
+        .pierceLimit(2)
         .particle(ParticleTypes.FLAME)
         .build()),
 
@@ -105,12 +106,13 @@ public enum WeaponType {
         .build()),
 
     DOUBLE_BARREL(WeaponData.builder("Double Barrel", Items.IRON_HOE)
-        .damage(2.5f)
-        .bullets(12, 0.75)
+        .damage(4.0f)
+        .bullets(12, 1.05)
         .ammo(8, 120)
-        .delay(20)
+        .delay(18)
         .reload(25)
         .gold(10)
+        .pierceLimit(3)
         .particle(ParticleTypes.FLAME)
         .build()),
 

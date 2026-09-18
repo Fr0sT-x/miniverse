@@ -1,6 +1,8 @@
 package dev.frost.miniverse.minigame.impl.zombies.wave;
 
 import dev.frost.miniverse.map.MapPosition;
+import dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficulty;
+import dev.frost.miniverse.minigame.impl.zombies.ZombiesSettings;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesMapConfig;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesWindow;
 import dev.frost.miniverse.minigame.impl.zombies.mob.ZombieEntityManager;
@@ -39,6 +41,11 @@ public class ZombieWaveEngine {
     private final ZombieEntityManager mobManager;
     private final Random random = new Random();
 
+    private int maxRounds = MAX_ROUNDS;
+    private int intermissionTicks = INTERMISSION_TICKS;
+    private ZombiesDifficulty difficulty = ZombiesDifficulty.EASY;
+    private boolean endlessMode = false;
+
     private int currentRound = 0;
     private WaveState state = WaveState.INTERMISSION;
     private int timerTicks = 100; // 5 second intro before Round 1
@@ -52,14 +59,28 @@ public class ZombieWaveEngine {
     private Runnable onVictoryListener;
 
     public ZombieWaveEngine(ServerWorld world, ZombiesMapConfig mapConfig, ZombieEntityManager mobManager) {
+        this(world, mapConfig, mobManager, ZombiesSettings.defaults());
+    }
+
+    public ZombieWaveEngine(ServerWorld world, ZombiesMapConfig mapConfig, ZombieEntityManager mobManager, ZombiesSettings settings) {
         this.world = world;
         this.mapConfig = mapConfig;
         this.mobManager = mobManager;
         this.mobManager.setSpawnQueueEmptySupplier(() -> this.spawnQueue.isEmpty() && this.state == WaveState.IN_ROUND);
+        if (settings != null) {
+            this.maxRounds = settings.maxRounds();
+            this.intermissionTicks = settings.intermissionSeconds() * 20;
+            this.difficulty = settings.difficulty() != null ? settings.difficulty() : ZombiesDifficulty.EASY;
+            this.endlessMode = settings.endlessMode();
+        }
     }
 
     public int getCurrentRound() {
         return this.currentRound;
+    }
+
+    public boolean isEndlessMode() {
+        return this.endlessMode;
     }
 
     public WaveState getState() {
@@ -106,10 +127,14 @@ public class ZombieWaveEngine {
 
         if (this.state == WaveState.IN_ROUND) {
             // Spawn queued mobs if under cap
-            if (!this.spawnQueue.isEmpty() && this.mobManager.getAliveMobCount() < MAX_ACTIVE_MOBS) {
+            int baseMaxActive = this.difficulty.getMaxActiveMobs();
+            int maxActive = (this.endlessMode && this.currentRound > 30)
+                ? Math.min(48, baseMaxActive + ((this.currentRound - 30) / 5) * 2)
+                : baseMaxActive;
+            if (!this.spawnQueue.isEmpty() && this.mobManager.getAliveMobCount() < maxActive) {
                 this.spawnCooldown--;
                 if (this.spawnCooldown <= 0) {
-                    this.spawnCooldown = 32 + this.random.nextInt(24);
+                    this.spawnCooldown = this.difficulty.getSpawnCooldownMin() + this.random.nextInt(this.difficulty.getSpawnCooldownRandom());
                     ZombieType nextType = this.spawnQueue.poll();
                     if (nextType != null) {
                         spawnMobAtWindow(nextType, reachableAreas);
@@ -141,7 +166,7 @@ public class ZombieWaveEngine {
 
     public void startNextRound(List<ServerPlayerEntity> survivors) {
         this.currentRound++;
-        if (this.currentRound > MAX_ROUNDS) {
+        if (!this.endlessMode && this.currentRound > this.maxRounds) {
             this.state = WaveState.VICTORY;
             if (this.onVictoryListener != null) {
                 this.onVictoryListener.run();
@@ -159,10 +184,34 @@ public class ZombieWaveEngine {
         for (ServerPlayerEntity p : survivors) {
             p.playSound(SoundEvents.ENTITY_WITHER_SPAWN, 0.9f, 1.2f);
         }
+
+        Text subtitle = Text.empty();
+        if (this.endlessMode && this.currentRound > 30) {
+            if (this.currentRound % 5 == 0) {
+                subtitle = Text.literal("⚠ BOSS SURGE ⚠").formatted(Formatting.DARK_RED, Formatting.BOLD);
+            } else {
+                int themeIdx = (this.currentRound - 31) % 4;
+                subtitle = switch (themeIdx) {
+                    case 0 -> Text.literal("Theme: The Swarm").formatted(Formatting.YELLOW);
+                    case 1 -> Text.literal("Theme: Infernal Siege").formatted(Formatting.GOLD);
+                    case 2 -> Text.literal("Theme: Laser Vanguard").formatted(Formatting.AQUA);
+                    case 3 -> Text.literal("Theme: Apocalyptic Chaos").formatted(Formatting.LIGHT_PURPLE);
+                    default -> Text.empty();
+                };
+            }
+
+            if (this.currentRound == 31) {
+                for (ServerPlayerEntity p : survivors) {
+                    p.sendMessage(Text.literal("☠ ENDLESS MODE ACTIVATED! Survive as long as you can... ☠").formatted(Formatting.DARK_RED, Formatting.BOLD), false);
+                    p.playSound(SoundEvents.ENTITY_ENDER_DRAGON_GROWL, 1.0f, 0.8f);
+                }
+            }
+        }
+
         dev.frost.miniverse.minigame.core.GameMessenger.showGameTitle(
             survivors,
             Text.literal("Round " + this.currentRound).formatted(Formatting.RED, Formatting.BOLD),
-            Text.empty()
+            subtitle
         );
 
         if (this.onRoundStartListener != null) {
@@ -171,7 +220,7 @@ public class ZombieWaveEngine {
     }
 
     private void completeRound(List<ServerPlayerEntity> survivors) {
-        if (this.currentRound >= MAX_ROUNDS) {
+        if (!this.endlessMode && this.currentRound >= this.maxRounds) {
             this.state = WaveState.VICTORY;
             if (this.onVictoryListener != null) {
                 this.onVictoryListener.run();
@@ -180,7 +229,7 @@ public class ZombieWaveEngine {
         }
 
         this.state = WaveState.INTERMISSION;
-        this.timerTicks = INTERMISSION_TICKS;
+        this.timerTicks = this.intermissionTicks;
         this.mobManager.clearGlowingEffects();
 
         long durationMs = Math.max(0, System.currentTimeMillis() - this.roundStartTime);
@@ -244,24 +293,82 @@ public class ZombieWaveEngine {
     }
 
     private void buildRoundQueue(int round) {
-        int mobCount = 14 + (round * 3);
+        if (round > 30) {
+            int mobCount = this.difficulty.getBaseWaveMobs() + (round * this.difficulty.getWaveMobsPerRound()) + (round - 30) * 2;
+
+            if (round % 5 == 0) {
+                if (round == 35) {
+                    this.spawnQueue.add(ZombieType.BOMBIE);
+                    this.spawnQueue.add(ZombieType.INFERNO);
+                } else if (round == 40) {
+                    this.spawnQueue.add(ZombieType.BROODMOTHER);
+                    this.spawnQueue.add(ZombieType.BOMBIE);
+                } else if (round == 45) {
+                    this.spawnQueue.add(ZombieType.BROODMOTHER);
+                    this.spawnQueue.add(ZombieType.INFERNO);
+                } else { // 50+
+                    this.spawnQueue.add(ZombieType.BROODMOTHER);
+                    this.spawnQueue.add(ZombieType.INFERNO);
+                    this.spawnQueue.add(ZombieType.BOMBIE);
+                }
+            }
+
+            int themeIdx = (round - 31) % 4;
+            for (int i = 0; i < mobCount; i++) {
+                this.spawnQueue.add(selectEndlessMobType(themeIdx));
+            }
+            return;
+        }
+
+        int mobCount = this.difficulty.getBaseWaveMobs() + (round * this.difficulty.getWaveMobsPerRound());
 
         if (round == 10) {
             this.spawnQueue.add(ZombieType.BOMBIE);
-            mobCount = 20;
+            mobCount = Math.round(20 * (this.difficulty.getBaseWaveMobs() / 14.0f));
         } else if (round == 20) {
             this.spawnQueue.add(ZombieType.INFERNO);
-            mobCount = 30;
+            mobCount = Math.round(30 * (this.difficulty.getBaseWaveMobs() / 14.0f));
         } else if (round == 30) {
             this.spawnQueue.add(ZombieType.BROODMOTHER);
             this.spawnQueue.add(ZombieType.INFERNO);
             this.spawnQueue.add(ZombieType.BOMBIE);
-            mobCount = 40;
+            mobCount = Math.round(40 * (this.difficulty.getBaseWaveMobs() / 14.0f));
         }
 
         for (int i = 0; i < mobCount; i++) {
             this.spawnQueue.add(selectMobTypeForRound(round));
         }
+    }
+
+    private ZombieType selectEndlessMobType(int themeIdx) {
+        float r = this.random.nextFloat();
+        return switch (themeIdx) {
+            case 0 -> { // The Swarm: Wolves 35%, Little Bombies 30%, Pig Zombies 20%, Normal Hard 15%
+                if (r < 0.35f) yield ZombieType.ZOMBIE_WOLF;
+                if (r < 0.65f) yield ZombieType.LITTLE_BOMBIE;
+                if (r < 0.85f) yield ZombieType.PIG_ZOMBIE;
+                yield ZombieType.NORMAL_HARD;
+            }
+            case 1 -> { // Infernal Siege: Fire Zombies 35%, Magma Zombies 30%, Magma Cubes 20%, Normal Hard 15%
+                if (r < 0.35f) yield ZombieType.FIRE_ZOMBIE;
+                if (r < 0.65f) yield ZombieType.MAGMA_ZOMBIE;
+                if (r < 0.85f) yield ZombieType.MAGMA_CUBE;
+                yield ZombieType.NORMAL_HARD;
+            }
+            case 2 -> { // Laser Vanguard: Guardian Zombies 35%, Normal Hard 35%, Pig Zombies 20%, Little Bombie 10%
+                if (r < 0.35f) yield ZombieType.GUARDIAN_ZOMBIE;
+                if (r < 0.70f) yield ZombieType.NORMAL_HARD;
+                if (r < 0.90f) yield ZombieType.PIG_ZOMBIE;
+                yield ZombieType.LITTLE_BOMBIE;
+            }
+            default -> { // 3: Apocalyptic Chaos: Equal mix of all elites
+                if (r < 0.20f) yield ZombieType.GUARDIAN_ZOMBIE;
+                if (r < 0.40f) yield ZombieType.MAGMA_ZOMBIE;
+                if (r < 0.60f) yield ZombieType.FIRE_ZOMBIE;
+                if (r < 0.80f) yield ZombieType.LITTLE_BOMBIE;
+                yield ZombieType.NORMAL_HARD;
+            }
+        };
     }
 
     private ZombieType selectMobTypeForRound(int round) {

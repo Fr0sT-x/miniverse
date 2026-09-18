@@ -12,6 +12,8 @@ public class MapEditorState {
     public boolean editorActive = false;
     /** Per-definition overlay visibility toggles. Contains "gameId:definitionKey" entries that are explicitly enabled. */
     public final Set<String> enabledOverlays = new HashSet<>();
+    /** Per-marker overlay visibility toggles. Contains marker IDs that are explicitly shown. */
+    public final Set<String> explicitlyShownMarkers = new HashSet<>();
     /** Per-marker overlay visibility toggles. Contains marker IDs that are explicitly hidden. */
     public final Set<String> hiddenIndividualMarkers = new HashSet<>();
     /** Which marker definitions are currently expanded in the UI. */
@@ -59,6 +61,7 @@ public class MapEditorState {
         this.selectedDefinitionKey = "";
         this.editorActive = false;
         this.enabledOverlays.clear();
+        this.explicitlyShownMarkers.clear();
         this.hiddenIndividualMarkers.clear();
         this.expandedMarkers.clear();
         this.currentBuilderSelection.clear();
@@ -72,6 +75,27 @@ public class MapEditorState {
         this.transX = 0; this.transY = 0; this.transZ = 0;
         this.scaleX = 1; this.scaleY = 1; this.scaleZ = 1;
         this.rotY = 0;
+    }
+
+    public boolean isMarkerVisible(String gameId, String definitionKey, String markerId) {
+        if (markerId == null || markerId.isBlank()) return false;
+        if (isOverlayEnabled(gameId, definitionKey)) {
+            return !this.hiddenIndividualMarkers.contains(markerId);
+        }
+        return this.explicitlyShownMarkers.contains(markerId);
+    }
+
+    public void toggleMarkerVisibility(String gameId, String definitionKey, String markerId) {
+        if (markerId == null || markerId.isBlank()) return;
+        if (isMarkerVisible(gameId, definitionKey, markerId)) {
+            this.explicitlyShownMarkers.remove(markerId);
+            if (isOverlayEnabled(gameId, definitionKey)) {
+                this.hiddenIndividualMarkers.add(markerId);
+            }
+        } else {
+            this.hiddenIndividualMarkers.remove(markerId);
+            this.explicitlyShownMarkers.add(markerId);
+        }
     }
 
     public boolean isOverlayEnabled(String gameId, String definitionKey) {

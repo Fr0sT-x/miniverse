@@ -18,7 +18,7 @@ public class ZombiesConfigAndLogicTest {
 
     @Test
     public void testZombiesSettingsSerialization() {
-        ZombiesSettings original = new ZombiesSettings("dead_end", 750, 30, 15, 35, false);
+        ZombiesSettings original = new ZombiesSettings("dead_end", 750, 30, 15, 35, false, ZombiesDifficulty.HARD, true);
         Properties props = new Properties();
         original.writeTo(props);
 
@@ -29,6 +29,8 @@ public class ZombiesConfigAndLogicTest {
         Assert.assertEquals(15, restored.intermissionSeconds());
         Assert.assertEquals(35, restored.bleedoutSeconds());
         Assert.assertFalse(restored.friendlyFire());
+        Assert.assertEquals(ZombiesDifficulty.HARD, restored.difficulty());
+        Assert.assertTrue(restored.endlessMode());
     }
 
     @Test
@@ -40,6 +42,8 @@ public class ZombiesConfigAndLogicTest {
         Assert.assertEquals(10, defaults.intermissionSeconds());
         Assert.assertEquals(30, defaults.bleedoutSeconds());
         Assert.assertFalse(defaults.friendlyFire());
+        Assert.assertEquals(ZombiesDifficulty.EASY, defaults.difficulty());
+        Assert.assertFalse(defaults.endlessMode());
     }
 
     @Test
@@ -48,60 +52,71 @@ public class ZombiesConfigAndLogicTest {
             Assert.assertNotNull("Bundled dead_end.json must be present on classpath", stream);
             JsonObject root = JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();
 
-            // 1. Verify start area
-            Assert.assertTrue("Root must have startArea", root.has("startArea"));
-            Assert.assertEquals("Alley", root.get("startArea").getAsString());
+            // 1. Verify player spawns
+            Assert.assertTrue("Root must have playerSpawns", root.has("playerSpawns") && root.get("playerSpawns").isJsonArray());
+            Assert.assertFalse("Must have at least one player spawn", root.getAsJsonArray("playerSpawns").isEmpty());
 
-            // 2. Verify doors
+            // 2. Verify area configs & start area
+            Assert.assertTrue("Root must have areaConfigs", root.has("areaConfigs") && root.get("areaConfigs").isJsonArray());
+            JsonArray areas = root.getAsJsonArray("areaConfigs");
+            boolean foundStartArea = false;
+            for (JsonElement el : areas) {
+                JsonObject a = el.getAsJsonObject();
+                if (a.has("properties") && a.getAsJsonObject("properties").has("isStartArea")
+                        && a.getAsJsonObject("properties").get("isStartArea").getAsBoolean()) {
+                    foundStartArea = true;
+                    Assert.assertEquals("Alley", a.getAsJsonObject("properties").get("areaName").getAsString());
+                }
+            }
+            Assert.assertTrue("Must have start area configured", foundStartArea);
+
+            // 3. Verify doors
             Assert.assertTrue("Root must have doors", root.has("doors") && root.get("doors").isJsonArray());
             JsonArray doors = root.getAsJsonArray("doors");
             Assert.assertTrue("Must have at least 5 doors", doors.size() >= 5);
-            Set<String> referencedAreas = new HashSet<>();
-            referencedAreas.add(root.get("startArea").getAsString());
-
             for (JsonElement el : doors) {
                 JsonObject d = el.getAsJsonObject();
-                Assert.assertTrue(d.has("area1"));
-                Assert.assertTrue(d.has("area2"));
-                Assert.assertTrue(d.has("gold"));
-                Assert.assertTrue(d.has("position"));
-                referencedAreas.add(d.get("area1").getAsString());
-                referencedAreas.add(d.get("area2").getAsString());
+                Assert.assertTrue("Door must have properties", d.has("properties"));
+                JsonObject p = d.getAsJsonObject("properties");
+                Assert.assertTrue(p.has("area1"));
+                Assert.assertTrue(p.has("area2"));
+                Assert.assertTrue(p.has("gold"));
+                Assert.assertTrue(d.has("regions"));
             }
 
-            // 3. Verify windows
-            Assert.assertTrue("Root must have windows", root.has("windows") && root.get("windows").isJsonArray());
-            JsonArray windows = root.getAsJsonArray("windows");
-            Assert.assertTrue("Must have at least 10 barricade windows", windows.size() >= 10);
-            for (JsonElement el : windows) {
-                JsonObject w = el.getAsJsonObject();
-                Assert.assertTrue(w.has("area"));
-                Assert.assertTrue(w.has("spawnLocation") || w.has("spawn"));
-                Assert.assertTrue(w.has("blocks"));
-                Assert.assertTrue(w.has("repairArea"));
-            }
+            // 4. Verify windows
+            Assert.assertTrue("Root must have windowSpawns", root.has("windowSpawns") && root.get("windowSpawns").isJsonArray());
+            Assert.assertTrue("Must have at least 10 window spawns", root.getAsJsonArray("windowSpawns").size() >= 10);
+            Assert.assertTrue("Root must have windowBlocks", root.has("windowBlocks") && root.get("windowBlocks").isJsonArray());
+            Assert.assertTrue("Must have at least 10 window blocks", root.getAsJsonArray("windowBlocks").size() >= 10);
 
-            // 4. Verify stations
+            // 5. Verify shops & machines
             Assert.assertTrue("Must have weaponShops", root.has("weaponShops") && root.get("weaponShops").isJsonArray());
+            Assert.assertFalse("Weapon shops must not be empty", root.getAsJsonArray("weaponShops").isEmpty());
             Assert.assertTrue("Must have armorShops", root.has("armorShops") && root.get("armorShops").isJsonArray());
+            Assert.assertFalse("Armor shops must not be empty", root.getAsJsonArray("armorShops").isEmpty());
             Assert.assertTrue("Must have perkMachines", root.has("perkMachines") && root.get("perkMachines").isJsonArray());
+            Assert.assertFalse("Perk machines must not be empty", root.getAsJsonArray("perkMachines").isEmpty());
             Assert.assertTrue("Must have luckyChests", root.has("luckyChests") && root.get("luckyChests").isJsonArray());
-            Assert.assertTrue("Must have powerSwitch", root.has("powerSwitch") && root.get("powerSwitch").isJsonObject());
-            Assert.assertTrue("Must have teamMachine", root.has("teamMachine") && root.get("teamMachine").isJsonObject());
+            Assert.assertTrue("Must have powerSwitches", root.has("powerSwitches") && root.get("powerSwitches").isJsonArray());
+            Assert.assertTrue("Must have teamMachines", root.has("teamMachines") && root.get("teamMachines").isJsonArray());
+            Assert.assertTrue("Must have ultimateMachines", root.has("ultimateMachines") && root.get("ultimateMachines").isJsonArray());
 
-            // 5. Verify perk machines include key perks
+            // 6. Verify perk machines include key perks
             JsonArray perks = root.getAsJsonArray("perkMachines");
             Set<String> perkTypes = new HashSet<>();
             for (JsonElement el : perks) {
                 JsonObject p = el.getAsJsonObject();
-                perkTypes.add(p.get("perk").getAsString());
+                if (p.has("properties") && p.getAsJsonObject("properties").has("perk")) {
+                    perkTypes.add(p.getAsJsonObject("properties").get("perk").getAsString());
+                }
             }
             Assert.assertTrue("Must contain SPEED perk", perkTypes.contains("SPEED"));
             Assert.assertTrue("Must contain EXTRA_HEALTH perk", perkTypes.contains("EXTRA_HEALTH"));
             Assert.assertTrue("Must contain FAST_REVIVE perk", perkTypes.contains("FAST_REVIVE"));
             Assert.assertTrue("Must contain QUICK_FIRE perk", perkTypes.contains("QUICK_FIRE"));
         } catch (Exception e) {
-            Assert.fail("Failed to load and validate dead_end.json template: " + e.getMessage());
+            Assert.fail("Failed to validate dead_end.json template: " + e.getMessage());
         }
     }
 }

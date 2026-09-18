@@ -194,13 +194,11 @@ public class MapEditorWorkspaceScreen extends Screen {
     
                     for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorExtension ext : dev.frost.miniverse.client.gui.SessionSnapshotData.editorExtensions()) {
                         for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarkerDefinition def : ext.markers()) {
-                            if (!MapEditorState.INSTANCE.isOverlayEnabled(ext.gameId(), def.key())) continue;
-    
                             java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker> markers = dev.frost.miniverse.client.gui.SessionSnapshotData.editorState().markers(ext.gameId(), def.key());
                             if (markers == null) continue;
     
                             for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker marker : markers) {
-                                if (MapEditorState.INSTANCE.hiddenIndividualMarkers.contains(marker.id())) continue;
+                                if (!MapEditorState.INSTANCE.isMarkerVisible(ext.gameId(), def.key(), marker.id())) continue;
     
                                 if ("REGION".equalsIgnoreCase(marker.type())) {
                                     for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart region : marker.regions()) {
@@ -377,11 +375,10 @@ public class MapEditorWorkspaceScreen extends Screen {
 
                 for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorExtension ext : dev.frost.miniverse.client.gui.SessionSnapshotData.editorExtensions()) {
                     for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarkerDefinition def : ext.markers()) {
-                        if (!MapEditorState.INSTANCE.isOverlayEnabled(ext.gameId(), def.key())) continue;
                         java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker> markers = dev.frost.miniverse.client.gui.SessionSnapshotData.editorState().markers(ext.gameId(), def.key());
                         if (markers == null) continue;
                         for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker marker : markers) {
-                            if (MapEditorState.INSTANCE.hiddenIndividualMarkers.contains(marker.id())) continue;
+                            if (!MapEditorState.INSTANCE.isMarkerVisible(ext.gameId(), def.key(), marker.id())) continue;
 
                             boolean inside = false;
                             if ("REGION".equalsIgnoreCase(marker.type())) {

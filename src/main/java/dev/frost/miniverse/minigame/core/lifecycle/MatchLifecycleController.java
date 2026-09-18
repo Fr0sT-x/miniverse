@@ -11,8 +11,10 @@ import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
 import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
 import dev.frost.miniverse.minigame.core.freeze.FreezeService;
+import net.minecraft.entity.EntityPose;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.network.TransitionTransferCoordinator;
 import dev.frost.miniverse.session.SessionPermissions;
@@ -406,7 +408,11 @@ public final class MatchLifecycleController {
     private void unfreezeParticipants() {
         for (ServerPlayerEntity player : this.roster()) {
             this.freezeService.clear(player);
+            player.setPose(EntityPose.STANDING);
+            DownedPlayerTracker.setDowned(player.getUuid(), false);
+            ServerPlayNetworking.send(player, new NetworkConstants.DownedStatePayload(player.getUuid(), false));
         }
+        DownedPlayerTracker.clear();
     }
 
     private void sendCountdownTo(ServerPlayerEntity player, int secondsRemaining) {

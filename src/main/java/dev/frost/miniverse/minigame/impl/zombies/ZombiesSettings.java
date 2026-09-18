@@ -10,23 +10,42 @@ public record ZombiesSettings(
     int maxRounds,
     int intermissionSeconds,
     int bleedoutSeconds,
-    boolean friendlyFire
+    boolean friendlyFire,
+    ZombiesDifficulty difficulty,
+    boolean endlessMode
 ) {
+    public ZombiesSettings(String mapId, int startGold, int maxRounds, int intermissionSeconds, int bleedoutSeconds, boolean friendlyFire) {
+        this(mapId, startGold, maxRounds, intermissionSeconds, bleedoutSeconds, friendlyFire, ZombiesDifficulty.EASY, false);
+    }
+
+    public ZombiesSettings(String mapId, int startGold, int maxRounds, int intermissionSeconds, int bleedoutSeconds, boolean friendlyFire, ZombiesDifficulty difficulty) {
+        this(mapId, startGold, maxRounds, intermissionSeconds, bleedoutSeconds, friendlyFire, difficulty, false);
+    }
+
     public static ZombiesSettings defaults() {
-        return new ZombiesSettings("dead_end", 500, 30, 10, 30, false);
+        return new ZombiesSettings("dead_end", 500, 30, 10, 30, false, ZombiesDifficulty.EASY, false);
     }
 
     public static ZombiesSettings fromNbt(NbtCompound nbt) {
         if (nbt == null) {
             return defaults();
         }
+        ZombiesDifficulty diff = ZombiesDifficulty.EASY;
+        if (nbt.contains("difficulty")) {
+            try {
+                diff = ZombiesDifficulty.valueOf(nbt.getString("difficulty").toUpperCase());
+            } catch (IllegalArgumentException ignored) {}
+        }
+        boolean endless = nbt.contains("endlessMode") && nbt.getBoolean("endlessMode");
         return new ZombiesSettings(
             nbt.contains("mapId") ? nbt.getString("mapId") : "dead_end",
             nbt.contains("startGold") ? nbt.getInt("startGold") : 500,
             nbt.contains("maxRounds") ? nbt.getInt("maxRounds") : 30,
             nbt.contains("intermissionSeconds") ? nbt.getInt("intermissionSeconds") : 10,
             nbt.contains("bleedoutSeconds") ? nbt.getInt("bleedoutSeconds") : 30,
-            nbt.contains("friendlyFire") && nbt.getBoolean("friendlyFire")
+            nbt.contains("friendlyFire") && nbt.getBoolean("friendlyFire"),
+            diff,
+            endless
         );
     }
 
@@ -37,19 +56,31 @@ public record ZombiesSettings(
         properties.setProperty("zombies.intermissionSeconds", String.valueOf(this.intermissionSeconds));
         properties.setProperty("zombies.bleedoutSeconds", String.valueOf(this.bleedoutSeconds));
         properties.setProperty("zombies.friendlyFire", String.valueOf(this.friendlyFire));
+        properties.setProperty("zombies.difficulty", this.difficulty != null ? this.difficulty.name() : ZombiesDifficulty.EASY.name());
+        properties.setProperty("zombies.endlessMode", String.valueOf(this.endlessMode));
     }
 
     public static ZombiesSettings fromProperties(Properties properties) {
         if (properties == null) {
             return defaults();
         }
+        ZombiesDifficulty diff = ZombiesDifficulty.EASY;
+        String diffStr = properties.getProperty("zombies.difficulty");
+        if (diffStr != null) {
+            try {
+                diff = ZombiesDifficulty.valueOf(diffStr.toUpperCase());
+            } catch (IllegalArgumentException ignored) {}
+        }
+        boolean endless = Boolean.parseBoolean(properties.getProperty("zombies.endlessMode", "false"));
         return new ZombiesSettings(
             properties.getProperty("zombies.mapId", "dead_end"),
             Integer.parseInt(properties.getProperty("zombies.startGold", "500")),
             Integer.parseInt(properties.getProperty("zombies.maxRounds", "30")),
             Integer.parseInt(properties.getProperty("zombies.intermissionSeconds", "10")),
             Integer.parseInt(properties.getProperty("zombies.bleedoutSeconds", "30")),
-            Boolean.parseBoolean(properties.getProperty("zombies.friendlyFire", "false"))
+            Boolean.parseBoolean(properties.getProperty("zombies.friendlyFire", "false")),
+            diff,
+            endless
         );
     }
 }

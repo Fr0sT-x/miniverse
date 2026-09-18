@@ -1,6 +1,8 @@
 package dev.frost.miniverse.minigame.impl.zombies;
 
+import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.map.MapPosition;
+import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.MinigameManager;
@@ -42,7 +44,9 @@ import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponItemHelper;
 import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponType;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.damage.DamageSource;
@@ -112,6 +116,17 @@ public class ZombiesMinigame extends AbstractMinigame implements
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private int tickCounter = 0;
 
+    private enum ActionBarPrompt {
+        NONE,
+        WINDOW_HOLD_SNEAK,
+        WINDOW_REPAIRING,
+        WINDOW_REPAIR_COMPLETE,
+        WINDOW_UNDER_ATTACK,
+        DOOR_PROMPT
+    }
+    private final Map<UUID, ActionBarPrompt> activeActionBarPrompts = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> repairCompleteTicks = new ConcurrentHashMap<>();
+
     public ZombiesMinigame() {
     }
 
@@ -138,6 +153,8 @@ public class ZombiesMinigame extends AbstractMinigame implements
         this.lastDamageTimes.clear();
         this.playerPerks.clear();
         this.scoreboards.clear();
+        this.activeActionBarPrompts.clear();
+        this.repairCompleteTicks.clear();
         this.teamManager.clear();
         this.tickCounter = 0;
     }
@@ -166,7 +183,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
     }
 
     public String getDescription() {
-        return "Survive 30 waves of zombies in Dead End.";
+        return "Survive 30 waves of zombies.";
     }
 
     @Override
@@ -281,12 +298,13 @@ public class ZombiesMinigame extends AbstractMinigame implements
         }
 
         // Initialize Managers
-        this.mobManager = new ZombieEntityManager(world);
+        this.mobManager = new ZombieEntityManager(world, this.settings.difficulty());
         this.mobManager.setWindows(this.mapConfig.windows());
         this.reviveManager = new ZombiesReviveManager(world, (p, g) -> {
             this.addGold(p, g);
             this.playerRevives.merge(p.getUuid(), 1, Integer::sum);
         }, this::hasPerk, this::broadcast);
+        this.reviveManager.setBleedoutSeconds(this.settings.bleedoutSeconds());
         this.dropManager = new PerkDropManager(world, this.mapConfig, this.mobManager, this::addGold);
         this.gunManager = new WeaponGunManager(
             world,
@@ -299,7 +317,9 @@ public class ZombiesMinigame extends AbstractMinigame implements
         this.gunManager.setKillTracker(this::recordKill);
 
         // Ultimate Machine & Holograms
-        this.ultimateMachine = new ZombiesUltimateMachine(this.mapConfig.getEffectiveUltimateMachinePos());
+        this.ultimateMachine = this.mapConfig.ultimateMachine() != null
+            ? this.mapConfig.ultimateMachine()
+            : new ZombiesUltimateMachine(this.mapConfig.getEffectiveUltimateMachinePos());
         this.hologramManager = new ZombiesHologramManager(world);
         this.hologramManager.spawnAll(this.mapConfig, this.ultimateMachine.getPos());
 
@@ -326,7 +346,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
         this.luckyChestManager.initHologram();
         this.teamMachineManager = new ZombiesTeamMachineManager(world, this.mobManager, this.reviveManager, this::getParticipants, this::spendGold, this::broadcast);
 
-        this.waveEngine = new ZombieWaveEngine(world, this.mapConfig, this.mobManager);
+        this.waveEngine = new ZombieWaveEngine(world, this.mapConfig, this.mobManager, this.settings);
         this.mobManager.setStuckMobHandler(active -> this.waveEngine.handleStuckMob(active, this.reachableAreas));
         this.waveEngine.setOnRoundClearListener(() -> {
             // Respawn downed/spectating players
@@ -343,8 +363,10 @@ public class ZombiesMinigame extends AbstractMinigame implements
         this.waveEngine.setOnVictoryListener(this::winMatch);
 
         this.mobManager.setOnMobKilledCallback(mob -> {
-            // 5% drop chance
-            this.dropManager.trySpawnDrop(mob.entity.getPos());
+            // Little Bombie should not spawn power-ups (explodes immediately causing accidental pickups)
+            if (mob.type != dev.frost.miniverse.minigame.impl.zombies.mob.ZombieType.LITTLE_BOMBIE) {
+                this.dropManager.trySpawnDrop(mob.entity.getPos());
+            }
         });
 
         // Reset Doors & Windows
@@ -362,7 +384,11 @@ public class ZombiesMinigame extends AbstractMinigame implements
         BlockPos pStart = !this.mapConfig.playerSpawns().isEmpty() ? this.mapConfig.playerSpawns().get(0) : new BlockPos(0, 70, 0);
         MapPosition spawnPos = MapPosition.of(pStart.getX() + 0.5, pStart.getY(), pStart.getZ() + 0.5);
 
+        DownedPlayerTracker.clear();
         for (ServerPlayerEntity p : participants) {
+            DownedPlayerTracker.setDowned(p.getUuid(), false);
+            p.setPose(EntityPose.STANDING);
+            ServerPlayNetworking.send(p, new NetworkConstants.DownedStatePayload(p.getUuid(), false));
             this.teamManager.assign(p, TEAM_SURVIVORS, "Survivors");
             this.goldMap.put(p.getUuid(), this.settings.startGold());
             this.playerPerks.put(p.getUuid(), ConcurrentHashMap.newKeySet());
@@ -430,6 +456,11 @@ public class ZombiesMinigame extends AbstractMinigame implements
                             if (window.repairOneSlab(world)) {
                                 int goldGain = this.dropManager.isDoubleGoldActive() ? 20 : 10;
                                 addGold(p, goldGain);
+                                if (window.isFullyRepaired(world)) {
+                                    p.sendMessage(Text.literal("Repair complete!").formatted(Formatting.GREEN), true);
+                                    this.activeActionBarPrompts.put(p.getUuid(), ActionBarPrompt.WINDOW_REPAIR_COMPLETE);
+                                    this.repairCompleteTicks.put(p.getUuid(), 25);
+                                }
                                 break;
                             }
                         }
@@ -458,26 +489,91 @@ public class ZombiesMinigame extends AbstractMinigame implements
             }
         }
 
-        // 9. Proximity Action Bar Prompts (every 5 ticks)
-        if (this.tickCounter % 5 == 0) {
+        // 9. Proximity Action Bar Prompts & Window Repair Status (every 2 ticks)
+        if (this.tickCounter % 2 == 0) {
             for (ServerPlayerEntity p : survivors) {
-                if (!p.isAlive() || p.isSpectator() || this.reviveManager.isDowned(p.getUuid())) continue;
+                if (!p.isAlive() || p.isSpectator() || this.reviveManager.isDowned(p.getUuid())) {
+                    if (this.activeActionBarPrompts.getOrDefault(p.getUuid(), ActionBarPrompt.NONE) != ActionBarPrompt.NONE) {
+                        p.sendMessage(Text.empty(), true);
+                        this.activeActionBarPrompts.put(p.getUuid(), ActionBarPrompt.NONE);
+                        this.repairCompleteTicks.remove(p.getUuid());
+                    }
+                    continue;
+                }
                 if (this.gunManager.isReloading(p.getUuid())) continue;
 
-                boolean prompted = false;
+                // Handle active repair complete countdown
+                int completeTimer = this.repairCompleteTicks.getOrDefault(p.getUuid(), 0);
+                if (completeTimer > 0) {
+                    boolean nearAnyWindow = false;
+                    for (ZombiesWindow w : this.mapConfig.windows()) {
+                        if (w.isNearWindow(p.getX(), p.getY(), p.getZ(), 6.25)) {
+                            nearAnyWindow = true;
+                            break;
+                        }
+                    }
+                    if (!nearAnyWindow) {
+                        p.sendMessage(Text.empty(), true);
+                        this.activeActionBarPrompts.put(p.getUuid(), ActionBarPrompt.NONE);
+                        this.repairCompleteTicks.remove(p.getUuid());
+                    } else {
+                        int nextTimer = completeTimer - 2;
+                        if (nextTimer <= 0) {
+                            p.sendMessage(Text.empty(), true);
+                            this.activeActionBarPrompts.put(p.getUuid(), ActionBarPrompt.NONE);
+                            this.repairCompleteTicks.remove(p.getUuid());
+                        } else {
+                            this.repairCompleteTicks.put(p.getUuid(), nextTimer);
+                        }
+                    }
+                    continue;
+                }
+
+                ActionBarPrompt targetPrompt = ActionBarPrompt.NONE;
+                Text promptMessage = null;
+
+                // Check window proximity
                 for (ZombiesWindow window : this.mapConfig.windows()) {
                     if (window.isNearWindow(p.getX(), p.getY(), p.getZ(), 6.25) && !window.isFullyRepaired(world)) {
-                        p.sendMessage(Text.literal("Hold SNEAK to repair").formatted(Formatting.YELLOW), true);
-                        prompted = true;
+                        if (window.isUnderAttack()) {
+                            targetPrompt = ActionBarPrompt.WINDOW_UNDER_ATTACK;
+                            if (p.isSneaking()) {
+                                promptMessage = Text.literal("Repairing cancelled due to zombies!").formatted(Formatting.RED, Formatting.BOLD);
+                            } else {
+                                promptMessage = Text.literal("Cannot repair - barricade is under attack!").formatted(Formatting.RED);
+                            }
+                        } else if (p.isSneaking()) {
+                            targetPrompt = ActionBarPrompt.WINDOW_REPAIRING;
+                            promptMessage = Text.literal("Repairing window...").formatted(Formatting.YELLOW);
+                        } else {
+                            targetPrompt = ActionBarPrompt.WINDOW_HOLD_SNEAK;
+                            promptMessage = Text.literal("Hold SNEAK to repair").formatted(Formatting.YELLOW);
+                        }
                         break;
                     }
                 }
-                if (!prompted) {
+
+                // Check door proximity if not near window
+                if (targetPrompt == ActionBarPrompt.NONE) {
                     for (ZombiesDoor door : this.mapConfig.doors()) {
                         if (!door.isOpen() && door.isNearDoor(p.getX(), p.getY(), p.getZ(), 3.5)) {
-                            p.sendMessage(Text.literal("Right-click with empty hand to open").formatted(Formatting.YELLOW), true);
+                            targetPrompt = ActionBarPrompt.DOOR_PROMPT;
+                            promptMessage = Text.literal("Right-click with empty hand to open door").formatted(Formatting.YELLOW);
                             break;
                         }
+                    }
+                }
+
+                ActionBarPrompt current = this.activeActionBarPrompts.getOrDefault(p.getUuid(), ActionBarPrompt.NONE);
+                if (targetPrompt == ActionBarPrompt.NONE) {
+                    if (current != ActionBarPrompt.NONE) {
+                        p.sendMessage(Text.empty(), true);
+                        this.activeActionBarPrompts.put(p.getUuid(), ActionBarPrompt.NONE);
+                    }
+                } else {
+                    if (current != targetPrompt || this.tickCounter % 20 == 0) {
+                        p.sendMessage(promptMessage, true);
+                        this.activeActionBarPrompts.put(p.getUuid(), targetPrompt);
                     }
                 }
             }
@@ -665,8 +761,8 @@ public class ZombiesMinigame extends AbstractMinigame implements
     public boolean allowDamage(ServerPlayerEntity player, DamageSource source, float amount) {
         if (this.state != GameState.RUNNING) return true;
 
-        // Downed players are immune to further damage
-        if (this.reviveManager.isDowned(player.getUuid())) {
+        // Downed players and freshly revived players (2s invulnerability) are immune to damage
+        if (this.reviveManager.isDowned(player.getUuid()) || this.reviveManager.isInvulnerable(player.getUuid())) {
             return false;
         }
 
@@ -706,6 +802,15 @@ public class ZombiesMinigame extends AbstractMinigame implements
         }
         ServerWorld world = player.getServerWorld();
         world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.BLOCKS, 1.2f, 1.0f);
+
+        Text powerTitle = Text.literal(player.getName().getString() + " activated Power!").formatted(Formatting.GOLD, Formatting.BOLD);
+        Text powerSubtitle = Text.literal("Perk machines and traps are online!").formatted(Formatting.YELLOW);
+        dev.frost.miniverse.minigame.core.GameMessenger.showGameTitle(getParticipants(), powerTitle, powerSubtitle);
+
+        for (ServerPlayerEntity p : getParticipants()) {
+            p.playSound(SoundEvents.BLOCK_BEACON_ACTIVATE, 1.0f, 1.2f);
+        }
+
         broadcast(Text.literal("⚡ POWER HAS BEEN RESTORED by " + player.getName().getString() + "! Perk machines are now operational!").formatted(Formatting.GOLD, Formatting.BOLD));
     }
 
@@ -762,28 +867,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
             player.playSound(SoundEvents.ENTITY_ITEM_PICKUP, 1.0f, 1.0f);
 
             // Spec sheet in chat
-            WeaponData d = targetType.getData();
-            player.sendMessage(Text.literal("═════════════════════════════════").formatted(Formatting.GOLD), false);
-            player.sendMessage(Text.literal("You purchased " + d.displayName() + "!").formatted(Formatting.GREEN, Formatting.BOLD), false);
-            player.sendMessage(Text.literal("  Damage: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.1f HP", d.damage())).formatted(Formatting.WHITE)), false);
-            player.sendMessage(Text.literal("  Total ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize() + d.maxReserve())).formatted(Formatting.WHITE)), false);
-            player.sendMessage(Text.literal("  Magazine ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize())).formatted(Formatting.WHITE)), false);
-            player.sendMessage(Text.literal("  Fire Rate: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.delayTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
-            player.sendMessage(Text.literal("  Reload: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.reloadTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
-
-            if (d.bulletsPerShot() > 1) {
-                player.sendMessage(Text.literal("  Pellets: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.bulletsPerShot())).formatted(Formatting.WHITE)), false);
-            }
-            if (d.isPiercing()) {
-                player.sendMessage(Text.literal("  Piercing: ").formatted(Formatting.GRAY).append(Text.literal("Up to " + d.pierceLimit() + " mobs").formatted(Formatting.AQUA)), false);
-            }
-            if (targetType == WeaponType.ROCKET_LAUNCHER || targetType == WeaponType.NUKE_LAUNCHER) {
-                player.sendMessage(Text.literal("  Special: ").formatted(Formatting.GRAY).append(Text.literal("Splash Damage (explosive blast radius)").formatted(Formatting.GOLD)), false);
-            }
-            if (targetType == WeaponType.GOLD_DIGGER) {
-                player.sendMessage(Text.literal("  Special: ").formatted(Formatting.GRAY).append(Text.literal("Bonus Gold (+15g per hit)").formatted(Formatting.YELLOW)), false);
-            }
-            player.sendMessage(Text.literal("═════════════════════════════════").formatted(Formatting.GOLD), false);
+            WeaponItemHelper.sendWeaponSpecSheet(player, targetType, "You purchased " + targetType.getData().displayName() + "!");
         }
     }
 
@@ -901,8 +985,31 @@ public class ZombiesMinigame extends AbstractMinigame implements
             this.hologramManager.removeDoorHologram(door.getId());
         }
 
+        Formatting areaColor = getAreaFormatting(door.getArea2());
+        Text title = Text.literal(player.getName().getString() + " opened ").formatted(Formatting.WHITE)
+            .append(Text.literal(door.getArea2() + "!").formatted(areaColor, Formatting.BOLD));
+        Text subtitle = Text.literal("Door unlocked for " + cost + "g").formatted(Formatting.GRAY, Formatting.ITALIC);
+        dev.frost.miniverse.minigame.core.GameMessenger.showGameTitle(getParticipants(), title, subtitle);
+
+        for (ServerPlayerEntity p : getParticipants()) {
+            p.playSound(SoundEvents.BLOCK_IRON_DOOR_OPEN, 1.0f, 1.0f);
+        }
+
         broadcast(Text.literal("🚪 " + player.getName().getString() + " opened the door to " + door.getArea2() + "! (-" + cost + "g)").formatted(Formatting.GOLD));
         return true;
+    }
+
+    private Formatting getAreaFormatting(String areaName) {
+        if (areaName == null) return Formatting.GOLD;
+        String lower = areaName.toLowerCase();
+        if (lower.contains("alley")) return Formatting.YELLOW;
+        if (lower.contains("office")) return Formatting.AQUA;
+        if (lower.contains("hotel")) return Formatting.GOLD;
+        if (lower.contains("apartment")) return Formatting.GREEN;
+        if (lower.contains("rooftop")) return Formatting.LIGHT_PURPLE;
+        if (lower.contains("power")) return Formatting.RED;
+        if (lower.contains("garden")) return Formatting.DARK_GREEN;
+        return Formatting.GOLD;
     }
 
     private void updateScoreboards() {
@@ -921,15 +1028,17 @@ public class ZombiesMinigame extends AbstractMinigame implements
             board.addBlankLine();
 
             int round = this.waveEngine.getCurrentRound();
+            String roundLabel = "Round " + round + (this.settings.endlessMode() && round > 30 ? " (Endless)" : "");
             if (this.waveEngine.getState() == ZombieWaveEngine.WaveState.IN_ROUND) {
-                board.addLine(Text.literal("Round " + round).formatted(Formatting.WHITE));
+                board.addLine(Text.literal(roundLabel).formatted(Formatting.WHITE));
                 board.addLine(Text.literal("Zombies left: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(this.mobManager.getAliveMobCount() + this.waveEngine.getRemainingInQueue())).formatted(Formatting.RED)));
             } else if (this.waveEngine.getState() == ZombieWaveEngine.WaveState.INTERMISSION) {
-                board.addLine(Text.literal("Round " + round).formatted(Formatting.WHITE).append(Text.literal(" (Next: " + this.waveEngine.getIntermissionSeconds() + "s)").formatted(Formatting.YELLOW)));
+                board.addLine(Text.literal(roundLabel).formatted(Formatting.WHITE).append(Text.literal(" (Next: " + this.waveEngine.getIntermissionSeconds() + "s)").formatted(Formatting.YELLOW)));
                 board.addLine(Text.literal("Zombies left: 0").formatted(Formatting.GRAY));
             } else {
                 board.addLine(Text.literal("Round: -").formatted(Formatting.GRAY));
             }
+            board.addLine(Text.literal("Difficulty: ").formatted(Formatting.GRAY).append(Text.literal(this.settings.difficulty().getDisplayName()).formatted(this.settings.difficulty().getColor())));
 
             board.addBlankLine();
 
@@ -976,8 +1085,8 @@ public class ZombiesMinigame extends AbstractMinigame implements
         String timeStr = String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60);
         int rounds = this.waveEngine != null ? this.waveEngine.getCurrentRound() : 0;
 
-        broadcast(Text.literal("═════════════════════════════════════════").formatted(victory ? Formatting.GOLD : Formatting.RED));
-        broadcast(Text.literal("           ZOMBIES: DEAD END").formatted(Formatting.WHITE, Formatting.BOLD));
+        broadcast(Text.literal("═══════════════════════════════════").formatted(victory ? Formatting.GOLD : Formatting.RED));
+        broadcast(Text.literal("           ZOMBIES").formatted(Formatting.WHITE, Formatting.BOLD));
         if (victory) {
             broadcast(Text.literal("            ★ VICTORY! ★").formatted(Formatting.GOLD, Formatting.BOLD));
         } else {
@@ -986,7 +1095,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
                 broadcast(Text.literal("        " + reason).formatted(Formatting.RED));
             }
         }
-        broadcast(Text.literal("═════════════════════════════════════════").formatted(victory ? Formatting.GOLD : Formatting.RED));
+        broadcast(Text.literal("═══════════════════════════════════").formatted(victory ? Formatting.GOLD : Formatting.RED));
         broadcast(Text.literal(" Rounds Survived: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(rounds)).formatted(Formatting.YELLOW, Formatting.BOLD)));
         broadcast(Text.literal(" Time Elapsed: ").formatted(Formatting.GRAY).append(Text.literal(timeStr).formatted(Formatting.WHITE)));
         broadcast(Text.empty());
@@ -1001,7 +1110,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
                 .append(Text.literal(": " + kills + " Kills | " + revives + " Revives | " + spent + "g Spent").formatted(Formatting.GRAY))
             );
         }
-        broadcast(Text.literal("═════════════════════════════════════════").formatted(victory ? Formatting.GOLD : Formatting.RED));
+        broadcast(Text.literal("═══════════════════════════════════").formatted(victory ? Formatting.GOLD : Formatting.RED));
     }
 
     public void winMatch() {
@@ -1015,8 +1124,8 @@ public class ZombiesMinigame extends AbstractMinigame implements
 
         MinigameManager.getInstance().getMatchLifecycleController().endMatch(
             this.runtime,
-            new MatchEndResult(winners, Text.literal("Zombies: Dead End Victory!")),
-            MatchLifecycleOptions.defaults("Zombies: Dead End")
+            new MatchEndResult(winners, Text.literal("Zombies Victory!")),
+            MatchLifecycleOptions.defaults("Zombies")
                 .withEndTitles(
                     Text.literal("VICTORY").formatted(Formatting.GOLD, Formatting.BOLD),
                     Text.literal("DEFEAT").formatted(Formatting.DARK_RED, Formatting.BOLD)
@@ -1033,7 +1142,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
         MinigameManager.getInstance().getMatchLifecycleController().endMatch(
             this.runtime,
             new MatchEndResult(Set.of(), Text.literal("Defeat: " + reason).formatted(Formatting.RED)),
-            MatchLifecycleOptions.defaults("Zombies: Dead End")
+            MatchLifecycleOptions.defaults("Zombies")
                 .withEndTitles(
                     Text.literal("VICTORY").formatted(Formatting.GOLD, Formatting.BOLD),
                     Text.literal("GAME OVER").formatted(Formatting.DARK_RED, Formatting.BOLD)
@@ -1076,11 +1185,19 @@ public class ZombiesMinigame extends AbstractMinigame implements
         if (this.mobManager != null) this.mobManager.clearAll();
         if (this.dropManager != null) this.dropManager.cleanup();
         if (this.reviveManager != null) this.reviveManager.cleanup();
+        for (ServerPlayerEntity p : getParticipants()) {
+            DownedPlayerTracker.setDowned(p.getUuid(), false);
+            p.setPose(EntityPose.STANDING);
+            ServerPlayNetworking.send(p, new NetworkConstants.DownedStatePayload(p.getUuid(), false));
+        }
+        DownedPlayerTracker.clear();
         if (this.luckyChestManager != null) this.luckyChestManager.cleanup();
 
         for (ScoreboardTemplate board : this.scoreboards.values()) {
             board.cleanup(this.context != null ? this.context.nullableServer() : null);
         }
         this.scoreboards.clear();
+        this.activeActionBarPrompts.clear();
+        this.repairCompleteTicks.clear();
     }
 }

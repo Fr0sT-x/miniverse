@@ -161,6 +161,7 @@ public class ZombiesLuckyChestManager {
         stand.setCustomName(Text.literal("Rolling...").formatted(Formatting.GOLD, Formatting.BOLD));
         this.world.spawnEntity(stand);
 
+        setChestOpen(chest.getPos(), true);
         ActiveChestSession session = new ActiveChestSession(chest, player.getUuid(), center, stand);
         this.activeSessions.put(chest.getId(), session);
     }
@@ -259,6 +260,7 @@ public class ZombiesLuckyChestManager {
             player.playerScreenHandler.sendContentUpdates();
             player.playSound(SoundEvents.ENTITY_ITEM_PICKUP, 1.0f, 1.2f);
             player.sendMessage(Text.literal("✔ Obtained " + session.finalWeapon.getData().displayName() + "!").formatted(Formatting.GREEN, Formatting.BOLD), true);
+            WeaponItemHelper.sendWeaponSpecSheet(player, session.finalWeapon, "You obtained " + session.finalWeapon.getData().displayName() + " from the Mystery Box!");
         }
 
         closeChest(session);
@@ -269,7 +271,27 @@ public class ZombiesLuckyChestManager {
         if (session.displayStand != null && !session.displayStand.isRemoved()) {
             session.displayStand.discard();
         }
+        setChestOpen(session.chest.getPos(), false);
         this.world.playSound(null, session.center.x, session.center.y, session.center.z, SoundEvents.BLOCK_CHEST_CLOSE, SoundCategory.BLOCKS, 1.0f, 1.0f);
+    }
+
+    private void setChestOpen(BlockPos pos, boolean open) {
+        if (this.world == null || pos == null) return;
+        net.minecraft.block.BlockState state = this.world.getBlockState(pos);
+        if (state.getBlock() instanceof ChestBlock) {
+            int viewerCount = open ? 1 : 0;
+            this.world.addSyncedBlockEvent(pos, state.getBlock(), 1, viewerCount);
+            net.minecraft.block.enums.ChestType type = state.get(ChestBlock.CHEST_TYPE);
+            if (type != net.minecraft.block.enums.ChestType.SINGLE) {
+                for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
+                    BlockPos adj = pos.offset(dir);
+                    net.minecraft.block.BlockState adjState = this.world.getBlockState(adj);
+                    if (adjState.getBlock() instanceof ChestBlock && adjState.get(ChestBlock.FACING) == state.get(ChestBlock.FACING)) {
+                        this.world.addSyncedBlockEvent(adj, adjState.getBlock(), 1, viewerCount);
+                    }
+                }
+            }
+        }
     }
 
     public void cleanup() {
@@ -277,6 +299,7 @@ public class ZombiesLuckyChestManager {
             if (s.displayStand != null && !s.displayStand.isRemoved()) {
                 s.displayStand.discard();
             }
+            setChestOpen(s.chest.getPos(), false);
         }
         this.activeSessions.clear();
     }

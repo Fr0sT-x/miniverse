@@ -259,6 +259,18 @@ public class MiniverseClient implements ClientModInitializer {
 			context.client().execute(() -> ClientFreezeState.setFrozen(payload.frozen()))
 		);
 
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.DOWNED_STATE_ID, (payload, context) ->
+			context.client().execute(() -> {
+				dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.setDowned(payload.playerUuid(), payload.downed());
+				if (context.client().world != null) {
+					net.minecraft.entity.player.PlayerEntity p = context.client().world.getPlayerByUuid(payload.playerUuid());
+					if (p != null) {
+						p.setPose(payload.downed() ? net.minecraft.entity.EntityPose.SWIMMING : net.minecraft.entity.EntityPose.STANDING);
+					}
+				}
+			})
+		);
+
 		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.MAP_EDITOR_HIDE_ID, (payload, context) ->
 			context.client().execute(() -> {
 				dev.frost.miniverse.client.gui.map.MapEditorState state = dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE;
@@ -275,13 +287,23 @@ public class MiniverseClient implements ClientModInitializer {
 
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientFreezeState.setFrozen(false);
+			dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
+			if (client.player != null) {
+				client.player.setPose(net.minecraft.entity.EntityPose.STANDING);
+			}
 			SessionLaunchStatus.clear();
 			InventoryLayoutClient.clear();
 			ProtectionOverlayClient.clearAll();
 			dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.clear();
 			dev.frost.miniverse.client.gui.SessionSnapshotData.updateEditor(false, java.util.List.of(), null);
 		});
-		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> sendConnectionHost(client));
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+			dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
+			if (client.player != null) {
+				client.player.setPose(net.minecraft.entity.EntityPose.STANDING);
+			}
+			sendConnectionHost(client);
+		});
 	}
 
 	private static void sendConnectionHost(MinecraftClient client) {

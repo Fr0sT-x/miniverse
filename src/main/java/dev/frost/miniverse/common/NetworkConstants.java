@@ -33,6 +33,7 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<ServerSettingsPayload> SERVER_SETTINGS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "server_settings"));
     public static final CustomPayload.Id<ClientConnectionHostPayload> CLIENT_CONNECTION_HOST_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "client_connection_host"));
     public static final CustomPayload.Id<FreezeStatePayload> FREEZE_STATE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "freeze_state"));
+    public static final CustomPayload.Id<DownedStatePayload> DOWNED_STATE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "downed_state"));
     public static final CustomPayload.Id<TransitionStartPayload> TRANSITION_START_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "transition_start"));
     public static final CustomPayload.Id<TransitionReadyPayload> TRANSITION_READY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "transition_ready"));
     public static final CustomPayload.Id<ClientMatchReadyPayload> CLIENT_MATCH_READY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "client_match_ready"));
@@ -112,6 +113,7 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(SESSION_LIST_ID, SessionListPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(LAUNCH_PROGRESS_ID, LaunchProgressPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(FREEZE_STATE_ID, FreezeStatePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(DOWNED_STATE_ID, DownedStatePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(TRANSITION_START_ID, TransitionStartPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MATCH_INTRO_ID, MatchIntroPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MATCH_READY_STATE_ID, MatchReadyStatePayload.CODEC);
@@ -461,6 +463,25 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return FREEZE_STATE_ID;
+        }
+    }
+
+    public record DownedStatePayload(java.util.UUID playerUuid, boolean downed) implements CustomPayload {
+        private static final PacketCodec<RegistryByteBuf, java.util.UUID> UUID_CODEC = PacketCodec.of(
+            (uuid, buffer) -> buffer.writeUuid(uuid),
+            (RegistryByteBuf buffer) -> buffer.readUuid()
+        );
+        public static final PacketCodec<RegistryByteBuf, DownedStatePayload> CODEC = PacketCodec.tuple(
+            UUID_CODEC,
+            DownedStatePayload::playerUuid,
+            PacketCodecs.BOOL,
+            DownedStatePayload::downed,
+            DownedStatePayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DOWNED_STATE_ID;
         }
     }
 

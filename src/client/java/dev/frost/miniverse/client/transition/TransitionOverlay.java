@@ -105,6 +105,11 @@ public final class TransitionOverlay {
     }
 
     public static void start(String token, String context) {
+        dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc != null && mc.player != null) {
+            mc.player.setPose(net.minecraft.entity.EntityPose.STANDING);
+        }
         pendingToken = token;
         matchSessionId = "";
         contextText = context == null || context.isBlank() ? "Transferring" : context;
@@ -134,6 +139,11 @@ public final class TransitionOverlay {
     }
 
     private static void showMatchIntro(NbtCompound data) {
+        dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc != null && mc.player != null) {
+            mc.player.setPose(net.minecraft.entity.EntityPose.STANDING);
+        }
         matchSessionId = getStringOrDefault(data, "sessionId", "");
         contextText = getStringOrDefault(data, "title", contextText);
         descriptionText = getStringOrDefault(data, "description", "");
@@ -167,6 +177,11 @@ public final class TransitionOverlay {
     private static void releaseForMatch(String sessionId) {
         if (!matchSessionId.isBlank() && !matchSessionId.equals(sessionId)) {
             return;
+        }
+        dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc != null && mc.player != null) {
+            mc.player.setPose(net.minecraft.entity.EntityPose.STANDING);
         }
         awaitingMatchStart = false;
         statusText = "Entering match";

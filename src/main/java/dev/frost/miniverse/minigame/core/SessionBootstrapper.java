@@ -3,7 +3,11 @@ package dev.frost.miniverse.minigame.core;
 import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -135,6 +139,10 @@ public final class SessionBootstrapper {
 
             boolean restoredActiveSession = SessionRestoreCoordinator.hasRestoredActiveOrPausedState();
             boolean knownRuntimeParticipant = MinigameManager.getInstance().isParticipant(player.getUuid());
+            DownedPlayerTracker.setDowned(player.getUuid(), false);
+            player.setPose(EntityPose.STANDING);
+            ServerPlayNetworking.send(player, new NetworkConstants.DownedStatePayload(player.getUuid(), false));
+
             boolean admittedParticipant = expectedPlayer || assignedLatePlayer || knownRuntimeParticipant;
             if (admittedParticipant) {
                 MinigameManager.getInstance().addParticipant(player);

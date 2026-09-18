@@ -25,9 +25,8 @@ import java.util.Map;
 import java.util.Properties;
 
 public final class ZombiesDefinition implements MinigameDefinition {
-    public static final String ID = "zombies_dead_end";
-    public static final String ALIAS_ID = "zombies";
-    public static final String DISPLAY_NAME = "Zombies: Dead End";
+    public static final String ID = "zombies";
+    public static final String DISPLAY_NAME = "Zombies";
 
     public static final MapEditorExtension EXTENSION = new MapEditorExtension(
         ID, DISPLAY_NAME,
@@ -82,7 +81,6 @@ public final class ZombiesDefinition implements MinigameDefinition {
         parsed.writeTo(properties);
         if (!parsed.mapId().isBlank()) {
             MapStore.readGamemodeConfig(parsed.mapId(), ID)
-                .or(() -> MapStore.readGamemodeConfig(parsed.mapId(), ALIAS_ID))
                 .ifPresent(config -> properties.setProperty("zombies.mapConfig", config.toString()));
         }
     }
@@ -95,12 +93,6 @@ public final class ZombiesDefinition implements MinigameDefinition {
         }
     }
 
-    public static final MapEditorExtension ALIAS_EXTENSION = new MapEditorExtension(
-        ALIAS_ID, DISPLAY_NAME,
-        EXTENSION.markers(),
-        EXTENSION.validators()
-    );
-
     @Override
     public void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
         ZombiesCommand.register(dispatcher);
@@ -109,9 +101,7 @@ public final class ZombiesDefinition implements MinigameDefinition {
     @Override
     public void registerEvents() {
         MapGamemodeRegistry.register(new MapGamemodeType(ID, DISPLAY_NAME, ZombiesMapConfig::validateEditor));
-        MapGamemodeRegistry.register(new MapGamemodeType(ALIAS_ID, DISPLAY_NAME, ZombiesMapConfig::validateEditor));
         MapEditorExtensionRegistry.register(EXTENSION);
-        MapEditorExtensionRegistry.register(ALIAS_EXTENSION);
         ZombiesSessionBootstrap.register();
 
         NetworkConstants.registerPayloadTypes();

@@ -9,6 +9,7 @@ import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDefinition;
+import dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficulty;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -24,19 +25,23 @@ public final class ZombiesWorkspaceView extends AbstractGamemodeWorkspaceView {
     private IntFieldWidget intermissionField;
     private IntFieldWidget bleedoutField;
     private ButtonWidget friendlyFireButton;
+    private ButtonWidget difficultyButton;
+    private ButtonWidget endlessModeButton;
 
     private int startGold = 500;
     private int maxRounds = 30;
     private int intermissionSeconds = 10;
     private int bleedoutSeconds = 30;
     private boolean friendlyFire = false;
+    private boolean endlessMode = false;
+    private ZombiesDifficulty difficulty = ZombiesDifficulty.EASY;
 
     public ZombiesWorkspaceView() {
         super(ZombiesDefinition.ID);
         this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
         this.playerGrid.addColumn("selected", "Survivors", UiTheme.ACCENT_RED, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Survivors", "Setup", "Select participating survivors.", UiTheme.ACCENT_RED);
-        this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated Dead End map.", UiTheme.ACCENT_BLUE, "Valid Zombies Maps");
+        this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated Zombies map.", UiTheme.ACCENT_BLUE, "Valid Zombies Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure gold, round limits, and bleedout timers.", UiTheme.ACCENT_BLUE);
         this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_RED);
     }
@@ -45,6 +50,23 @@ public final class ZombiesWorkspaceView extends AbstractGamemodeWorkspaceView {
     protected void initGamemode(SessionScreen screen) {
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
+
+            this.rulesLayout.addRow(
+                "Difficulty", (s, x, y, w) -> {
+                    this.difficultyButton = this.addCycleButton(s,
+                        () -> "Difficulty: " + this.difficulty.getDisplayName(),
+                        () -> this.difficulty.ordinal(),
+                        x, y, w,
+                        new String[] {
+                            "Easy: Baseline zombie health and damage. Standard wave pacing.",
+                            "Normal: +35% zombie health, +50% melee damage, +5% speed, denser waves.",
+                            "Hard: +80% zombie health, +100% melee damage, +10% speed, relentless waves."
+                        },
+                        ZombiesDifficulty.values().length,
+                        () -> this.difficulty = this.difficulty.next()
+                    );
+                }
+            );
 
             this.rulesLayout.addRow(
                 "Starting Gold", (s, x, y, w) -> {
@@ -77,6 +99,14 @@ public final class ZombiesWorkspaceView extends AbstractGamemodeWorkspaceView {
                         () -> this.friendlyFire = !this.friendlyFire);
                 }
             );
+
+            this.rulesLayout.addRow(
+                "Endless Mode", (s, x, y, w) -> {
+                    this.endlessModeButton = this.addToggleButton(s, "Endless Mode", () -> this.endlessMode, x, y, w,
+                        new BinaryTooltip("Game continues infinitely past round 30 with escalating waves until defeat.", "Game ends in victory after round 30."),
+                        () -> this.endlessMode = !this.endlessMode);
+                }
+            );
         }
     }
 
@@ -90,8 +120,10 @@ public final class ZombiesWorkspaceView extends AbstractGamemodeWorkspaceView {
     @Override
     protected List<Text> getSummaryLines() {
         return List.of(
+            Text.literal("Difficulty: " + this.difficulty.getDisplayName()),
             Text.literal("Starting Gold: " + this.startGold),
             Text.literal("Max Rounds: " + this.maxRounds),
+            Text.literal("Endless Mode: " + (this.endlessMode ? "ON" : "OFF")),
             Text.literal("Intermission: " + this.intermissionSeconds + "s"),
             Text.literal("Bleedout Timer: " + this.bleedoutSeconds + "s"),
             Text.literal("Friendly Fire: " + (this.friendlyFire ? "ON" : "OFF"))
@@ -119,7 +151,7 @@ public final class ZombiesWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     public String title() {
-        return "Zombies: Dead End Setup";
+        return "Zombies Setup";
     }
 
     @Override
@@ -150,6 +182,8 @@ public final class ZombiesWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putInt("intermissionSeconds", this.intermissionSeconds);
         builder.settings().putInt("bleedoutSeconds", this.bleedoutSeconds);
         builder.settings().putBoolean("friendlyFire", this.friendlyFire);
+        builder.settings().putString("difficulty", this.difficulty.name());
+        builder.settings().putBoolean("endlessMode", this.endlessMode);
     }
 
     @Override

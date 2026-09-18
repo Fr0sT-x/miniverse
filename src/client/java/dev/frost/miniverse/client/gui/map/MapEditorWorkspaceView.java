@@ -129,11 +129,14 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         addTopRightBtn.accept(thumbnailBtn, 106);
 
         boolean overlaysVisible = !this.state.enabledOverlays.isEmpty();
-        String globalOverlayLabel = overlaysVisible ? "Hide Overlays" : "Show Overlays";
+        String globalOverlayLabel = overlaysVisible ? "Hide All Overlays" : "Show All Overlays";
         UiButton toggleOverlays = new UiButton(globalOverlayLabel, () -> {
             if (overlaysVisible) {
                 this.state.enabledOverlays.clear();
+                this.state.explicitlyShownMarkers.clear();
+                this.state.hiddenIndividualMarkers.clear();
             } else {
+                this.state.hiddenIndividualMarkers.clear();
                 for (SessionSnapshotData.EditorExtension ext : SessionSnapshotData.editorExtensions()) {
                     for (SessionSnapshotData.EditorMarkerDefinition def : ext.markers()) {
                         this.state.enableOverlay(ext.gameId(), def.key());
@@ -150,7 +153,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 }
             }
         });
-        addTopRightBtn.accept(toggleOverlays, 96);
+        addTopRightBtn.accept(toggleOverlays, 114);
 
         Selected selected = this.selected();
         if (selected.extension != null && selected.definition == null) {
@@ -466,9 +469,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                             }
                             
                             if (toggle.contains(mouseX, adjustedMouseY)) {
-                                if (!this.state.hiddenIndividualMarkers.remove(placed.id())) {
-                                    this.state.hiddenIndividualMarkers.add(placed.id());
-                                }
+                                this.state.toggleMarkerVisibility(selected.extension.gameId(), marker.key(), placed.id());
                                 return true;
                             }
                             if (rename.contains(mouseX, adjustedMouseY)) {
@@ -563,9 +564,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             UiLayout.Rect delete = new UiLayout.Rect(row.x() + row.width() - 74, row.y() + 10, 60, 20);
             
             if (toggle.contains(mouseX, adjustedMouseY)) {
-                if (!this.state.hiddenIndividualMarkers.remove(marker.id())) {
-                    this.state.hiddenIndividualMarkers.add(marker.id());
-                }
+                this.state.toggleMarkerVisibility(selected.extension.gameId(), selected.definition.key(), marker.id());
                 return true;
             }
             if (rename.contains(mouseX, adjustedMouseY)) {
@@ -797,8 +796,8 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             context.drawText(textRenderer, Text.literal(index + ". " + marker.name()), row.x() + 10, row.y() + 8, UiTheme.TEXT, false);
             context.drawText(textRenderer, Text.literal(locationText(marker)), row.x() + 10, row.y() + 22, UiTheme.TEXT_DIM, false);
             
-            boolean isHidden = this.state.hiddenIndividualMarkers.contains(marker.id());
-            String toggleLabel = isHidden ? "Show" : "Hide";
+            boolean isVisible = this.state.isMarkerVisible(extension.gameId(), definition.key(), marker.id());
+            String toggleLabel = isVisible ? "Hide" : "Show";
             
             boolean isParent = extension.markers().stream().anyMatch(m -> m.grouping() != null && marker.definitionKey().equals(m.grouping().parentKey()));
             if (isParent && this.drillDownParentId == null) {

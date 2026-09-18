@@ -18,10 +18,20 @@ import java.util.function.Consumer;
 
 public class ZombiesUltimateMachine {
     public static final int UPGRADE_COST = 1000;
+    private final String id;
     private final BlockPos pos;
 
     public ZombiesUltimateMachine(BlockPos pos) {
+        this("ultimate_machine", pos);
+    }
+
+    public ZombiesUltimateMachine(String id, BlockPos pos) {
+        this.id = id != null && !id.isBlank() ? id : "ultimate_machine";
         this.pos = pos;
+    }
+
+    public String getId() {
+        return this.id;
     }
 
     public BlockPos getPos() {

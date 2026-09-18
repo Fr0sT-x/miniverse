@@ -220,7 +220,7 @@ public class PerkDropManager {
             }
             case NUKE -> {
                 for (ZombieEntityManager.ActiveMob mob : this.mobManager.getActiveMobs()) {
-                    if (mob.type != ZombieType.BOMBIE && mob.type != ZombieType.INFERNO && mob.type != ZombieType.BROODMOTHER) {
+                    if (mob.type != null && !mob.type.isBoss()) {
                         mob.entity.damage(this.world.getDamageSources().genericKill(), 9999.0f);
                     }
                 }

@@ -49,7 +49,7 @@ public final class ZombiesSessionBootstrap {
                     .withFreezeSeconds(5)
                     .withReturnSeconds(10)
                     .withStartTitle(
-                        Text.literal("ZOMBIES: DEAD END").formatted(Formatting.RED, Formatting.BOLD),
+                        Text.literal("ZOMBIES").formatted(Formatting.RED, Formatting.BOLD),
                         Text.literal("Survive 30 waves of the undead!").formatted(Formatting.YELLOW)
                     );
             }

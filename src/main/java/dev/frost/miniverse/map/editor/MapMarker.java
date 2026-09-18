@@ -69,8 +69,15 @@ public record MapMarker(String id, String definitionKey, String name, MarkerType
         if (json != null && json.has("properties") && json.get("properties").isJsonObject()) {
             properties = json.getAsJsonObject("properties").deepCopy();
         }
+        String id;
+        if (json != null && json.has("id") && !json.get("id").getAsString().isBlank()) {
+            id = json.get("id").getAsString();
+        } else {
+            String seed = definition.key() + ":" + (json != null ? json.toString() : fallbackName);
+            id = UUID.nameUUIDFromBytes(seed.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        }
         return new MapMarker(
-            json != null && json.has("id") ? json.get("id").getAsString() : UUID.randomUUID().toString(),
+            id,
             definition.key(),
             json != null && json.has("name") ? json.get("name").getAsString() : fallbackName,
             definition.type(),

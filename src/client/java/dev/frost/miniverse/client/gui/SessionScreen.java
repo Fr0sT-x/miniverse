@@ -77,7 +77,6 @@ public class SessionScreen extends Screen {
         Map.entry("duels", SessionScreen::openDuels),
         Map.entry("pillarsoffortune", SessionScreen::openPillarsOfFortune),
         Map.entry("horde_survival", SessionScreen::openHordeSurvival),
-        Map.entry("zombies_dead_end", SessionScreen::openZombies),
         Map.entry("zombies", SessionScreen::openZombies)
     );
 

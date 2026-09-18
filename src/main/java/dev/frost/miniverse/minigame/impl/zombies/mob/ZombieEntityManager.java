@@ -7,7 +7,9 @@ import dev.frost.miniverse.minigame.impl.zombies.mob.attack.FireTrailAttack;
 import dev.frost.miniverse.minigame.impl.zombies.mob.attack.FireballAttack;
 import dev.frost.miniverse.minigame.impl.zombies.mob.attack.GuardianLaserAttack;
 import dev.frost.miniverse.minigame.impl.zombies.mob.attack.ZombieExplosion;
+import dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficulty;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.attribute.EntityAttributes;
@@ -58,6 +60,10 @@ public class ZombieEntityManager {
         public Vec3d lastTrackedPos = null;
         public int stuckTicks = 0;
         public Entity mount = null;
+        public net.minecraft.entity.mob.GuardianEntity laserGuardian = null;
+        public int laserChargeTicks = 0;
+        public int laserCooldownTicks = 40;
+        public ServerPlayerEntity laserTarget = null;
 
         public ActiveMob(MobEntity entity, ZombieType type, ZombiesWindow window) {
             this.entity = entity;
@@ -67,6 +73,7 @@ public class ZombieEntityManager {
     }
 
     private final ServerWorld world;
+    private ZombiesDifficulty difficulty = ZombiesDifficulty.EASY;
     private final Map<Integer, ActiveMob> activeMobs = new ConcurrentHashMap<>();
     private List<ZombiesWindow> windows = Collections.emptyList();
     private Consumer<ActiveMob> onMobKilledCallback;
@@ -92,7 +99,20 @@ public class ZombieEntityManager {
     }
 
     public ZombieEntityManager(ServerWorld world) {
+        this(world, ZombiesDifficulty.EASY);
+    }
+
+    public ZombieEntityManager(ServerWorld world, ZombiesDifficulty difficulty) {
         this.world = world;
+        this.difficulty = difficulty != null ? difficulty : ZombiesDifficulty.EASY;
+    }
+
+    public void setDifficulty(ZombiesDifficulty difficulty) {
+        this.difficulty = difficulty != null ? difficulty : ZombiesDifficulty.EASY;
+    }
+
+    public ZombiesDifficulty getDifficulty() {
+        return this.difficulty;
     }
 
     public void setWindows(List<ZombiesWindow> windows) {
@@ -131,19 +151,26 @@ public class ZombieEntityManager {
         mob.initialize(this.world, this.world.getLocalDifficulty(new BlockPos((int) spawnPos.x(), (int) spawnPos.y(), (int) spawnPos.z())), SpawnReason.EVENT, null);
         mob.addCommandTag(TAG_ZOMBIE_MOB);
         mob.setPersistent();
+        ((dev.frost.miniverse.mixin.MobEntityAccessor) mob).getTargetSelector().clear(goal -> true);
 
         ZombieMobData data = type.getData();
 
         // Attributes
         var healthAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
         if (healthAttr != null) {
-            healthAttr.setBaseValue(data.getHealth());
-            mob.setHealth(data.getHealth());
+            float scaledHealth = Math.round(data.getHealth() * this.difficulty.getHealthMultiplier());
+            healthAttr.setBaseValue(scaledHealth);
+            mob.setHealth(scaledHealth);
         }
 
         var speedAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED);
         if (speedAttr != null) {
-            speedAttr.setBaseValue(data.getSpeed());
+            speedAttr.setBaseValue(data.getSpeed() * this.difficulty.getSpeedMultiplier());
+        }
+
+        var attackAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE);
+        if (attackAttr != null) {
+            attackAttr.setBaseValue(attackAttr.getBaseValue() * this.difficulty.getDamageMultiplier());
         }
 
         var followAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_FOLLOW_RANGE);
@@ -196,6 +223,17 @@ public class ZombieEntityManager {
             active.mount = mob.getVehicle();
             active.mount.addCommandTag(TAG_ZOMBIE_MOB);
         }
+        if (type == ZombieType.GUARDIAN_ZOMBIE) {
+            net.minecraft.entity.mob.GuardianEntity guardian = new net.minecraft.entity.mob.GuardianEntity(EntityType.GUARDIAN, this.world);
+            guardian.setInvisible(true);
+            guardian.setSilent(true);
+            guardian.setInvulnerable(true);
+            guardian.setNoGravity(true);
+            guardian.noClip = true;
+            guardian.setPosition(mob.getX(), mob.getEyeY() - 0.2, mob.getZ());
+            this.world.spawnEntity(guardian);
+            active.laserGuardian = guardian;
+        }
         this.activeMobs.put(mob.getId(), active);
 
         return active;
@@ -207,6 +245,16 @@ public class ZombieEntityManager {
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             minion.setEquipmentDropChance(slot, 0.0f);
         }
+        var healthAttr = minion.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+        if (healthAttr != null) {
+            float scaledHealth = Math.round(type.getData().getHealth() * this.difficulty.getHealthMultiplier());
+            healthAttr.setBaseValue(scaledHealth);
+            minion.setHealth(scaledHealth);
+        }
+        var attackAttr = minion.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE);
+        if (attackAttr != null) {
+            attackAttr.setBaseValue(attackAttr.getBaseValue() * this.difficulty.getDamageMultiplier());
+        }
         ActiveMob active = new ActiveMob(minion, type, null);
         this.activeMobs.put(minion.getId(), active);
     }
@@ -215,7 +263,7 @@ public class ZombieEntityManager {
         if (this.activeMobs.isEmpty()) return;
 
         List<ServerPlayerEntity> validTargets = survivors.stream()
-            .filter(p -> !p.isSpectator() && p.isAlive())
+            .filter(p -> !p.isSpectator() && p.isAlive() && !dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.isDowned(p.getUuid()))
             .toList();
 
         Iterator<Map.Entry<Integer, ActiveMob>> it = this.activeMobs.entrySet().iterator();
@@ -227,6 +275,9 @@ public class ZombieEntityManager {
             if (mob == null || !mob.isAlive() || mob.isRemoved()) {
                 if (active.mount != null && active.mount.isAlive()) {
                     active.mount.discard();
+                }
+                if (active.laserGuardian != null && active.laserGuardian.isAlive()) {
+                    active.laserGuardian.discard();
                 }
                 this.lastMobKilledTime = System.currentTimeMillis();
                 clearGlowingEffects();
@@ -262,6 +313,7 @@ public class ZombieEntityManager {
             }
 
             // Window Barricade Breaking
+            int breakThreshold = Math.max(5, Math.round(active.type.getData().getBreakWindowTicks() / this.difficulty.getWindowBreakMultiplier()));
             ZombiesWindow winToBreak = active.window;
             if (winToBreak != null && !winToBreak.isCompletelyBroken(this.world)) {
                 double distToSpawnSq = mob.squaredDistanceTo(
@@ -277,7 +329,7 @@ public class ZombieEntityManager {
                             winToBreak.playBarricadeHit(this.world, nearest);
                         }
                     }
-                    if (active.windowBreakTimer >= active.type.getData().getBreakWindowTicks()) {
+                    if (active.windowBreakTimer >= breakThreshold) {
                         active.windowBreakTimer = 0;
                         winToBreak.breakOneSlab(this.world);
                     }
@@ -293,7 +345,7 @@ public class ZombieEntityManager {
                             if (active.windowBreakTimer % 15 == 0) {
                                 w.playBarricadeHit(this.world, nearest);
                             }
-                            if (active.windowBreakTimer >= active.type.getData().getBreakWindowTicks()) {
+                            if (active.windowBreakTimer >= breakThreshold) {
                                 active.windowBreakTimer = 0;
                                 w.breakOneSlab(this.world);
                             }
@@ -304,12 +356,22 @@ public class ZombieEntityManager {
                 }
             }
 
-            // Target nearest survivor
+            // De-agro immediately if current target is downed or dead
+            if (mob.getTarget() != null && (!mob.getTarget().isAlive() || dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.isDowned(mob.getTarget().getUuid()))) {
+                mob.setTarget(null);
+            }
+
+            // Target nearest valid survivor
             ServerPlayerEntity target = findClosestSurvivor(mob, validTargets);
             if (target != null) {
                 mob.setTarget(target);
                 if (tickCounter % 20 == 0) {
                     mob.getNavigation().startMovingTo(target, 1.0);
+                }
+            } else {
+                if (mob.getTarget() != null) {
+                    mob.setTarget(null);
+                    mob.getNavigation().stop();
                 }
             }
 
@@ -371,14 +433,14 @@ public class ZombieEntityManager {
             switch (active.type) {
                 case LITTLE_BOMBIE -> {
                     if (target != null && mob.squaredDistanceTo(target) <= 2.25) {
-                        ZombieExplosion.explode(mob, this.world, 3.0, 8.0f);
+                        ZombieExplosion.explode(mob, this.world, 3.0, 8.0f * this.difficulty.getSpecialAttackMultiplier());
                         mob.discard();
                     }
                 }
                 case BOMBIE -> {
                     // Periodic mini-explosion every 10s if near target
                     if (active.attackTimer % 200 == 0 && target != null && mob.squaredDistanceTo(target) <= 16.0) {
-                        ZombieExplosion.explode(mob, this.world, 3.5, 10.0f);
+                        ZombieExplosion.explode(mob, this.world, 3.5, 10.0f * this.difficulty.getSpecialAttackMultiplier());
                     }
                     // Spawn Little Bombie minions every 160 ticks (8s) up to max 3 alive
                     if (active.attackTimer % 160 == 0) {
@@ -403,13 +465,13 @@ public class ZombieEntityManager {
                     }
                 }
                 case INFERNO -> {
-                    FireTrailAttack.tickTrail(mob, this.world, validTargets, tickCounter);
+                    FireTrailAttack.tickTrail(mob, this.world, validTargets, tickCounter, 2.0f * this.difficulty.getSpecialAttackMultiplier());
                     if (active.attackTimer % 80 == 0 && target != null) {
                         FireballAttack.shootFireball(mob, this.world, validTargets);
                     }
                 }
                 case GUARDIAN_ZOMBIE -> {
-                    GuardianLaserAttack.tickLaser(mob, this.world, validTargets, active.attackTimer);
+                    GuardianLaserAttack.tickLaser(mob, active, this.world, validTargets, 4.0f * this.difficulty.getSpecialAttackMultiplier());
                 }
                 case BROODMOTHER -> {
                     BroodmotherAttack.tickBroodmother(mob, this.world, validTargets, tickCounter, minion -> registerMinion(minion, ZombieType.NORMAL_EASY));
@@ -423,6 +485,9 @@ public class ZombieEntityManager {
         for (ActiveMob active : this.activeMobs.values()) {
             if (active.entity != null && active.entity.isAlive()) {
                 active.entity.discard();
+            }
+            if (active.laserGuardian != null && active.laserGuardian.isAlive()) {
+                active.laserGuardian.discard();
             }
         }
         this.activeMobs.clear();

@@ -20,11 +20,15 @@
 		"bedwars.BridgeEggEntityMixin",
 		"DisplayEntityAccessor",
 		"TextDisplayEntityAccessor",
-		"SlimeEntityMixin"
+		"GuardianEntityAccessor",
+		"SlimeEntityMixin",
+		"DownedPlayerPoseMixin",
+		"MobEntityAccessor"
 	],
 	"client": [
 		"ProtectedItemClientHandledScreenMixin",
-		"ProtectedItemClientPlayerEntityMixin"
+		"ProtectedItemClientPlayerEntityMixin",
+		"HeadFeatureRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

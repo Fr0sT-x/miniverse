@@ -112,4 +112,31 @@ public final class WeaponItemHelper {
 
         stack.set(DataComponentTypes.LORE, new LoreComponent(lore));
     }
+
+    public static void sendWeaponSpecSheet(net.minecraft.server.network.ServerPlayerEntity player, WeaponType targetType, String titleText) {
+        if (player == null || targetType == null) return;
+        WeaponData d = targetType.getData();
+        player.sendMessage(Text.literal("═════════════════════════════════").formatted(Formatting.GOLD), false);
+        player.sendMessage(Text.literal(titleText).formatted(Formatting.GREEN, Formatting.BOLD), false);
+        player.sendMessage(Text.literal("  Damage: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.1f HP", d.damage())).formatted(Formatting.WHITE)), false);
+        if (!d.isMelee()) {
+            player.sendMessage(Text.literal("  Total ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize() + d.maxReserve())).formatted(Formatting.WHITE)), false);
+            player.sendMessage(Text.literal("  Magazine ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize())).formatted(Formatting.WHITE)), false);
+            player.sendMessage(Text.literal("  Fire Rate: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.delayTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
+            player.sendMessage(Text.literal("  Reload: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.reloadTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
+            if (d.bulletsPerShot() > 1) {
+                player.sendMessage(Text.literal("  Pellets: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.bulletsPerShot())).formatted(Formatting.WHITE)), false);
+            }
+            if (d.isPiercing()) {
+                player.sendMessage(Text.literal("  Piercing: ").formatted(Formatting.GRAY).append(Text.literal("Up to " + d.pierceLimit() + " mobs").formatted(Formatting.AQUA)), false);
+            }
+            if (targetType == WeaponType.ROCKET_LAUNCHER || targetType == WeaponType.NUKE_LAUNCHER) {
+                player.sendMessage(Text.literal("  Special: ").formatted(Formatting.GRAY).append(Text.literal("Splash Damage (explosive blast radius)").formatted(Formatting.GOLD)), false);
+            }
+            if (targetType == WeaponType.GOLD_DIGGER) {
+                player.sendMessage(Text.literal("  Special: ").formatted(Formatting.GRAY).append(Text.literal("Bonus Gold (+15g per hit)").formatted(Formatting.YELLOW)), false);
+            }
+        }
+        player.sendMessage(Text.literal("═════════════════════════════════").formatted(Formatting.GOLD), false);
+    }
 }

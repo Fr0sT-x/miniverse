@@ -47,30 +47,32 @@ public final class MapEditorOverlayClient {
             // Render all enabled overlay definitions
             for (SessionSnapshotData.EditorExtension extension : SessionSnapshotData.editorExtensions()) {
                 for (SessionSnapshotData.EditorMarkerDefinition def : extension.markers()) {
-                    if (!state.isOverlayEnabled(extension.gameId(), def.key())) continue;
-
                     List<SessionSnapshotData.EditorMarker> markers = SessionSnapshotData.editorState().markers(extension.gameId(), def.key());
                     if (markers == null || markers.isEmpty()) continue;
 
-                Camera camera = context.camera();
-                Vec3d cameraPos = camera.getPos();
-                MatrixStack matrices = context.matrixStack();
+                    boolean anyVisible = state.isOverlayEnabled(extension.gameId(), def.key()) ||
+                        markers.stream().anyMatch(m -> state.isMarkerVisible(extension.gameId(), def.key(), m.id()));
+                    if (!anyVisible) continue;
 
-                matrices.push();
-                matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
+                    Camera camera = context.camera();
+                    Vec3d cameraPos = camera.getPos();
+                    MatrixStack matrices = context.matrixStack();
 
-                var tessellator = Tessellator.getInstance();
+                    matrices.push();
+                    matrices.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
 
-                RenderSystem.enableBlend();
-                RenderSystem.defaultBlendFunc();
-                RenderSystem.disableCull();
-                RenderSystem.disableDepthTest();
-                RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+                    var tessellator = Tessellator.getInstance();
 
-                for (SessionSnapshotData.EditorMarker marker : markers) {
-                    if (state.hiddenIndividualMarkers.contains(marker.id())) {
-                        continue;
-                    }
+                    RenderSystem.enableBlend();
+                    RenderSystem.defaultBlendFunc();
+                    RenderSystem.disableCull();
+                    RenderSystem.disableDepthTest();
+                    RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+
+                    for (SessionSnapshotData.EditorMarker marker : markers) {
+                        if (!state.isMarkerVisible(extension.gameId(), def.key(), marker.id())) {
+                            continue;
+                        }
                     if ("REGION".equalsIgnoreCase(marker.type())) {
                         if (marker.regions() != null && !marker.regions().isEmpty()) {
                             drawRegion(matrices, tessellator, marker);
@@ -268,6 +270,10 @@ public final class MapEditorOverlayClient {
             int screenH = client.getWindow().getScaledHeight();
             int cx = screenW / 2;
             int cy = screenH / 2;
+            if (client.currentScreen != null) {
+                cx = (int) (client.mouse.getX() * (double) screenW / (double) client.getWindow().getWidth());
+                cy = (int) (client.mouse.getY() * (double) screenH / (double) client.getWindow().getHeight());
+            }
 
             class HoveredMarker {
                 final SessionSnapshotData.EditorMarker marker;
@@ -283,47 +289,121 @@ public final class MapEditorOverlayClient {
             net.minecraft.client.render.Camera camera = client.gameRenderer.getCamera();
             net.minecraft.util.math.Vec3d camPos = camera.getPos();
 
+            org.joml.Vector3d rayDir = null;
+            if (lastProjMatrix != null && lastModelViewMatrix != null) {
+                rayDir = GizmoMath.unprojectMouseToRay(client, cx, cy);
+            }
+            if (rayDir == null && client.player != null) {
+                net.minecraft.util.math.Vec3d rot = client.player.getRotationVec(1.0f);
+                rayDir = new org.joml.Vector3d(rot.x, rot.y, rot.z);
+            }
+            net.minecraft.util.math.Vec3d rayOrigin = camPos;
+            net.minecraft.util.math.Vec3d rayEnd = rayDir != null
+                    ? rayOrigin.add(rayDir.x * 256.0, rayDir.y * 256.0, rayDir.z * 256.0)
+                    : null;
+
             for (SessionSnapshotData.EditorExtension extension : SessionSnapshotData.editorExtensions()) {
                 for (SessionSnapshotData.EditorMarkerDefinition def : extension.markers()) {
-                    if (!state.isOverlayEnabled(extension.gameId(), def.key())) continue;
-
                     List<SessionSnapshotData.EditorMarker> markers = SessionSnapshotData.editorState().markers(extension.gameId(), def.key());
                     if (markers == null || markers.isEmpty()) continue;
 
                     for (SessionSnapshotData.EditorMarker marker : markers) {
-                        if (state.hiddenIndividualMarkers.contains(marker.id())) continue;
+                        if (!state.isMarkerVisible(extension.gameId(), def.key(), marker.id())) continue;
 
-                        double px, py, pz;
+                        boolean isHovered = false;
+                        double worldDist = Double.MAX_VALUE;
+
                         if ("REGION".equalsIgnoreCase(marker.type()) && marker.regions() != null && !marker.regions().isEmpty()) {
-                            SessionSnapshotData.EditorRegionPart part = marker.regions().get(0);
-                            px = (Math.floor(part.min().x()) + Math.floor(part.max().x()) + 1.0) / 2.0;
-                            py = Math.floor(Math.max(part.min().y(), part.max().y())) + 1.0;
-                            pz = (Math.floor(part.min().z()) + Math.floor(part.max().z()) + 1.0) / 2.0;
+                            for (SessionSnapshotData.EditorRegionPart part : marker.regions()) {
+                                double minX = Math.floor(Math.min(part.min().x(), part.max().x()));
+                                double minY = Math.floor(Math.min(part.min().y(), part.max().y()));
+                                double minZ = Math.floor(Math.min(part.min().z(), part.max().z()));
+                                double maxX = Math.floor(Math.max(part.min().x(), part.max().x())) + 1.0;
+                                double maxY = Math.floor(Math.max(part.min().y(), part.max().y())) + 1.0;
+                                double maxZ = Math.floor(Math.max(part.min().z(), part.max().z())) + 1.0;
+                                net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(minX, minY, minZ, maxX, maxY, maxZ);
+
+                                if (box.contains(rayOrigin)) {
+                                    isHovered = true;
+                                    worldDist = Math.min(worldDist, 0.0);
+                                } else if (rayEnd != null) {
+                                    java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
+                                    if (hit.isPresent()) {
+                                        isHovered = true;
+                                        worldDist = Math.min(worldDist, hit.get().distanceTo(rayOrigin));
+                                    }
+                                }
+
+                                double px = (minX + maxX) / 2.0;
+                                double py = maxY;
+                                double pz = (minZ + maxZ) / 2.0;
+                                double wx = px - camPos.x;
+                                double wy = py - camPos.y;
+                                double wz = pz - camPos.z;
+                                double distCenter = Math.sqrt(wx * wx + wy * wy + wz * wz);
+
+                                org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
+                                lastModelViewMatrix.transform(clip);
+                                lastProjMatrix.transform(clip);
+                                if (clip.w > 0.0f) {
+                                    float ndcX = clip.x / clip.w;
+                                    float ndcY = clip.y / clip.w;
+                                    if (Math.abs(ndcX) <= 1.2f && Math.abs(ndcY) <= 1.2f) {
+                                        int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
+                                        int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
+                                        double distSq = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy);
+                                        if (distSq < 400) {
+                                            isHovered = true;
+                                            worldDist = Math.min(worldDist, distCenter);
+                                        }
+                                    }
+                                }
+                            }
                         } else if (marker.points() != null && !marker.points().isEmpty()) {
-                            px = Math.floor(marker.points().get(0).x()) + 0.5;
-                            py = Math.floor(marker.points().get(0).y()); // exact top face
-                            pz = Math.floor(marker.points().get(0).z()) + 0.5;
-                        } else continue;
+                            for (SessionSnapshotData.EditorPoint pt : marker.points()) {
+                                double px = Math.floor(pt.x()) + 0.5;
+                                double py = Math.floor(pt.y());
+                                double pz = Math.floor(pt.z()) + 0.5;
 
-                        double wx = px - camPos.x;
-                        double wy = py - camPos.y;
-                        double wz = pz - camPos.z;
-                        double worldDist = Math.sqrt(wx*wx + wy*wy + wz*wz);
+                                if (rayEnd != null) {
+                                    net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(px - 0.5, py - 0.5, pz - 0.5, px + 0.5, py + 0.5, pz + 0.5);
+                                    if (box.contains(rayOrigin)) {
+                                        isHovered = true;
+                                        worldDist = Math.min(worldDist, 0.0);
+                                    } else {
+                                        java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
+                                        if (hit.isPresent()) {
+                                            isHovered = true;
+                                            worldDist = Math.min(worldDist, hit.get().distanceTo(rayOrigin));
+                                        }
+                                    }
+                                }
 
-                        org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
-                        lastModelViewMatrix.transform(clip);
-                        lastProjMatrix.transform(clip);
-                        if (clip.w <= 0.0f) continue;
+                                double wx = px - camPos.x;
+                                double wy = py - camPos.y;
+                                double wz = pz - camPos.z;
+                                double distToPt = Math.sqrt(wx * wx + wy * wy + wz * wz);
 
-                        float ndcX = clip.x / clip.w;
-                        float ndcY = clip.y / clip.w;
-                        if (Math.abs(ndcX) > 1.2f || Math.abs(ndcY) > 1.2f) continue;
+                                org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
+                                lastModelViewMatrix.transform(clip);
+                                lastProjMatrix.transform(clip);
+                                if (clip.w > 0.0f) {
+                                    float ndcX = clip.x / clip.w;
+                                    float ndcY = clip.y / clip.w;
+                                    if (Math.abs(ndcX) <= 1.2f && Math.abs(ndcY) <= 1.2f) {
+                                        int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
+                                        int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
+                                        double distSq = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy);
+                                        if (distSq < 400) {
+                                            isHovered = true;
+                                            worldDist = Math.min(worldDist, distToPt);
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                        int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
-                        int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
-
-                        double distSq = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy);
-                        if (distSq < 400) { // tight 20px radius
+                        if (isHovered) {
                             hovered.add(new HoveredMarker(marker, def, extension, worldDist));
                         }
                     }
@@ -346,37 +426,100 @@ public final class MapEditorOverlayClient {
                                 .orElse(null);
                         if (def == null) continue;
 
-                        double px, py, pz;
+                        boolean isHovered = false;
+                        double worldDist = Double.MAX_VALUE;
+
                         if ("REGION".equalsIgnoreCase(marker.type()) && marker.regions() != null && !marker.regions().isEmpty()) {
-                            SessionSnapshotData.EditorRegionPart part = marker.regions().get(0);
-                            px = (Math.floor(part.min().x()) + Math.floor(part.max().x()) + 1.0) / 2.0;
-                            py = Math.floor(Math.max(part.min().y(), part.max().y())) + 1.0;
-                            pz = (Math.floor(part.min().z()) + Math.floor(part.max().z()) + 1.0) / 2.0;
+                            for (SessionSnapshotData.EditorRegionPart part : marker.regions()) {
+                                double minX = Math.floor(Math.min(part.min().x(), part.max().x()));
+                                double minY = Math.floor(Math.min(part.min().y(), part.max().y()));
+                                double minZ = Math.floor(Math.min(part.min().z(), part.max().z()));
+                                double maxX = Math.floor(Math.max(part.min().x(), part.max().x())) + 1.0;
+                                double maxY = Math.floor(Math.max(part.min().y(), part.max().y())) + 1.0;
+                                double maxZ = Math.floor(Math.max(part.min().z(), part.max().z())) + 1.0;
+                                net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(minX, minY, minZ, maxX, maxY, maxZ);
+
+                                if (box.contains(rayOrigin)) {
+                                    isHovered = true;
+                                    worldDist = Math.min(worldDist, 0.0);
+                                } else if (rayEnd != null) {
+                                    java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
+                                    if (hit.isPresent()) {
+                                        isHovered = true;
+                                        worldDist = Math.min(worldDist, hit.get().distanceTo(rayOrigin));
+                                    }
+                                }
+
+                                double px = (minX + maxX) / 2.0;
+                                double py = maxY;
+                                double pz = (minZ + maxZ) / 2.0;
+                                double wx = px - camPos.x;
+                                double wy = py - camPos.y;
+                                double wz = pz - camPos.z;
+                                double distCenter = Math.sqrt(wx * wx + wy * wy + wz * wz);
+
+                                org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
+                                lastModelViewMatrix.transform(clip);
+                                lastProjMatrix.transform(clip);
+                                if (clip.w > 0.0f) {
+                                    float ndcX = clip.x / clip.w;
+                                    float ndcY = clip.y / clip.w;
+                                    if (Math.abs(ndcX) <= 1.2f && Math.abs(ndcY) <= 1.2f) {
+                                        int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
+                                        int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
+                                        double distSq = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy);
+                                        if (distSq < 400) {
+                                            isHovered = true;
+                                            worldDist = Math.min(worldDist, distCenter);
+                                        }
+                                    }
+                                }
+                            }
                         } else if (marker.points() != null && !marker.points().isEmpty()) {
-                            px = Math.floor(marker.points().get(0).x()) + 0.5;
-                            py = Math.floor(marker.points().get(0).y());
-                            pz = Math.floor(marker.points().get(0).z()) + 0.5;
-                        } else continue;
+                            for (SessionSnapshotData.EditorPoint pt : marker.points()) {
+                                double px = Math.floor(pt.x()) + 0.5;
+                                double py = Math.floor(pt.y());
+                                double pz = Math.floor(pt.z()) + 0.5;
 
-                        double wx = px - camPos.x;
-                        double wy = py - camPos.y;
-                        double wz = pz - camPos.z;
-                        double worldDist = Math.sqrt(wx * wx + wy * wy + wz * wz);
+                                if (rayEnd != null) {
+                                    net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(px - 0.5, py - 0.5, pz - 0.5, px + 0.5, py + 0.5, pz + 0.5);
+                                    if (box.contains(rayOrigin)) {
+                                        isHovered = true;
+                                        worldDist = Math.min(worldDist, 0.0);
+                                    } else {
+                                        java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
+                                        if (hit.isPresent()) {
+                                            isHovered = true;
+                                            worldDist = Math.min(worldDist, hit.get().distanceTo(rayOrigin));
+                                        }
+                                    }
+                                }
 
-                        org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
-                        lastModelViewMatrix.transform(clip);
-                        lastProjMatrix.transform(clip);
-                        if (clip.w <= 0.0f) continue;
+                                double wx = px - camPos.x;
+                                double wy = py - camPos.y;
+                                double wz = pz - camPos.z;
+                                double distToPt = Math.sqrt(wx * wx + wy * wy + wz * wz);
 
-                        float ndcX = clip.x / clip.w;
-                        float ndcY = clip.y / clip.w;
-                        if (Math.abs(ndcX) > 1.2f || Math.abs(ndcY) > 1.2f) continue;
+                                org.joml.Vector4f clip = new org.joml.Vector4f((float) wx, (float) wy, (float) wz, 1.0f);
+                                lastModelViewMatrix.transform(clip);
+                                lastProjMatrix.transform(clip);
+                                if (clip.w > 0.0f) {
+                                    float ndcX = clip.x / clip.w;
+                                    float ndcY = clip.y / clip.w;
+                                    if (Math.abs(ndcX) <= 1.2f && Math.abs(ndcY) <= 1.2f) {
+                                        int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
+                                        int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
+                                        double distSq = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy);
+                                        if (distSq < 400) {
+                                            isHovered = true;
+                                            worldDist = Math.min(worldDist, distToPt);
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                        int sx = (int) ((ndcX * 0.5f + 0.5f) * screenW);
-                        int sy = (int) ((0.5f - ndcY * 0.5f) * screenH);
-
-                        double distSq = (sx - cx) * (sx - cx) + (sy - cy) * (sy - cy);
-                        if (distSq < 400) {
+                        if (isHovered) {
                             hovered.add(new HoveredMarker(marker, def, previewExtension, worldDist));
                         }
                     }
@@ -426,6 +569,13 @@ public final class MapEditorOverlayClient {
                     width = Math.max(width, client.textRenderer.getWidth(l));
                 }
                 height += renderedLines.size() * lineHeight;
+
+                if (boxX + width + (padding * 2) > screenW) {
+                    boxX = Math.max(10, cx - width - (padding * 2) - 15);
+                }
+                if (boxY + height > screenH) {
+                    boxY = Math.max(10, screenH - height - 10);
+                }
 
                 drawContext.fill(boxX, boxY, boxX + width + (padding * 2), boxY + height, 0xCC000000);
                 drawContext.drawBorder(boxX, boxY, width + (padding * 2), height, getMarkerColor(hovered.get(0).marker.definitionKey()) | 0xFF000000);

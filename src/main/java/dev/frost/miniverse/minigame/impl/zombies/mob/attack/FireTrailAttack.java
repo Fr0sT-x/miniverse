@@ -13,6 +13,10 @@ public final class FireTrailAttack {
     private FireTrailAttack() {}
 
     public static void tickTrail(MobEntity mob, ServerWorld world, List<ServerPlayerEntity> survivors, int tickCounter) {
+        tickTrail(mob, world, survivors, tickCounter, 2.0f);
+    }
+
+    public static void tickTrail(MobEntity mob, ServerWorld world, List<ServerPlayerEntity> survivors, int tickCounter, float damage) {
         double x = mob.getX();
         double y = mob.getY();
         double z = mob.getZ();
@@ -29,7 +33,7 @@ public final class FireTrailAttack {
             for (ServerPlayerEntity p : survivors) {
                 if (!p.isSpectator() && p.isAlive() && p.squaredDistanceTo(x, y, z) <= radiusSq) {
                     p.setOnFireFor(2);
-                    p.damage(world.getDamageSources().inFire(), 2.0f);
+                    p.damage(world.getDamageSources().inFire(), damage);
                     world.playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.ENTITY_GENERIC_BURN, SoundCategory.PLAYERS, 0.8f, 1.0f);
                 }
             }

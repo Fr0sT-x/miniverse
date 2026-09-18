@@ -1,1465 +1,2612 @@
 {
-  "startArea": "Alley",
-  "doors": [
+  "playerSpawns": [
     {
-      "area1": "Alley",
-      "area2": "Hotel",
-      "gold": 750,
-      "position": {
-        "position1": {
-          "x": 11,
-          "y": 68,
-          "z": 22
-        },
-        "position2": {
-          "x": 11,
-          "y": 71,
-          "z": 20
+      "name": "Survivor Spawn",
+      "points": [
+        {
+          "x": 17.5,
+          "y": 69.0,
+          "z": 30.5
         }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 57,
-          "y": 81,
-          "z": -24
-        },
-        "position2": {
-          "x": 57,
-          "y": 84,
-          "z": -22
-        }
-      }
-    },
-    {
-      "area1": "Alley",
-      "area2": "Office",
-      "gold": 500,
-      "position": {
-        "position1": {
-          "x": 26,
-          "y": 68,
-          "z": 42
-        },
-        "position2": {
-          "x": 26,
-          "y": 71,
-          "z": 44
-        }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 57,
-          "y": 81,
-          "z": -24
-        },
-        "position2": {
-          "x": 57,
-          "y": 84,
-          "z": -22
-        }
-      }
-    },
-    {
-      "area1": "Hotel",
-      "area2": "Garden",
-      "gold": 500,
-      "position": {
-        "position1": {
-          "x": 16,
-          "y": 68,
-          "z": -8
-        },
-        "position2": {
-          "x": 18,
-          "y": 71,
-          "z": -8
-        }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 57,
-          "y": 81,
-          "z": -17
-        },
-        "position2": {
-          "x": 59,
-          "y": 84,
-          "z": -17
-        }
-      }
-    },
-    {
-      "area1": "Hotel",
-      "area2": "Apartment",
-      "gold": 750,
-      "position": {
-        "position1": {
-          "x": 8,
-          "y": 75,
-          "z": 3
-        },
-        "position2": {
-          "x": 6,
-          "y": 78,
-          "z": 3
-        }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 57,
-          "y": 84,
-          "z": -17
-        },
-        "position2": {
-          "x": 59,
-          "y": 81,
-          "z": -17
-        }
-      }
-    },
-    {
-      "area1": "Apartment",
-      "area2": "Power Station",
-      "gold": 1000,
-      "position": {
-        "position1": {
-          "x": -9,
-          "y": 76,
-          "z": 30
-        },
-        "position2": {
-          "x": -7,
-          "y": 79,
-          "z": 30
-        }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 57,
-          "y": 81,
-          "z": -17
-        },
-        "position2": {
-          "x": 59,
-          "y": 84,
-          "z": -17
-        }
-      }
-    },
-    {
-      "area1": "Power Station",
-      "area2": "Gallery",
-      "gold": 750,
-      "position": {
-        "position1": {
-          "x": 14,
-          "y": 75,
-          "z": 53
-        },
-        "position2": {
-          "x": 14,
-          "y": 79,
-          "z": 55
-        }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 57,
-          "y": 81,
-          "z": -14
-        },
-        "position2": {
-          "x": 57,
-          "y": 85,
-          "z": -12
-        }
-      }
-    },
-    {
-      "area1": "Office",
-      "area2": "Gallery",
-      "gold": 750,
-      "position": {
-        "position1": {
-          "x": 37,
-          "y": 75,
-          "z": 57
-        },
-        "position2": {
-          "x": 35,
-          "y": 78,
-          "z": 57
-        }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 59,
-          "y": 81,
-          "z": -17
-        },
-        "position2": {
-          "x": 57,
-          "y": 84,
-          "z": -17
-        }
-      }
-    },
-    {
-      "area1": "Power Station",
-      "area2": "Roof Top",
-      "gold": 750,
-      "position": {
-        "position1": {
-          "x": -14,
-          "y": 85,
-          "z": 53
-        },
-        "position2": {
-          "x": -14,
-          "y": 82,
-          "z": 55
-        }
-      },
-      "templateOpen": null,
-      "templateClosed": {
-        "position1": {
-          "x": 57,
-          "y": 81,
-          "z": -9
-        },
-        "position2": {
-          "x": 57,
-          "y": 84,
-          "z": -7
-        }
-      }
+      ],
+      "id": "player_spawn_1"
     }
   ],
-  "windows": [
+  "areaConfigs": [
     {
-      "area": "Alley",
-      "spawnLocation": {
-        "x": 36.56341594412264,
-        "y": 70.0,
-        "z": 12.027679467182912,
-        "yaw": 1.0504159,
-        "pitch": -0.74991184
+      "name": "Alley",
+      "properties": {
+        "areaName": "Alley",
+        "isStartArea": true
       },
-      "blocks": {
-        "position1": {
-          "x": 37,
-          "y": 71,
-          "z": 14
-        },
-        "position2": {
-          "x": 35,
-          "y": 72,
-          "z": 14
+      "points": [
+        {
+          "x": 17.0,
+          "y": 69.0,
+          "z": 30.0
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 35,
-          "y": 69,
-          "z": 15
-        },
-        "position2": {
-          "x": 37,
-          "y": 69,
-          "z": 15
-        }
-      }
+      ],
+      "id": "area_alley"
     },
     {
-      "area": "Alley",
-      "spawnLocation": {
-        "x": 39.66385802336725,
-        "y": 70.0,
-        "z": 25.448539756925594,
-        "yaw": 91.05019,
-        "pitch": 0.90004617
+      "name": "Hotel",
+      "properties": {
+        "areaName": "Hotel",
+        "isStartArea": false
       },
-      "blocks": {
-        "position1": {
-          "x": 37,
-          "y": 71,
-          "z": 26
-        },
-        "position2": {
-          "x": 37,
-          "y": 72,
-          "z": 24
+      "points": [
+        {
+          "x": 8.0,
+          "y": 71.0,
+          "z": 11.0
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 36,
-          "y": 69,
-          "z": 24
-        },
-        "position2": {
-          "x": 36,
-          "y": 69,
-          "z": 26
-        }
-      }
+      ],
+      "id": "area_hotel"
     },
     {
-      "area": "Alley",
-      "spawnLocation": {
-        "x": 9.206332036660736,
-        "y": 69.0,
-        "z": 27.732706819178674,
-        "yaw": -89.70044,
-        "pitch": -4.650009
+      "name": "Office",
+      "properties": {
+        "areaName": "Office",
+        "isStartArea": false
       },
-      "blocks": {
-        "position1": {
-          "x": 10,
-          "y": 70,
-          "z": 28
-        },
-        "position2": {
-          "x": 10,
-          "y": 71,
-          "z": 26
+      "points": [
+        {
+          "x": 33.0,
+          "y": 70.0,
+          "z": 46.0
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 11,
-          "y": 68,
-          "z": 28
-        },
-        "position2": {
-          "x": 11,
-          "y": 68,
-          "z": 26
-        }
-      }
+      ],
+      "id": "area_office"
     },
     {
-      "area": "Alley",
-      "spawnLocation": {
-        "x": 8.751404992642449,
-        "y": 69.0,
-        "z": 39.48636717844619,
-        "yaw": -88.65094,
-        "pitch": -1.5000257
+      "name": "Garden",
+      "properties": {
+        "areaName": "Garden",
+        "isStartArea": false
       },
-      "blocks": {
-        "position1": {
-          "x": 10,
-          "y": 70,
-          "z": 40
-        },
-        "position2": {
-          "x": 10,
-          "y": 71,
-          "z": 38
+      "points": [
+        {
+          "x": 16.0,
+          "y": 68.0,
+          "z": -24.0
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 11,
-          "y": 68,
-          "z": 40
-        },
-        "position2": {
-          "x": 11,
-          "y": 68,
-          "z": 38
-        }
-      }
+      ],
+      "id": "area_garden"
     },
     {
-      "area": "Hotel",
-      "spawnLocation": {
-        "x": -6.495543162738223,
-        "y": 68.0,
-        "z": 16.501261726393135,
-        "yaw": 2.2459106,
-        "pitch": 7.799862
+      "name": "Apartment",
+      "properties": {
+        "areaName": "Apartment",
+        "isStartArea": false
       },
-      "blocks": {
-        "position1": {
-          "x": -8,
-          "y": 69,
-          "z": 18
-        },
-        "position2": {
-          "x": -6,
-          "y": 70,
-          "z": 18
+      "points": [
+        {
+          "x": -4.0,
+          "y": 76.0,
+          "z": 18.0
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -8,
-          "y": 67,
-          "z": 19
-        },
-        "position2": {
-          "x": -6,
-          "y": 67,
-          "z": 19
-        }
-      }
+      ],
+      "id": "area_apartment"
     },
     {
-      "area": "Hotel",
-      "spawnLocation": {
-        "x": -3.761472132188415,
-        "y": 68.0,
-        "z": 39.54546424775271,
-        "yaw": -175.5028,
-        "pitch": 9.149931
+      "name": "Power Station",
+      "properties": {
+        "areaName": "Power Station",
+        "isStartArea": false
       },
-      "blocks": {
-        "position1": {
-          "x": -3,
-          "y": 69,
-          "z": 37
-        },
-        "position2": {
-          "x": -5,
-          "y": 70,
-          "z": 37
+      "points": [
+        {
+          "x": 2.0,
+          "y": 82.0,
+          "z": 40.0
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -3,
-          "y": 67,
-          "z": 36
-        },
-        "position2": {
-          "x": -5,
-          "y": 67,
-          "z": 36
-        }
-      }
+      ],
+      "id": "area_power_station"
     },
     {
-      "area": "Hotel",
-      "spawnLocation": {
-        "x": 27.56943374820408,
-        "y": 69.0,
-        "z": 10.38922529511006,
-        "yaw": 90.747925,
-        "pitch": -2.4000418
+      "name": "Gallery",
+      "properties": {
+        "areaName": "Gallery",
+        "isStartArea": false
       },
-      "blocks": {
-        "position1": {
-          "x": 25,
-          "y": 70,
-          "z": 9
-        },
-        "position2": {
-          "x": 25,
-          "y": 71,
-          "z": 11
+      "points": [
+        {
+          "x": 27.0,
+          "y": 75.0,
+          "z": 57.0
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 24,
-          "y": 68,
-          "z": 9
-        },
-        "position2": {
-          "x": 24,
-          "y": 68,
-          "z": 11
-        }
-      }
+      ],
+      "id": "area_gallery"
     },
     {
-      "area": "Hotel",
-      "spawnLocation": {
-        "x": 24.11686133451531,
-        "y": 69.0,
-        "z": -0.578274530866324,
-        "yaw": 90.75043,
-        "pitch": -1.2000964
+      "name": "Roof Top",
+      "properties": {
+        "areaName": "Roof Top",
+        "isStartArea": false
       },
-      "blocks": {
-        "position1": {
-          "x": 22,
-          "y": 70,
-          "z": -2
-        },
-        "position2": {
-          "x": 22,
-          "y": 71,
-          "z": 0
+      "points": [
+        {
+          "x": -15.0,
+          "y": 82.0,
+          "z": 52.0
         }
+      ],
+      "id": "area_roof_top"
+    }
+  ],
+  "doors": [
+    {
+      "id": "door_1",
+      "name": "door_1",
+      "properties": {
+        "area1": "Alley",
+        "area2": "Hotel",
+        "gold": 750
       },
-      "repairArea": {
-        "position1": {
-          "x": 21,
-          "y": 68,
-          "z": -2
-        },
-        "position2": {
-          "x": 21,
-          "y": 68,
-          "z": 0
+      "regions": [
+        {
+          "min": {
+            "x": 11,
+            "y": 68,
+            "z": 20
+          },
+          "max": {
+            "x": 11,
+            "y": 71,
+            "z": 22
+          }
         }
-      }
+      ]
     },
     {
-      "area": "Garden",
-      "spawnLocation": {
-        "x": 2.306211116750171,
-        "y": 68.0,
-        "z": -12.318655900542149,
-        "yaw": -90.45184,
-        "pitch": 3.4499667
+      "id": "door_2",
+      "name": "door_2",
+      "properties": {
+        "area1": "Alley",
+        "area2": "Office",
+        "gold": 500
       },
-      "blocks": {
-        "position1": {
-          "x": 4,
-          "y": 69,
-          "z": -12
-        },
-        "position2": {
-          "x": 4,
-          "y": 70,
-          "z": -14
+      "regions": [
+        {
+          "min": {
+            "x": 26,
+            "y": 68,
+            "z": 42
+          },
+          "max": {
+            "x": 26,
+            "y": 71,
+            "z": 44
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 5,
-          "y": 67,
-          "z": -12
-        },
-        "position2": {
-          "x": 5,
-          "y": 67,
-          "z": -14
-        }
-      }
+      ]
     },
     {
-      "area": "Garden",
-      "spawnLocation": {
-        "x": 26.99049207523287,
-        "y": 68.0,
-        "z": -30.26770556584075,
-        "yaw": -8.255005,
-        "pitch": 15.899977
+      "id": "door_3",
+      "name": "door_3",
+      "properties": {
+        "area1": "Hotel",
+        "area2": "Garden",
+        "gold": 500
       },
-      "blocks": {
-        "position1": {
-          "x": 26,
-          "y": 69,
-          "z": -29
-        },
-        "position2": {
-          "x": 28,
-          "y": 70,
-          "z": -29
+      "regions": [
+        {
+          "min": {
+            "x": 16,
+            "y": 68,
+            "z": -8
+          },
+          "max": {
+            "x": 18,
+            "y": 71,
+            "z": -8
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 26,
-          "y": 67,
-          "z": -28
-        },
-        "position2": {
-          "x": 28,
-          "y": 67,
-          "z": -28
-        }
-      }
+      ]
     },
     {
-      "area": "Garden",
-      "spawnLocation": {
-        "x": 32.20844161892142,
-        "y": 68.0,
-        "z": -12.53990290057853,
-        "yaw": 90.59192,
-        "pitch": 0.15002038
+      "id": "door_4",
+      "name": "door_4",
+      "properties": {
+        "area1": "Hotel",
+        "area2": "Apartment",
+        "gold": 750
       },
-      "blocks": {
-        "position1": {
-          "x": 30,
-          "y": 69,
-          "z": -14
-        },
-        "position2": {
-          "x": 30,
-          "y": 70,
-          "z": -12
+      "regions": [
+        {
+          "min": {
+            "x": 6,
+            "y": 75,
+            "z": 3
+          },
+          "max": {
+            "x": 8,
+            "y": 78,
+            "z": 3
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 29,
-          "y": 67,
-          "z": -14
-        },
-        "position2": {
-          "x": 29,
-          "y": 67,
-          "z": -12
-        }
-      }
+      ]
     },
     {
-      "area": "Hotel",
-      "spawnLocation": {
-        "x": 0.46334456754133085,
-        "y": 76.0,
-        "z": -17.613325499418185,
-        "yaw": 2.3914795,
-        "pitch": 2.699949
+      "id": "door_5",
+      "name": "door_5",
+      "properties": {
+        "area1": "Apartment",
+        "area2": "Power Station",
+        "gold": 1000
       },
-      "blocks": {
-        "position1": {
-          "x": 1,
-          "y": 77,
-          "z": -16
-        },
-        "position2": {
-          "x": -1,
-          "y": 78,
-          "z": -16
+      "regions": [
+        {
+          "min": {
+            "x": -9,
+            "y": 76,
+            "z": 30
+          },
+          "max": {
+            "x": -7,
+            "y": 79,
+            "z": 30
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -1,
-          "y": 75,
-          "z": -15
-        },
-        "position2": {
-          "x": 1,
-          "y": 75,
-          "z": -15
-        }
-      }
+      ]
     },
     {
-      "area": "Hotel",
-      "spawnLocation": {
-        "x": 21.690353109985853,
-        "y": 76.0,
-        "z": -0.4922634239793459,
-        "yaw": 90.44104,
-        "pitch": -4.500019
+      "id": "door_6",
+      "name": "door_6",
+      "properties": {
+        "area1": "Power Station",
+        "area2": "Gallery",
+        "gold": 750
       },
-      "blocks": {
-        "position1": {
-          "x": 20,
-          "y": 77,
-          "z": -2
-        },
-        "position2": {
-          "x": 20,
-          "y": 78,
-          "z": 0
+      "regions": [
+        {
+          "min": {
+            "x": 14,
+            "y": 75,
+            "z": 53
+          },
+          "max": {
+            "x": 14,
+            "y": 79,
+            "z": 55
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 19,
-          "y": 75,
-          "z": -2
-        },
-        "position2": {
-          "x": 19,
-          "y": 75,
-          "z": 0
-        }
-      }
+      ]
     },
     {
-      "area": "Apartment",
-      "spawnLocation": {
-        "x": 15.89608049498856,
-        "y": 76.0,
-        "z": 6.390055983714558,
-        "yaw": 90.748535,
-        "pitch": 3.7500052
+      "id": "door_7",
+      "name": "door_7",
+      "properties": {
+        "area1": "Office",
+        "area2": "Gallery",
+        "gold": 750
       },
-      "blocks": {
-        "position1": {
-          "x": 14,
-          "y": 77,
-          "z": 5
-        },
-        "position2": {
-          "x": 14,
-          "y": 78,
-          "z": 7
+      "regions": [
+        {
+          "min": {
+            "x": 35,
+            "y": 75,
+            "z": 57
+          },
+          "max": {
+            "x": 37,
+            "y": 78,
+            "z": 57
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 13,
-          "y": 75,
-          "z": 5
-        },
-        "position2": {
-          "x": 13,
-          "y": 75,
-          "z": 7
-        }
-      }
+      ]
     },
     {
-      "area": "Apartment",
-      "spawnLocation": {
-        "x": -12.301014722132534,
-        "y": 76.0,
-        "z": 21.370804720920866,
-        "yaw": -89.40234,
-        "pitch": -1.3500451
+      "id": "door_8",
+      "name": "door_8",
+      "properties": {
+        "area1": "Power Station",
+        "area2": "Roof Top",
+        "gold": 750
       },
-      "blocks": {
-        "position1": {
-          "x": -12,
-          "y": 77,
-          "z": 22
-        },
-        "position2": {
-          "x": -12,
-          "y": 78,
-          "z": 20
+      "regions": [
+        {
+          "min": {
+            "x": -14,
+            "y": 82,
+            "z": 53
+          },
+          "max": {
+            "x": -14,
+            "y": 85,
+            "z": 55
+          }
         }
+      ]
+    }
+  ],
+  "doorClosedTemplates": [
+    {
+      "id": "door_1_closed",
+      "name": "door_1 Closed",
+      "properties": {
+        "doorId": "door_1"
       },
-      "repairArea": {
-        "position1": {
-          "x": -11,
-          "y": 75,
-          "z": 22
-        },
-        "position2": {
-          "x": -11,
-          "y": 75,
-          "z": 20
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -24
+          },
+          "max": {
+            "x": 57,
+            "y": 84,
+            "z": -22
+          }
         }
-      }
+      ]
     },
     {
-      "area": "Apartment",
-      "spawnLocation": {
-        "x": -11.157142408762027,
-        "y": 76.0,
-        "z": 45.61342908249947,
-        "yaw": -90.45535,
-        "pitch": -1.6499578
+      "id": "door_2_closed",
+      "name": "door_2 Closed",
+      "properties": {
+        "doorId": "door_2"
       },
-      "blocks": {
-        "position1": {
-          "x": -10,
-          "y": 77,
-          "z": 46
-        },
-        "position2": {
-          "x": -10,
-          "y": 78,
-          "z": 44
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -24
+          },
+          "max": {
+            "x": 57,
+            "y": 84,
+            "z": -22
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -9,
-          "y": 75,
-          "z": 46
-        },
-        "position2": {
-          "x": -9,
-          "y": 75,
-          "z": 44
-        }
-      }
+      ]
     },
     {
-      "area": "Apartment",
-      "spawnLocation": {
-        "x": 2.460039594805263,
-        "y": 76.0,
-        "z": 61.00360722522206,
-        "yaw": -178.65576,
-        "pitch": 2.550055
+      "id": "door_3_closed",
+      "name": "door_3 Closed",
+      "properties": {
+        "doorId": "door_3"
       },
-      "blocks": {
-        "position1": {
-          "x": 3,
-          "y": 77,
-          "z": 59
-        },
-        "position2": {
-          "x": 1,
-          "y": 78,
-          "z": 59
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -17
+          },
+          "max": {
+            "x": 59,
+            "y": 84,
+            "z": -17
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 3,
-          "y": 75,
-          "z": 58
-        },
-        "position2": {
-          "x": 1,
-          "y": 75,
-          "z": 58
-        }
-      }
+      ]
     },
     {
-      "area": "Gallery",
-      "spawnLocation": {
-        "x": 29.1433706261529,
-        "y": 76.0,
-        "z": 50.43707139023412,
-        "yaw": 91.6452,
-        "pitch": 11.399728
+      "id": "door_4_closed",
+      "name": "door_4 Closed",
+      "properties": {
+        "doorId": "door_4"
       },
-      "blocks": {
-        "position1": {
-          "x": 27,
-          "y": 77,
-          "z": 49
-        },
-        "position2": {
-          "x": 27,
-          "y": 78,
-          "z": 51
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -17
+          },
+          "max": {
+            "x": 59,
+            "y": 84,
+            "z": -17
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 26,
-          "y": 75,
-          "z": 49
-        },
-        "position2": {
-          "x": 26,
-          "y": 75,
-          "z": 51
-        }
-      }
+      ]
     },
     {
-      "area": "Gallery",
-      "spawnLocation": {
-        "x": 20.656434841317676,
-        "y": 76.0,
-        "z": 65.10597872502609,
-        "yaw": 178.49544,
-        "pitch": 3.8998365
+      "id": "door_5_closed",
+      "name": "door_5 Closed",
+      "properties": {
+        "doorId": "door_5"
       },
-      "blocks": {
-        "position1": {
-          "x": 21,
-          "y": 77,
-          "z": 63
-        },
-        "position2": {
-          "x": 19,
-          "y": 78,
-          "z": 63
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -17
+          },
+          "max": {
+            "x": 59,
+            "y": 84,
+            "z": -17
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 21,
-          "y": 75,
-          "z": 62
-        },
-        "position2": {
-          "x": 19,
-          "y": 75,
-          "z": 62
-        }
-      }
+      ]
     },
     {
-      "area": "Gallery",
-      "spawnLocation": {
-        "x": 23.848247598830625,
-        "y": 76.0,
-        "z": 71.66637936684155,
-        "yaw": -89.55502,
-        "pitch": -1.6501523
+      "id": "door_6_closed",
+      "name": "door_6 Closed",
+      "properties": {
+        "doorId": "door_6"
       },
-      "blocks": {
-        "position1": {
-          "x": 25,
-          "y": 77,
-          "z": 72
-        },
-        "position2": {
-          "x": 25,
-          "y": 78,
-          "z": 70
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -14
+          },
+          "max": {
+            "x": 57,
+            "y": 85,
+            "z": -12
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 26,
-          "y": 75,
-          "z": 72
-        },
-        "position2": {
-          "x": 26,
-          "y": 75,
-          "z": 70
-        }
-      }
+      ]
     },
     {
-      "area": "Office",
-      "spawnLocation": {
-        "x": 52.34315517596858,
-        "y": 76.0,
-        "z": 60.1687374277507,
-        "yaw": -179.1095,
-        "pitch": 5.099752
+      "id": "door_7_closed",
+      "name": "door_7 Closed",
+      "properties": {
+        "doorId": "door_7"
       },
-      "blocks": {
-        "position1": {
-          "x": 53,
-          "y": 77,
-          "z": 58
-        },
-        "position2": {
-          "x": 51,
-          "y": 78,
-          "z": 58
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -17
+          },
+          "max": {
+            "x": 59,
+            "y": 84,
+            "z": -17
+          }
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 53,
-          "y": 75,
-          "z": 57
-        },
-        "position2": {
-          "x": 51,
-          "y": 75,
-          "z": 57
-        }
-      }
+      ]
     },
     {
-      "area": "Office",
-      "spawnLocation": {
-        "x": 47.663625557791065,
-        "y": 76.0,
-        "z": 33.038521180274834,
-        "yaw": 0.14038086,
-        "pitch": -1.6502324
+      "id": "door_8_closed",
+      "name": "door_8 Closed",
+      "properties": {
+        "doorId": "door_8"
       },
-      "blocks": {
-        "position1": {
-          "x": 46,
-          "y": 77,
-          "z": 34
-        },
-        "position2": {
-          "x": 48,
-          "y": 78,
-          "z": 34
+      "regions": [
+        {
+          "min": {
+            "x": 57,
+            "y": 81,
+            "z": -9
+          },
+          "max": {
+            "x": 57,
+            "y": 84,
+            "z": -7
+          }
         }
+      ]
+    }
+  ],
+  "windowSpawns": [
+    {
+      "id": "window_1",
+      "name": "window_1 Spawn",
+      "properties": {
+        "windowId": "window_1",
+        "area": "Alley"
       },
-      "repairArea": {
-        "position1": {
-          "x": 46,
-          "y": 75,
-          "z": 35
-        },
-        "position2": {
-          "x": 48,
-          "y": 75,
-          "z": 35
+      "points": [
+        {
+          "x": 36.56341594412264,
+          "y": 70.0,
+          "z": 12.027679467182912,
+          "yaw": 1.0504159,
+          "pitch": -0.74991184
         }
-      }
+      ]
     },
     {
-      "area": "Office",
-      "spawnLocation": {
-        "x": 40.56368953754411,
-        "y": 76.0,
-        "z": 33.429611175753955,
-        "yaw": 0.28967285,
-        "pitch": -2.7002587
+      "id": "window_2",
+      "name": "window_2 Spawn",
+      "properties": {
+        "windowId": "window_2",
+        "area": "Alley"
       },
-      "blocks": {
-        "position1": {
-          "x": 39,
-          "y": 77,
-          "z": 34
-        },
-        "position2": {
-          "x": 41,
-          "y": 78,
-          "z": 34
+      "points": [
+        {
+          "x": 39.66385802336725,
+          "y": 70.0,
+          "z": 25.448539756925594,
+          "yaw": 91.05019,
+          "pitch": 0.90004617
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 39,
-          "y": 75,
-          "z": 35
-        },
-        "position2": {
-          "x": 41,
-          "y": 75,
-          "z": 35
-        }
-      }
+      ]
     },
     {
-      "area": "Roof Top",
-      "spawnLocation": {
-        "x": -18.095990449627216,
-        "y": 83.0,
-        "z": 33.266696557227064,
-        "yaw": -1.063324,
-        "pitch": 6.7497334
+      "id": "window_3",
+      "name": "window_3 Spawn",
+      "properties": {
+        "windowId": "window_3",
+        "area": "Alley"
       },
-      "blocks": {
-        "position1": {
-          "x": -19,
-          "y": 84,
-          "z": 34
-        },
-        "position2": {
-          "x": -18,
-          "y": 85,
-          "z": 34
+      "points": [
+        {
+          "x": 9.206332036660736,
+          "y": 69.0,
+          "z": 27.732706819178674,
+          "yaw": -89.70044,
+          "pitch": -4.650009
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -19,
-          "y": 82,
-          "z": 35
-        },
-        "position2": {
-          "x": -18,
-          "y": 82,
-          "z": 35
-        }
-      }
+      ]
     },
     {
-      "area": "Roof Top",
-      "spawnLocation": {
-        "x": -19.57891211339746,
-        "y": 83.0,
-        "z": 59.70097468335238,
-        "yaw": -178.51215,
-        "pitch": 0.44971025
+      "id": "window_4",
+      "name": "window_4 Spawn",
+      "properties": {
+        "windowId": "window_4",
+        "area": "Alley"
       },
-      "blocks": {
-        "position1": {
-          "x": -19,
-          "y": 84,
-          "z": 58
-        },
-        "position2": {
-          "x": -21,
-          "y": 85,
-          "z": 58
+      "points": [
+        {
+          "x": 8.751404992642449,
+          "y": 69.0,
+          "z": 39.48636717844619,
+          "yaw": -88.65094,
+          "pitch": -1.5000257
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -19,
-          "y": 82,
-          "z": 57
-        },
-        "position2": {
-          "x": -21,
-          "y": 82,
-          "z": 57
-        }
-      }
+      ]
     },
     {
-      "area": "Roof Top",
-      "spawnLocation": {
-        "x": -31.99197354368411,
-        "y": 83.0,
-        "z": 28.27738892967046,
-        "yaw": -1.0627441,
-        "pitch": -3.0002859
+      "id": "window_5",
+      "name": "window_5 Spawn",
+      "properties": {
+        "windowId": "window_5",
+        "area": "Hotel"
       },
-      "blocks": {
-        "position1": {
-          "x": -33,
-          "y": 84,
-          "z": 29
-        },
-        "position2": {
-          "x": -32,
-          "y": 85,
-          "z": 29
+      "points": [
+        {
+          "x": -6.495543162738223,
+          "y": 68.0,
+          "z": 16.501261726393135,
+          "yaw": 2.2459106,
+          "pitch": 7.799862
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -33,
-          "y": 82,
-          "z": 30
-        },
-        "position2": {
-          "x": -32,
-          "y": 82,
-          "z": 30
-        }
-      }
+      ]
     },
     {
-      "area": "Roof Top",
-      "spawnLocation": {
-        "x": -46.72671635827858,
-        "y": 83.0,
-        "z": 32.96125659484583,
-        "yaw": -88.6629,
-        "pitch": -2.1002443
+      "id": "window_6",
+      "name": "window_6 Spawn",
+      "properties": {
+        "windowId": "window_6",
+        "area": "Hotel"
       },
-      "blocks": {
-        "position1": {
-          "x": -46,
-          "y": 84,
-          "z": 33
-        },
-        "position2": {
-          "x": -46,
-          "y": 85,
-          "z": 32
+      "points": [
+        {
+          "x": -3.761472132188415,
+          "y": 68.0,
+          "z": 39.54546424775271,
+          "yaw": -175.5028,
+          "pitch": 9.149931
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -45,
-          "y": 82,
-          "z": 33
-        },
-        "position2": {
-          "x": -45,
-          "y": 82,
-          "z": 32
-        }
-      }
+      ]
     },
     {
-      "area": "Power Station",
-      "spawnLocation": {
-        "x": 2.8831389088115764,
-        "y": 83.0,
-        "z": 34.80517016971046,
-        "yaw": 1.65015,
-        "pitch": -5.6999154
+      "id": "window_7",
+      "name": "window_7 Spawn",
+      "properties": {
+        "windowId": "window_7",
+        "area": "Hotel"
       },
-      "blocks": {
-        "position1": {
-          "x": 1,
-          "y": 84,
-          "z": 36
-        },
-        "position2": {
-          "x": 3,
-          "y": 85,
-          "z": 36
+      "points": [
+        {
+          "x": 27.56943374820408,
+          "y": 69.0,
+          "z": 10.38922529511006,
+          "yaw": 90.747925,
+          "pitch": -2.4000418
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": 1,
-          "y": 82,
-          "z": 37
-        },
-        "position2": {
-          "x": 3,
-          "y": 82,
-          "z": 37
-        }
-      }
+      ]
     },
     {
-      "area": "Power Station",
-      "spawnLocation": {
-        "x": -1.558844461141,
-        "y": 83.0,
-        "z": 60.5101143321878,
-        "yaw": -176.3999,
-        "pitch": -2.9999862
+      "id": "window_8",
+      "name": "window_8 Spawn",
+      "properties": {
+        "windowId": "window_8",
+        "area": "Hotel"
       },
-      "blocks": {
-        "position1": {
-          "x": -1,
-          "y": 84,
-          "z": 59
-        },
-        "position2": {
-          "x": -3,
-          "y": 85,
-          "z": 59
+      "points": [
+        {
+          "x": 24.11686133451531,
+          "y": 69.0,
+          "z": -0.578274530866324,
+          "yaw": 90.75043,
+          "pitch": -1.2000964
         }
-      },
-      "repairArea": {
-        "position1": {
-          "x": -1,
-          "y": 82,
-          "z": 58
-        },
-        "position2": {
-          "x": -3,
-          "y": 82,
-          "z": 58
-        }
-      }
+      ]
     },
     {
-      "area": "Power Station",
-      "spawnLocation": {
-        "x": -9.592773261650082,
-        "y": 83.0,
-        "z": 60.936950863527734,
-        "yaw": -178.34909,
-        "pitch": -0.89999074
+      "id": "window_9",
+      "name": "window_9 Spawn",
+      "properties": {
+        "windowId": "window_9",
+        "area": "Garden"
       },
-      "blocks": {
-        "position1": {
-          "x": -9,
-          "y": 84,
-          "z": 59
-        },
-        "position2": {
-          "x": -11,
-          "y": 85,
-          "z": 59
+      "points": [
+        {
+          "x": 2.306211116750171,
+          "y": 68.0,
+          "z": -12.318655900542149,
+          "yaw": -90.45184,
+          "pitch": 3.4499667
         }
+      ]
+    },
+    {
+      "id": "window_10",
+      "name": "window_10 Spawn",
+      "properties": {
+        "windowId": "window_10",
+        "area": "Garden"
       },
-      "repairArea": {
-        "position1": {
-          "x": -9,
-          "y": 82,
-          "z": 58
-        },
-        "position2": {
-          "x": -11,
-          "y": 82,
-          "z": 58
+      "points": [
+        {
+          "x": 26.99049207523287,
+          "y": 68.0,
+          "z": -30.26770556584075,
+          "yaw": -8.255005,
+          "pitch": 15.899977
         }
-      }
+      ]
+    },
+    {
+      "id": "window_11",
+      "name": "window_11 Spawn",
+      "properties": {
+        "windowId": "window_11",
+        "area": "Garden"
+      },
+      "points": [
+        {
+          "x": 32.20844161892142,
+          "y": 68.0,
+          "z": -12.53990290057853,
+          "yaw": 90.59192,
+          "pitch": 0.15002038
+        }
+      ]
+    },
+    {
+      "id": "window_12",
+      "name": "window_12 Spawn",
+      "properties": {
+        "windowId": "window_12",
+        "area": "Hotel"
+      },
+      "points": [
+        {
+          "x": 0.46334456754133085,
+          "y": 76.0,
+          "z": -17.613325499418185,
+          "yaw": 2.3914795,
+          "pitch": 2.699949
+        }
+      ]
+    },
+    {
+      "id": "window_13",
+      "name": "window_13 Spawn",
+      "properties": {
+        "windowId": "window_13",
+        "area": "Hotel"
+      },
+      "points": [
+        {
+          "x": 21.690353109985853,
+          "y": 76.0,
+          "z": -0.4922634239793459,
+          "yaw": 90.44104,
+          "pitch": -4.500019
+        }
+      ]
+    },
+    {
+      "id": "window_14",
+      "name": "window_14 Spawn",
+      "properties": {
+        "windowId": "window_14",
+        "area": "Apartment"
+      },
+      "points": [
+        {
+          "x": 15.89608049498856,
+          "y": 76.0,
+          "z": 6.390055983714558,
+          "yaw": 90.748535,
+          "pitch": 3.7500052
+        }
+      ]
+    },
+    {
+      "id": "window_15",
+      "name": "window_15 Spawn",
+      "properties": {
+        "windowId": "window_15",
+        "area": "Apartment"
+      },
+      "points": [
+        {
+          "x": -12.301014722132534,
+          "y": 76.0,
+          "z": 21.370804720920866,
+          "yaw": -89.40234,
+          "pitch": -1.3500451
+        }
+      ]
+    },
+    {
+      "id": "window_16",
+      "name": "window_16 Spawn",
+      "properties": {
+        "windowId": "window_16",
+        "area": "Apartment"
+      },
+      "points": [
+        {
+          "x": -11.157142408762027,
+          "y": 76.0,
+          "z": 45.61342908249947,
+          "yaw": -90.45535,
+          "pitch": -1.6499578
+        }
+      ]
+    },
+    {
+      "id": "window_17",
+      "name": "window_17 Spawn",
+      "properties": {
+        "windowId": "window_17",
+        "area": "Apartment"
+      },
+      "points": [
+        {
+          "x": 2.460039594805263,
+          "y": 76.0,
+          "z": 61.00360722522206,
+          "yaw": -178.65576,
+          "pitch": 2.550055
+        }
+      ]
+    },
+    {
+      "id": "window_18",
+      "name": "window_18 Spawn",
+      "properties": {
+        "windowId": "window_18",
+        "area": "Gallery"
+      },
+      "points": [
+        {
+          "x": 29.1433706261529,
+          "y": 76.0,
+          "z": 50.43707139023412,
+          "yaw": 91.6452,
+          "pitch": 11.399728
+        }
+      ]
+    },
+    {
+      "id": "window_19",
+      "name": "window_19 Spawn",
+      "properties": {
+        "windowId": "window_19",
+        "area": "Gallery"
+      },
+      "points": [
+        {
+          "x": 20.656434841317676,
+          "y": 76.0,
+          "z": 65.10597872502609,
+          "yaw": 178.49544,
+          "pitch": 3.8998365
+        }
+      ]
+    },
+    {
+      "id": "window_20",
+      "name": "window_20 Spawn",
+      "properties": {
+        "windowId": "window_20",
+        "area": "Gallery"
+      },
+      "points": [
+        {
+          "x": 23.848247598830625,
+          "y": 76.0,
+          "z": 71.66637936684155,
+          "yaw": -89.55502,
+          "pitch": -1.6501523
+        }
+      ]
+    },
+    {
+      "id": "window_21",
+      "name": "window_21 Spawn",
+      "properties": {
+        "windowId": "window_21",
+        "area": "Office"
+      },
+      "points": [
+        {
+          "x": 52.34315517596858,
+          "y": 76.0,
+          "z": 60.1687374277507,
+          "yaw": -179.1095,
+          "pitch": 5.099752
+        }
+      ]
+    },
+    {
+      "id": "window_22",
+      "name": "window_22 Spawn",
+      "properties": {
+        "windowId": "window_22",
+        "area": "Office"
+      },
+      "points": [
+        {
+          "x": 47.663625557791065,
+          "y": 76.0,
+          "z": 33.038521180274834,
+          "yaw": 0.14038086,
+          "pitch": -1.6502324
+        }
+      ]
+    },
+    {
+      "id": "window_23",
+      "name": "window_23 Spawn",
+      "properties": {
+        "windowId": "window_23",
+        "area": "Office"
+      },
+      "points": [
+        {
+          "x": 40.56368953754411,
+          "y": 76.0,
+          "z": 33.429611175753955,
+          "yaw": 0.28967285,
+          "pitch": -2.7002587
+        }
+      ]
+    },
+    {
+      "id": "window_24",
+      "name": "window_24 Spawn",
+      "properties": {
+        "windowId": "window_24",
+        "area": "Roof Top"
+      },
+      "points": [
+        {
+          "x": -18.095990449627216,
+          "y": 83.0,
+          "z": 33.266696557227064,
+          "yaw": -1.063324,
+          "pitch": 6.7497334
+        }
+      ]
+    },
+    {
+      "id": "window_25",
+      "name": "window_25 Spawn",
+      "properties": {
+        "windowId": "window_25",
+        "area": "Roof Top"
+      },
+      "points": [
+        {
+          "x": -19.57891211339746,
+          "y": 83.0,
+          "z": 59.70097468335238,
+          "yaw": -178.51215,
+          "pitch": 0.44971025
+        }
+      ]
+    },
+    {
+      "id": "window_26",
+      "name": "window_26 Spawn",
+      "properties": {
+        "windowId": "window_26",
+        "area": "Roof Top"
+      },
+      "points": [
+        {
+          "x": -31.99197354368411,
+          "y": 83.0,
+          "z": 28.27738892967046,
+          "yaw": -1.0627441,
+          "pitch": -3.0002859
+        }
+      ]
+    },
+    {
+      "id": "window_27",
+      "name": "window_27 Spawn",
+      "properties": {
+        "windowId": "window_27",
+        "area": "Roof Top"
+      },
+      "points": [
+        {
+          "x": -46.72671635827858,
+          "y": 83.0,
+          "z": 32.96125659484583,
+          "yaw": -88.6629,
+          "pitch": -2.1002443
+        }
+      ]
+    },
+    {
+      "id": "window_28",
+      "name": "window_28 Spawn",
+      "properties": {
+        "windowId": "window_28",
+        "area": "Power Station"
+      },
+      "points": [
+        {
+          "x": 2.8831389088115764,
+          "y": 83.0,
+          "z": 34.80517016971046,
+          "yaw": 1.65015,
+          "pitch": -5.6999154
+        }
+      ]
+    },
+    {
+      "id": "window_29",
+      "name": "window_29 Spawn",
+      "properties": {
+        "windowId": "window_29",
+        "area": "Power Station"
+      },
+      "points": [
+        {
+          "x": -1.558844461141,
+          "y": 83.0,
+          "z": 60.5101143321878,
+          "yaw": -176.3999,
+          "pitch": -2.9999862
+        }
+      ]
+    },
+    {
+      "id": "window_30",
+      "name": "window_30 Spawn",
+      "properties": {
+        "windowId": "window_30",
+        "area": "Power Station"
+      },
+      "points": [
+        {
+          "x": -9.592773261650082,
+          "y": 83.0,
+          "z": 60.936950863527734,
+          "yaw": -178.34909,
+          "pitch": -0.89999074
+        }
+      ]
+    }
+  ],
+  "windowBlocks": [
+    {
+      "id": "window_1_blocks",
+      "name": "window_1 Blocks",
+      "properties": {
+        "windowId": "window_1"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 35,
+            "y": 71,
+            "z": 14
+          },
+          "max": {
+            "x": 37,
+            "y": 72,
+            "z": 14
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_2_blocks",
+      "name": "window_2 Blocks",
+      "properties": {
+        "windowId": "window_2"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 37,
+            "y": 71,
+            "z": 24
+          },
+          "max": {
+            "x": 37,
+            "y": 72,
+            "z": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_3_blocks",
+      "name": "window_3 Blocks",
+      "properties": {
+        "windowId": "window_3"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 10,
+            "y": 70,
+            "z": 26
+          },
+          "max": {
+            "x": 10,
+            "y": 71,
+            "z": 28
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_4_blocks",
+      "name": "window_4 Blocks",
+      "properties": {
+        "windowId": "window_4"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 10,
+            "y": 70,
+            "z": 38
+          },
+          "max": {
+            "x": 10,
+            "y": 71,
+            "z": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_5_blocks",
+      "name": "window_5 Blocks",
+      "properties": {
+        "windowId": "window_5"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -8,
+            "y": 69,
+            "z": 18
+          },
+          "max": {
+            "x": -6,
+            "y": 70,
+            "z": 18
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_6_blocks",
+      "name": "window_6 Blocks",
+      "properties": {
+        "windowId": "window_6"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -5,
+            "y": 69,
+            "z": 37
+          },
+          "max": {
+            "x": -3,
+            "y": 70,
+            "z": 37
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_7_blocks",
+      "name": "window_7 Blocks",
+      "properties": {
+        "windowId": "window_7"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 25,
+            "y": 70,
+            "z": 9
+          },
+          "max": {
+            "x": 25,
+            "y": 71,
+            "z": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_8_blocks",
+      "name": "window_8 Blocks",
+      "properties": {
+        "windowId": "window_8"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 22,
+            "y": 70,
+            "z": -2
+          },
+          "max": {
+            "x": 22,
+            "y": 71,
+            "z": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_9_blocks",
+      "name": "window_9 Blocks",
+      "properties": {
+        "windowId": "window_9"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 4,
+            "y": 69,
+            "z": -14
+          },
+          "max": {
+            "x": 4,
+            "y": 70,
+            "z": -12
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_10_blocks",
+      "name": "window_10 Blocks",
+      "properties": {
+        "windowId": "window_10"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 26,
+            "y": 69,
+            "z": -29
+          },
+          "max": {
+            "x": 28,
+            "y": 70,
+            "z": -29
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_11_blocks",
+      "name": "window_11 Blocks",
+      "properties": {
+        "windowId": "window_11"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 30,
+            "y": 69,
+            "z": -14
+          },
+          "max": {
+            "x": 30,
+            "y": 70,
+            "z": -12
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_12_blocks",
+      "name": "window_12 Blocks",
+      "properties": {
+        "windowId": "window_12"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -1,
+            "y": 77,
+            "z": -16
+          },
+          "max": {
+            "x": 1,
+            "y": 78,
+            "z": -16
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_13_blocks",
+      "name": "window_13 Blocks",
+      "properties": {
+        "windowId": "window_13"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 20,
+            "y": 77,
+            "z": -2
+          },
+          "max": {
+            "x": 20,
+            "y": 78,
+            "z": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_14_blocks",
+      "name": "window_14 Blocks",
+      "properties": {
+        "windowId": "window_14"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 14,
+            "y": 77,
+            "z": 5
+          },
+          "max": {
+            "x": 14,
+            "y": 78,
+            "z": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_15_blocks",
+      "name": "window_15 Blocks",
+      "properties": {
+        "windowId": "window_15"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -12,
+            "y": 77,
+            "z": 20
+          },
+          "max": {
+            "x": -12,
+            "y": 78,
+            "z": 22
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_16_blocks",
+      "name": "window_16 Blocks",
+      "properties": {
+        "windowId": "window_16"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -10,
+            "y": 77,
+            "z": 44
+          },
+          "max": {
+            "x": -10,
+            "y": 78,
+            "z": 46
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_17_blocks",
+      "name": "window_17 Blocks",
+      "properties": {
+        "windowId": "window_17"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 1,
+            "y": 77,
+            "z": 59
+          },
+          "max": {
+            "x": 3,
+            "y": 78,
+            "z": 59
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_18_blocks",
+      "name": "window_18 Blocks",
+      "properties": {
+        "windowId": "window_18"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 27,
+            "y": 77,
+            "z": 49
+          },
+          "max": {
+            "x": 27,
+            "y": 78,
+            "z": 51
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_19_blocks",
+      "name": "window_19 Blocks",
+      "properties": {
+        "windowId": "window_19"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 19,
+            "y": 77,
+            "z": 63
+          },
+          "max": {
+            "x": 21,
+            "y": 78,
+            "z": 63
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_20_blocks",
+      "name": "window_20 Blocks",
+      "properties": {
+        "windowId": "window_20"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 25,
+            "y": 77,
+            "z": 70
+          },
+          "max": {
+            "x": 25,
+            "y": 78,
+            "z": 72
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_21_blocks",
+      "name": "window_21 Blocks",
+      "properties": {
+        "windowId": "window_21"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 51,
+            "y": 77,
+            "z": 58
+          },
+          "max": {
+            "x": 53,
+            "y": 78,
+            "z": 58
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_22_blocks",
+      "name": "window_22 Blocks",
+      "properties": {
+        "windowId": "window_22"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 46,
+            "y": 77,
+            "z": 34
+          },
+          "max": {
+            "x": 48,
+            "y": 78,
+            "z": 34
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_23_blocks",
+      "name": "window_23 Blocks",
+      "properties": {
+        "windowId": "window_23"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 39,
+            "y": 77,
+            "z": 34
+          },
+          "max": {
+            "x": 41,
+            "y": 78,
+            "z": 34
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_24_blocks",
+      "name": "window_24 Blocks",
+      "properties": {
+        "windowId": "window_24"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -19,
+            "y": 84,
+            "z": 34
+          },
+          "max": {
+            "x": -18,
+            "y": 85,
+            "z": 34
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_25_blocks",
+      "name": "window_25 Blocks",
+      "properties": {
+        "windowId": "window_25"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -21,
+            "y": 84,
+            "z": 58
+          },
+          "max": {
+            "x": -19,
+            "y": 85,
+            "z": 58
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_26_blocks",
+      "name": "window_26 Blocks",
+      "properties": {
+        "windowId": "window_26"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -33,
+            "y": 84,
+            "z": 29
+          },
+          "max": {
+            "x": -32,
+            "y": 85,
+            "z": 29
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_27_blocks",
+      "name": "window_27 Blocks",
+      "properties": {
+        "windowId": "window_27"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -46,
+            "y": 84,
+            "z": 32
+          },
+          "max": {
+            "x": -46,
+            "y": 85,
+            "z": 33
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_28_blocks",
+      "name": "window_28 Blocks",
+      "properties": {
+        "windowId": "window_28"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 1,
+            "y": 84,
+            "z": 36
+          },
+          "max": {
+            "x": 3,
+            "y": 85,
+            "z": 36
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_29_blocks",
+      "name": "window_29 Blocks",
+      "properties": {
+        "windowId": "window_29"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -3,
+            "y": 84,
+            "z": 59
+          },
+          "max": {
+            "x": -1,
+            "y": 85,
+            "z": 59
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_30_blocks",
+      "name": "window_30 Blocks",
+      "properties": {
+        "windowId": "window_30"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -11,
+            "y": 84,
+            "z": 59
+          },
+          "max": {
+            "x": -9,
+            "y": 85,
+            "z": 59
+          }
+        }
+      ]
+    }
+  ],
+  "windowRepairZones": [
+    {
+      "id": "window_1_repair",
+      "name": "window_1 Repair",
+      "properties": {
+        "windowId": "window_1"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 35,
+            "y": 69,
+            "z": 15
+          },
+          "max": {
+            "x": 37,
+            "y": 69,
+            "z": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_2_repair",
+      "name": "window_2 Repair",
+      "properties": {
+        "windowId": "window_2"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 36,
+            "y": 69,
+            "z": 24
+          },
+          "max": {
+            "x": 36,
+            "y": 69,
+            "z": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_3_repair",
+      "name": "window_3 Repair",
+      "properties": {
+        "windowId": "window_3"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 11,
+            "y": 68,
+            "z": 26
+          },
+          "max": {
+            "x": 11,
+            "y": 68,
+            "z": 28
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_4_repair",
+      "name": "window_4 Repair",
+      "properties": {
+        "windowId": "window_4"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 11,
+            "y": 68,
+            "z": 38
+          },
+          "max": {
+            "x": 11,
+            "y": 68,
+            "z": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_5_repair",
+      "name": "window_5 Repair",
+      "properties": {
+        "windowId": "window_5"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -8,
+            "y": 67,
+            "z": 19
+          },
+          "max": {
+            "x": -6,
+            "y": 67,
+            "z": 19
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_6_repair",
+      "name": "window_6 Repair",
+      "properties": {
+        "windowId": "window_6"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -5,
+            "y": 67,
+            "z": 36
+          },
+          "max": {
+            "x": -3,
+            "y": 67,
+            "z": 36
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_7_repair",
+      "name": "window_7 Repair",
+      "properties": {
+        "windowId": "window_7"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 24,
+            "y": 68,
+            "z": 9
+          },
+          "max": {
+            "x": 24,
+            "y": 68,
+            "z": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_8_repair",
+      "name": "window_8 Repair",
+      "properties": {
+        "windowId": "window_8"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 21,
+            "y": 68,
+            "z": -2
+          },
+          "max": {
+            "x": 21,
+            "y": 68,
+            "z": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_9_repair",
+      "name": "window_9 Repair",
+      "properties": {
+        "windowId": "window_9"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 5,
+            "y": 67,
+            "z": -14
+          },
+          "max": {
+            "x": 5,
+            "y": 67,
+            "z": -12
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_10_repair",
+      "name": "window_10 Repair",
+      "properties": {
+        "windowId": "window_10"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 26,
+            "y": 67,
+            "z": -28
+          },
+          "max": {
+            "x": 28,
+            "y": 67,
+            "z": -28
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_11_repair",
+      "name": "window_11 Repair",
+      "properties": {
+        "windowId": "window_11"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 29,
+            "y": 67,
+            "z": -14
+          },
+          "max": {
+            "x": 29,
+            "y": 67,
+            "z": -12
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_12_repair",
+      "name": "window_12 Repair",
+      "properties": {
+        "windowId": "window_12"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -1,
+            "y": 75,
+            "z": -15
+          },
+          "max": {
+            "x": 1,
+            "y": 75,
+            "z": -15
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_13_repair",
+      "name": "window_13 Repair",
+      "properties": {
+        "windowId": "window_13"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 19,
+            "y": 75,
+            "z": -2
+          },
+          "max": {
+            "x": 19,
+            "y": 75,
+            "z": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_14_repair",
+      "name": "window_14 Repair",
+      "properties": {
+        "windowId": "window_14"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 13,
+            "y": 75,
+            "z": 5
+          },
+          "max": {
+            "x": 13,
+            "y": 75,
+            "z": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_15_repair",
+      "name": "window_15 Repair",
+      "properties": {
+        "windowId": "window_15"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -11,
+            "y": 75,
+            "z": 20
+          },
+          "max": {
+            "x": -11,
+            "y": 75,
+            "z": 22
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_16_repair",
+      "name": "window_16 Repair",
+      "properties": {
+        "windowId": "window_16"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -9,
+            "y": 75,
+            "z": 44
+          },
+          "max": {
+            "x": -9,
+            "y": 75,
+            "z": 46
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_17_repair",
+      "name": "window_17 Repair",
+      "properties": {
+        "windowId": "window_17"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 1,
+            "y": 75,
+            "z": 58
+          },
+          "max": {
+            "x": 3,
+            "y": 75,
+            "z": 58
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_18_repair",
+      "name": "window_18 Repair",
+      "properties": {
+        "windowId": "window_18"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 26,
+            "y": 75,
+            "z": 49
+          },
+          "max": {
+            "x": 26,
+            "y": 75,
+            "z": 51
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_19_repair",
+      "name": "window_19 Repair",
+      "properties": {
+        "windowId": "window_19"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 19,
+            "y": 75,
+            "z": 62
+          },
+          "max": {
+            "x": 21,
+            "y": 75,
+            "z": 62
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_20_repair",
+      "name": "window_20 Repair",
+      "properties": {
+        "windowId": "window_20"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 26,
+            "y": 75,
+            "z": 70
+          },
+          "max": {
+            "x": 26,
+            "y": 75,
+            "z": 72
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_21_repair",
+      "name": "window_21 Repair",
+      "properties": {
+        "windowId": "window_21"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 51,
+            "y": 75,
+            "z": 57
+          },
+          "max": {
+            "x": 53,
+            "y": 75,
+            "z": 57
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_22_repair",
+      "name": "window_22 Repair",
+      "properties": {
+        "windowId": "window_22"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 46,
+            "y": 75,
+            "z": 35
+          },
+          "max": {
+            "x": 48,
+            "y": 75,
+            "z": 35
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_23_repair",
+      "name": "window_23 Repair",
+      "properties": {
+        "windowId": "window_23"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 39,
+            "y": 75,
+            "z": 35
+          },
+          "max": {
+            "x": 41,
+            "y": 75,
+            "z": 35
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_24_repair",
+      "name": "window_24 Repair",
+      "properties": {
+        "windowId": "window_24"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -19,
+            "y": 82,
+            "z": 35
+          },
+          "max": {
+            "x": -18,
+            "y": 82,
+            "z": 35
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_25_repair",
+      "name": "window_25 Repair",
+      "properties": {
+        "windowId": "window_25"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -21,
+            "y": 82,
+            "z": 57
+          },
+          "max": {
+            "x": -19,
+            "y": 82,
+            "z": 57
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_26_repair",
+      "name": "window_26 Repair",
+      "properties": {
+        "windowId": "window_26"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -33,
+            "y": 82,
+            "z": 30
+          },
+          "max": {
+            "x": -32,
+            "y": 82,
+            "z": 30
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_27_repair",
+      "name": "window_27 Repair",
+      "properties": {
+        "windowId": "window_27"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -45,
+            "y": 82,
+            "z": 32
+          },
+          "max": {
+            "x": -45,
+            "y": 82,
+            "z": 33
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_28_repair",
+      "name": "window_28 Repair",
+      "properties": {
+        "windowId": "window_28"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": 1,
+            "y": 82,
+            "z": 37
+          },
+          "max": {
+            "x": 3,
+            "y": 82,
+            "z": 37
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_29_repair",
+      "name": "window_29 Repair",
+      "properties": {
+        "windowId": "window_29"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -3,
+            "y": 82,
+            "z": 58
+          },
+          "max": {
+            "x": -1,
+            "y": 82,
+            "z": 58
+          }
+        }
+      ]
+    },
+    {
+      "id": "window_30_repair",
+      "name": "window_30 Repair",
+      "properties": {
+        "windowId": "window_30"
+      },
+      "regions": [
+        {
+          "min": {
+            "x": -11,
+            "y": 82,
+            "z": 58
+          },
+          "max": {
+            "x": -9,
+            "y": 82,
+            "z": 58
+          }
+        }
+      ]
     }
   ],
   "weaponShops": [
     {
-      "position": {
-        "x": 1,
-        "y": 76,
-        "z": 24
+      "id": "weapon_shop_1",
+      "name": "Sniper Shop",
+      "properties": {
+        "weapon": "SNIPER",
+        "purchasePrice": 750,
+        "refillPrice": 200
       },
-      "weaponType": "SNIPER",
-      "purchasePrice": 750,
-      "refillPrice": 200
+      "points": [
+        {
+          "x": 1,
+          "y": 76,
+          "z": 24
+        }
+      ]
     },
     {
-      "position": {
-        "x": 45,
-        "y": 76,
-        "z": 46
+      "id": "weapon_shop_2",
+      "name": "Shotgun Shop",
+      "properties": {
+        "weapon": "SHOTGUN",
+        "purchasePrice": 500,
+        "refillPrice": 250
       },
-      "weaponType": "SHOTGUN",
-      "purchasePrice": 500,
-      "refillPrice": 250
+      "points": [
+        {
+          "x": 45,
+          "y": 76,
+          "z": 46
+        }
+      ]
     },
     {
-      "position": {
-        "x": -11,
-        "y": 68,
-        "z": 30
+      "id": "weapon_shop_3",
+      "name": "Rifle Shop",
+      "properties": {
+        "weapon": "RIFLE",
+        "purchasePrice": 500,
+        "refillPrice": 250
       },
-      "weaponType": "RIFLE",
-      "purchasePrice": 500,
-      "refillPrice": 250
+      "points": [
+        {
+          "x": -11,
+          "y": 68,
+          "z": 30
+        }
+      ]
     }
   ],
   "armorShops": [
     {
-      "position": {
-        "x": -3,
-        "y": 76,
-        "z": -2
+      "id": "armor_shop_1",
+      "name": "LEATHER UPPER_BODY Armor",
+      "properties": {
+        "part": "UPPER_BODY",
+        "quality": "LEATHER",
+        "price": 50
       },
-      "price": 50,
-      "part": "UPPER_BODY",
-      "quality": "LEATHER"
+      "points": [
+        {
+          "x": -3,
+          "y": 76,
+          "z": -2
+        }
+      ]
     },
     {
-      "position": {
-        "x": -5,
-        "y": 76,
-        "z": 58
+      "id": "armor_shop_2",
+      "name": "IRON LOWER_BODY Armor",
+      "properties": {
+        "part": "LOWER_BODY",
+        "quality": "IRON",
+        "price": 700
       },
-      "price": 700,
-      "part": "LOWER_BODY",
-      "quality": "IRON"
+      "points": [
+        {
+          "x": -5,
+          "y": 76,
+          "z": 58
+        }
+      ]
     },
     {
-      "position": {
-        "x": -45,
-        "y": 83,
-        "z": 44
+      "id": "armor_shop_3",
+      "name": "IRON UPPER_BODY Armor",
+      "properties": {
+        "part": "UPPER_BODY",
+        "quality": "IRON",
+        "price": 800
       },
-      "price": 800,
-      "part": "UPPER_BODY",
-      "quality": "IRON"
+      "points": [
+        {
+          "x": -45,
+          "y": 83,
+          "z": 44
+        }
+      ]
     },
     {
-      "position": {
-        "x": 36,
-        "y": 76,
-        "z": 73
+      "id": "armor_shop_4",
+      "name": "GOLD UPPER_BODY Armor",
+      "properties": {
+        "part": "UPPER_BODY",
+        "quality": "GOLD",
+        "price": 500
       },
-      "price": 500,
-      "part": "UPPER_BODY",
-      "quality": "GOLD"
+      "points": [
+        {
+          "x": 36,
+          "y": 76,
+          "z": 73
+        }
+      ]
     },
     {
-      "position": {
-        "x": 56,
-        "y": 76,
-        "z": 41
+      "id": "armor_shop_5",
+      "name": "LEATHER LOWER_BODY Armor",
+      "properties": {
+        "part": "LOWER_BODY",
+        "quality": "LEATHER",
+        "price": 75
       },
-      "price": 75,
-      "part": "LOWER_BODY",
-      "quality": "LEATHER"
-    }
-  ],
-  "luckyChests": [
-    {
-      "position": {
-        "x": -8,
-        "y": 75,
-        "z": 49
-      },
-      "gold": 1000
-    },
-    {
-      "position": {
-        "x": -9,
-        "y": 67,
-        "z": 23
-      },
-      "gold": 1000
-    },
-    {
-      "position": {
-        "x": 39,
-        "y": 75,
-        "z": 65
-      },
-      "gold": 1000
-    },
-    {
-      "position": {
-        "x": 33,
-        "y": 75,
-        "z": 54
-      },
-      "gold": 1000
+      "points": [
+        {
+          "x": 56,
+          "y": 76,
+          "z": 41
+        }
+      ]
     }
   ],
   "perkMachines": [
     {
-      "position": {
-        "x": 16,
-        "y": 76,
-        "z": -12
+      "id": "perk_1",
+      "name": "Frozen Bullets Perk",
+      "properties": {
+        "perk": "FROZEN_BULLETS",
+        "gold": 500
       },
-      "perk": "FROZEN_BULLETS",
-      "gold": 500
+      "points": [
+        {
+          "x": 16,
+          "y": 76,
+          "z": -12
+        }
+      ]
     },
     {
-      "position": {
-        "x": 15,
-        "y": 76,
-        "z": 48
+      "id": "perk_2",
+      "name": "Speed Perk",
+      "properties": {
+        "perk": "SPEED",
+        "gold": 500
       },
-      "perk": "SPEED",
-      "gold": 500
+      "points": [
+        {
+          "x": 15,
+          "y": 76,
+          "z": 48
+        }
+      ]
     },
     {
-      "position": {
-        "x": -16,
-        "y": 83,
-        "z": 45
+      "id": "perk_3",
+      "name": "Extra Health Perk",
+      "properties": {
+        "perk": "EXTRA_HEALTH",
+        "gold": 750
       },
-      "perk": "EXTRA_HEALTH",
-      "gold": 750
+      "points": [
+        {
+          "x": -16,
+          "y": 83,
+          "z": 45
+        }
+      ]
     },
     {
-      "position": {
-        "x": 9,
-        "y": 69,
-        "z": 5
+      "id": "perk_4",
+      "name": "Flame Bullets Perk",
+      "properties": {
+        "perk": "FLAME_BULLETS",
+        "gold": 500
       },
-      "perk": "FLAME_BULLETS",
-      "gold": 500
+      "points": [
+        {
+          "x": 9,
+          "y": 69,
+          "z": 5
+        }
+      ]
     },
     {
-      "position": {
-        "x": 41,
-        "y": 76,
-        "z": 45
+      "id": "perk_5",
+      "name": "Extra Weapon Perk",
+      "properties": {
+        "perk": "EXTRA_WEAPON",
+        "gold": 500
       },
-      "perk": "EXTRA_WEAPON",
-      "gold": 500
+      "points": [
+        {
+          "x": 41,
+          "y": 76,
+          "z": 45
+        }
+      ]
     },
     {
-      "position": {
-        "x": -4,
-        "y": 77,
-        "z": 35
+      "id": "perk_6",
+      "name": "Quick Fire Perk",
+      "properties": {
+        "perk": "QUICK_FIRE",
+        "gold": 500
       },
-      "perk": "QUICK_FIRE",
-      "gold": 500
+      "points": [
+        {
+          "x": -4,
+          "y": 77,
+          "z": 35
+        }
+      ]
     },
     {
-      "position": {
-        "x": 11,
-        "y": 68,
-        "z": 33
+      "id": "perk_7",
+      "name": "Fast Revive Perk",
+      "properties": {
+        "perk": "FAST_REVIVE",
+        "gold": 500
       },
-      "perk": "FAST_REVIVE",
-      "gold": 500
+      "points": [
+        {
+          "x": 11,
+          "y": 68,
+          "z": 33
+        }
+      ]
     }
   ],
-  "powerSwitch": {
-    "gold": 1000,
-    "position": {
-      "x": 6,
-      "y": 83,
-      "z": 43
+  "luckyChests": [
+    {
+      "id": "lucky_chest_1",
+      "name": "Lucky Chest",
+      "properties": {
+        "gold": 1000
+      },
+      "points": [
+        {
+          "x": -8,
+          "y": 75,
+          "z": 49
+        }
+      ]
+    },
+    {
+      "id": "lucky_chest_2",
+      "name": "Lucky Chest",
+      "properties": {
+        "gold": 1000
+      },
+      "points": [
+        {
+          "x": -9,
+          "y": 67,
+          "z": 23
+        }
+      ]
+    },
+    {
+      "id": "lucky_chest_3",
+      "name": "Lucky Chest",
+      "properties": {
+        "gold": 1000
+      },
+      "points": [
+        {
+          "x": 39,
+          "y": 75,
+          "z": 65
+        }
+      ]
+    },
+    {
+      "id": "lucky_chest_4",
+      "name": "Lucky Chest",
+      "properties": {
+        "gold": 1000
+      },
+      "points": [
+        {
+          "x": 33,
+          "y": 75,
+          "z": 54
+        }
+      ]
     }
-  },
-  "teamMachine": {
-    "x": -40,
-    "y": 83,
-    "z": 51
-  },
-  "autoStartStop": false,
-  "preventBuilding": false
+  ],
+  "powerSwitches": [
+    {
+      "id": "power_switch",
+      "name": "Power Switch",
+      "properties": {
+        "gold": 1000
+      },
+      "points": [
+        {
+          "x": 6,
+          "y": 83,
+          "z": 43
+        }
+      ]
+    }
+  ],
+  "teamMachines": [
+    {
+      "id": "team_machine",
+      "name": "Team Machine",
+      "properties": {},
+      "points": [
+        {
+          "x": -40,
+          "y": 83,
+          "z": 51
+        }
+      ]
+    }
+  ],
+  "ultimateMachines": [
+    {
+      "id": "ultimate_machine",
+      "name": "Ultimate Machine",
+      "properties": {
+        "gold": 1000
+      },
+      "points": [
+        {
+          "x": 16.0,
+          "y": 68.0,
+          "z": -32.0
+        }
+      ]
+    }
+  ]
 }

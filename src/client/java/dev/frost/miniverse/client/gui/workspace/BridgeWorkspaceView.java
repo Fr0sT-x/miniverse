@@ -47,7 +47,6 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players to Red and Blue teams.", UiTheme.ACCENT_RED);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for The Bridge.", UiTheme.ACCENT_BLUE, "Valid Bridge Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Tune score limits, respawn delays, and item permissions.", UiTheme.ACCENT);
-        this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
     }
 
     @Override

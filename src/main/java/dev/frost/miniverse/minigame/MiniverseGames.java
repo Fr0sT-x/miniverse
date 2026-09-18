@@ -16,6 +16,7 @@ import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
 import dev.frost.miniverse.minigame.impl.pillarsoffortune.PillarsOfFortuneDefinition;
 import dev.frost.miniverse.minigame.impl.horde.HordeSurvivalDefinition;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDefinition;
+import dev.frost.miniverse.minigame.impl.dropper.DropperDefinition;
 
 public final class MiniverseGames {
     private static boolean registered;
@@ -43,6 +44,7 @@ public final class MiniverseGames {
         MinigameRegistry.register(new PillarsOfFortuneDefinition());
         MinigameRegistry.register(new HordeSurvivalDefinition());
         MinigameRegistry.register(new ZombiesDefinition());
+        MinigameRegistry.register(new DropperDefinition());
         registered = true;
     }
 }

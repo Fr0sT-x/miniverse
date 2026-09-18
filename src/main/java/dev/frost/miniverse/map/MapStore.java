@@ -300,6 +300,24 @@ public final class MapStore {
                     }
                 }
             }
+            if (descriptor.supportedGamemodes().stream().anyMatch(g -> g.equalsIgnoreCase("dropper"))) {
+                Optional<JsonObject> config = readGamemodeConfig(descriptor, "dropper");
+                if (config.isPresent()) {
+                    JsonObject cfg = config.get();
+                    if (cfg.has("levels") && cfg.get("levels").isJsonArray()) {
+                        for (com.google.gson.JsonElement el : cfg.getAsJsonArray("levels")) {
+                            if (el.isJsonObject()) {
+                                JsonObject obj = el.getAsJsonObject();
+                                String id = obj.has("id") ? obj.get("id").getAsString() : "";
+                                String name = obj.has("name") ? obj.get("name").getAsString() : id;
+                                if (!id.isBlank()) {
+                                    tags.add(net.minecraft.nbt.NbtString.of("dropper_level:" + id + ":" + name));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             nbt.put("tags", tags);
 
             maps.add(nbt);

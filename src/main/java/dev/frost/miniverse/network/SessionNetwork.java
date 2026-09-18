@@ -1,8 +1,8 @@
 package dev.frost.miniverse.network;
 
 import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.minigame.core.SessionBootstrapper;
 import dev.frost.miniverse.network.handlers.DuelTypeNetworkHandler;
+import dev.frost.miniverse.network.handlers.GamemodePresetNetworkHandler;
 import dev.frost.miniverse.network.handlers.KitNetworkHandler;
 import dev.frost.miniverse.network.handlers.MapNetworkHandler;
 import dev.frost.miniverse.network.handlers.SessionManagementNetworkHandler;
@@ -27,6 +27,7 @@ public final class SessionNetwork {
         SessionSettingsNetworkHandler.register();
         DuelTypeNetworkHandler.register();
         KitNetworkHandler.register();
+        GamemodePresetNetworkHandler.register();
 
         ServerPlayNetworking.registerGlobalReceiver(NetworkConstants.CLIENT_CONNECTION_HOST_ID, (payload, context) ->
             ClientConnectionHosts.remember(context.player(), payload.host())

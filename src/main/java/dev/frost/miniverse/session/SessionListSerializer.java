@@ -114,6 +114,7 @@ public class SessionListSerializer {
             duelTypes.add(dtNbt);
         }
         root.put("duelTypes", duelTypes);
+        root.put("presets", dev.frost.miniverse.minigame.core.preset.GamemodePresetStore.allPresetsToNbt());
 
         NbtList roster = new NbtList();
         for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {

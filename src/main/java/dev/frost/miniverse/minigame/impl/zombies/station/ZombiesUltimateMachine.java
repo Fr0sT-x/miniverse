@@ -45,6 +45,17 @@ public class ZombiesUltimateMachine {
         BiPredicate<ServerPlayerEntity, Integer> goldSpender,
         Consumer<Text> broadcastCallback
     ) {
+        return handleInteract(player, clickedPos, powerActive, goldSpender, broadcastCallback, null);
+    }
+
+    public boolean handleInteract(
+        ServerPlayerEntity player,
+        BlockPos clickedPos,
+        boolean powerActive,
+        BiPredicate<ServerPlayerEntity, Integer> goldSpender,
+        Consumer<Text> broadcastCallback,
+        dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig config
+    ) {
         boolean matches = clickedPos.equals(this.pos)
             || clickedPos.isWithinDistance(this.pos, 2.0)
             || clickedPos.equals(this.pos.north())
@@ -88,7 +99,7 @@ public class ZombiesUltimateMachine {
         }
 
         // Replace held weapon with upgraded variant
-        ItemStack upgradedStack = WeaponItemHelper.createWeaponStack(upgraded);
+        ItemStack upgradedStack = WeaponItemHelper.createWeaponStack(upgraded, config);
         player.setStackInHand(player.getActiveHand(), upgradedStack);
 
         ServerWorld world = player.getServerWorld();
@@ -98,13 +109,16 @@ public class ZombiesUltimateMachine {
 
         // Spec sheet in chat
         WeaponData d = upgraded.getData();
+        float damage = config != null ? config.getDamage(upgraded) : d.damage();
+        int reloadTicks = config != null ? config.getReloadTicks(upgraded) : d.reloadTicks();
+
         player.sendMessage(Text.literal("═════════════════════════════════").formatted(Formatting.LIGHT_PURPLE), false);
         player.sendMessage(Text.literal("★ WEAPON UPGRADED TO " + d.displayName().toUpperCase() + "! ★").formatted(Formatting.LIGHT_PURPLE, Formatting.BOLD), false);
-        player.sendMessage(Text.literal("  Damage: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.1f HP", d.damage())).formatted(Formatting.WHITE)), false);
+        player.sendMessage(Text.literal("  Damage: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.1f HP", damage)).formatted(Formatting.WHITE)), false);
         player.sendMessage(Text.literal("  Total ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize() + d.maxReserve())).formatted(Formatting.WHITE)), false);
         player.sendMessage(Text.literal("  Magazine ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize())).formatted(Formatting.WHITE)), false);
         player.sendMessage(Text.literal("  Fire Rate: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.delayTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
-        player.sendMessage(Text.literal("  Reload: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.reloadTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
+        player.sendMessage(Text.literal("  Reload: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", reloadTicks / 20.0f)).formatted(Formatting.WHITE)), false);
 
         if (d.bulletsPerShot() > 1) {
             player.sendMessage(Text.literal("  Pellets: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.bulletsPerShot())).formatted(Formatting.WHITE)), false);

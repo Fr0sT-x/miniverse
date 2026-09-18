@@ -44,7 +44,6 @@ public final class HordeSurvivalWorkspaceView extends AbstractGamemodeWorkspaceV
         this.playerGrid.addColumn("selected", "Survivors", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Survivors", "Setup", "Select participating survivors.", UiTheme.ACCENT);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure wave counts and match rules.", UiTheme.ACCENT_BLUE);
-        this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_RED);
     }
 
     @Override

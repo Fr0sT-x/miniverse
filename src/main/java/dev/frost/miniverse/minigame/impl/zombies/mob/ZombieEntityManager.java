@@ -74,6 +74,7 @@ public class ZombieEntityManager {
 
     private final ServerWorld world;
     private ZombiesDifficulty difficulty = ZombiesDifficulty.EASY;
+    private dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig difficultyConfig = dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig.defaults();
     private final Map<Integer, ActiveMob> activeMobs = new ConcurrentHashMap<>();
     private List<ZombiesWindow> windows = Collections.emptyList();
     private Consumer<ActiveMob> onMobKilledCallback;
@@ -113,6 +114,34 @@ public class ZombieEntityManager {
 
     public ZombiesDifficulty getDifficulty() {
         return this.difficulty;
+    }
+
+    public void setDifficultyConfig(dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig difficultyConfig) {
+        this.difficultyConfig = difficultyConfig != null ? difficultyConfig : dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig.defaults();
+    }
+
+    public dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig getDifficultyConfig() {
+        return this.difficultyConfig;
+    }
+
+    public float getHealthMultiplier() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getHealthMultiplier(this.difficulty) : this.difficulty.getHealthMultiplier();
+    }
+
+    public double getSpeedMultiplier() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getSpeedMultiplier(this.difficulty) : this.difficulty.getSpeedMultiplier();
+    }
+
+    public float getDamageMultiplier() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getDamageMultiplier(this.difficulty) : this.difficulty.getDamageMultiplier();
+    }
+
+    public float getWindowBreakMultiplier() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getWindowBreakMultiplier(this.difficulty) : this.difficulty.getWindowBreakMultiplier();
+    }
+
+    public float getSpecialAttackMultiplier() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getSpecialAttackMultiplier(this.difficulty) : this.difficulty.getSpecialAttackMultiplier();
     }
 
     public void setWindows(List<ZombiesWindow> windows) {
@@ -158,19 +187,19 @@ public class ZombieEntityManager {
         // Attributes
         var healthAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
         if (healthAttr != null) {
-            float scaledHealth = Math.round(data.getHealth() * this.difficulty.getHealthMultiplier());
+            float scaledHealth = Math.round(data.getHealth() * getHealthMultiplier());
             healthAttr.setBaseValue(scaledHealth);
             mob.setHealth(scaledHealth);
         }
 
         var speedAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED);
         if (speedAttr != null) {
-            speedAttr.setBaseValue(data.getSpeed() * this.difficulty.getSpeedMultiplier());
+            speedAttr.setBaseValue(data.getSpeed() * getSpeedMultiplier());
         }
 
         var attackAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE);
         if (attackAttr != null) {
-            attackAttr.setBaseValue(attackAttr.getBaseValue() * this.difficulty.getDamageMultiplier());
+            attackAttr.setBaseValue(attackAttr.getBaseValue() * getDamageMultiplier());
         }
 
         var followAttr = mob.getAttributeInstance(EntityAttributes.GENERIC_FOLLOW_RANGE);
@@ -247,13 +276,13 @@ public class ZombieEntityManager {
         }
         var healthAttr = minion.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
         if (healthAttr != null) {
-            float scaledHealth = Math.round(type.getData().getHealth() * this.difficulty.getHealthMultiplier());
+            float scaledHealth = Math.round(type.getData().getHealth() * getHealthMultiplier());
             healthAttr.setBaseValue(scaledHealth);
             minion.setHealth(scaledHealth);
         }
         var attackAttr = minion.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE);
         if (attackAttr != null) {
-            attackAttr.setBaseValue(attackAttr.getBaseValue() * this.difficulty.getDamageMultiplier());
+            attackAttr.setBaseValue(attackAttr.getBaseValue() * getDamageMultiplier());
         }
         ActiveMob active = new ActiveMob(minion, type, null);
         this.activeMobs.put(minion.getId(), active);
@@ -313,7 +342,7 @@ public class ZombieEntityManager {
             }
 
             // Window Barricade Breaking
-            int breakThreshold = Math.max(5, Math.round(active.type.getData().getBreakWindowTicks() / this.difficulty.getWindowBreakMultiplier()));
+            int breakThreshold = Math.max(5, Math.round(active.type.getData().getBreakWindowTicks() / getWindowBreakMultiplier()));
             ZombiesWindow winToBreak = active.window;
             if (winToBreak != null && !winToBreak.isCompletelyBroken(this.world)) {
                 double distToSpawnSq = mob.squaredDistanceTo(
@@ -433,14 +462,14 @@ public class ZombieEntityManager {
             switch (active.type) {
                 case LITTLE_BOMBIE -> {
                     if (target != null && mob.squaredDistanceTo(target) <= 2.25) {
-                        ZombieExplosion.explode(mob, this.world, 3.0, 8.0f * this.difficulty.getSpecialAttackMultiplier());
+                        ZombieExplosion.explode(mob, this.world, 3.0, 8.0f * getSpecialAttackMultiplier());
                         mob.discard();
                     }
                 }
                 case BOMBIE -> {
                     // Periodic mini-explosion every 10s if near target
                     if (active.attackTimer % 200 == 0 && target != null && mob.squaredDistanceTo(target) <= 16.0) {
-                        ZombieExplosion.explode(mob, this.world, 3.5, 10.0f * this.difficulty.getSpecialAttackMultiplier());
+                        ZombieExplosion.explode(mob, this.world, 3.5, 10.0f * getSpecialAttackMultiplier());
                     }
                     // Spawn Little Bombie minions every 160 ticks (8s) up to max 3 alive
                     if (active.attackTimer % 160 == 0) {
@@ -465,13 +494,13 @@ public class ZombieEntityManager {
                     }
                 }
                 case INFERNO -> {
-                    FireTrailAttack.tickTrail(mob, this.world, validTargets, tickCounter, 2.0f * this.difficulty.getSpecialAttackMultiplier());
+                    FireTrailAttack.tickTrail(mob, this.world, validTargets, tickCounter, 2.0f * getSpecialAttackMultiplier());
                     if (active.attackTimer % 80 == 0 && target != null) {
                         FireballAttack.shootFireball(mob, this.world, validTargets);
                     }
                 }
                 case GUARDIAN_ZOMBIE -> {
-                    GuardianLaserAttack.tickLaser(mob, active, this.world, validTargets, 4.0f * this.difficulty.getSpecialAttackMultiplier());
+                    GuardianLaserAttack.tickLaser(mob, active, this.world, validTargets, 4.0f * getSpecialAttackMultiplier());
                 }
                 case BROODMOTHER -> {
                     BroodmotherAttack.tickBroodmother(mob, this.world, validTargets, tickCounter, minion -> registerMinion(minion, ZombieType.NORMAL_EASY));

@@ -12,13 +12,21 @@ public final class MiniversePaths {
     private MiniversePaths() {
     }
 
+    private static boolean isDevEnvironment() {
+        try {
+            return FabricLoader.getInstance() != null && FabricLoader.getInstance().isDevelopmentEnvironment();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static Path projectRoot() {
         Path cached = projectRoot;
         if (cached != null) {
             return cached;
         }
 
-        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+        if (!isDevEnvironment()) {
             Path fallback = Paths.get("").toAbsolutePath();
             projectRoot = fallback;
             return fallback;
@@ -43,7 +51,7 @@ public final class MiniversePaths {
         if (override != null && !override.isBlank()) {
             return Paths.get(override).toAbsolutePath().normalize();
         }
-        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+        if (!isDevEnvironment()) {
             return projectRoot();
         }
         return projectRoot().resolve("run");
@@ -55,7 +63,7 @@ public final class MiniversePaths {
             return Paths.get(override).toAbsolutePath().normalize();
         }
 
-        if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
+        if (!isDevEnvironment()) {
             return projectRoot();
         }
 
@@ -97,6 +105,14 @@ public final class MiniversePaths {
             return mainSessionsRoot.getParent().resolve("profiles").toAbsolutePath().normalize();
         }
         return runRoot().resolve("miniverse").resolve("profiles");
+    }
+
+    public static Path presetsRoot() {
+        Path mainSessionsRoot = dev.frost.miniverse.session.SessionRuntimeConfig.getMainSessionsRoot().orElse(null);
+        if (mainSessionsRoot != null && mainSessionsRoot.getParent() != null) {
+            return mainSessionsRoot.getParent().resolve("presets").toAbsolutePath().normalize();
+        }
+        return runRoot().resolve("miniverse").resolve("presets");
     }
 
     public static Path mainServerProperties() {

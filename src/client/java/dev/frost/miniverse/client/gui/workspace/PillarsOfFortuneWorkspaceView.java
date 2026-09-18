@@ -33,7 +33,6 @@ public final class PillarsOfFortuneWorkspaceView extends AbstractGamemodeWorkspa
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for Pillars of Fortune.", UiTheme.ACCENT_BLUE, "Valid Pillars of Fortune Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure time limit, loot drops, and modifiers.", UiTheme.ACCENT_BLUE);
-        this.moduleManager.register("summary", "U", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT_RED);
     }
 
     @Override

@@ -451,3 +451,22 @@ Copy this template and append it to the file:
 **Constraints this imposes:** Any new shop implementation must use the F24 interfaces instead of writing custom raw `GenericContainerScreenHandler` code. Purchase logic must be encapsulated in the `ShopItem.onPurchase` method.
 
 **Supersedes:** Nothing.
+
+---
+
+### D18 — Leaf Decay Prevention on Maps and Map Editor Rules
+
+**Status:** DECIDED
+**Date:** 2026-09-18
+
+**Decision:** Leaf decay is completely and unconditionally disabled across all map-based environments (Map Editor, Inspection Sessions, and all 8 map-based gamemodes: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper). Standard vanilla survival gamemodes (Speedrun, Manhunt, etc.) retain normal leaf decay. Furthermore, Map Editor enforces builder-friendly world rules (noon daylight, clear weather, no daylight/weather cycles, no mob/animal/NPC spawning, no fire tick, no vine overgrowth).
+
+**Reason:** Leaves are extensively used as decorative elements in custom minigame maps. In vanilla Minecraft, unsupported leaves decay within minutes if logs are far or absent, ruining map aesthetics in both editor and gameplay. In Minecraft 1.21.1, `LeavesBlock.randomTick` performs all decay operations; intercepting and cancelling it via `LeavesBlockMixin` based on `MapWorldRules.isLeafDecayDisabled(world)` cleanly eliminates leaf decay with zero performance overhead.
+
+**Constraints this imposes:**
+- Do not add ad-hoc gamerules or tick loops to battle leaf decay; the mixin in `MapWorldRules` is the single source of truth.
+- If leaf decay is ever desired for a map in the future, it must be explicitly configured in `MapWorldRules.isLeafDecayDisabled(world)`.
+- Zombies minigame manual spawning (`ZombieEntityManager.spawnEntity`) bypasses `doMobSpawning`, so `doMobSpawning=false` remains safe for minigames and map editors.
+
+**Supersedes:** Nothing.
+

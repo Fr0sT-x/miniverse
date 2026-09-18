@@ -15,10 +15,15 @@ public final class WeaponItemHelper {
     public static final String KEY_WEAPON_TYPE = "zombies_weapon";
     public static final String KEY_CLIP_AMMO = "zombies_clip";
     public static final String KEY_RESERVE_AMMO = "zombies_reserve";
+    public static final String KEY_CUSTOM_DAMAGE = "zombies_dmg";
 
     private WeaponItemHelper() {}
 
     public static ItemStack createWeaponStack(WeaponType type) {
+        return createWeaponStack(type, null);
+    }
+
+    public static ItemStack createWeaponStack(WeaponType type, WeaponCustomConfig config) {
         ItemStack stack = new ItemStack(type.getData().item());
         WeaponData data = type.getData();
 
@@ -32,9 +37,12 @@ public final class WeaponItemHelper {
             nbt.putString(KEY_WEAPON_TYPE, type.name());
             nbt.putInt(KEY_CLIP_AMMO, data.clipSize());
             nbt.putInt(KEY_RESERVE_AMMO, data.maxReserve());
+            if (config != null) {
+                nbt.putFloat(KEY_CUSTOM_DAMAGE, config.getDamage(type));
+            }
         });
 
-        updateStackLore(stack, type, data.clipSize(), data.maxReserve(), false);
+        updateStackLore(stack, type, data.clipSize(), data.maxReserve(), false, config);
         dev.frost.miniverse.minigame.core.item.ProtectedItemTags.mark(
             stack,
             data.isMelee() ? dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_KNIFE : dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_WEAPON
@@ -87,12 +95,26 @@ public final class WeaponItemHelper {
     }
 
     public static void updateStackLore(ItemStack stack, WeaponType type, int clip, int reserve, boolean reloading) {
+        updateStackLore(stack, type, clip, reserve, reloading, null);
+    }
+
+    public static void updateStackLore(ItemStack stack, WeaponType type, int clip, int reserve, boolean reloading, WeaponCustomConfig config) {
         WeaponData data = type.getData();
         stack.set(DataComponentTypes.CUSTOM_NAME, Text.literal(data.displayName()).formatted(Formatting.GOLD, Formatting.BOLD));
 
+        float damage = data.damage();
+        if (config != null) {
+            damage = config.getDamage(type);
+        } else {
+            NbtComponent comp = stack.get(DataComponentTypes.CUSTOM_DATA);
+            if (comp != null && comp.contains(KEY_CUSTOM_DAMAGE)) {
+                damage = comp.copyNbt().getFloat(KEY_CUSTOM_DAMAGE);
+            }
+        }
+
         List<Text> lore = new ArrayList<>();
         lore.add(Text.literal("Damage: ").formatted(Formatting.GRAY)
-            .append(Text.literal(String.valueOf(data.damage())).formatted(Formatting.RED)));
+            .append(Text.literal(String.valueOf(damage)).formatted(Formatting.RED)));
 
         if (data.isMelee()) {
             lore.add(Text.literal("Type: ").formatted(Formatting.GRAY)
@@ -114,16 +136,23 @@ public final class WeaponItemHelper {
     }
 
     public static void sendWeaponSpecSheet(net.minecraft.server.network.ServerPlayerEntity player, WeaponType targetType, String titleText) {
+        sendWeaponSpecSheet(player, targetType, titleText, null);
+    }
+
+    public static void sendWeaponSpecSheet(net.minecraft.server.network.ServerPlayerEntity player, WeaponType targetType, String titleText, WeaponCustomConfig config) {
         if (player == null || targetType == null) return;
         WeaponData d = targetType.getData();
+        float damage = config != null ? config.getDamage(targetType) : d.damage();
+        int reloadTicks = config != null ? config.getReloadTicks(targetType) : d.reloadTicks();
+
         player.sendMessage(Text.literal("═════════════════════════════════").formatted(Formatting.GOLD), false);
         player.sendMessage(Text.literal(titleText).formatted(Formatting.GREEN, Formatting.BOLD), false);
-        player.sendMessage(Text.literal("  Damage: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.1f HP", d.damage())).formatted(Formatting.WHITE)), false);
+        player.sendMessage(Text.literal("  Damage: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.1f HP", damage)).formatted(Formatting.WHITE)), false);
         if (!d.isMelee()) {
             player.sendMessage(Text.literal("  Total ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize() + d.maxReserve())).formatted(Formatting.WHITE)), false);
             player.sendMessage(Text.literal("  Magazine ammo: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.clipSize())).formatted(Formatting.WHITE)), false);
             player.sendMessage(Text.literal("  Fire Rate: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.delayTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
-            player.sendMessage(Text.literal("  Reload: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", d.reloadTicks() / 20.0f)).formatted(Formatting.WHITE)), false);
+            player.sendMessage(Text.literal("  Reload: ").formatted(Formatting.GRAY).append(Text.literal(String.format("%.2fs", reloadTicks / 20.0f)).formatted(Formatting.WHITE)), false);
             if (d.bulletsPerShot() > 1) {
                 player.sendMessage(Text.literal("  Pellets: ").formatted(Formatting.GRAY).append(Text.literal(String.valueOf(d.bulletsPerShot())).formatted(Formatting.WHITE)), false);
             }

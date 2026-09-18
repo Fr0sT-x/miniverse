@@ -53,6 +53,7 @@ public final class TransitionOverlay {
     private static int holdTicks;
     private static String pendingToken;
     private static String matchSessionId = "";
+    private static String activeGameId = "";
     private static String contextText = "Transferring";
     private static String descriptionText = "";
     private static String mapText = "";
@@ -112,6 +113,7 @@ public final class TransitionOverlay {
         }
         pendingToken = token;
         matchSessionId = "";
+        activeGameId = "";
         contextText = context == null || context.isBlank() ? "Transferring" : context;
         descriptionText = "";
         mapText = "";
@@ -138,6 +140,14 @@ public final class TransitionOverlay {
         return phase != Phase.IDLE;
     }
 
+    public static String getActiveGameId() {
+        return activeGameId;
+    }
+
+    public static boolean isZombiesActive() {
+        return "zombies".equalsIgnoreCase(activeGameId);
+    }
+
     private static void showMatchIntro(NbtCompound data) {
         dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -145,6 +155,7 @@ public final class TransitionOverlay {
             mc.player.setPose(net.minecraft.entity.EntityPose.STANDING);
         }
         matchSessionId = getStringOrDefault(data, "sessionId", "");
+        activeGameId = getStringOrDefault(data, "gameId", "");
         contextText = getStringOrDefault(data, "title", contextText);
         descriptionText = getStringOrDefault(data, "description", "");
         mapText = getStringOrDefault(data, "map", "");
@@ -196,6 +207,7 @@ public final class TransitionOverlay {
             return;
         }
 
+        activeGameId = "";
         if (awaitingMatchStart || matchReadySent || !matchSessionId.isBlank()) {
             awaitingMatchStart = false;
             serverStatusText = "";

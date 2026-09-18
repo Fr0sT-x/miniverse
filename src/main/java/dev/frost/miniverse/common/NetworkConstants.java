@@ -72,6 +72,9 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<LayoutSupportPayload> LAYOUT_SUPPORT_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "layout_support"));
     public static final CustomPayload.Id<SaveQuickBuyPayload> SAVE_QUICKBUY_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "save_quickbuy"));
     public static final CustomPayload.Id<QuickBuySyncPayload> QUICKBUY_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "quickbuy_sync"));
+    public static final CustomPayload.Id<SaveGamemodePresetPayload> SAVE_GAMEMODE_PRESET_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "save_gamemode_preset"));
+    public static final CustomPayload.Id<DeleteGamemodePresetPayload> DELETE_GAMEMODE_PRESET_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "delete_gamemode_preset"));
+    public static final CustomPayload.Id<SyncGamemodePresetsPayload> SYNC_GAMEMODE_PRESETS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_gamemode_presets"));
 
     private static boolean payloadTypesRegistered;
 
@@ -141,6 +144,9 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MANHUNT_LATE_JOIN_ID, ManhuntLateJoinPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ZOMBIES_RELOAD_ID, ZombiesReloadPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(SAVE_GAMEMODE_PRESET_ID, SaveGamemodePresetPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DELETE_GAMEMODE_PRESET_ID, DeleteGamemodePresetPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SYNC_GAMEMODE_PRESETS_ID, SyncGamemodePresetsPayload.CODEC);
         
         payloadTypesRegistered = true;
     }
@@ -1031,6 +1037,55 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return ZOMBIES_RELOAD_ID;
+        }
+    }
+
+    public record SaveGamemodePresetPayload(String gameId, String name, NbtCompound settings, boolean overwrite) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, SaveGamemodePresetPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            SaveGamemodePresetPayload::gameId,
+            PacketCodecs.STRING,
+            SaveGamemodePresetPayload::name,
+            PacketCodecs.NBT_COMPOUND,
+            SaveGamemodePresetPayload::settings,
+            PacketCodecs.BOOL,
+            SaveGamemodePresetPayload::overwrite,
+            SaveGamemodePresetPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SAVE_GAMEMODE_PRESET_ID;
+        }
+    }
+
+    public record DeleteGamemodePresetPayload(String gameId, String name) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DeleteGamemodePresetPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            DeleteGamemodePresetPayload::gameId,
+            PacketCodecs.STRING,
+            DeleteGamemodePresetPayload::name,
+            DeleteGamemodePresetPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DELETE_GAMEMODE_PRESET_ID;
+        }
+    }
+
+    public record SyncGamemodePresetsPayload(String gameId, NbtCompound presetsCompound) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, SyncGamemodePresetsPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            SyncGamemodePresetsPayload::gameId,
+            PacketCodecs.NBT_COMPOUND,
+            SyncGamemodePresetsPayload::presetsCompound,
+            SyncGamemodePresetsPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SYNC_GAMEMODE_PRESETS_ID;
         }
     }
 }

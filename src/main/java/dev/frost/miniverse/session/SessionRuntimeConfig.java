@@ -116,6 +116,10 @@ public final class SessionRuntimeConfig {
         return config;
     }
 
+    public static synchronized String getProperty(String key, String defaultValue) {
+        return getConfig().getProperty(key, defaultValue);
+    }
+
     private static Optional<String> optionalString(String key) {
         String value = getConfig().getProperty(key, "");
         return value.isBlank() ? Optional.empty() : Optional.of(value);

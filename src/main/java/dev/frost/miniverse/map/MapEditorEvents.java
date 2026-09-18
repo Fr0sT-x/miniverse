@@ -24,6 +24,8 @@ public final class MapEditorEvents {
             booted = true;
             emptyTicks = 0;
             
+            MapWorldRules.applyMapEditorRules(server);
+            
             // Teleport to editorSpawn
             JsonObject editorConfig = SessionRuntimeConfig.getSessionJson()
                 .filter(json -> json.has("mapEditor") && json.get("mapEditor").isJsonObject())

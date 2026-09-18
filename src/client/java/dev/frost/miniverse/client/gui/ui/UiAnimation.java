@@ -52,6 +52,13 @@ public final class UiAnimation {
             this.target = initial;
         }
 
+        public void set(float value) {
+            this.current = value;
+            this.start = value;
+            this.target = value;
+            this.animating = false;
+        }
+
         public void animateTo(float target, int durationMs) {
             if (Math.abs(this.target - target) < 0.001F && this.animating) {
                 return;

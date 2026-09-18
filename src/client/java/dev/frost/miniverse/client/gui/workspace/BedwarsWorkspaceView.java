@@ -47,7 +47,6 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.useRosterGrid(this.teamGrid, "teams", "T", "Teams", "Setup", "Assign players to teams.", UiTheme.ACCENT_RED);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a validated map configured for Bed Wars.", UiTheme.ACCENT_BLUE, "Valid Bed Wars Maps");
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure respawn and generator speeds.", UiTheme.ACCENT);
-        this.moduleManager.register("summary", "S", "Summary", "Summary", "Review and launch the match.", UiTheme.ACCENT);
 
         // Pre-create two teams
         this.teamGrid.clear();
@@ -189,6 +188,71 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putInt("goldGenCap", this.goldCap);
         builder.settings().putInt("diamondGenCap", this.diamondCap);
         builder.settings().putInt("emeraldGenCap", this.emeraldCap);
+    }
+
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        if (settings.contains("respawnDelaySeconds", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.respawnDelay = settings.getInt("respawnDelaySeconds");
+        }
+        if (settings.contains("ironGenIntervalTicks", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.ironGenTicks = settings.getInt("ironGenIntervalTicks");
+        }
+        if (settings.contains("goldGenIntervalTicks", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.goldGenTicks = settings.getInt("goldGenIntervalTicks");
+        }
+        if (settings.contains("diamondGenIntervalTicks", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.diamondGenTicks = settings.getInt("diamondGenIntervalTicks");
+        }
+        if (settings.contains("emeraldGenIntervalTicks", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.emeraldGenTicks = settings.getInt("emeraldGenIntervalTicks");
+        }
+        if (settings.contains("ironGenCap", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.ironCap = settings.getInt("ironGenCap");
+        }
+        if (settings.contains("goldGenCap", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.goldCap = settings.getInt("goldGenCap");
+        }
+        if (settings.contains("diamondGenCap", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.diamondCap = settings.getInt("diamondGenCap");
+        }
+        if (settings.contains("emeraldGenCap", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
+            this.emeraldCap = settings.getInt("emeraldGenCap");
+        }
+
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelay));
+        if (this.ironGenField != null) this.ironGenField.setText(String.valueOf(this.ironGenTicks));
+        if (this.goldGenField != null) this.goldGenField.setText(String.valueOf(this.goldGenTicks));
+        if (this.diamondGenField != null) this.diamondGenField.setText(String.valueOf(this.diamondGenTicks));
+        if (this.emeraldGenField != null) this.emeraldGenField.setText(String.valueOf(this.emeraldGenTicks));
+        if (this.ironCapField != null) this.ironCapField.setText(String.valueOf(this.ironCap));
+        if (this.goldCapField != null) this.goldCapField.setText(String.valueOf(this.goldCap));
+        if (this.diamondCapField != null) this.diamondCapField.setText(String.valueOf(this.diamondCap));
+        if (this.emeraldCapField != null) this.emeraldCapField.setText(String.valueOf(this.emeraldCap));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.respawnDelay = 5;
+        this.ironGenTicks = 20;
+        this.goldGenTicks = 160;
+        this.diamondGenTicks = 500;
+        this.emeraldGenTicks = 700;
+        this.ironCap = 64;
+        this.goldCap = 32;
+        this.diamondCap = 8;
+        this.emeraldCap = 4;
+
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelay));
+        if (this.ironGenField != null) this.ironGenField.setText(String.valueOf(this.ironGenTicks));
+        if (this.goldGenField != null) this.goldGenField.setText(String.valueOf(this.goldGenTicks));
+        if (this.diamondGenField != null) this.diamondGenField.setText(String.valueOf(this.diamondGenTicks));
+        if (this.emeraldGenField != null) this.emeraldGenField.setText(String.valueOf(this.emeraldGenTicks));
+        if (this.ironCapField != null) this.ironCapField.setText(String.valueOf(this.ironCap));
+        if (this.goldCapField != null) this.goldCapField.setText(String.valueOf(this.goldCap));
+        if (this.diamondCapField != null) this.diamondCapField.setText(String.valueOf(this.diamondCap));
+        if (this.emeraldCapField != null) this.emeraldCapField.setText(String.valueOf(this.emeraldCap));
     }
 
     @Override

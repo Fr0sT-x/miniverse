@@ -44,6 +44,7 @@ public class ZombieWaveEngine {
     private int maxRounds = MAX_ROUNDS;
     private int intermissionTicks = INTERMISSION_TICKS;
     private ZombiesDifficulty difficulty = ZombiesDifficulty.EASY;
+    private dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig difficultyConfig = dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig.defaults();
     private boolean endlessMode = false;
 
     private int currentRound = 0;
@@ -72,7 +73,38 @@ public class ZombieWaveEngine {
             this.intermissionTicks = settings.intermissionSeconds() * 20;
             this.difficulty = settings.difficulty() != null ? settings.difficulty() : ZombiesDifficulty.EASY;
             this.endlessMode = settings.endlessMode();
+            if (settings.difficultyConfig() != null) {
+                this.difficultyConfig = settings.difficultyConfig();
+            }
         }
+    }
+
+    public void setDifficultyConfig(dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig difficultyConfig) {
+        this.difficultyConfig = difficultyConfig != null ? difficultyConfig : dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig.defaults();
+    }
+
+    public dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig getDifficultyConfig() {
+        return this.difficultyConfig;
+    }
+
+    public int getMaxActiveMobs() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getMaxActiveMobs(this.difficulty) : this.difficulty.getMaxActiveMobs();
+    }
+
+    public int getSpawnCooldownMin() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getSpawnCooldownMin(this.difficulty) : this.difficulty.getSpawnCooldownMin();
+    }
+
+    public int getSpawnCooldownRandom() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getSpawnCooldownRandom(this.difficulty) : this.difficulty.getSpawnCooldownRandom();
+    }
+
+    public int getBaseWaveMobs() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getBaseWaveMobs(this.difficulty) : this.difficulty.getBaseWaveMobs();
+    }
+
+    public int getWaveMobsPerRound() {
+        return this.difficultyConfig != null ? this.difficultyConfig.getWaveMobsPerRound(this.difficulty) : this.difficulty.getWaveMobsPerRound();
     }
 
     public int getCurrentRound() {
@@ -127,14 +159,14 @@ public class ZombieWaveEngine {
 
         if (this.state == WaveState.IN_ROUND) {
             // Spawn queued mobs if under cap
-            int baseMaxActive = this.difficulty.getMaxActiveMobs();
+            int baseMaxActive = getMaxActiveMobs();
             int maxActive = (this.endlessMode && this.currentRound > 30)
                 ? Math.min(48, baseMaxActive + ((this.currentRound - 30) / 5) * 2)
                 : baseMaxActive;
             if (!this.spawnQueue.isEmpty() && this.mobManager.getAliveMobCount() < maxActive) {
                 this.spawnCooldown--;
                 if (this.spawnCooldown <= 0) {
-                    this.spawnCooldown = this.difficulty.getSpawnCooldownMin() + this.random.nextInt(this.difficulty.getSpawnCooldownRandom());
+                    this.spawnCooldown = getSpawnCooldownMin() + this.random.nextInt(Math.max(1, getSpawnCooldownRandom()));
                     ZombieType nextType = this.spawnQueue.poll();
                     if (nextType != null) {
                         spawnMobAtWindow(nextType, reachableAreas);
@@ -294,7 +326,7 @@ public class ZombieWaveEngine {
 
     private void buildRoundQueue(int round) {
         if (round > 30) {
-            int mobCount = this.difficulty.getBaseWaveMobs() + (round * this.difficulty.getWaveMobsPerRound()) + (round - 30) * 2;
+            int mobCount = getBaseWaveMobs() + (round * getWaveMobsPerRound()) + (round - 30) * 2;
 
             if (round % 5 == 0) {
                 if (round == 35) {
@@ -320,19 +352,19 @@ public class ZombieWaveEngine {
             return;
         }
 
-        int mobCount = this.difficulty.getBaseWaveMobs() + (round * this.difficulty.getWaveMobsPerRound());
+        int mobCount = getBaseWaveMobs() + (round * getWaveMobsPerRound());
 
         if (round == 10) {
             this.spawnQueue.add(ZombieType.BOMBIE);
-            mobCount = Math.round(20 * (this.difficulty.getBaseWaveMobs() / 14.0f));
+            mobCount = Math.round(20 * (getBaseWaveMobs() / 14.0f));
         } else if (round == 20) {
             this.spawnQueue.add(ZombieType.INFERNO);
-            mobCount = Math.round(30 * (this.difficulty.getBaseWaveMobs() / 14.0f));
+            mobCount = Math.round(30 * (getBaseWaveMobs() / 14.0f));
         } else if (round == 30) {
             this.spawnQueue.add(ZombieType.BROODMOTHER);
             this.spawnQueue.add(ZombieType.INFERNO);
             this.spawnQueue.add(ZombieType.BOMBIE);
-            mobCount = Math.round(40 * (this.difficulty.getBaseWaveMobs() / 14.0f));
+            mobCount = Math.round(40 * (getBaseWaveMobs() / 14.0f));
         }
 
         for (int i = 0; i < mobCount; i++) {

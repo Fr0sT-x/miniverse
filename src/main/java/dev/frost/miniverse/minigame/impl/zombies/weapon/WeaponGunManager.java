@@ -64,6 +64,7 @@ public class WeaponGunManager {
     private final Map<UUID, Long> lastOutOfAmmoChatTimes = new ConcurrentHashMap<>();
     private final Map<UUID, ReloadTask> activeReloads = new ConcurrentHashMap<>();
     private final Random random = new Random();
+    private WeaponCustomConfig weaponConfig = WeaponCustomConfig.defaults();
 
     public WeaponGunManager(
         ServerWorld world,
@@ -83,6 +84,14 @@ public class WeaponGunManager {
 
     public void setKillTracker(java.util.function.Consumer<ServerPlayerEntity> killTracker) {
         this.killTracker = killTracker;
+    }
+
+    public void setWeaponConfig(WeaponCustomConfig weaponConfig) {
+        this.weaponConfig = weaponConfig != null ? weaponConfig : WeaponCustomConfig.defaults();
+    }
+
+    public WeaponCustomConfig getWeaponConfig() {
+        return this.weaponConfig;
     }
 
     public boolean isReloading(UUID playerUuid) {
@@ -206,7 +215,7 @@ public class WeaponGunManager {
             return;
         }
 
-        int reloadTicks = type.getData().reloadTicks();
+        int reloadTicks = this.weaponConfig != null ? this.weaponConfig.getReloadTicks(type) : type.getData().reloadTicks();
         if (this.perkChecker.test(player, PlayerPerk.QUICK_FIRE)) {
             reloadTicks = (int) (reloadTicks * 0.70); // 30% faster reload
         }
@@ -312,7 +321,8 @@ public class WeaponGunManager {
             if (e instanceof MobEntity mob && this.mobManager.isZombieMob(mob) && mob.isAlive()) {
                 var active = this.mobManager.getActiveMob(mob);
                 boolean isBoss = active != null && active.type != null && active.type.isBoss();
-                float dmg = (this.instantKillSupplier.get() && !isBoss) ? 9999.0f : data.damage();
+                float baseDmg = this.weaponConfig != null ? this.weaponConfig.getDamage(WeaponType.KNIFE) : data.damage();
+                float dmg = (this.instantKillSupplier.get() && !isBoss) ? 9999.0f : baseDmg;
                 boolean wasAlive = mob.isAlive();
                 mob.damage(this.world.getDamageSources().playerAttack(player), dmg);
 
@@ -377,7 +387,8 @@ public class WeaponGunManager {
             for (MobEntity mob : nearbyMobs) {
                 var active = this.mobManager.getActiveMob(mob);
                 boolean isBoss = active != null && active.type != null && active.type.isBoss();
-                float damage = (this.instantKillSupplier != null && this.instantKillSupplier.get() && !isBoss) ? 9999.0f : data.damage();
+                float baseDmg = this.weaponConfig != null ? this.weaponConfig.getDamage(type) : data.damage();
+                float damage = (this.instantKillSupplier != null && this.instantKillSupplier.get() && !isBoss) ? 9999.0f : baseDmg;
 
                 boolean wasAlive = mob.isAlive();
                 mob.damage(this.world.getDamageSources().playerAttack(player), damage);
@@ -443,7 +454,7 @@ public class WeaponGunManager {
                 double mobHeight = mobBox.maxY - mobBox.minY;
                 boolean headshot = (hit.pos().y - mobBox.minY) >= (mobHeight * 0.72);
 
-                float finalDamage = data.damage();
+                float finalDamage = this.weaponConfig != null ? this.weaponConfig.getDamage(type) : data.damage();
                 if (headshot) {
                     finalDamage *= 2.0f;
                     this.world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ENTITY_ARROW_HIT_PLAYER, SoundCategory.PLAYERS, 0.8f, 1.8f);

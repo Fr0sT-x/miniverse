@@ -408,20 +408,32 @@ and vanilla display sync.
 **Status:** Fully Implemented · **Adoption:** 11/11 (via `MinigameEventRouter`)
 
 **Purpose:** Prevents players from breaking pre-existing map blocks. Only blocks placed
-dynamically during the session are breakable.
+dynamically during the session are breakable. Also manages map environmental rules including
+global leaf decay prevention across all map-based environments.
 
 **Key classes:**
 | Class | Role |
 |-------|------|
 | `MapProtectionManager` | `isProtected(world, pos)`, `canBreak(player, pos, message)` |
 | `MapProtectionTracker` | Per-runtime set of dynamically placed block positions |
+| `MapWorldRules` | Detects map worlds (`isMapWorld`), controls leaf decay prevention (`isLeafDecayDisabled`), and applies editor rules |
+| `LeavesBlockMixin` | Intercepts `LeavesBlock.randomTick` to cancel decay on maps |
 | `MinigameContext.protectionTracker()` | Accessor |
+
+**Leaf Decay Policy (CRITICAL):**
+- Leaf decay is **totally disabled** on all maps (`MapWorldRules.isLeafDecayDisabled(world) == true`), including:
+  - Any session running in `MAP_EDITOR` or `INSPECTION_SESSION` mode.
+  - Any session where a map is loaded (`map.id` / `mapId`).
+  - All 8 map-based gamemodes: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper.
+- All leaf varieties (oak, birch, spruce, jungle, acacia, dark oak, mangrove, cherry, azalea) will **never** decay, despawn, or drop items on maps.
+- Normal vanilla survival gamemodes (Speedrun, Manhunt, Block Shuffle, Death Swap, Bounty Hunt, Death Shuffle, Resource Sprint, Horde) keep leaf decay **enabled** (`isLeafDecayDisabled == false`).
+- *Developer note:* If you ever need to allow leaf decay on a specific map or gamemode in the future, adjust the check in `MapWorldRules.isLeafDecayDisabled`.
 
 **Bypass conditions:** OP/creative players, MAP_EDITOR backend mode, gamemodes not
 in `MapGamemodeRegistry`.
 
 > **AI note:** This framework requires no gamemode-level code. It runs automatically
-> via `MinigameEventRouter`. Do not call it manually from a gamemode.
+> via `MinigameEventRouter` and `LeavesBlockMixin`. Do not call it manually from a gamemode.
 
 ---
 

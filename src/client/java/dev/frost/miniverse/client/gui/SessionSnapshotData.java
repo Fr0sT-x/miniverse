@@ -1,8 +1,18 @@
 package dev.frost.miniverse.client.gui;
 
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
+
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class SessionSnapshotData {
+    public record GamemodePresetEntry(String gameId, String name, long createdAt, long updatedAt, NbtCompound settings) {
+    }
+
     public record SessionSummary(String id, String game, String state, long seed, int players, long createdAtMillis, long launchedAtMillis, long updatedAtMillis, long playedMillis, boolean inspectable, boolean retained, List<GroupSummary> groups, List<String> playerNames) {
     }
 
@@ -240,5 +250,47 @@ public final class SessionSnapshotData {
 
     public static void update(List<SessionSummary> newSessions, List<RosterEntry> newRoster, List<GameMetadata> newGames, int newMaxConcurrentLaunches, int newLauncherQueueCapacity) {
         update(newSessions, newRoster, newGames, newMaxConcurrentLaunches, newLauncherQueueCapacity, memorySettings, serverSettings, retentionSettings, sessionServer);
+    }
+
+    private static final Map<String, List<GamemodePresetEntry>> presets = new ConcurrentHashMap<>();
+
+    public static List<GamemodePresetEntry> getPresets(String gameId) {
+        if (gameId == null) return List.of();
+        return presets.getOrDefault(gameId.toLowerCase(), List.of());
+    }
+
+    public static void updatePresets(NbtCompound allPresetsNbt) {
+        if (allPresetsNbt == null) return;
+        for (String gameId : allPresetsNbt.getKeys()) {
+            NbtList list = allPresetsNbt.getList(gameId, NbtElement.COMPOUND_TYPE);
+            List<GamemodePresetEntry> entries = new ArrayList<>();
+            for (int i = 0; i < list.size(); i++) {
+                NbtCompound c = list.getCompound(i);
+                entries.add(new GamemodePresetEntry(
+                    c.getString("gameId"),
+                    c.getString("name"),
+                    c.getLong("createdAt"),
+                    c.getLong("updatedAt"),
+                    c.getCompound("settings")
+                ));
+            }
+            presets.put(gameId.toLowerCase(), entries);
+        }
+    }
+
+    public static void updateGamePresets(String gameId, NbtList list) {
+        if (gameId == null || list == null) return;
+        List<GamemodePresetEntry> entries = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            NbtCompound c = list.getCompound(i);
+            entries.add(new GamemodePresetEntry(
+                c.getString("gameId"),
+                c.getString("name"),
+                c.getLong("createdAt"),
+                c.getLong("updatedAt"),
+                c.getCompound("settings")
+            ));
+        }
+        presets.put(gameId.toLowerCase(), entries);
     }
 }

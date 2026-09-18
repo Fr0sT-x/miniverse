@@ -13,33 +13,54 @@
 
 **Legend:** ✅ Fully Used · ⚠️ Partially Used · ❌ Not Used · 🔄 Migration In Progress
 
-| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune | HordeSurvival |
-|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|:-------------:|
-| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ |
-| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ | ❌ | ✅ |
-| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** | **N/A** | **75%** |
+| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune | HordeSurvival | Dropper | Zombies |
+|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|:-------------:|:-------:|:-------:|
+| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ |
+| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** | **N/A** | **75%** | **78%** | **75%** |
+
+---
+
+### 🌿 Universal Map Rule: Leaf Decay Prevention & Map Protection (F09)
+
+> **CRITICAL ARCHITECTURE INVARIANT**: In all map-based environments, **leaf decay is 100% disabled**.
+>
+> - **Where Leaf Decay is OFF**:
+>   1. **Map Editor sessions** (`SessionMode.MAP_EDITOR`).
+>   2. **Inspection sessions** (`SessionMode.INSPECTION_SESSION`).
+>   3. **All 8 Map-based Gamemodes**: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper (identified via `MapWorldRules.isLeafDecayDisabled(world)`).
+> - **How it works**:
+>   - `LeavesBlockMixin` intercepts `LeavesBlock.randomTick` at `HEAD` and cancels decay whenever `MapWorldRules.isLeafDecayDisabled(world)` is true.
+>   - Leaves placed during map construction (oak, birch, spruce, jungle, acacia, dark oak, mangrove, cherry, azalea) will **never** decay, despawn, or drop saplings/apples.
+> - **Survival Minigames Untouched**:
+>   - Natural vanilla survival minigames (Speedrun, Manhunt, Block Shuffle, Death Swap, Bounty Hunt, Death Shuffle, Resource Sprint, Horde Survival) retain standard vanilla leaf decay.
+> - **Map Editor World Rules**:
+>   - Map Editor automatically enforces daytime (`time set 6000`), clear weather (`weather clear`), `doDaylightCycle=false`, `doWeatherCycle=false`, `doMobSpawning=false`, `doFireTick=false`, `doVinesSpread=false`, `doInsomnia=false`, `doPatrolSpawning=false`, `doTraderSpawning=false`, `spawn-animals: false`, `spawn-npcs: false`.
+> - **Developer note for the future**:
+>   - If you ever decide to allow leaf decay on a specific map or gamemode in the future, adjust `MapWorldRules.isLeafDecayDisabled(world)` in `dev.frost.miniverse.map.MapWorldRules`.
+
 
 ---
 
@@ -439,6 +460,74 @@ any code. Add the gamemode column to the matrix above.
 **Migration target:** None currently.
 
 ---
+
+### Dropper
+
+**Main class:** `DropperMinigame`
+**Status:** Production-ready · **Compliance:** 78%
+**Last reviewed:** 2026-09-18
+
+**Gamerules:** `keepInventory=true`, `doImmediateRespawn=true`, `fallDamage=false` (handled by fail logic)
+
+**Frameworks actively used:**
+- F01 Session, F02 Match Lifecycle, F03 Freeze (5s countdown freeze)
+- F04 Spectator (`SpectatorPolicies.unrestricted()`, `SpectatorTargetProviders.roster()` with teleport hotbar upon completion)
+- F05 Death Lifecycle (Damage cancellation on lethal fall/void damage, instant snap back without death screen)
+- F06 Persistence / F20 Player Snapshot (Level index, fail counters, completion times)
+- F09 Map Protection (Full block break/place denial)
+- F10 Region Trigger (Goal detection via `PlayerRegionAware` and `level_goal`)
+- F11 Map Editor (`level_config` parent marker with child `level_spawn` and `level_goal`, `lobby_spawn`)
+- F12 Scoreboard (Dynamic sidebar displaying Level progress, Elapsed Time, Fails, and Final Countdown)
+- F19 Countdown Svc (Post-first-finish 60s countdown)
+
+**Key Mechanics & Modules:**
+- **Single-World Multi-Level Architecture**: Multiple dropper maps pasted into a single world, detected automatically via `dropper.json` or `dropper_level` tags.
+- **Client Workspace Inspection**: Interactive map selection that reveals detected levels, with toggles to include/exclude levels from the active pool.
+- **Customizable Level Selection**: Supports `ALL_SEQUENTIAL`, `ALL_SHUFFLED`, or `RANDOM_N` levels per match.
+- **Instant Respawn & Fail Tracking**: Lethal damage is caught and cancelled before death screen triggers; player is reset to the level spawn with sound effects and fail counter incremented.
+- **Configurable Final Countdown**: First player to complete all levels starts a 60s countdown for remaining runners.
+- **Stuck Skip Command**: Players failing >= 20 times (configurable and toggleable in Match Rules) can use `/dropper skip` to skip to the next level.
+- **Spectator Transition with Player Teleport**: Finishing all levels switches player to spectator mode with hotbar teleportation enabled.
+
+**Known issues / debt:**
+- None.
+
+**Migration target:** None currently.
+
+---
+
+### Zombies
+
+**Main class:** `ZombiesMinigame`
+**Status:** Production-ready · **Compliance:** 75%
+**Last reviewed:** 2026-09-18
+
+**Gamerules:** `keepInventory=true`, `doImmediateRespawn=true`, `doMobSpawning=false` (manual spawning via `ZombieEntityManager` completely bypasses this rule)
+
+**Frameworks actively used:**
+- F01 Session, F02 Match Lifecycle, F03 Freeze (`DownedPlayerTracker`), F04 Spectator
+- F05 Death Lifecycle (Downed crawl state, teammate revives, bleedout to spectator)
+- F06 Persistence / F20 Player Snapshot (Rounds, gold balance, active perks, weapons)
+- F08 Team (`TeamManagerProvider` with unified "Survivors" team)
+- F09 Map Protection (`BlockProtectionProvider`, map break denial, **Leaf decay completely disabled**)
+- F11 Map Editor (Extensive marker suite: windows, doors, perks, weapon shops, lucky chests, power switch, team/ultimate machines, zombie spawns)
+- F12 Scoreboard (Dynamic sidebar tracking rounds, remaining zombies, gold, perks, power status)
+- F13 Protected Items (`ProtectedItemService`, gun hotbar management, right-click prevention for perk items)
+
+**Key Mechanics & Modules:**
+- **Wave Engine**: Configurable round-based spawning with scaling zombie counts, boss rounds, and intermission countdowns.
+- **Entity Management**: `ZombieEntityManager` spawns zombies with custom speeds, health, armor, and target-finding, completely independent of vanilla `doMobSpawning`.
+- **Guns & Hotbar**: Left-click / right-click shooting, reloading, ammo tracking, weapon purchases, and Pack-a-Punch / Ultimate weapon upgrades.
+- **Interactive Map Elements**: Window barricades (repairable with gold reward), purchasable barrier doors, power switches, lucky chests, armor shops.
+- **Downed & Revive System**: Crawling pose when downed, revive progress timer with teammates, spectator mode on full bleedout.
+
+**Known issues / debt:**
+- None.
+
+**Migration target:** None currently.
+
+---
+
 
 ## Adding a New Gamemode
 

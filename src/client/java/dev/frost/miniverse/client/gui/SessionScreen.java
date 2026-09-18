@@ -55,6 +55,8 @@ public class SessionScreen extends Screen {
     private static final int SIDEBAR_GROUP_HEIGHT = 20;
     private static final int SIDEBAR_ROW_GAP = 4;
     private static final int SIDEBAR_INSET = 10;
+    private static final int SIDEBAR_SCROLLBAR_WIDTH = 4;
+    private static final int SIDEBAR_SCROLLBAR_INSET = 3;
     private static final int MODULE_RAIL_INSET = 8;
     private static final int MODULE_RAIL_WIDTH = 4;
     private static final int MODULE_RAIL_GAP = 4;
@@ -77,7 +79,8 @@ public class SessionScreen extends Screen {
         Map.entry("duels", SessionScreen::openDuels),
         Map.entry("pillarsoffortune", SessionScreen::openPillarsOfFortune),
         Map.entry("horde_survival", SessionScreen::openHordeSurvival),
-        Map.entry("zombies", SessionScreen::openZombies)
+        Map.entry("zombies", SessionScreen::openZombies),
+        Map.entry("dropper", SessionScreen::openDropper)
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -91,11 +94,17 @@ public class SessionScreen extends Screen {
     private TextFieldWidget searchField;
     private TextFieldWidget sidebarSearchField;
     private WorkspaceView workspaceView;
+
+    public WorkspaceView getWorkspaceView() {
+        return this.workspaceView;
+    }
     private String statusMessage = "";
     private long openedAt;
     private boolean defaultWorkspaceApplied;
     private double sidebarScroll;
     private double sidebarMaxScroll;
+    private boolean draggingSidebarScrollbar;
+    private double sidebarDragClickOffsetY;
     private final List<WorkspaceView> history = new ArrayList<>();
     private int historyIndex = -1;
 
@@ -302,15 +311,22 @@ public class SessionScreen extends Screen {
             sessionServer
         );
         SessionSnapshotData.updateEditor(mapEditor, editorExtensions, editorState);
+        if (root.contains("presets", NbtElement.COMPOUND_TYPE)) {
+            SessionSnapshotData.updatePresets(root.getCompound("presets"));
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.currentScreen instanceof SessionScreen sessionScreen) {
             sessionScreen.rebuildEntries();
             sessionScreen.applyDefaultWorkspace();
-            if (sessionScreen.workspaceView instanceof AdminWorkspaceView) {
+            if (sessionScreen.workspaceView instanceof AdminWorkspaceView
+                || sessionScreen.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView) {
                 sessionScreen.rebuildWorkspaceChildren();
             }
             if (sessionScreen.workspaceView instanceof GamemodeWorkspaceView.RosterRefreshable refreshable) {
                 refreshable.refreshRoster();
+            }
+            if (sessionScreen.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+                agw.onPresetsUpdated();
             }
         }
     }
@@ -501,6 +517,7 @@ public class SessionScreen extends Screen {
         }
         this.syncExpandedSectionsForWorkspace();
         this.rebuildWorkspaceChildren();
+        this.requestSnapshot();
     }
     
     public void goBack() {
@@ -554,12 +571,19 @@ public class SessionScreen extends Screen {
     }
 
     private void syncExpandedSectionsForWorkspace() {
+        this.expandedSections.add(SidebarSection.GAMEMODES);
         this.expandedSections.add(this.resolveSectionForWorkspace());
     }
 
     private void resetExpandedSectionsForWorkspace() {
-        this.expandedSections.clear();
+        this.expandedSections.add(SidebarSection.GAMEMODES);
         this.expandedSections.add(this.resolveSectionForWorkspace());
+        for (SidebarSection section : SidebarSection.values()) {
+            UiAnimation.Value anim = this.sidebarAnimations.get(section);
+            if (anim != null && this.expandedSections.contains(section)) {
+                anim.set(1.0F);
+            }
+        }
     }
 
     private SidebarSection resolveSectionForWorkspace() {
@@ -582,7 +606,7 @@ public class SessionScreen extends Screen {
         return SidebarSection.GAMEMODES;
     }
 
-    private void rebuildWorkspaceChildren() {
+    public void rebuildWorkspaceChildren() {
         this.clearChildren();
         Layout layout = this.createLayout();
         if (this.workspaceView == null) {
@@ -679,16 +703,87 @@ public class SessionScreen extends Screen {
             y = this.drawSidebarSection(context, sidebar, section, y, mouseX, mouseY);
         }
         context.disableScissor();
+
+        if (this.sidebarMaxScroll > 0.0) {
+            this.drawSidebarScrollbar(context, sidebar, search, mouseX, mouseY);
+        }
+    }
+
+    private int sidebarTrackTop(UiLayout.Rect sidebar, UiLayout.Rect search) {
+        return this.sidebarContentStart(sidebar, search);
+    }
+
+    private int sidebarTrackBottom(UiLayout.Rect sidebar) {
+        return sidebar.y() + sidebar.height() - 6;
+    }
+
+    private int sidebarTrackHeight(UiLayout.Rect sidebar, UiLayout.Rect search) {
+        return Math.max(1, this.sidebarTrackBottom(sidebar) - this.sidebarTrackTop(sidebar, search));
+    }
+
+    private int sidebarThumbHeight(UiLayout.Rect sidebar, UiLayout.Rect search) {
+        int trackHeight = this.sidebarTrackHeight(sidebar, search);
+        int contentHeight = this.sidebarContentHeight();
+        int viewportHeight = sidebar.y() + sidebar.height() - this.sidebarContentStart(sidebar, search) - 6;
+        if (contentHeight <= 0) return trackHeight;
+        double ratio = (double) viewportHeight / (double) contentHeight;
+        return Math.max(22, Math.min(trackHeight, (int) Math.round(trackHeight * ratio)));
+    }
+
+    private int sidebarThumbY(UiLayout.Rect sidebar, UiLayout.Rect search) {
+        int trackTop = this.sidebarTrackTop(sidebar, search);
+        int trackHeight = this.sidebarTrackHeight(sidebar, search);
+        int thumbH = this.sidebarThumbHeight(sidebar, search);
+        int scrollable = trackHeight - thumbH;
+        if (scrollable <= 0 || this.sidebarMaxScroll <= 0.0) {
+            return trackTop;
+        }
+        double fraction = this.sidebarScroll / this.sidebarMaxScroll;
+        return trackTop + (int) Math.round(scrollable * fraction);
+    }
+
+    private void drawSidebarScrollbar(DrawContext context, UiLayout.Rect sidebar, UiLayout.Rect search, int mouseX, int mouseY) {
+        int barX = sidebar.x() + SIDEBAR_SCROLLBAR_INSET;
+        int barW = SIDEBAR_SCROLLBAR_WIDTH;
+        int trackTop = this.sidebarTrackTop(sidebar, search);
+        int trackHeight = this.sidebarTrackHeight(sidebar, search);
+        int thumbH = this.sidebarThumbHeight(sidebar, search);
+        int thumbY = this.sidebarThumbY(sidebar, search);
+
+        // Subtle dark track channel in sidebar gutter
+        context.fill(barX, trackTop, barX + barW, trackTop + trackHeight, 0x33000000);
+
+        boolean isHovered = mouseX >= sidebar.x() && mouseX < sidebar.x() + SIDEBAR_INSET && mouseY >= trackTop && mouseY <= trackTop + trackHeight;
+        boolean isThumbHovered = mouseX >= sidebar.x() && mouseX < sidebar.x() + SIDEBAR_INSET && mouseY >= thumbY && mouseY <= thumbY + thumbH;
+
+        int thumbColor;
+        int drawX = barX;
+        int drawW = barW;
+        if (this.draggingSidebarScrollbar) {
+            thumbColor = UiTheme.ACCENT;
+            drawX = barX - 1;
+            drawW = barW + 2;
+        } else if (isThumbHovered) {
+            thumbColor = 0xDDFFC857; // Bright golden accent on hover
+            drawX = barX - 1;
+            drawW = barW + 2;
+        } else if (isHovered) {
+            thumbColor = 0xBBFFC857; // Soft golden accent on track hover
+        } else {
+            thumbColor = 0x758DA4B7; // Refined theme border slate
+        }
+
+        context.fill(drawX, thumbY, drawX + drawW, thumbY + thumbH, thumbColor);
     }
 
     private int sidebarContentHeight() {
         int height = 0;
         for (SidebarSection section : SidebarSection.values()) {
             height += SIDEBAR_SECTION_HEIGHT;
+            UiAnimation.Value anim = this.sidebarAnimations.get(section);
+            float progress = anim != null ? anim.get() : (this.expandedSections.contains(section) ? 1.0F : 0.0F);
             int sectionRows = this.rowsFor(section).stream().mapToInt(this::rowHeight).sum();
-            if (this.expandedSections.contains(section)) {
-                height += sectionRows;
-            }
+            height += Math.round(sectionRows * progress);
             height += SIDEBAR_ROW_GAP;
         }
         return height;
@@ -851,6 +946,31 @@ public class SessionScreen extends Screen {
             return true;
         }
         Layout layout = this.createLayout();
+        if (button == 0 && this.sidebarMaxScroll > 0.0) {
+            UiLayout.Rect sidebar = layout.sidebar();
+            UiLayout.Rect search = layout.sidebarSearch();
+            int trackTop = this.sidebarTrackTop(sidebar, search);
+            int trackBottom = this.sidebarTrackBottom(sidebar);
+            if (mouseX >= sidebar.x() && mouseX < sidebar.x() + SIDEBAR_INSET && mouseY >= trackTop && mouseY <= trackBottom) {
+                int thumbY = this.sidebarThumbY(sidebar, search);
+                int thumbH = this.sidebarThumbHeight(sidebar, search);
+                if (mouseY >= thumbY && mouseY <= thumbY + thumbH) {
+                    this.draggingSidebarScrollbar = true;
+                    this.sidebarDragClickOffsetY = mouseY - thumbY;
+                } else {
+                    int trackHeight = this.sidebarTrackHeight(sidebar, search);
+                    int scrollable = trackHeight - thumbH;
+                    if (scrollable > 0) {
+                        double targetThumbY = mouseY - (thumbH / 2.0);
+                        double fraction = (targetThumbY - trackTop) / (double) scrollable;
+                        this.sidebarScroll = Math.max(0.0, Math.min(fraction * this.sidebarMaxScroll, this.sidebarMaxScroll));
+                    }
+                    this.draggingSidebarScrollbar = true;
+                    this.sidebarDragClickOffsetY = thumbH / 2.0;
+                }
+                return true;
+            }
+        }
         if (button == 0 && this.handleWorkspaceNavigationClick(layout.sidebar(), layout.sidebarSearch(), mouseX, mouseY)) {
             return true;
         }
@@ -941,7 +1061,7 @@ public class SessionScreen extends Screen {
         if (mouseX >= sidebar.x() && mouseX <= sidebar.x() + sidebar.width()
             && mouseY >= contentStart && mouseY <= sidebar.y() + sidebar.height()
             && this.sidebarMaxScroll > 0.0) {
-            this.sidebarScroll = Math.max(0.0, Math.min(this.sidebarScroll - verticalAmount * 12.0, this.sidebarMaxScroll));
+            this.sidebarScroll = Math.max(0.0, Math.min(this.sidebarScroll - verticalAmount * 18.0, this.sidebarMaxScroll));
             return true;
         }
         if (this.workspaceView != null && this.workspaceView.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) {
@@ -952,6 +1072,21 @@ public class SessionScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == 0 && this.draggingSidebarScrollbar && this.sidebarMaxScroll > 0.0) {
+            Layout layout = this.createLayout();
+            UiLayout.Rect sidebar = layout.sidebar();
+            UiLayout.Rect search = layout.sidebarSearch();
+            int trackTop = this.sidebarTrackTop(sidebar, search);
+            int trackHeight = this.sidebarTrackHeight(sidebar, search);
+            int thumbH = this.sidebarThumbHeight(sidebar, search);
+            int scrollable = trackHeight - thumbH;
+            if (scrollable > 0) {
+                double targetThumbY = mouseY - this.sidebarDragClickOffsetY;
+                double fraction = (targetThumbY - trackTop) / (double) scrollable;
+                this.sidebarScroll = Math.max(0.0, Math.min(fraction * this.sidebarMaxScroll, this.sidebarMaxScroll));
+            }
+            return true;
+        }
         if (this.workspaceView != null && this.workspaceView.mouseDragged(mouseX, mouseY, button, deltaX, deltaY)) {
             return true;
         }
@@ -960,10 +1095,30 @@ public class SessionScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && this.draggingSidebarScrollbar) {
+            this.draggingSidebarScrollbar = false;
+            return true;
+        }
         if (this.workspaceView != null && this.workspaceView.mouseReleased(mouseX, mouseY, button)) {
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.workspaceView != null && this.workspaceView.keyPressed(keyCode, scanCode, modifiers)) {
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char chr, int modifiers) {
+        if (this.workspaceView != null && this.workspaceView.charTyped(chr, modifiers)) {
+            return true;
+        }
+        return super.charTyped(chr, modifiers);
     }
 
     private List<MinigameEntry> createMinigameEntries() {
@@ -1476,6 +1631,10 @@ public class SessionScreen extends Screen {
 
     private void openZombies() {
         this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.ZombiesWorkspaceView());
+    }
+
+    private void openDropper() {
+        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.DropperWorkspaceView());
     }
 
     public void openGenericSetup(MinigameEntry entry) {

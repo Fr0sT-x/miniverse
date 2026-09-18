@@ -299,6 +299,9 @@ public class ZombiesMinigame extends AbstractMinigame implements
 
         // Initialize Managers
         this.mobManager = new ZombieEntityManager(world, this.settings.difficulty());
+        if (this.settings.difficultyConfig() != null) {
+            this.mobManager.setDifficultyConfig(this.settings.difficultyConfig());
+        }
         this.mobManager.setWindows(this.mapConfig.windows());
         this.reviveManager = new ZombiesReviveManager(world, (p, g) -> {
             this.addGold(p, g);
@@ -314,6 +317,9 @@ public class ZombiesMinigame extends AbstractMinigame implements
             this.dropManager::isDoubleGoldActive,
             this::hasPerk
         );
+        if (this.settings.weaponConfig() != null) {
+            this.gunManager.setWeaponConfig(this.settings.weaponConfig());
+        }
         this.gunManager.setKillTracker(this::recordKill);
 
         // Ultimate Machine & Holograms
@@ -343,6 +349,9 @@ public class ZombiesMinigame extends AbstractMinigame implements
 
         this.reviveManager.setOnReviveOrRespawnCallback(this::clearPlayerPerks);
         this.luckyChestManager = new ZombiesLuckyChestManager(world, this.mapConfig.luckyChests(), this::spendGold, this::broadcast, this.hologramManager, this::hasPerk);
+        if (this.settings.weaponConfig() != null) {
+            this.luckyChestManager.setWeaponConfig(this.settings.weaponConfig());
+        }
         this.luckyChestManager.initHologram();
         this.teamMachineManager = new ZombiesTeamMachineManager(world, this.mobManager, this.reviveManager, this::getParticipants, this::spendGold, this::broadcast);
 
@@ -397,7 +406,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
             p.teleport(world, spawnPos.x(), spawnPos.y(), spawnPos.z(), spawnPos.yaw(), spawnPos.pitch());
 
             // Starter hotbar: Knife, Pistol, Placeholders
-            ZombiesHotbarManager.setupInitialHotbar(p);
+            ZombiesHotbarManager.setupInitialHotbar(p, this.settings.weaponConfig());
 
             // Survivor clothes
             ItemStack chest = new ItemStack(Items.LEATHER_CHESTPLATE);
@@ -450,7 +459,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
                     for (ZombiesWindow window : this.mapConfig.windows()) {
                         if (window.isNearWindow(p.getX(), p.getY(), p.getZ(), 6.25) && !window.isFullyRepaired(world)) {
                             if (window.isUnderAttack()) {
-                                p.sendMessage(Text.literal("Cannot repair while barricade is under attack!").formatted(Formatting.RED), true);
+                                p.sendMessage(Text.literal("Cannot repair - barricade is under attack!").formatted(Formatting.RED), true);
                                 continue;
                             }
                             if (window.repairOneSlab(world)) {
@@ -537,11 +546,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
                     if (window.isNearWindow(p.getX(), p.getY(), p.getZ(), 6.25) && !window.isFullyRepaired(world)) {
                         if (window.isUnderAttack()) {
                             targetPrompt = ActionBarPrompt.WINDOW_UNDER_ATTACK;
-                            if (p.isSneaking()) {
-                                promptMessage = Text.literal("Repairing cancelled due to zombies!").formatted(Formatting.RED, Formatting.BOLD);
-                            } else {
-                                promptMessage = Text.literal("Cannot repair - barricade is under attack!").formatted(Formatting.RED);
-                            }
+                            promptMessage = Text.literal("Cannot repair - barricade is under attack!").formatted(Formatting.RED);
                         } else if (p.isSneaking()) {
                             targetPrompt = ActionBarPrompt.WINDOW_REPAIRING;
                             promptMessage = Text.literal("Repairing window...").formatted(Formatting.YELLOW);
@@ -635,6 +640,13 @@ public class ZombiesMinigame extends AbstractMinigame implements
         if (this.reviveManager.isDowned(player.getUuid())) return ActionResult.FAIL;
 
         ItemStack held = player.getMainHandStack();
+        int selectedSlot = player.getInventory().selectedSlot;
+        if (ZombiesHotbarManager.isPerkSlot(selectedSlot)
+            || ZombiesHotbarManager.isPerkItem(held)
+            || ZombiesHotbarManager.isPlaceholder(held)) {
+            return ActionResult.FAIL;
+        }
+
         if (!held.isEmpty() && held.isOf(Items.TNT)) {
             Text name = held.get(DataComponentTypes.CUSTOM_NAME);
             if (name != null && name.getString().contains("Nuke")) {
@@ -687,7 +699,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
 
         // 4. Ultimate Machine
         if (this.ultimateMachine != null) {
-            if (this.ultimateMachine.handleInteract(player, pos, this.powerActive, this::spendGold, this::broadcast)) {
+            if (this.ultimateMachine.handleInteract(player, pos, this.powerActive, this::spendGold, this::broadcast, this.settings.weaponConfig())) {
                 return ActionResult.SUCCESS;
             }
         }
@@ -734,7 +746,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
             }
         }
 
-        int selectedSlot = player.getInventory().selectedSlot;
+        selectedSlot = player.getInventory().selectedSlot;
         boolean isPerkOrPlaceholder = ZombiesHotbarManager.isPerkSlot(selectedSlot)
             || ZombiesHotbarManager.isPerkItem(stack)
             || ZombiesHotbarManager.isPlaceholder(stack);
@@ -804,7 +816,7 @@ public class ZombiesMinigame extends AbstractMinigame implements
         world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.BLOCKS, 1.2f, 1.0f);
 
         Text powerTitle = Text.literal(player.getName().getString() + " activated Power!").formatted(Formatting.GOLD, Formatting.BOLD);
-        Text powerSubtitle = Text.literal("Perk machines and traps are online!").formatted(Formatting.YELLOW);
+        Text powerSubtitle = Text.literal("Perk machines are online!").formatted(Formatting.YELLOW);
         dev.frost.miniverse.minigame.core.GameMessenger.showGameTitle(getParticipants(), powerTitle, powerSubtitle);
 
         for (ServerPlayerEntity p : getParticipants()) {
@@ -861,13 +873,13 @@ public class ZombiesMinigame extends AbstractMinigame implements
                 player.sendMessage(Text.literal("Not enough gold to purchase " + targetType.getData().displayName() + "! (" + cost + "g required)").formatted(Formatting.RED), true);
                 return;
             }
-            ItemStack newWeapon = WeaponItemHelper.createWeaponStack(targetType);
+            ItemStack newWeapon = WeaponItemHelper.createWeaponStack(targetType, this.settings.weaponConfig());
             player.getInventory().setStack(targetSlot, newWeapon);
             player.playerScreenHandler.sendContentUpdates();
             player.playSound(SoundEvents.ENTITY_ITEM_PICKUP, 1.0f, 1.0f);
 
             // Spec sheet in chat
-            WeaponItemHelper.sendWeaponSpecSheet(player, targetType, "You purchased " + targetType.getData().displayName() + "!");
+            WeaponItemHelper.sendWeaponSpecSheet(player, targetType, "You purchased " + targetType.getData().displayName() + "!", this.settings.weaponConfig());
         }
     }
 

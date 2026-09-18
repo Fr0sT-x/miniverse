@@ -31,6 +31,9 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     private final boolean isGeneral;
     
     private String editingMarkerId = "";
+    private String editingGameId = "";
+    private String editingMarkerKey = "";
+    private UiLayout.Rect activeSaveButtonRect = null;
     private TextFieldWidget renameField;
     private int pendingRefreshTicks = -1;
     private final Set<String> localDeletedMarkerIds = new HashSet<>();
@@ -278,8 +281,10 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         
         // Remove old map id draw text here as breadcrumbs are above now
         
-        if (this.renameField != null && this.renameField.getText().isBlank()) {
-            context.drawText(textRenderer, Text.literal("New marker name"), this.renameField.getX() + 6, this.renameField.getY() + 6, UiTheme.TEXT_DIM, false);
+        if (!this.editingMarkerId.isEmpty() && this.renameField != null && this.renameField.getX() > -500 && this.renameField.getText().isBlank()) {
+            context.drawText(textRenderer, Text.literal("New marker name"), this.renameField.getX() + 6, this.renameField.getY() + 5, UiTheme.TEXT_DIM, false);
+        } else if (this.editingMarkerId.isEmpty() && this.renameField != null && this.renameField.getX() > -500) {
+            this.renameField.setX(-1000);
         }
 
         context.enableScissor(this.listArea.x(), this.listArea.y(), this.listArea.x() + this.listArea.width(), this.listArea.y() + this.listArea.height());
@@ -315,8 +320,106 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         return false;
     }
 
+    private void startRename(String gameId, String markerKey, String markerId, String currentName) {
+        this.editingGameId = gameId;
+        this.editingMarkerKey = markerKey;
+        this.editingMarkerId = markerId;
+        if (this.renameField != null) {
+            this.renameField.setText(currentName);
+            this.renameField.setSelectionStart(0);
+            this.renameField.setSelectionEnd(currentName.length());
+            this.renameField.setFocused(true);
+            if (this.screen != null) {
+                this.screen.setFocused(this.renameField);
+            }
+        }
+        this.status = "Editing name for marker '" + currentName + "'. Press Enter to save, or click away to cancel.";
+    }
+
+    private void confirmRename() {
+        if (this.editingMarkerId.isEmpty()) {
+            return;
+        }
+        String newName = this.renameField != null ? this.renameField.getText().trim() : "";
+        if (newName.isBlank()) {
+            this.status = "Enter a new marker name first.";
+            return;
+        }
+        this.sendMarkerAction("rename", this.editingGameId, this.editingMarkerKey, this.editingMarkerId, newName);
+        this.status = "Renamed marker to '" + newName + "'.";
+        this.editingMarkerId = "";
+        this.editingGameId = "";
+        this.editingMarkerKey = "";
+        this.activeSaveButtonRect = null;
+        if (this.renameField != null) {
+            this.renameField.setX(-1000);
+            this.renameField.setFocused(false);
+        }
+        if (this.screen != null) {
+            this.screen.setFocused(null);
+        }
+        this.pendingRefreshTicks = 3;
+    }
+
+    private void cancelRename() {
+        if (this.editingMarkerId.isEmpty()) {
+            return;
+        }
+        this.editingMarkerId = "";
+        this.editingGameId = "";
+        this.editingMarkerKey = "";
+        this.activeSaveButtonRect = null;
+        if (this.renameField != null) {
+            this.renameField.setX(-1000);
+            this.renameField.setFocused(false);
+        }
+        if (this.screen != null) {
+            this.screen.setFocused(null);
+        }
+        this.status = "Marker renaming cancelled.";
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (!this.editingMarkerId.isEmpty() && this.renameField != null) {
+            if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER || keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+                this.confirmRename();
+                return true;
+            }
+            if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+                this.cancelRename();
+                return true;
+            }
+            return this.renameField.keyPressed(keyCode, scanCode, modifiers);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean charTyped(char chr, int modifiers) {
+        if (!this.editingMarkerId.isEmpty() && this.renameField != null) {
+            return this.renameField.charTyped(chr, modifiers);
+        }
+        return false;
+    }
+
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!this.editingMarkerId.isEmpty()) {
+            if (this.renameField != null && this.renameField.getX() > -500) {
+                UiLayout.Rect fieldRect = new UiLayout.Rect(this.renameField.getX(), this.renameField.getY(), this.renameField.getWidth(), this.renameField.getHeight());
+                if (fieldRect.contains((int) mouseX, (int) mouseY)) {
+                    return this.renameField.mouseClicked(mouseX, mouseY, button);
+                }
+            }
+            if (this.activeSaveButtonRect != null && this.activeSaveButtonRect.contains((int) mouseX, (int) mouseY)) {
+                this.confirmRename();
+                return true;
+            }
+            this.cancelRename();
+            return true;
+        }
+
         int adjustedMouseY = (int) mouseY;
         if (this.listArea.contains((int) mouseX, (int) mouseY)) {
             adjustedMouseY += (int) this.scrollY;
@@ -474,17 +577,9 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                             }
                             if (rename.contains(mouseX, adjustedMouseY)) {
                                 if (this.editingMarkerId.equals(placed.id())) {
-                                    if (this.renameField.getText().trim().isBlank()) {
-                                        this.status = "Enter a new marker name first.";
-                                        return true;
-                                    }
-                                    this.sendMarkerAction("rename", selected.extension.gameId(), marker.key(), placed.id(), this.renameField.getText().trim());
-                                    this.editingMarkerId = "";
-                                    this.renameField.setX(-1000);
-                                    this.pendingRefreshTicks = 5;
+                                    this.confirmRename();
                                 } else {
-                                    this.editingMarkerId = placed.id();
-                                    this.renameField.setText(placed.name());
+                                    this.startRename(selected.extension.gameId(), marker.key(), placed.id(), placed.name());
                                 }
                                 return true;
                             }
@@ -495,8 +590,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                             if (delete.contains(mouseX, adjustedMouseY)) {
                                 this.sendMarkerAction("delete", selected.extension.gameId(), marker.key(), placed.id());
                                 if (this.editingMarkerId.equals(placed.id())) {
-                                    this.editingMarkerId = "";
-                                    this.renameField.setX(-1000);
+                                    this.cancelRename();
                                 }
                                 this.localDeletedMarkerIds.add(placed.id());
                                 this.pendingRefreshTicks = 2;
@@ -569,17 +663,9 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             }
             if (rename.contains(mouseX, adjustedMouseY)) {
                 if (this.editingMarkerId.equals(marker.id())) {
-                    if (this.renameField.getText().trim().isBlank()) {
-                        this.status = "Enter a new marker name first.";
-                        return true;
-                    }
-                    this.sendMarkerAction("rename", selected.extension.gameId(), selected.definition.key(), marker.id(), this.renameField.getText().trim());
-                    this.editingMarkerId = "";
-                    this.renameField.setX(-1000);
-                    this.pendingRefreshTicks = 5;
+                    this.confirmRename();
                 } else {
-                    this.editingMarkerId = marker.id();
-                    this.renameField.setText(marker.name());
+                    this.startRename(selected.extension.gameId(), selected.definition.key(), marker.id(), marker.name());
                 }
                 return true;
             }
@@ -590,8 +676,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             if (delete.contains(mouseX, adjustedMouseY)) {
                 this.sendMarkerAction("delete", selected.extension.gameId(), selected.definition.key(), marker.id());
                 if (this.editingMarkerId.equals(marker.id())) {
-                    this.editingMarkerId = "";
-                    this.renameField.setX(-1000);
+                    this.cancelRename();
                 }
                 this.localDeletedMarkerIds.add(marker.id());
                 this.pendingRefreshTicks = 2;
@@ -793,7 +878,15 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             UiLayout.Rect row = new UiLayout.Rect(indentX, rowY, innerWidth, rowHeight);
             UiRenderer.panel(context, row.x(), row.y(), row.width(), row.height(), UiTheme.CARD, UiTheme.BORDER_SUBTLE);
             
-            context.drawText(textRenderer, Text.literal(index + ". " + marker.name()), row.x() + 10, row.y() + 8, UiTheme.TEXT, false);
+            String prefix = index + ". ";
+            int prefixW = textRenderer.getWidth(prefix);
+            boolean isEditingThis = this.editingMarkerId.equals(marker.id());
+
+            if (isEditingThis) {
+                context.drawText(textRenderer, Text.literal(prefix), row.x() + 10, row.y() + 8, UiTheme.ACCENT, false);
+            } else {
+                context.drawText(textRenderer, Text.literal(prefix + marker.name()), row.x() + 10, row.y() + 8, UiTheme.TEXT, false);
+            }
             context.drawText(textRenderer, Text.literal(locationText(marker)), row.x() + 10, row.y() + 22, UiTheme.TEXT_DIM, false);
             
             boolean isVisible = this.state.isMarkerVisible(extension.gameId(), definition.key(), marker.id());
@@ -805,13 +898,30 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             }
             
             renderSmallButton(context, textRenderer, row.x() + row.width() - 302, row.y() + 10, 68, toggleLabel);
-            renderSmallButton(context, textRenderer, row.x() + row.width() - 226, row.y() + 10, 68, "Rename");
+            renderSmallButton(context, textRenderer, row.x() + row.width() - 226, row.y() + 10, 68, isEditingThis ? "Save" : "Rename");
             renderSmallButton(context, textRenderer, row.x() + row.width() - 150, row.y() + 10, 68, "Teleport");
             renderSmallButton(context, textRenderer, row.x() + row.width() - 74, row.y() + 10, 60, "Delete");
             
-            if (this.editingMarkerId.equals(marker.id())) {
-                this.renameField.setX(row.x() + row.width() - 226);
-                this.renameField.setY(row.y() + 10);
+            if (isEditingThis) {
+                this.activeSaveButtonRect = new UiLayout.Rect(row.x() + row.width() - 226, row.y() + 10, 68, 20);
+                int fieldX = row.x() + 10 + prefixW;
+                int fieldY = row.y() + 4;
+                int rightLimit = row.x() + row.width() - (isParent && this.drillDownParentId == null ? 398 : 308);
+                int fieldW = Math.max(120, Math.min(240, rightLimit - fieldX - 8));
+                if (fieldY >= this.listArea.y() - 10 && fieldY + 18 <= this.listArea.y() + this.listArea.height() + 10) {
+                    this.renameField.setX(fieldX);
+                    this.renameField.setY(fieldY);
+                    this.renameField.setWidth(fieldW);
+                    this.renameField.setHeight(18);
+                    this.renameField.setVisible(true);
+                    this.renameField.setFocused(true);
+                    if (this.screen != null && this.screen.getFocused() != this.renameField) {
+                        this.screen.setFocused(this.renameField);
+                    }
+                } else {
+                    this.renameField.setX(-1000);
+                    this.renameField.setVisible(false);
+                }
             }
             MapEditorCustomRenderer customRenderer = MapEditorCustomRendererRegistry.get(definition.key());
             if (customRenderer != null) {
@@ -830,7 +940,11 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                     // Update the panel height to encompass the new content
                     UiRenderer.panel(context, row.x(), row.y(), row.width(), rowHeight, UiTheme.CARD, UiTheme.BORDER_SUBTLE);
                     // Re-draw text since we just overwrote it with the panel
-                    context.drawText(textRenderer, Text.literal(index + ". " + marker.name()), row.x() + 10, row.y() + 8, UiTheme.TEXT, false);
+                    if (isEditingThis) {
+                        context.drawText(textRenderer, Text.literal(prefix), row.x() + 10, row.y() + 8, UiTheme.ACCENT, false);
+                    } else {
+                        context.drawText(textRenderer, Text.literal(prefix + marker.name()), row.x() + 10, row.y() + 8, UiTheme.TEXT, false);
+                    }
                     context.drawText(textRenderer, Text.literal(locationText(marker)), row.x() + 10, row.y() + 22, UiTheme.TEXT_DIM, false);
                 }
             }

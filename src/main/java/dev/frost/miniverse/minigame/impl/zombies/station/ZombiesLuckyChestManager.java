@@ -59,6 +59,7 @@ public class ZombiesLuckyChestManager {
     private final Random random = new Random();
 
     private final Map<String, ActiveChestSession> activeSessions = new HashMap<>();
+    private dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig weaponConfig = dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig.defaults();
 
     public ZombiesLuckyChestManager(
         ServerWorld world,
@@ -74,6 +75,12 @@ public class ZombiesLuckyChestManager {
         this.broadcastCallback = broadcastCallback;
         this.hologramManager = hologramManager;
         this.perkChecker = perkChecker;
+    }
+
+    public void setWeaponConfig(dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig weaponConfig) {
+        if (weaponConfig != null) {
+            this.weaponConfig = weaponConfig;
+        }
     }
 
     public void initHologram() {
@@ -97,7 +104,6 @@ public class ZombiesLuckyChestManager {
 
     public boolean handleInteract(ServerPlayerEntity player, BlockPos clickedPos) {
         ZombiesLuckyChest targetChest = null;
-
         // 1. Direct match with chest block or adjacent half of double chest
         for (ZombiesLuckyChest lc : this.chestLocations) {
             if (clickedPos.equals(lc.getPos())) {
@@ -171,7 +177,7 @@ public class ZombiesLuckyChestManager {
 
         List<WeaponType> chestWeapons = new ArrayList<>();
         for (WeaponType wt : WeaponType.values()) {
-            if (wt.getData().inLuckyChest() || !wt.getData().isMelee()) {
+            if (this.weaponConfig.isAllowedInLuckyChest(wt)) {
                 chestWeapons.add(wt);
             }
         }

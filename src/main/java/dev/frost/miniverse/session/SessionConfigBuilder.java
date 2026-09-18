@@ -56,6 +56,7 @@ public class SessionConfigBuilder {
             }
         }
 
+
         SessionConfigJson.write(
                 workingDirectory.resolve("miniverse-session.json"),
                 SessionConfigJson.runtimeSession(session, group, groupsForConfig, settingsProperties, properties.getProperty("return.host"), launcher.parsePort(properties.getProperty("return.port"), 25565), MiniversePaths.sessionsRoot(), launchMode)
@@ -143,6 +144,8 @@ public class SessionConfigBuilder {
             .withMotd("Miniverse map editor for " + mapId)
             .override("pvp", "false")
             .override("spawn-monsters", "false")
+            .override("spawn-animals", "false")
+            .override("spawn-npcs", "false")
             .writeTo(workingDirectory.resolve("server.properties"));
     }
 

@@ -15,6 +15,7 @@
 		"protection.FireBlockMixin",
 		"protection.FlowableFluidMixin",
 		"protection.FallingBlockMixin",
+		"protection.LeavesBlockMixin",
 		"WorldArenaTrackerMixin",
 		"GlowingFilterMixin",
 		"bedwars.BridgeEggEntityMixin",

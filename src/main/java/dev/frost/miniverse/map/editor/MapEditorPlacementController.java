@@ -5,9 +5,13 @@ import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.LoreComponent;
+import net.minecraft.item.ItemConvertible;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
@@ -18,8 +22,11 @@ import net.minecraft.util.math.BlockPos;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public final class MapEditorPlacementController {
@@ -54,7 +61,7 @@ public final class MapEditorPlacementController {
                 return ActionResult.PASS;
             }
             if (hand == Hand.MAIN_HAND) {
-                if (session.handleRightClick(serverPlayer)) {
+                if (session.handleRightClick(serverPlayer, hitResult.getBlockPos())) {
                     return ActionResult.FAIL;
                 }
             }
@@ -70,7 +77,7 @@ public final class MapEditorPlacementController {
                 return TypedActionResult.pass(player.getStackInHand(hand));
             }
             if (hand == Hand.MAIN_HAND) {
-                if (session.handleRightClick(serverPlayer)) {
+                if (session.handleRightClick(serverPlayer, null)) {
                     return TypedActionResult.fail(player.getStackInHand(hand));
                 }
             }
@@ -95,14 +102,16 @@ public final class MapEditorPlacementController {
 
         if (definition.type() == MarkerType.REGION) {
             session.setupBuilderInventory(player);
-            player.sendMessage(Text.literal("Entered Region Builder Mode.").formatted(Formatting.GREEN), false);
+            player.sendMessage(Text.literal("§6§l[REGION BUILDER] §aEntered Region Builder Mode.").formatted(Formatting.GREEN), false);
+            player.sendMessage(Text.literal("§eLeft-Click: §fPos 1 §7| §eRight-Click: §fPos 2 §7| §eShift+Left: §f+Block §7| §a[Lime Dye]: §fConfirm").formatted(Formatting.YELLOW), true);
         } else {
             session.setupPointInventory(player);
             if (definition.type() == MarkerType.MULTI_POINT) {
-                player.sendMessage(Text.literal("Multi-point placement: left click to add points. Right click with the Barrier to finish.").formatted(Formatting.YELLOW), false);
+                player.sendMessage(Text.literal("§e§l[POINT PLACER] §7Left-click blocks to add route points. Right-click [Lime Dye] to save, [Barrier] to cancel.").formatted(Formatting.YELLOW), false);
             } else {
-                player.sendMessage(Text.literal("Point placement: left click blocks to place markers. Right click with the Barrier to finish.").formatted(Formatting.YELLOW), false);
+                player.sendMessage(Text.literal("§e§l[POINT PLACER] §7Left-click a block to position " + definition.displayName() + ". Right-click [Lime Dye] to save, [Barrier] to cancel.").formatted(Formatting.YELLOW), false);
             }
+            player.sendMessage(Text.literal("§6[Placing: " + definition.displayName() + "] §eLeft-Click: §fPosition | §a[Lime Dye]: §fSave | §c[Barrier]: §fCancel").formatted(Formatting.GOLD), true);
         }
     }
 
@@ -112,13 +121,20 @@ public final class MapEditorPlacementController {
         private final MarkerDefinition definition;
         private final String name;
         private final com.google.gson.JsonObject properties;
-        
+
+        // Debounce
+        private long lastLeftClickTime = 0;
+        private long lastRightClickTime = 0;
+
         // Point/Multi-Point
         private final List<MapPosition> selectedPoints = new ArrayList<>();
-        
+        private final List<List<MapPosition>> pointUndoHistory = new ArrayList<>();
+        private final List<List<MapPosition>> pointRedoHistory = new ArrayList<>();
+
         // Region Builder
         private final List<RegionPart> regionParts = new ArrayList<>();
-        private final List<RegionPart> undoneParts = new ArrayList<>();
+        private final List<List<RegionPart>> undoHistory = new ArrayList<>();
+        private final List<List<RegionPart>> redoHistory = new ArrayList<>();
         private MapPosition regionCorner1 = null;
         private final net.minecraft.util.collection.DefaultedList<ItemStack> savedInventory = net.minecraft.util.collection.DefaultedList.ofSize(36, ItemStack.EMPTY);
 
@@ -130,27 +146,78 @@ public final class MapEditorPlacementController {
             this.properties = properties;
         }
 
+        private static ItemStack createTool(ItemConvertible item, Text name, List<Text> lore) {
+            ItemStack stack = new ItemStack(item);
+            stack.set(DataComponentTypes.CUSTOM_NAME, name);
+            if (lore != null && !lore.isEmpty()) {
+                stack.set(DataComponentTypes.LORE, new LoreComponent(lore));
+            }
+            return stack;
+        }
+
         public void setupBuilderInventory(ServerPlayerEntity player) {
             for (int i = 0; i < 36; i++) {
                 this.savedInventory.set(i, player.getInventory().getStack(i).copy());
                 player.getInventory().setStack(i, ItemStack.EMPTY);
             }
-            
-            ItemStack wand = new ItemStack(Items.BLAZE_ROD);
-            wand.set(DataComponentTypes.CUSTOM_NAME, Text.literal("Region Wand (Left Click / Shift+Left Click)").formatted(Formatting.GOLD));
-            player.getInventory().setStack(0, wand);
-            
-            ItemStack undo = new ItemStack(Items.RED_DYE);
-            undo.set(DataComponentTypes.CUSTOM_NAME, Text.literal("Undo").formatted(Formatting.RED));
-            player.getInventory().setStack(6, undo);
-            
-            ItemStack redo = new ItemStack(Items.GREEN_DYE);
-            redo.set(DataComponentTypes.CUSTOM_NAME, Text.literal("Redo").formatted(Formatting.GREEN));
-            player.getInventory().setStack(7, redo);
-            
-            ItemStack confirm = new ItemStack(Items.LIME_DYE);
-            confirm.set(DataComponentTypes.CUSTOM_NAME, Text.literal("Confirm").formatted(Formatting.GREEN, Formatting.BOLD));
-            player.getInventory().setStack(8, confirm);
+
+            // Slot 0: Region Wand
+            player.getInventory().setStack(0, createTool(
+                Items.BLAZE_ROD,
+                Text.literal("Region Wand").formatted(Formatting.GOLD, Formatting.BOLD),
+                List.of(
+                    Text.literal("Left-Click: ").formatted(Formatting.YELLOW).append(Text.literal("Set Corner 1").formatted(Formatting.WHITE)),
+                    Text.literal("Right-Click: ").formatted(Formatting.YELLOW).append(Text.literal("Set Corner 2 (creates 3D box)").formatted(Formatting.WHITE)),
+                    Text.literal("Shift + Left-Click: ").formatted(Formatting.AQUA).append(Text.literal("Add single block (1x1x1)").formatted(Formatting.WHITE)),
+                    Text.literal("Shift + Right-Click: ").formatted(Formatting.RED).append(Text.literal("Carve/remove clicked block").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 1: Region Eraser
+            player.getInventory().setStack(1, createTool(
+                Items.SHEARS,
+                Text.literal("Region Eraser").formatted(Formatting.RED, Formatting.BOLD),
+                List.of(
+                    Text.literal("Left or Right-Click: ").formatted(Formatting.RED).append(Text.literal("Remove targeted block").formatted(Formatting.WHITE)),
+                    Text.literal("Click any highlighted block to erase it.").formatted(Formatting.GRAY)
+                )
+            ));
+
+            // Slot 4: Cancel
+            player.getInventory().setStack(4, createTool(
+                Items.BARRIER,
+                Text.literal("Cancel Placement").formatted(Formatting.DARK_RED, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.RED).append(Text.literal("Discard changes and exit").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 6: Undo
+            player.getInventory().setStack(6, createTool(
+                Items.RED_DYE,
+                Text.literal("Undo").formatted(Formatting.RED, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.YELLOW).append(Text.literal("Undo last action").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 7: Redo
+            player.getInventory().setStack(7, createTool(
+                Items.GREEN_DYE,
+                Text.literal("Redo").formatted(Formatting.GREEN, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.YELLOW).append(Text.literal("Redo last action").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 8: Confirm & Save
+            player.getInventory().setStack(8, createTool(
+                Items.LIME_DYE,
+                Text.literal("Confirm & Save").formatted(Formatting.GREEN, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.GREEN).append(Text.literal("Save region and finish").formatted(Formatting.WHITE))
+                )
+            ));
         }
 
         public void restoreInventory(ServerPlayerEntity player) {
@@ -164,98 +231,360 @@ public final class MapEditorPlacementController {
                 this.savedInventory.set(i, player.getInventory().getStack(i).copy());
                 player.getInventory().setStack(i, ItemStack.EMPTY);
             }
-            
-            ItemStack stop = new ItemStack(Items.BARRIER);
-            stop.set(DataComponentTypes.CUSTOM_NAME, Text.literal("Stop Placing").formatted(Formatting.RED, Formatting.BOLD));
-            player.getInventory().setStack(8, stop);
+
+            // Slot 0: Point Placer Compass
+            player.getInventory().setStack(0, createTool(
+                Items.COMPASS,
+                Text.literal("Point Placer: " + this.definition.displayName()).formatted(Formatting.GOLD, Formatting.BOLD),
+                List.of(
+                    Text.literal("Left-Click a block: ").formatted(Formatting.YELLOW).append(Text.literal(this.definition.type() == MarkerType.MULTI_POINT ? "Add route point" : "Set point position").formatted(Formatting.WHITE)),
+                    Text.literal("Right-Click [Lime Dye]: ").formatted(Formatting.GREEN).append(Text.literal("Save and finish").formatted(Formatting.WHITE)),
+                    Text.literal("Right-Click [Barrier]: ").formatted(Formatting.RED).append(Text.literal("Cancel without saving").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 4: Cancel (Barrier)
+            player.getInventory().setStack(4, createTool(
+                Items.BARRIER,
+                Text.literal("Cancel Placement").formatted(Formatting.DARK_RED, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.RED).append(Text.literal("Exit without saving").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 6: Undo (Red Dye)
+            player.getInventory().setStack(6, createTool(
+                Items.RED_DYE,
+                Text.literal("Undo").formatted(Formatting.RED, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.YELLOW).append(Text.literal("Revert previous point change").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 7: Redo (Green Dye)
+            player.getInventory().setStack(7, createTool(
+                Items.GREEN_DYE,
+                Text.literal("Redo").formatted(Formatting.GREEN, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.YELLOW).append(Text.literal("Restore undone point change").formatted(Formatting.WHITE))
+                )
+            ));
+
+            // Slot 8: Confirm & Save (Lime Dye)
+            player.getInventory().setStack(8, createTool(
+                Items.LIME_DYE,
+                Text.literal("Confirm & Save").formatted(Formatting.GREEN, Formatting.BOLD),
+                List.of(
+                    Text.literal("Right-Click: ").formatted(Formatting.GREEN).append(Text.literal("Save marker and finish").formatted(Formatting.WHITE))
+                )
+            ));
+        }
+
+        private void pushHistory() {
+            List<RegionPart> copy = new ArrayList<>();
+            for (RegionPart p : this.regionParts) {
+                copy.add(new RegionPart(p.min(), p.max()));
+            }
+            this.undoHistory.add(copy);
+            this.redoHistory.clear();
+        }
+
+        private void pushPointHistory() {
+            List<MapPosition> copy = new ArrayList<>(this.selectedPoints);
+            this.pointUndoHistory.add(copy);
+            this.pointRedoHistory.clear();
         }
 
         public boolean handleLeftClick(ServerPlayerEntity player, BlockPos pos) {
-            MapPosition position;
-            if (this.definition.type() == MarkerType.REGION) {
-                position = new MapPosition(pos.getX(), pos.getY(), pos.getZ(), 0.0F, 0.0F);
-            } else {
-                position = new MapPosition(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, player.getYaw(), 0.0F);
+            long now = System.currentTimeMillis();
+            if (now - this.lastLeftClickTime < 300) {
+                return true; // Debounce duplicate packets
             }
-            
+            this.lastLeftClickTime = now;
+
             if (this.definition.type() == MarkerType.REGION) {
-                if (player.getMainHandStack().isOf(Items.BLAZE_ROD)) {
+                ItemStack hand = player.getMainHandStack();
+
+                // 1. Eraser Tool (Shears)
+                if (hand.isOf(Items.SHEARS)) {
+                    this.carveBlock(player, pos);
+                    return true;
+                }
+
+                // 2. Region Wand (Blaze Rod)
+                if (hand.isOf(Items.BLAZE_ROD)) {
+                    MapPosition blockPos = new MapPosition(pos.getX(), pos.getY(), pos.getZ(), 0.0F, 0.0F);
+
+                    // Shift + Left Click: Add single 1x1x1 block
                     if (player.isSneaking()) {
-                        this.regionParts.add(new RegionPart(position, position));
-                        this.undoneParts.clear();
+                        this.pushHistory();
+                        this.regionParts.add(new RegionPart(blockPos, blockPos));
                         this.regionCorner1 = null;
-                        this.sendSummary(player, "Added Point Selection");
-                    } else {
-                        if (this.regionCorner1 == null) {
-                            this.regionCorner1 = position;
-                            this.sendSummary(player, "Position 1 set");
-                        } else {
-                            MapPosition a = this.regionCorner1;
-                            MapPosition b = position;
-                            MapPosition min = new MapPosition(Math.min(a.x(), b.x()), Math.min(a.y(), b.y()), Math.min(a.z(), b.z()), 0.0F, 0.0F);
-                            MapPosition max = new MapPosition(Math.max(a.x(), b.x()), Math.max(a.y(), b.y()), Math.max(a.z(), b.z()), 0.0F, 0.0F);
-                            this.regionParts.add(new RegionPart(min, max));
-                            this.regionCorner1 = null;
-                            this.undoneParts.clear();
-                            this.sendSummary(player, "Added Region Selection");
-                        }
+                        player.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 0.8f, 1.4f);
+                        this.sendSummary(player, "§a+ Added Block (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")");
+                        return true;
                     }
+
+                    // Normal Left Click: Set Corner 1
+                    this.regionCorner1 = blockPos;
+                    player.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), SoundCategory.PLAYERS, 0.8f, 1.2f);
+                    this.sendSummary(player, "§b✓ Corner 1 set (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ") — Right-click Corner 2!");
                     return true;
                 }
                 return false;
             }
 
-            this.selectedPoints.add(position);
-            this.sendPointSummary(player);
-            this.savePointLike(player, position);
-            // SESSIONS.remove(player.getUuid()); // Allow continuous placing!
+            // POINT PLACEMENT
+            this.pushPointHistory();
+            MapPosition position = new MapPosition(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, player.getYaw(), 0.0F);
+
+            if (this.definition.type() == MarkerType.MULTI_POINT) {
+                this.selectedPoints.add(position);
+                player.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 0.8f, 1.2f + (this.selectedPoints.size() * 0.05f));
+                this.sendPointSummary(player);
+                player.sendMessage(Text.literal("§aAdded point #" + this.selectedPoints.size() + " at (" + (pos.getX() + 0.5) + ", " + (pos.getY() + 1.0) + ", " + (pos.getZ() + 0.5) + ") — §eRight-click [Lime Dye] to save!").formatted(Formatting.GREEN), true);
+            } else {
+                this.selectedPoints.clear();
+                this.selectedPoints.add(position);
+                player.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), SoundCategory.PLAYERS, 0.8f, 1.4f);
+                this.sendPointSummary(player);
+                player.sendMessage(Text.literal("§aPosition set (" + (pos.getX() + 0.5) + ", " + (pos.getY() + 1.0) + ", " + (pos.getZ() + 0.5) + ") — §eRight-click [Lime Dye] to save!").formatted(Formatting.GREEN), true);
+            }
             return true;
         }
 
-        public boolean handleRightClick(ServerPlayerEntity player) {
-            if (this.definition.type() != MarkerType.REGION) {
-                if (player.getMainHandStack().isOf(Items.BARRIER) || player.getMainHandStack().isEmpty()) {
-                    this.cancel(player);
-                    return true;
-                }
-                return false;
+        public boolean handleRightClick(ServerPlayerEntity player, BlockPos pos) {
+            long now = System.currentTimeMillis();
+            if (now - this.lastRightClickTime < 250) {
+                return true; // Debounce
             }
-            
+            this.lastRightClickTime = now;
+
             ItemStack stack = player.getMainHandStack();
-            if (stack.isOf(Items.RED_DYE)) {
-                if (!this.regionParts.isEmpty()) {
-                    this.undoneParts.add(this.regionParts.removeLast());
-                    this.sendSummary(player, "Undo Successful");
+
+            // 1. Confirm & Save (Lime Dye)
+            if (stack.isOf(Items.LIME_DYE)) {
+                if (this.definition.type() == MarkerType.REGION) {
+                    if (this.regionParts.isEmpty()) {
+                        player.sendMessage(Text.literal("§cCannot confirm an empty region.").formatted(Formatting.RED), true);
+                        player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.7f, 1.0f);
+                    } else {
+                        this.saveRegion(player);
+                    }
                 } else {
-                    player.sendMessage(Text.literal("Nothing to undo.").formatted(Formatting.RED), true);
+                    if (this.selectedPoints.isEmpty()) {
+                        player.sendMessage(Text.literal("§cSet a point first by Left-Clicking a block!").formatted(Formatting.RED), true);
+                        player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.7f, 1.0f);
+                    } else {
+                        this.savePoints(player);
+                    }
                 }
                 return true;
-            } else if (stack.isOf(Items.GREEN_DYE)) {
-                if (!this.undoneParts.isEmpty()) {
-                    this.regionParts.add(this.undoneParts.removeLast());
-                    this.sendSummary(player, "Redo Successful");
-                } else {
-                    player.sendMessage(Text.literal("Nothing to redo.").formatted(Formatting.RED), true);
-                }
-                return true;
-            } else if (stack.isOf(Items.LIME_DYE)) {
-                if (this.regionParts.isEmpty()) {
-                    player.sendMessage(Text.literal("Cannot confirm an empty region.").formatted(Formatting.RED), true);
-                } else {
-                    this.saveRegion(player);
-                    this.restoreInventory(player);
-                    SESSIONS.remove(player.getUuid());
-                }
-                return true;
-            } else if (stack.isOf(Items.BLAZE_ROD)) {
+            }
+
+            // 2. Cancel (Barrier)
+            if (stack.isOf(Items.BARRIER)) {
                 this.cancel(player);
                 return true;
             }
+
+            // 3. Undo (Red Dye)
+            if (stack.isOf(Items.RED_DYE)) {
+                if (this.definition.type() == MarkerType.REGION) {
+                    this.undo(player);
+                } else {
+                    this.undoPoint(player);
+                }
+                return true;
+            }
+
+            // 4. Redo (Green Dye)
+            if (stack.isOf(Items.GREEN_DYE)) {
+                if (this.definition.type() == MarkerType.REGION) {
+                    this.redo(player);
+                } else {
+                    this.redoPoint(player);
+                }
+                return true;
+            }
+
+            // 5. Eraser Tool (Shears)
+            if (stack.isOf(Items.SHEARS)) {
+                if (pos != null) {
+                    this.carveBlock(player, pos);
+                }
+                return true;
+            }
+
+            // 6. Region Wand (Blaze Rod)
+            if (stack.isOf(Items.BLAZE_ROD)) {
+                if (pos == null) {
+                    return false;
+                }
+
+                // Shift + Right-Click: Targeted Block Removal
+                if (player.isSneaking()) {
+                    this.carveBlock(player, pos);
+                    return true;
+                }
+
+                // Normal Right-Click: Set Corner 2 & Form Box
+                if (this.regionCorner1 == null) {
+                    player.sendMessage(Text.literal("§cSet Corner 1 first by Left-Clicking a block!").formatted(Formatting.RED), true);
+                    player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.7f, 1.0f);
+                    return true;
+                }
+
+                MapPosition blockPos = new MapPosition(pos.getX(), pos.getY(), pos.getZ(), 0.0F, 0.0F);
+                MapPosition a = this.regionCorner1;
+                MapPosition b = blockPos;
+                MapPosition min = new MapPosition(Math.min(a.x(), b.x()), Math.min(a.y(), b.y()), Math.min(a.z(), b.z()), 0.0F, 0.0F);
+                MapPosition max = new MapPosition(Math.max(a.x(), b.x()), Math.max(a.y(), b.y()), Math.max(a.z(), b.z()), 0.0F, 0.0F);
+
+                this.pushHistory();
+                this.regionParts.add(new RegionPart(min, max));
+                this.regionCorner1 = null;
+
+                int dx = (int) (max.x() - min.x() + 1);
+                int dy = (int) (max.y() - min.y() + 1);
+                int dz = (int) (max.z() - min.z() + 1);
+                player.playSoundToPlayer(SoundEvents.ENTITY_PLAYER_LEVELUP, SoundCategory.PLAYERS, 0.8f, 1.8f);
+                this.sendSummary(player, "§a✓ Added Box (" + dx + "x" + dy + "x" + dz + ")");
+                return true;
+            }
+
             return false;
         }
 
+        private boolean carveBlock(ServerPlayerEntity player, BlockPos pos) {
+            double px = pos.getX();
+            double py = pos.getY();
+            double pz = pos.getZ();
+            MapPosition target = new MapPosition(px, py, pz, 0, 0);
+
+            boolean found = false;
+            List<RegionPart> updated = new ArrayList<>();
+
+            for (RegionPart part : this.regionParts) {
+                if (!part.contains(target)) {
+                    updated.add(part);
+                    continue;
+                }
+
+                found = true;
+                // If this is a 1x1x1 single block part, removing it leaves 0 sub-boxes
+                if (part.min().x() == part.max().x() &&
+                    part.min().y() == part.max().y() &&
+                    part.min().z() == part.max().z()) {
+                    continue;
+                }
+
+                // Subdivide the box around the carved block (3D CSG subtraction)
+                // 1. -X side
+                if (part.min().x() < px) {
+                    updated.add(new RegionPart(
+                        part.min(),
+                        new MapPosition(px - 1, part.max().y(), part.max().z(), 0, 0)
+                    ));
+                }
+                // 2. +X side
+                if (part.max().x() > px) {
+                    updated.add(new RegionPart(
+                        new MapPosition(px + 1, part.min().y(), part.min().z(), 0, 0),
+                        part.max()
+                    ));
+                }
+                // 3. -Y side (for X == px)
+                if (part.min().y() < py) {
+                    updated.add(new RegionPart(
+                        new MapPosition(px, part.min().y(), part.min().z(), 0, 0),
+                        new MapPosition(px, py - 1, part.max().z(), 0, 0)
+                    ));
+                }
+                // 4. +Y side (for X == px)
+                if (part.max().y() > py) {
+                    updated.add(new RegionPart(
+                        new MapPosition(px, py + 1, part.min().z(), 0, 0),
+                        new MapPosition(px, part.max().y(), part.max().z(), 0, 0)
+                    ));
+                }
+                // 5. -Z side (for X == px, Y == py)
+                if (part.min().z() < pz) {
+                    updated.add(new RegionPart(
+                        new MapPosition(px, py, part.min().z(), 0, 0),
+                        new MapPosition(px, py, pz - 1, 0, 0)
+                    ));
+                }
+                // 6. +Z side (for X == px, Y == py)
+                if (part.max().z() > pz) {
+                    updated.add(new RegionPart(
+                        new MapPosition(px, py, pz + 1, 0, 0),
+                        new MapPosition(px, py, part.max().z(), 0, 0)
+                    ));
+                }
+            }
+
+            if (found) {
+                this.pushHistory();
+                this.regionParts.clear();
+                this.regionParts.addAll(updated);
+                player.playSoundToPlayer(SoundEvents.BLOCK_LAVA_EXTINGUISH, SoundCategory.PLAYERS, 0.7f, 1.5f);
+                this.sendSummary(player, "§c- Removed Block (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")");
+                return true;
+            } else {
+                player.sendMessage(Text.literal("§cTargeted block is not part of the active selection.").formatted(Formatting.RED), true);
+                player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.6f, 1.2f);
+                return false;
+            }
+        }
+
+        private void undo(ServerPlayerEntity player) {
+            if (this.undoHistory.isEmpty()) {
+                player.sendMessage(Text.literal("§cNothing to undo.").formatted(Formatting.RED), true);
+                player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.6f, 1.0f);
+                return;
+            }
+
+            List<RegionPart> currentCopy = new ArrayList<>();
+            for (RegionPart p : this.regionParts) {
+                currentCopy.add(new RegionPart(p.min(), p.max()));
+            }
+            this.redoHistory.add(currentCopy);
+
+            List<RegionPart> previous = this.undoHistory.remove(this.undoHistory.size() - 1);
+            this.regionParts.clear();
+            this.regionParts.addAll(previous);
+            this.regionCorner1 = null;
+
+            player.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 0.8f, 1.0f);
+            this.sendSummary(player, "§e↩ Undo successful");
+        }
+
+        private void redo(ServerPlayerEntity player) {
+            if (this.redoHistory.isEmpty()) {
+                player.sendMessage(Text.literal("§cNothing to redo.").formatted(Formatting.RED), true);
+                player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.6f, 1.0f);
+                return;
+            }
+
+            List<RegionPart> currentCopy = new ArrayList<>();
+            for (RegionPart p : this.regionParts) {
+                currentCopy.add(new RegionPart(p.min(), p.max()));
+            }
+            this.undoHistory.add(currentCopy);
+
+            List<RegionPart> next = this.redoHistory.remove(this.redoHistory.size() - 1);
+            this.regionParts.clear();
+            this.regionParts.addAll(next);
+            this.regionCorner1 = null;
+
+            player.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 0.8f, 1.4f);
+            this.sendSummary(player, "§a↪ Redo successful");
+        }
+
         private void sendSummary(ServerPlayerEntity player, String prefix) {
-            player.sendMessage(Text.literal(prefix + " | Current Parts: " + this.regionParts.size()).formatted(Formatting.AQUA), true);
+            player.sendMessage(Text.literal(prefix + " §8| §7Parts: §b" + this.regionParts.size() + " §8| §a[Lime Dye] Save").formatted(Formatting.AQUA), true);
+
             net.minecraft.nbt.NbtList list = new net.minecraft.nbt.NbtList();
             for (RegionPart part : this.regionParts) {
                 net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
@@ -319,7 +648,37 @@ public final class MapEditorPlacementController {
             }
         }
 
-        private void cancel(ServerPlayerEntity player) {
+        private void undoPoint(ServerPlayerEntity player) {
+            if (this.pointUndoHistory.isEmpty()) {
+                player.sendMessage(Text.literal("§7Nothing to undo.").formatted(Formatting.GRAY), true);
+                player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.5f, 1.2f);
+                return;
+            }
+            List<MapPosition> prev = this.pointUndoHistory.remove(this.pointUndoHistory.size() - 1);
+            this.pointRedoHistory.add(new ArrayList<>(this.selectedPoints));
+            this.selectedPoints.clear();
+            this.selectedPoints.addAll(prev);
+            player.playSoundToPlayer(SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.PLAYERS, 0.8f, 1.1f);
+            this.sendPointSummary(player);
+            player.sendMessage(Text.literal("§eUndid point action (Points: " + this.selectedPoints.size() + ")").formatted(Formatting.YELLOW), true);
+        }
+
+        private void redoPoint(ServerPlayerEntity player) {
+            if (this.pointRedoHistory.isEmpty()) {
+                player.sendMessage(Text.literal("§7Nothing to redo.").formatted(Formatting.GRAY), true);
+                player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.5f, 1.2f);
+                return;
+            }
+            List<MapPosition> next = this.pointRedoHistory.remove(this.pointRedoHistory.size() - 1);
+            this.pointUndoHistory.add(new ArrayList<>(this.selectedPoints));
+            this.selectedPoints.clear();
+            this.selectedPoints.addAll(next);
+            player.playSoundToPlayer(SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.PLAYERS, 0.8f, 1.3f);
+            this.sendPointSummary(player);
+            player.sendMessage(Text.literal("§aRedid point action (Points: " + this.selectedPoints.size() + ")").formatted(Formatting.GREEN), true);
+        }
+
+        private void cleanup(ServerPlayerEntity player) {
             this.restoreInventory(player);
             SESSIONS.remove(player.getUuid());
             // Send an empty payload to clear the client's placement preview
@@ -329,38 +688,115 @@ public final class MapEditorPlacementController {
             if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.SYNC_BUILDER_SELECTION_ID)) {
                 net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.SyncBuilderSelectionPayload(emptyPayload));
             }
-            player.sendMessage(Text.literal("Finished marker placement.").formatted(Formatting.YELLOW), false);
         }
 
-        private void savePointLike(ServerPlayerEntity player, MapPosition position) {
-            List<MapMarker> markers = new ArrayList<>(MapEditorMarkerStore.load(this.mapId, this.extension, this.definition));
-            if (this.definition.type() == MarkerType.MULTI_POINT && !markers.isEmpty()) {
-                MapMarker route = markers.getFirst();
-                List<MapPosition> points = new ArrayList<>(route.points());
-                points.add(position);
-                markers.set(0, new MapMarker(route.id(), route.definitionKey(), route.name(), route.type(), points, List.of(), this.properties));
-                this.save(player, markers, "Added point to " + this.definition.displayName() + ".");
-            } else {
-                if (markers.size() >= this.definition.maxCount()) {
-                    markers.removeLast();
-                }
-                String name = (this.name != null && !this.name.isBlank()) ? this.name : (this.definition.single() ? this.definition.displayName() : this.definition.displayName() + " #" + (markers.size() + 1));
-                String id = java.util.UUID.randomUUID().toString();
-                markers.add(new MapMarker(id, this.definition.key(), name, this.definition.type(), List.of(position), List.of(), this.properties));
-                this.save(player, markers, "Placed " + this.definition.displayName() + ".");
+        public void cancel(ServerPlayerEntity player) {
+            this.cleanup(player);
+            player.sendMessage(Text.literal("§cCancelled marker placement.").formatted(Formatting.RED), false);
+            player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.7f, 1.0f);
+        }
+
+        public void finish(ServerPlayerEntity player) {
+            this.cleanup(player);
+            player.sendMessage(Text.literal("§aSaved and finished marker placement.").formatted(Formatting.GREEN), false);
+            player.playSoundToPlayer(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.PLAYERS, 0.9f, 1.2f);
+            dev.frost.miniverse.session.SessionListSerializer.sendSessionList(player.server, player);
+        }
+
+        private void savePoints(ServerPlayerEntity player) {
+            if (this.selectedPoints.isEmpty()) {
+                player.sendMessage(Text.literal("§cCannot save: no point has been set.").formatted(Formatting.RED), true);
+                player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.7f, 1.0f);
+                return;
             }
+
+            List<MapMarker> markers = new ArrayList<>(MapEditorMarkerStore.load(this.mapId, this.extension, this.definition));
+            if (this.definition.type() == MarkerType.MULTI_POINT) {
+                if (!markers.isEmpty()) {
+                    MapMarker route = markers.getFirst();
+                    List<MapPosition> points = new ArrayList<>(route.points());
+                    points.addAll(this.selectedPoints);
+                    markers.set(0, new MapMarker(route.id(), route.definitionKey(), route.name(), route.type(), points, List.of(), this.properties));
+                    this.save(player, markers, "Added " + this.selectedPoints.size() + " points to " + this.definition.displayName() + ".");
+                } else {
+                    String markerName = this.name != null && !this.name.isBlank() ? this.name : this.computeMarkerName(markers);
+                    String id = UUID.randomUUID().toString();
+                    markers.add(new MapMarker(id, this.definition.key(), markerName, this.definition.type(), new ArrayList<>(this.selectedPoints), List.of(), this.properties));
+                    this.save(player, markers, "Saved " + markerName + " with " + this.selectedPoints.size() + " points.");
+                }
+            } else {
+                if (this.definition.single()) {
+                    markers.clear();
+                } else if (markers.size() >= this.definition.maxCount() && this.definition.maxCount() > 0) {
+                    markers.remove(markers.size() - 1);
+                }
+                String markerName = this.name != null && !this.name.isBlank() ? this.name : this.computeMarkerName(markers);
+                String id = UUID.randomUUID().toString();
+                MapPosition finalPos = this.selectedPoints.get(this.selectedPoints.size() - 1);
+                markers.add(new MapMarker(id, this.definition.key(), markerName, this.definition.type(), List.of(finalPos), List.of(), this.properties));
+                this.save(player, markers, "Saved " + markerName + ".");
+            }
+            this.finish(player);
         }
 
         private void saveRegion(ServerPlayerEntity player) {
             List<MapMarker> markers = new ArrayList<>(MapEditorMarkerStore.load(this.mapId, this.extension, this.definition));
             if (this.definition.single()) {
                 markers.clear();
-            } else if (markers.size() >= this.definition.maxCount()) {
-                markers.removeLast();
+            } else if (markers.size() >= this.definition.maxCount() && this.definition.maxCount() > 0) {
+                markers.remove(markers.size() - 1);
             }
-            String name = (this.name != null && !this.name.isBlank()) ? this.name : (this.definition.single() ? this.definition.displayName() : this.definition.displayName() + " #" + (markers.size() + 1));
-            markers.add(new MapMarker(UUID.randomUUID().toString(), this.definition.key(), name, MarkerType.REGION, List.of(), new ArrayList<>(this.regionParts), this.properties));
-            this.save(player, markers, "Created " + this.definition.displayName() + " with " + this.regionParts.size() + " parts.");
+            String markerName = this.name;
+            if (markerName == null || markerName.isBlank()) {
+                markerName = this.computeMarkerName(markers);
+            }
+            markers.add(new MapMarker(UUID.randomUUID().toString(), this.definition.key(), markerName, MarkerType.REGION, List.of(), new ArrayList<>(this.regionParts), this.properties));
+            this.save(player, markers, "Created " + markerName + " with " + this.regionParts.size() + " parts.");
+            this.finish(player);
+        }
+
+        private String computeMarkerName(List<MapMarker> markers) {
+            if (this.definition.single()) {
+                return this.definition.displayName();
+            }
+
+            // Check if this is a child marker of a logical parent (e.g. level_config)
+            if (this.definition.grouping() != null && "LOGICAL".equals(this.definition.grouping().type())) {
+                String propKey = this.definition.grouping().propertyKey();
+                if (propKey != null && this.properties.has(propKey)) {
+                    String parentId = this.properties.get(propKey).getAsString();
+                    String parentKey = this.definition.grouping().parentKey();
+                    Optional<MarkerDefinition> parentDef = this.extension.markers().stream()
+                        .filter(m -> m.key().equals(parentKey))
+                        .findFirst();
+                    if (parentDef.isPresent()) {
+                        List<MapMarker> parents = MapEditorMarkerStore.load(this.mapId, this.extension, parentDef.get());
+                        for (MapMarker parent : parents) {
+                            if (parent.id().equals(parentId)) {
+                                return parent.name() + " " + this.definition.displayName();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Smart lowest-unused numbering for general multi-markers:
+            // Extract existing numbers from: "DisplayName #1", "DisplayName #2", etc.
+            Set<Integer> usedNumbers = new HashSet<>();
+            String prefix = this.definition.displayName() + " #";
+            for (MapMarker m : markers) {
+                if (m.name().startsWith(prefix)) {
+                    try {
+                        int num = Integer.parseInt(m.name().substring(prefix.length()).trim());
+                        usedNumbers.add(num);
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            int index = 1;
+            while (usedNumbers.contains(index)) {
+                index++;
+            }
+            return this.definition.displayName() + " #" + index;
         }
 
         private void save(ServerPlayerEntity player, List<MapMarker> markers, String success) {
@@ -371,6 +807,7 @@ public final class MapEditorPlacementController {
                 if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.HIDE_MAP_EDITOR_OVERLAY_ID)) {
                     net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.HideMapEditorOverlayPayload(this.extension.gameId(), this.definition.key()));
                 }
+                dev.frost.miniverse.session.SessionListSerializer.sendSessionList(player.server, player);
             } catch (IOException e) {
                 player.sendMessage(Text.literal("Failed to save marker: " + e.getMessage()).formatted(Formatting.RED), false);
             }

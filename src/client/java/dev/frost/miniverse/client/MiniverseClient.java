@@ -60,15 +60,49 @@ public class MiniverseClient implements ClientModInitializer {
 				return net.minecraft.util.TypedActionResult.pass(net.minecraft.item.ItemStack.EMPTY);
 			}
 			net.minecraft.item.ItemStack stack = player.getStackInHand(hand);
-			int slot = player.getInventory().selectedSlot;
-			if (slot >= 6 && slot <= 8) {
-				return net.minecraft.util.TypedActionResult.fail(stack);
+
+			// Map Editor air right-click forwarder
+			if (dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.editorActive && hand == net.minecraft.util.Hand.MAIN_HAND) {
+				if (stack.isOf(net.minecraft.item.Items.LIME_DYE)
+					|| stack.isOf(net.minecraft.item.Items.RED_DYE)
+					|| stack.isOf(net.minecraft.item.Items.GREEN_DYE)
+					|| stack.isOf(net.minecraft.item.Items.BARRIER)
+					|| stack.isOf(net.minecraft.item.Items.BLAZE_ROD)
+					|| stack.isOf(net.minecraft.item.Items.SHEARS)) {
+					return net.minecraft.util.TypedActionResult.success(stack);
+				}
 			}
-			if (dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PERK)
-				|| dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PLACEHOLDER)) {
-				return net.minecraft.util.TypedActionResult.fail(stack);
+
+			// Zombies-only right-click prevention
+			boolean isZombiesActive = TransitionOverlay.isZombiesActive()
+				|| (dev.frost.miniverse.client.gui.SessionSnapshotData.sessions() != null && dev.frost.miniverse.client.gui.SessionSnapshotData.sessions().stream()
+					.anyMatch(s -> "zombies".equalsIgnoreCase(s.game()) && !"STOPPED".equalsIgnoreCase(s.state())));
+			if (isZombiesActive) {
+				int slot = player.getInventory().selectedSlot;
+				if (dev.frost.miniverse.minigame.impl.zombies.item.ZombiesHotbarManager.isPerkSlot(slot)
+					|| dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PERK)
+					|| dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PLACEHOLDER)) {
+					return net.minecraft.util.TypedActionResult.fail(stack);
+				}
 			}
 			return net.minecraft.util.TypedActionResult.pass(stack);
+		});
+
+		net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+			if (player == null) {
+				return net.minecraft.util.ActionResult.PASS;
+			}
+			net.minecraft.item.ItemStack stack = player.getStackInHand(hand);
+			boolean isZombiesActive = TransitionOverlay.isZombiesActive()
+				|| (dev.frost.miniverse.client.gui.SessionSnapshotData.sessions() != null && dev.frost.miniverse.client.gui.SessionSnapshotData.sessions().stream()
+					.anyMatch(s -> "zombies".equalsIgnoreCase(s.game()) && !"STOPPED".equalsIgnoreCase(s.state())));
+			if (isZombiesActive) {
+				if (dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PERK)
+					|| dev.frost.miniverse.minigame.core.item.ProtectedItemTags.hasType(stack, dev.frost.miniverse.minigame.core.item.ProtectedItemTypes.ZOMBIES_PLACEHOLDER)) {
+					return net.minecraft.util.ActionResult.FAIL;
+				}
+			}
+			return net.minecraft.util.ActionResult.PASS;
 		});
 
 		OPEN_GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -282,6 +316,19 @@ public class MiniverseClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.HIDE_MAP_EDITOR_OVERLAY_ID, (payload, context) ->
 			context.client().execute(() -> {
 				dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.enabledOverlays.remove(payload.gameId() + ":" + payload.definitionKey());
+			})
+		);
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.SYNC_GAMEMODE_PRESETS_ID, (payload, context) ->
+			context.client().execute(() -> {
+				net.minecraft.nbt.NbtCompound wrapper = payload.presetsCompound();
+				if (wrapper != null && wrapper.contains("list", net.minecraft.nbt.NbtElement.LIST_TYPE)) {
+					dev.frost.miniverse.client.gui.SessionSnapshotData.updateGamePresets(payload.gameId(), wrapper.getList("list", net.minecraft.nbt.NbtElement.COMPOUND_TYPE));
+				}
+				if (context.client().currentScreen instanceof dev.frost.miniverse.client.gui.SessionScreen sessionScreen) {
+					if (sessionScreen.getWorkspaceView() instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+						agw.onPresetsUpdated();
+					}
+				}
 			})
 		);
 

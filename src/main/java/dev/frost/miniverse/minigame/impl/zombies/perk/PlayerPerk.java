@@ -56,6 +56,7 @@ public enum PlayerPerk {
 
     public ItemStack createItemStack() {
         ItemStack stack = new ItemStack(this.icon);
+        stack.remove(DataComponentTypes.FOOD);
         stack.set(DataComponentTypes.CUSTOM_NAME, toFormattedText());
         stack.set(DataComponentTypes.MAX_STACK_SIZE, 1);
         List<Text> lore = List.of(

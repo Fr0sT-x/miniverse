@@ -70,11 +70,15 @@ public final class ZombiesHotbarManager {
     }
 
     public static void setupInitialHotbar(ServerPlayerEntity player) {
+        setupInitialHotbar(player, null);
+    }
+
+    public static void setupInitialHotbar(ServerPlayerEntity player, dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig config) {
         PlayerInventory inv = player.getInventory();
         inv.clear();
 
-        inv.setStack(SLOT_KNIFE, WeaponItemHelper.createWeaponStack(WeaponType.KNIFE));
-        inv.setStack(SLOT_WEAPON_1, WeaponItemHelper.createWeaponStack(WeaponType.PISTOL));
+        inv.setStack(SLOT_KNIFE, WeaponItemHelper.createWeaponStack(WeaponType.KNIFE, config));
+        inv.setStack(SLOT_WEAPON_1, WeaponItemHelper.createWeaponStack(WeaponType.PISTOL, config));
         inv.setStack(SLOT_WEAPON_2, createEmptyWeaponPlaceholder());
         inv.setStack(SLOT_WEAPON_3, createLockedWeaponPlaceholder());
         inv.setStack(4, ItemStack.EMPTY);

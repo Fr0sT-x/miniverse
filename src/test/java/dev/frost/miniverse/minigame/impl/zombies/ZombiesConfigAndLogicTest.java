@@ -119,5 +119,95 @@ public class ZombiesConfigAndLogicTest {
             Assert.fail("Failed to validate dead_end.json template: " + e.getMessage());
         }
     }
+
+    @Test
+    public void testWeaponCustomConfigRoundtrip() {
+        dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig config = new dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig();
+        // Modify pistol
+        config.setDamage("PISTOL", 15.5f);
+        config.setReloadTicks("PISTOL", 25);
+        config.setInLuckyChest("PISTOL", false);
+
+        // Modify rocket launcher
+        config.setDamage("ROCKET_LAUNCHER", 120.0f);
+        config.setInLuckyChest("ROCKET_LAUNCHER", true);
+
+        // JSON roundtrip
+        String json = config.toJsonString();
+        dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig fromJson = dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig.fromJsonString(json);
+        Assert.assertEquals(15.5f, fromJson.getDamage("PISTOL"), 0.001f);
+        Assert.assertEquals(25, fromJson.getReloadTicks("PISTOL"));
+        Assert.assertFalse(fromJson.isAllowedInLuckyChest("PISTOL"));
+        Assert.assertEquals(120.0f, fromJson.getDamage("ROCKET_LAUNCHER"), 0.001f);
+        Assert.assertTrue(fromJson.isAllowedInLuckyChest("ROCKET_LAUNCHER"));
+
+        // NBT roundtrip
+        net.minecraft.nbt.NbtCompound nbt = config.toNbt();
+        dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig fromNbt = dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig.fromNbt(nbt);
+        Assert.assertEquals(15.5f, fromNbt.getDamage("PISTOL"), 0.001f);
+        Assert.assertEquals(25, fromNbt.getReloadTicks("PISTOL"));
+        Assert.assertFalse(fromNbt.isAllowedInLuckyChest("PISTOL"));
+    }
+
+    @Test
+    public void testZombiesDifficultyConfigRoundtripAndReset() {
+        ZombiesDifficultyConfig config = new ZombiesDifficultyConfig();
+        // Modify Hard
+        config.setEntry(ZombiesDifficulty.HARD, new ZombiesDifficultyConfig.DifficultyEntry(
+            1.25f, 1.75f, 1.08, 1.4f, 12, 1, 30, 8, 6, 1.3f
+        ));
+
+        // Verify modified
+        Assert.assertEquals(1.25f, config.getHealthMultiplier(ZombiesDifficulty.HARD), 0.001f);
+        Assert.assertEquals(1, config.getWaveMobsPerRound(ZombiesDifficulty.HARD));
+        Assert.assertEquals(8, config.getSpawnCooldownMin(ZombiesDifficulty.HARD));
+
+        // JSON roundtrip
+        String json = config.toJsonString();
+        ZombiesDifficultyConfig fromJson = ZombiesDifficultyConfig.fromJsonString(json);
+        Assert.assertEquals(1.25f, fromJson.getHealthMultiplier(ZombiesDifficulty.HARD), 0.001f);
+        Assert.assertEquals(1, fromJson.getWaveMobsPerRound(ZombiesDifficulty.HARD));
+        Assert.assertEquals(8, fromJson.getSpawnCooldownMin(ZombiesDifficulty.HARD));
+
+        // NBT roundtrip
+        net.minecraft.nbt.NbtCompound nbt = config.toNbt();
+        ZombiesDifficultyConfig fromNbt = ZombiesDifficultyConfig.fromNbt(nbt);
+        Assert.assertEquals(1.25f, fromNbt.getHealthMultiplier(ZombiesDifficulty.HARD), 0.001f);
+        Assert.assertEquals(1, fromNbt.getWaveMobsPerRound(ZombiesDifficulty.HARD));
+        Assert.assertEquals(8, fromNbt.getSpawnCooldownMin(ZombiesDifficulty.HARD));
+
+        // Reset Hard difficulty
+        config.resetDifficulty(ZombiesDifficulty.HARD);
+        Assert.assertEquals(ZombiesDifficulty.HARD.getHealthMultiplier(), config.getHealthMultiplier(ZombiesDifficulty.HARD), 0.001f);
+        Assert.assertEquals(ZombiesDifficulty.HARD.getWaveMobsPerRound(), config.getWaveMobsPerRound(ZombiesDifficulty.HARD));
+    }
+
+    @Test
+    public void testZombiesSettingsWithCustomConfigs() {
+        dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig wConfig = new dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig();
+        wConfig.setDamage("KNIFE", 35.0f);
+
+        ZombiesDifficultyConfig dConfig = new ZombiesDifficultyConfig();
+        dConfig.setEntry(ZombiesDifficulty.EASY, new ZombiesDifficultyConfig.DifficultyEntry(
+            0.8f, 0.9f, 1.0, 1.0f, 8, 1, 20, 25, 25, 0.8f
+        ));
+
+        ZombiesSettings settings = new ZombiesSettings(
+            "custom_map", 1000, 20, 8, 25, true, ZombiesDifficulty.NORMAL, true, wConfig, dConfig
+        );
+
+        // Properties serialization
+        Properties props = new Properties();
+        settings.writeTo(props);
+        ZombiesSettings fromProps = ZombiesSettings.fromProperties(props);
+        Assert.assertEquals(35.0f, fromProps.weaponConfig().getDamage("KNIFE"), 0.001f);
+        Assert.assertEquals(0.8f, fromProps.difficultyConfig().getHealthMultiplier(ZombiesDifficulty.EASY), 0.001f);
+
+        // NBT serialization
+        net.minecraft.nbt.NbtCompound nbt = settings.toNbt();
+        ZombiesSettings fromNbt = ZombiesSettings.fromNbt(nbt);
+        Assert.assertEquals(35.0f, fromNbt.weaponConfig().getDamage("KNIFE"), 0.001f);
+        Assert.assertEquals(0.8f, fromNbt.difficultyConfig().getHealthMultiplier(ZombiesDifficulty.EASY), 0.001f);
+    }
 }
 

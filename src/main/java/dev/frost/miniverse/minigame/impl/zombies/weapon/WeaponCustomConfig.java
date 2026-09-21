@@ -48,18 +48,18 @@ public final class WeaponCustomConfig {
     public static final Map<String, WeaponEntry> DEFAULTS = Map.ofEntries(
         Map.entry("KNIFE", new WeaponEntry(5.0f, 10, false)),
         Map.entry("PISTOL", new WeaponEntry(5.0f, 30, true)),
-        Map.entry("SHOTGUN", new WeaponEntry(2.8f, 30, true)),
+        Map.entry("SHOTGUN", new WeaponEntry(1.8f, 30, true)),
         Map.entry("RIFLE", new WeaponEntry(5.0f, 30, true)),
-        Map.entry("SNIPER", new WeaponEntry(20.0f, 30, true)),
+        Map.entry("SNIPER", new WeaponEntry(12.0f, 30, true)),
         Map.entry("FLAME_THROWER", new WeaponEntry(2.5f, 35, true)),
         Map.entry("GOLD_DIGGER", new WeaponEntry(7.0f, 25, true)),
-        Map.entry("ROCKET_LAUNCHER", new WeaponEntry(40.0f, 40, true)),
+        Map.entry("ROCKET_LAUNCHER", new WeaponEntry(7.0f, 40, true)),
         Map.entry("ZOMBIE_ZAPPER", new WeaponEntry(12.0f, 30, true)),
         Map.entry("LASER_GUN", new WeaponEntry(10.0f, 20, false)),
-        Map.entry("DOUBLE_BARREL", new WeaponEntry(4.5f, 25, false)),
+        Map.entry("DOUBLE_BARREL", new WeaponEntry(2.5f, 25, false)),
         Map.entry("ASSAULT_RIFLE", new WeaponEntry(9.0f, 25, false)),
-        Map.entry("RAILGUN", new WeaponEntry(45.0f, 25, false)),
-        Map.entry("NUKE_LAUNCHER", new WeaponEntry(80.0f, 35, false)),
+        Map.entry("RAILGUN", new WeaponEntry(16.0f, 25, false)),
+        Map.entry("NUKE_LAUNCHER", new WeaponEntry(11.0f, 35, false)),
         Map.entry("TESLA_GUN", new WeaponEntry(22.0f, 25, false))
     );
 

@@ -101,6 +101,42 @@ public class SessionScreen extends Screen {
     private String statusMessage = "";
     private long openedAt;
     private boolean defaultWorkspaceApplied;
+    public static final int MIN_LEFT_SIDEBAR_WIDTH = 150;
+    public static final int MAX_LEFT_SIDEBAR_WIDTH = 360;
+    private static int leftSidebarTargetWidth = UiTheme.SIDEBAR_WIDTH;
+    private static boolean leftSidebarCollapsed = false;
+    private static final UiAnimation.Value leftSidebarAnimation = new UiAnimation.Value(1.0F);
+
+    private boolean draggingLeftSplitter = false;
+    private double leftSplitterDragStartMouseX = 0;
+    private int leftSplitterDragStartWidth = UiTheme.SIDEBAR_WIDTH;
+    private UiLayout.Rect leftSplitterHitRect = null;
+    private UiLayout.Rect leftCollapseHandleRect = null;
+    private UiLayout.Rect leftCollapseStripRect = null;
+    private boolean lastLeftSidebarAnimating = false;
+
+    // Unified Right Sidebar / Match Dock State (shared across All Gamemodes overview and gamemode workspaces)
+    public static int rightDockTargetWidth = dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout.DEFAULT_DOCK_WIDTH;
+    public static boolean rightDockCollapsed = false;
+    public static final UiAnimation.Value rightDockAnimation = new UiAnimation.Value(1.0F);
+
+    public static boolean isRightDockCollapsed() {
+        return rightDockCollapsed;
+    }
+
+    public static void setRightDockCollapsed(boolean collapsed) {
+        rightDockCollapsed = collapsed;
+        rightDockAnimation.animateTo(collapsed ? 0.0F : 1.0F, 220, UiAnimation::easeInOutQuad);
+    }
+
+    private boolean draggingOverviewSplitter = false;
+    private double overviewSplitterDragStartMouseX = 0;
+    private int overviewSplitterDragStartWidth = 220;
+    private UiLayout.Rect overviewSplitterHitRect = null;
+    private UiLayout.Rect overviewCollapseHandleRect = null;
+    private UiLayout.Rect overviewCollapseStripRect = null;
+    private boolean lastOverviewDockAnimating = false;
+
     private double sidebarScroll;
     private double sidebarMaxScroll;
     private boolean draggingSidebarScrollbar;
@@ -644,11 +680,42 @@ public class SessionScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        boolean wasAnimating = this.lastLeftSidebarAnimating;
+        boolean nowAnimating = leftSidebarAnimation.isAnimating();
+        this.lastLeftSidebarAnimating = nowAnimating;
+        if (wasAnimating && !nowAnimating) {
+            this.rebuildWorkspaceChildren();
+        }
+
+        boolean wasOverviewAnimating = this.lastOverviewDockAnimating;
+        boolean nowOverviewAnimating = rightDockAnimation.isAnimating();
+        this.lastOverviewDockAnimating = nowOverviewAnimating;
+        if (wasOverviewAnimating && !nowOverviewAnimating && this.workspaceView == null) {
+            this.rebuildWorkspaceChildren();
+        }
+
         Layout layout = this.createLayout();
         float time = (System.currentTimeMillis() - this.openedAt) / 1000.0F;
         UiRenderer.workspace(context, this.width, this.height, time);
 
+        if (this.sidebarSearchField != null) {
+            this.sidebarSearchField.setX(layout.sidebarSearch().x());
+            this.sidebarSearchField.setY(layout.sidebarSearch().y());
+            this.sidebarSearchField.setWidth(layout.sidebarSearch().width());
+            this.sidebarSearchField.setHeight(layout.sidebarSearch().height());
+            this.sidebarSearchField.setVisible(layout.sidebar().width() >= 80);
+        }
+
+        if (this.searchField != null) {
+            this.searchField.setX(layout.search().x());
+            this.searchField.setY(layout.search().y());
+            this.searchField.setWidth(layout.search().width());
+            this.searchField.setHeight(layout.search().height());
+        }
+
         this.drawWorkspaceNavigation(context, layout.sidebar(), layout.sidebarSearch(), mouseX, mouseY);
+        this.renderLeftSplitter(context, layout.sidebar(), mouseX, mouseY);
+
         UiRenderer.panel(context, layout.toolbar().x(), layout.toolbar().y(), layout.toolbar().width(), layout.toolbar().height(), UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
         String toolbarTitle = this.workspaceView == null ? "Miniverse Multiplayer Platform" : this.workspaceView.title();
         String toolbarSubtitle = this.workspaceView == null ? "Gamemode studio" : this.workspaceView.subtitle();
@@ -656,8 +723,8 @@ public class SessionScreen extends Screen {
         context.drawText(this.textRenderer, Text.literal(toolbarSubtitle), layout.toolbar().x() + 12, layout.toolbar().y() + 20, UiTheme.TEXT_DIM, false);
 
         if (this.workspaceView == null) {
-            UiRenderer.panel(context, layout.detail().x(), layout.detail().y(), layout.detail().width(), layout.detail().height(), UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
-            this.drawDetailPanel(context, layout.detail());
+            this.renderOverviewDock(context, layout.detail(), mouseX, mouseY);
+            this.renderOverviewSplitter(context, layout.detail(), mouseX, mouseY);
 
             context.drawText(this.textRenderer, Text.literal("Search"), layout.search().x(), layout.search().y() - 11, UiTheme.TEXT_MUTED, false);
         } else {
@@ -667,7 +734,7 @@ public class SessionScreen extends Screen {
         if (this.workspaceView == null && this.searchField != null && this.searchField.getText().isEmpty()) {
             context.drawText(this.textRenderer, Text.literal("Filter gamemodes..."), layout.search().x() + 6, layout.search().y() + 6, UiTheme.TEXT_DIM, false);
         }
-        if (this.sidebarSearchField != null && this.sidebarSearchField.getText().isEmpty()) {
+        if (this.sidebarSearchField != null && this.sidebarSearchField.getText().isEmpty() && layout.sidebar().width() >= 80) {
             context.drawText(this.textRenderer, Text.literal("Search..."), layout.sidebarSearch().x() + 6, layout.sidebarSearch().y() + 6, UiTheme.TEXT_DIM, false);
         }
 
@@ -682,11 +749,79 @@ public class SessionScreen extends Screen {
         }
     }
 
+    private void renderLeftSplitter(DrawContext context, UiLayout.Rect sidebar, int mouseX, int mouseY) {
+        boolean isCollapsed = leftSidebarCollapsed || sidebar.width() <= 20;
+        int handleWidth = 17; // 20% larger than 14px
+        int handleHeight = 44; // 20% larger than 36px
+        int handleY = (this.height - handleHeight) / 2;
+
+        if (isCollapsed) {
+            int stripX = 0;
+            int stripY = 12;
+            int stripWidth = 26;
+            int stripHeight = this.height - 24;
+            this.leftCollapseStripRect = new UiLayout.Rect(stripX, stripY, stripWidth, stripHeight);
+            this.leftSplitterHitRect = null;
+
+            int handleX = stripX + (stripWidth - handleWidth) / 2;
+            this.leftCollapseHandleRect = new UiLayout.Rect(handleX, handleY, handleWidth, handleHeight);
+
+            boolean isStripHovered = this.leftCollapseStripRect.contains(mouseX, mouseY);
+            boolean isHandleHovered = this.leftCollapseHandleRect.contains(mouseX, mouseY);
+            boolean active = isStripHovered || isHandleHovered;
+
+            // Full-height colored gutter strip in left padding
+            int fill = active ? 0x335294E2 : 0x18304860;
+            int border = active ? UiTheme.ACCENT : 0x405294E2;
+            context.fill(stripX, stripY, stripX + stripWidth - 2, stripY + stripHeight, fill);
+            context.fill(stripX + stripWidth - 2, stripY, stripX + stripWidth - 1, stripY + stripHeight, border);
+
+            // Centered 17x44 pill button
+            int pillBg = isHandleHovered ? 0xFA1E2C3D : 0xEE141F2B;
+            int pillBorder = isHandleHovered ? UiTheme.ACCENT : (active ? 0xAA5294E2 : UiTheme.BORDER_STRONG);
+            UiRenderer.panel(context, handleX, handleY, handleWidth, handleHeight, pillBg, pillBorder);
+
+            String arrow = "\u276F"; // ❯ pointing right to expand
+            int arrowColor = isHandleHovered ? UiTheme.ACCENT : (active ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(arrow), handleX + handleWidth / 2, handleY + (handleHeight - 8) / 2, arrowColor);
+        } else {
+            this.leftCollapseStripRect = null;
+            if (this.leftSplitterHitRect == null || this.leftCollapseHandleRect == null) return;
+
+            int splitterLineX = this.leftSplitterHitRect.x() + this.leftSplitterHitRect.width() / 2;
+            boolean isSplitterHovered = this.leftSplitterHitRect.contains(mouseX, mouseY);
+            boolean isHandleHovered = this.leftCollapseHandleRect.contains(mouseX, mouseY);
+            boolean active = isSplitterHovered || isHandleHovered || this.draggingLeftSplitter;
+
+            int lineColor = this.draggingLeftSplitter ? UiTheme.ACCENT : (active ? 0x885294E2 : 0x22FFFFFF);
+            context.fill(splitterLineX - 1, 12, splitterLineX, this.height - 12, lineColor);
+
+            int hx = this.leftCollapseHandleRect.x();
+            int hy = this.leftCollapseHandleRect.y();
+            int hw = this.leftCollapseHandleRect.width();
+            int hh = this.leftCollapseHandleRect.height();
+
+            int pillBg = isHandleHovered ? 0xFA1E2C3D : 0xEE141F2B;
+            int pillBorder = isHandleHovered ? UiTheme.ACCENT : (active ? 0xAA5294E2 : UiTheme.BORDER_STRONG);
+            UiRenderer.panel(context, hx, hy, hw, hh, pillBg, pillBorder);
+
+            String arrow = "\u276E"; // ❮ pointing left to collapse
+            int arrowColor = isHandleHovered ? UiTheme.ACCENT : (active ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(arrow), hx + hw / 2, hy + (hh - 8) / 2, arrowColor);
+        }
+    }
+
     private void drawWorkspaceNavigation(DrawContext context, UiLayout.Rect sidebar, UiLayout.Rect search, int mouseX, int mouseY) {
+        if (sidebar.width() <= 4) {
+            return;
+        }
+        context.enableScissor(sidebar.x(), sidebar.y(), sidebar.x() + sidebar.width(), sidebar.y() + sidebar.height());
         UiRenderer.panel(context, sidebar.x(), sidebar.y(), sidebar.width(), sidebar.height(), UiTheme.SIDEBAR, UiTheme.BORDER_SUBTLE);
-        context.drawText(this.textRenderer, Text.literal("MINIVERSE"), sidebar.x() + 12, sidebar.y() + 12, UiTheme.TEXT, false);
-        context.drawText(this.textRenderer, Text.literal("Workspace"), sidebar.x() + 12, sidebar.y() + 24, UiTheme.TEXT_DIM, false);
-        if (this.sidebarSearchField != null) {
+        if (sidebar.width() >= 80) {
+            context.drawText(this.textRenderer, Text.literal("MINIVERSE"), sidebar.x() + 12, sidebar.y() + 12, UiTheme.TEXT, false);
+            context.drawText(this.textRenderer, Text.literal("Workspace"), sidebar.x() + 12, sidebar.y() + 24, UiTheme.TEXT_DIM, false);
+        }
+        if (this.sidebarSearchField != null && sidebar.width() >= 80) {
             int outline = this.sidebarSearchField.isFocused() ? UiTheme.ACCENT : UiTheme.BORDER_SUBTLE;
             UiRenderer.panel(context, search.x() - 1, search.y() - 1, search.width() + 2, search.height() + 2, UiTheme.SIDEBAR, outline);
         }
@@ -704,9 +839,10 @@ public class SessionScreen extends Screen {
         }
         context.disableScissor();
 
-        if (this.sidebarMaxScroll > 0.0) {
+        if (this.sidebarMaxScroll > 0.0 && sidebar.width() >= 60) {
             this.drawSidebarScrollbar(context, sidebar, search, mouseX, mouseY);
         }
+        context.disableScissor();
     }
 
     private int sidebarTrackTop(UiLayout.Rect sidebar, UiLayout.Rect search) {
@@ -946,6 +1082,42 @@ public class SessionScreen extends Screen {
             return true;
         }
         Layout layout = this.createLayout();
+        boolean isLeftCollapsed = leftSidebarCollapsed || layout.sidebar().width() <= 20;
+        if (button == 0 && isLeftCollapsed && this.leftCollapseStripRect != null && this.leftCollapseStripRect.contains(mouseX, mouseY)) {
+            leftSidebarCollapsed = false;
+            leftSidebarAnimation.animateTo(1.0F, 220, UiAnimation::easeInOutQuad);
+            return true;
+        }
+        if (button == 0 && this.leftCollapseHandleRect != null && this.leftCollapseHandleRect.contains(mouseX, mouseY)) {
+            leftSidebarCollapsed = !leftSidebarCollapsed;
+            leftSidebarAnimation.animateTo(leftSidebarCollapsed ? 0.0F : 1.0F, 220, UiAnimation::easeInOutQuad);
+            return true;
+        }
+        if (button == 0 && this.leftSplitterHitRect != null && this.leftSplitterHitRect.contains(mouseX, mouseY) && !leftSidebarCollapsed) {
+            this.draggingLeftSplitter = true;
+            this.leftSplitterDragStartMouseX = mouseX;
+            this.leftSplitterDragStartWidth = leftSidebarTargetWidth;
+            return true;
+        }
+        if (this.workspaceView == null) {
+            boolean isOverviewCollapsed = rightDockCollapsed || layout.detail().width() <= 20;
+            if (button == 0 && isOverviewCollapsed && this.overviewCollapseStripRect != null && this.overviewCollapseStripRect.contains(mouseX, mouseY)) {
+                rightDockCollapsed = false;
+                rightDockAnimation.animateTo(1.0F, 220, UiAnimation::easeInOutQuad);
+                return true;
+            }
+            if (button == 0 && this.overviewCollapseHandleRect != null && this.overviewCollapseHandleRect.contains(mouseX, mouseY)) {
+                rightDockCollapsed = !rightDockCollapsed;
+                rightDockAnimation.animateTo(rightDockCollapsed ? 0.0F : 1.0F, 220, UiAnimation::easeInOutQuad);
+                return true;
+            }
+            if (button == 0 && this.overviewSplitterHitRect != null && this.overviewSplitterHitRect.contains(mouseX, mouseY) && !rightDockCollapsed) {
+                this.draggingOverviewSplitter = true;
+                this.overviewSplitterDragStartMouseX = mouseX;
+                this.overviewSplitterDragStartWidth = rightDockTargetWidth;
+                return true;
+            }
+        }
         if (button == 0 && this.sidebarMaxScroll > 0.0) {
             UiLayout.Rect sidebar = layout.sidebar();
             UiLayout.Rect search = layout.sidebarSearch();
@@ -1002,6 +1174,9 @@ public class SessionScreen extends Screen {
     }
 
     private boolean handleWorkspaceNavigationClick(UiLayout.Rect sidebar, UiLayout.Rect search, double mouseX, double mouseY) {
+        if (sidebar.width() <= 20) {
+            return false;
+        }
         if (mouseX < sidebar.x() || mouseX > sidebar.x() + sidebar.width()) {
             return false;
         }
@@ -1072,6 +1247,20 @@ public class SessionScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == 0 && this.draggingLeftSplitter) {
+            int newW = (int) (this.leftSplitterDragStartWidth + (mouseX - this.leftSplitterDragStartMouseX));
+            leftSidebarTargetWidth = Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.min(MAX_LEFT_SIDEBAR_WIDTH, newW));
+            leftSidebarAnimation.set(1.0F);
+            leftSidebarCollapsed = false;
+            return true;
+        }
+        if (button == 0 && this.workspaceView == null && this.draggingOverviewSplitter) {
+            int newW = (int) (this.overviewSplitterDragStartWidth - (mouseX - this.overviewSplitterDragStartMouseX));
+            rightDockTargetWidth = Math.max(dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout.MIN_DOCK_WIDTH, Math.min(dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout.MAX_DOCK_WIDTH, newW));
+            rightDockAnimation.set(1.0F);
+            rightDockCollapsed = false;
+            return true;
+        }
         if (button == 0 && this.draggingSidebarScrollbar && this.sidebarMaxScroll > 0.0) {
             Layout layout = this.createLayout();
             UiLayout.Rect sidebar = layout.sidebar();
@@ -1095,6 +1284,16 @@ public class SessionScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && this.draggingLeftSplitter) {
+            this.draggingLeftSplitter = false;
+            this.rebuildWorkspaceChildren();
+            return true;
+        }
+        if (button == 0 && this.draggingOverviewSplitter) {
+            this.draggingOverviewSplitter = false;
+            this.rebuildWorkspaceChildren();
+            return true;
+        }
         if (button == 0 && this.draggingSidebarScrollbar) {
             this.draggingSidebarScrollbar = false;
             return true;
@@ -1316,23 +1515,114 @@ public class SessionScreen extends Screen {
         context.drawText(this.textRenderer, Text.literal("Close"), labelX, labelY, UiTheme.TEXT, false);
     }
 
-    private void drawDetailPanel(DrawContext context, UiLayout.Rect detail) {
-        int x = detail.x() + 12;
-        int y = detail.y() + 12;
-        int lineHeight = this.textRenderer.fontHeight + 4;
-        context.drawText(this.textRenderer, Text.literal("Overview"), x, y, UiTheme.TEXT, false);
-        y += lineHeight + 2;
-        context.drawText(this.textRenderer, Text.literal("Gamemodes: " + SessionSnapshotData.games().size()), x, y, UiTheme.TEXT_MUTED, false);
-        y += lineHeight;
-        context.drawText(this.textRenderer, Text.literal("Sessions: " + SessionSnapshotData.sessions().size()), x, y, UiTheme.TEXT_MUTED, false);
-        y += lineHeight;
-        context.drawText(this.textRenderer, Text.literal("Players: " + SessionSnapshotData.roster().size()), x, y, UiTheme.TEXT_MUTED, false);
-        y += lineHeight * 2;
-        context.drawText(this.textRenderer, Text.literal("Tip"), x, y, UiTheme.TEXT, false);
-        y += lineHeight + 2;
-        for (String line : this.wrapText("Choose a gamemode to configure teams and match rules before launching a session.", detail.width() - 24, 3)) {
-            context.drawText(this.textRenderer, Text.literal(line), x, y, UiTheme.TEXT_DIM, false);
-            y += lineHeight - 1;
+    private void renderOverviewDock(DrawContext context, UiLayout.Rect dock, int mouseX, int mouseY) {
+        if (dock.width() <= 4) return;
+
+        context.enableScissor(dock.x(), dock.y(), dock.x() + dock.width(), dock.y() + dock.height());
+        try {
+            // Main solid background panel
+            UiRenderer.panel(context, dock.x(), dock.y(), dock.width(), dock.height(), UiTheme.PANEL_SOFT, UiTheme.BORDER_SUBTLE);
+
+            // Header bar
+            int headerH = 42;
+            context.fill(dock.x() + 1, dock.y() + 1, dock.x() + dock.width() - 1, dock.y() + headerH, 0x601B2634);
+            context.fill(dock.x() + 1, dock.y() + headerH - 1, dock.x() + dock.width() - 1, dock.y() + headerH, UiTheme.BORDER_SUBTLE);
+
+            context.drawText(this.textRenderer, Text.literal("✦ Platform Overview"), dock.x() + 14, dock.y() + 11, UiTheme.ACCENT_BLUE, false);
+            context.drawText(this.textRenderer, Text.literal("Network state & stats"), dock.x() + 14, dock.y() + 24, UiTheme.TEXT_DIM, false);
+
+            int curY = dock.y() + headerH + 12;
+            int cardW = Math.max(20, dock.width() - 24);
+
+            // Stat Card 1: Gamemodes
+            curY = this.drawOverviewStatCard(context, dock.x() + 12, curY, cardW, "🎮  Gamemodes", String.valueOf(SessionSnapshotData.games().size()), "Available catalog modes", UiTheme.ACCENT);
+            curY += 8;
+
+            // Stat Card 2: Active Sessions
+            curY = this.drawOverviewStatCard(context, dock.x() + 12, curY, cardW, "⚡  Sessions", String.valueOf(SessionSnapshotData.sessions().size()), "Active or queued matches", UiTheme.ACCENT_BLUE);
+            curY += 8;
+
+            // Stat Card 3: Online Players
+            curY = this.drawOverviewStatCard(context, dock.x() + 12, curY, cardW, "👥  Players", String.valueOf(SessionSnapshotData.roster().size()), "Connected to network", UiTheme.ACCENT_GREEN);
+            curY += 14;
+
+            // Tip / Quick Info Card
+            int tipH = 76;
+            if (curY + tipH <= dock.y() + dock.height() - 10) {
+                UiRenderer.panel(context, dock.x() + 12, curY, cardW, tipH, 0x40141F2B, UiTheme.BORDER_SUBTLE);
+                context.fill(dock.x() + 13, curY + 1, dock.x() + 15, curY + tipH - 1, UiTheme.ACCENT);
+                context.drawText(this.textRenderer, Text.literal("💡 Quick Guide"), dock.x() + 22, curY + 8, UiTheme.TEXT, false);
+                int tipTextY = curY + 24;
+                for (String line : this.wrapText("Select any gamemode card to open its workspace, configure rules & teams, and launch a match.", cardW - 20, 3)) {
+                    context.drawText(this.textRenderer, Text.literal(line), dock.x() + 22, tipTextY, UiTheme.TEXT_MUTED, false);
+                    tipTextY += this.textRenderer.fontHeight + 2;
+                }
+            }
+        } finally {
+            context.disableScissor();
+        }
+    }
+
+    private int drawOverviewStatCard(DrawContext context, int x, int y, int width, String title, String value, String desc, int valueColor) {
+        int cardH = 46;
+        UiRenderer.panel(context, x, y, width, cardH, 0x40172230, UiTheme.BORDER_SUBTLE);
+        context.drawText(this.textRenderer, Text.literal(title), x + 10, y + 8, UiTheme.TEXT, false);
+        context.drawText(this.textRenderer, Text.literal(value), x + width - 12 - this.textRenderer.getWidth(value), y + 8, valueColor, false);
+        context.drawText(this.textRenderer, Text.literal(desc), x + 10, y + 24, UiTheme.TEXT_DIM, false);
+        return y + cardH;
+    }
+
+    private void renderOverviewSplitter(DrawContext context, UiLayout.Rect dock, int mouseX, int mouseY) {
+        boolean isClosed = rightDockCollapsed || dock.width() <= 20;
+        int handleWidth = 17;
+        int handleHeight = 44;
+
+        if (isClosed) {
+            if (this.overviewCollapseStripRect == null || this.overviewCollapseHandleRect == null) return;
+            int stripX = this.overviewCollapseStripRect.x();
+            int stripY = this.overviewCollapseStripRect.y();
+            int stripWidth = this.overviewCollapseStripRect.width();
+            int stripHeight = this.overviewCollapseStripRect.height();
+            int handleX = this.overviewCollapseHandleRect.x();
+            int handleY = this.overviewCollapseHandleRect.y();
+
+            boolean isStripHovered = this.overviewCollapseStripRect.contains(mouseX, mouseY);
+            boolean isHandleHovered = this.overviewCollapseHandleRect.contains(mouseX, mouseY);
+            boolean active = isStripHovered || isHandleHovered;
+
+            // Full-height colored gutter strip along physical right edge
+            int fill = active ? 0x335294E2 : 0x18304860;
+            int border = active ? UiTheme.ACCENT : 0x405294E2;
+            context.fill(stripX + 1, stripY, this.width, stripY + stripHeight, fill);
+            context.fill(stripX, stripY, stripX + 1, stripY + stripHeight, border);
+
+            // Centered 17x44 pill button
+            int pillBg = isHandleHovered ? 0xFA1E2C3D : 0xEE141F2B;
+            int pillBorder = isHandleHovered ? UiTheme.ACCENT : (active ? 0xAA5294E2 : UiTheme.BORDER_STRONG);
+            UiRenderer.panel(context, handleX, handleY, handleWidth, handleHeight, pillBg, pillBorder);
+
+            String arrow = "\u276E"; // ❮ pointing left to expand
+            int arrowColor = isHandleHovered ? UiTheme.ACCENT : (active ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(arrow), handleX + handleWidth / 2, handleY + (handleHeight - 8) / 2, arrowColor);
+        } else {
+            if (this.overviewSplitterHitRect == null || this.overviewCollapseHandleRect == null) return;
+            int splitterLineX = this.overviewSplitterHitRect.x() + this.overviewSplitterHitRect.width() / 2;
+            boolean isSplitterHovered = this.overviewSplitterHitRect.contains(mouseX, mouseY);
+            boolean isHandleHovered = this.overviewCollapseHandleRect.contains(mouseX, mouseY);
+            boolean active = isSplitterHovered || isHandleHovered || this.draggingOverviewSplitter;
+
+            int lineColor = this.draggingOverviewSplitter ? UiTheme.ACCENT : (active ? 0x885294E2 : 0x22FFFFFF);
+            context.fill(splitterLineX - 1, dock.y(), splitterLineX + 1, dock.y() + dock.height(), lineColor);
+
+            int handleX = this.overviewCollapseHandleRect.x();
+            int handleY = this.overviewCollapseHandleRect.y();
+            int pillBg = isHandleHovered ? 0xFA1E2C3D : 0xEE141F2B;
+            int pillBorder = isHandleHovered ? UiTheme.ACCENT : (active ? 0xAA5294E2 : UiTheme.BORDER_STRONG);
+            UiRenderer.panel(context, handleX, handleY, handleWidth, handleHeight, pillBg, pillBorder);
+
+            String arrow = "\u276F"; // ❯ pointing right to collapse
+            int arrowColor = isHandleHovered ? UiTheme.ACCENT : (active ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(arrow), handleX + handleWidth / 2, handleY + (handleHeight - 8) / 2, arrowColor);
         }
     }
 
@@ -1442,16 +1732,77 @@ public class SessionScreen extends Screen {
 
     private Layout createLayout() {
         int margin = 12;
-        UiLayout.Rect sidebarRect = new UiLayout.Rect(margin, margin, UiTheme.SIDEBAR_WIDTH, this.height - margin * 2);
-        UiLayout.Rect sidebarSearch = new UiLayout.Rect(sidebarRect.x() + 12, sidebarRect.y() + SIDEBAR_HEADER_HEIGHT, sidebarRect.width() - 24, UiTheme.INPUT_HEIGHT);
-        int workspaceX = sidebarRect.x() + sidebarRect.width() + UiTheme.GAP;
+        leftSidebarAnimation.tick();
+        float animProgress = leftSidebarAnimation.get();
+        int currentSidebarWidth = Math.round(animProgress * leftSidebarTargetWidth);
+
+        UiLayout.Rect sidebarRect;
+        UiLayout.Rect sidebarSearch;
+        int workspaceX;
+        int splitterLineX;
+
+        if (currentSidebarWidth > 4) {
+            sidebarRect = new UiLayout.Rect(margin, margin, currentSidebarWidth, this.height - margin * 2);
+            sidebarSearch = new UiLayout.Rect(sidebarRect.x() + 12, sidebarRect.y() + SIDEBAR_HEADER_HEIGHT, Math.max(10, sidebarRect.width() - 24), UiTheme.INPUT_HEIGHT);
+            splitterLineX = sidebarRect.x() + sidebarRect.width() + UiTheme.GAP / 2;
+            workspaceX = sidebarRect.x() + sidebarRect.width() + UiTheme.GAP;
+        } else {
+            sidebarRect = new UiLayout.Rect(margin, margin, 0, this.height - margin * 2);
+            sidebarSearch = new UiLayout.Rect(margin, margin, 0, 0);
+            splitterLineX = margin + 5;
+            workspaceX = margin + 14;
+        }
+
+        this.leftSplitterHitRect = new UiLayout.Rect(splitterLineX - 4, margin, 8, this.height - margin * 2);
+        int handleWidth = 17; // 20% larger than 14px
+        int handleHeight = 44; // 20% larger than 36px
+        int handleY = (this.height - handleHeight) / 2;
+        int handleX = splitterLineX - handleWidth / 2;
+        this.leftCollapseHandleRect = new UiLayout.Rect(handleX, handleY, handleWidth, handleHeight);
+
         int workspaceWidth = Math.max(1, this.width - workspaceX - margin);
         UiLayout.Rect toolbar = new UiLayout.Rect(workspaceX, margin, workspaceWidth, UiTheme.TOOLBAR_HEIGHT);
-        int detailWidth = Math.min(230, Math.max(180, workspaceWidth / 4));
-        UiLayout.Rect detail = new UiLayout.Rect(workspaceX + workspaceWidth - detailWidth, toolbar.y() + toolbar.height() + UiTheme.GAP, detailWidth, this.height - toolbar.height() - margin * 2 - UiTheme.GAP);
-        UiLayout.Rect search = new UiLayout.Rect(workspaceX, toolbar.y() + toolbar.height() + UiTheme.GAP + 14, Math.max(140, workspaceWidth - detailWidth - UiTheme.GAP), UiTheme.INPUT_HEIGHT);
-        UiLayout.Rect cards = new UiLayout.Rect(workspaceX, search.y() + search.height() + 18, Math.max(1, workspaceWidth - detailWidth - UiTheme.GAP), Math.max(1, this.height - search.y() - search.height() - 42));
-        UiLayout.Rect content = new UiLayout.Rect(workspaceX, toolbar.y() + toolbar.height() + UiTheme.GAP, workspaceWidth, Math.max(1, this.height - toolbar.y() - toolbar.height() - UiTheme.GAP - margin));
+        int dockY = toolbar.y() + toolbar.height() + UiTheme.GAP;
+        int dockHeight = Math.max(1, this.height - dockY - margin);
+        UiLayout.Rect content = new UiLayout.Rect(workspaceX, dockY, workspaceWidth, dockHeight);
+
+        rightDockAnimation.tick();
+        float overviewProgress = rightDockAnimation.get();
+        int currentOverviewWidth = Math.round(overviewProgress * rightDockTargetWidth);
+
+        UiLayout.Rect detail;
+        UiLayout.Rect search;
+        UiLayout.Rect cards;
+
+        int centerPadLeft = currentSidebarWidth <= 4 ? 20 : 16;
+        int centerStartX = workspaceX + centerPadLeft;
+
+        if (currentOverviewWidth > 4) {
+            int dockX = workspaceX + workspaceWidth - currentOverviewWidth;
+            detail = new UiLayout.Rect(dockX, dockY, currentOverviewWidth, dockHeight);
+            int centerPadRight = 16;
+            int availableWidth = Math.max(140, dockX - centerStartX - centerPadRight);
+            search = new UiLayout.Rect(centerStartX, dockY + 14, availableWidth, UiTheme.INPUT_HEIGHT);
+            cards = new UiLayout.Rect(centerStartX, search.y() + search.height() + 18, availableWidth, Math.max(1, this.height - search.y() - search.height() - 42));
+
+            int rightSplitterLineX = dockX - UiTheme.GAP / 2;
+            this.overviewSplitterHitRect = new UiLayout.Rect(rightSplitterLineX - 4, dockY, 8, dockHeight);
+            this.overviewCollapseHandleRect = new UiLayout.Rect(rightSplitterLineX - handleWidth / 2, dockY + (dockHeight - handleHeight) / 2, handleWidth, handleHeight);
+            this.overviewCollapseStripRect = null;
+        } else {
+            detail = new UiLayout.Rect(workspaceX + workspaceWidth, dockY, 0, dockHeight);
+
+            this.overviewSplitterHitRect = null;
+            int stripWidth = 26;
+            int stripX = this.width - stripWidth;
+            this.overviewCollapseStripRect = new UiLayout.Rect(stripX, dockY, stripWidth, dockHeight);
+            this.overviewCollapseHandleRect = new UiLayout.Rect(stripX + (stripWidth - handleWidth) / 2, dockY + (dockHeight - handleHeight) / 2, handleWidth, handleHeight);
+
+            int centerPadRight = 20;
+            int availableWidth = Math.max(140, stripX - centerStartX - centerPadRight);
+            search = new UiLayout.Rect(centerStartX, dockY + 14, availableWidth, UiTheme.INPUT_HEIGHT);
+            cards = new UiLayout.Rect(centerStartX, search.y() + search.height() + 18, availableWidth, Math.max(1, this.height - search.y() - search.height() - 42));
+        }
         return new Layout(sidebarRect, sidebarSearch, toolbar, search, cards, detail, content);
     }
 

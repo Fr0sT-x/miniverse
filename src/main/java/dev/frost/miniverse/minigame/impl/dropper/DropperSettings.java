@@ -15,7 +15,7 @@ public record DropperSettings(
     int skipFailsThreshold
 ) {
     public static DropperSettings defaults() {
-        return new DropperSettings("", 5, "ORDER", "", 60, 600, true, 20);
+        return new DropperSettings("", 0, "ORDER", "", 60, 600, true, 20);
     }
 
     public static DropperSettings fromNbt(NbtCompound nbt) {
@@ -24,7 +24,7 @@ public record DropperSettings(
         }
         return new DropperSettings(
             nbt.contains("mapId") ? nbt.getString("mapId") : "",
-            nbt.contains("levelsToPlay") ? nbt.getInt("levelsToPlay") : 5,
+            nbt.contains("levelsToPlay") ? nbt.getInt("levelsToPlay") : 0,
             nbt.contains("selectionMode") ? nbt.getString("selectionMode") : "ORDER",
             nbt.contains("selectedLevelIds") ? nbt.getString("selectedLevelIds") : "",
             nbt.contains("finalCountdownSeconds") ? nbt.getInt("finalCountdownSeconds") : 60,
@@ -51,7 +51,7 @@ public record DropperSettings(
         }
         return new DropperSettings(
             properties.getProperty("dropper.mapId", ""),
-            parseInt(properties.getProperty("dropper.levelsToPlay"), 5),
+            parseInt(properties.getProperty("dropper.levelsToPlay"), 0),
             properties.getProperty("dropper.selectionMode", "ORDER"),
             properties.getProperty("dropper.selectedLevelIds", ""),
             parseInt(properties.getProperty("dropper.finalCountdownSeconds"), 60),

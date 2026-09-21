@@ -137,9 +137,15 @@ public class PresetDropdownWidget {
         int menuY = this.y + this.height + 2;
         int menuHeight = this.items.size() * 20 + 4;
 
-        // Draw solid opaque shadow + panel
-        context.fill(this.x + 2, menuY + 2, this.x + this.width + 2, menuY + menuHeight + 2, 0x90000000);
-        context.fill(this.x, menuY, this.x + this.width, menuY + menuHeight, 0xFF0F151F);
+        // Flush all background rendering (including previously queued text) so it appears strictly UNDER the dropdown
+        context.draw();
+
+        context.getMatrices().push();
+        context.getMatrices().translate(0, 0, 400.0F);
+
+        // Draw 100% solid opaque shadow + panel
+        context.fill(this.x + 2, menuY + 2, this.x + this.width + 2, menuY + menuHeight + 2, 0xC0000000);
+        context.fill(this.x, menuY, this.x + this.width, menuY + menuHeight, 0xFF0D131C);
         UiRenderer.border(context, this.x, menuY, this.width, menuHeight, UiTheme.ACCENT_BLUE);
 
         for (int i = 0; i < this.items.size(); i++) {
@@ -148,10 +154,12 @@ public class PresetDropdownWidget {
             boolean isItemHovered = mouseX >= this.x && mouseX <= this.x + this.width && mouseY >= itemY && mouseY < itemY + 20;
             boolean isSelected = item.equalsIgnoreCase(this.selected);
 
-            if (isItemHovered) {
-                context.fill(this.x + 1, itemY, this.x + this.width - 1, itemY + 20, 0x503A70C2);
+            if (isItemHovered && isSelected) {
+                context.fill(this.x + 1, itemY, this.x + this.width - 1, itemY + 20, 0xFF223750);
+            } else if (isItemHovered) {
+                context.fill(this.x + 1, itemY, this.x + this.width - 1, itemY + 20, 0xFF1D2C40);
             } else if (isSelected) {
-                context.fill(this.x + 1, itemY, this.x + this.width - 1, itemY + 20, 0x253A70C2);
+                context.fill(this.x + 1, itemY, this.x + this.width - 1, itemY + 20, 0xFF162334);
             }
 
             int textColor = isSelected ? UiTheme.ACCENT_BLUE : (isItemHovered ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
@@ -159,5 +167,8 @@ public class PresetDropdownWidget {
             String label = textRenderer.trimToWidth(prefix + item, this.width - 16);
             context.drawText(textRenderer, Text.literal(label), this.x + 8, itemY + 6, textColor, false);
         }
+
+        context.draw();
+        context.getMatrices().pop();
     }
 }

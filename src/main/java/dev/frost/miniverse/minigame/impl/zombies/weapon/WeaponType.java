@@ -12,7 +12,7 @@ public enum WeaponType {
         .build()),
 
     PISTOL(WeaponData.builder("Pistol", Items.WOODEN_HOE)
-        .damage(5.0f)
+        .damage(3.5f)
         .ammo(10, 300)
         .delay(10)
         .reload(30)
@@ -21,7 +21,7 @@ public enum WeaponType {
         .build()),
 
     SHOTGUN(WeaponData.builder("Shotgun", Items.IRON_HOE)
-        .damage(2.8f)
+        .damage(1.8f)
         .bullets(10, 1.15)
         .ammo(5, 65)
         .delay(22)
@@ -41,7 +41,7 @@ public enum WeaponType {
         .build()),
 
     SNIPER(WeaponData.builder("Sniper", Items.WOODEN_SHOVEL)
-        .damage(20.0f)
+        .damage(12.0f)
         .bullets(1, 1.0)
         .ammo(4, 40)
         .delay(30)
@@ -53,7 +53,7 @@ public enum WeaponType {
         .build()),
 
     FLAME_THROWER(WeaponData.builder("Flame Thrower", Items.GOLDEN_HOE)
-        .damage(2.0f)
+        .damage(4.0f)
         .bullets(1, 0.95)
         .ammo(50, 350)
         .delay(2)
@@ -74,7 +74,7 @@ public enum WeaponType {
         .build()),
 
     ROCKET_LAUNCHER(WeaponData.builder("Rocket Launcher", Items.GOLDEN_SHOVEL)
-        .damage(25.0f)
+        .damage(7.0f)
         .ammo(2, 20)
         .delay(30)
         .reload(50)
@@ -84,7 +84,7 @@ public enum WeaponType {
         .build()),
 
     ZOMBIE_ZAPPER(WeaponData.builder("Zombie Zapper", Items.DIAMOND_HOE)
-        .damage(12.0f)
+        .damage(6.5f)
         .ammo(12, 120)
         .delay(10)
         .reload(30)
@@ -96,7 +96,7 @@ public enum WeaponType {
 
     // Upgraded (Ultimate Machine) Variants
     LASER_GUN(WeaponData.builder("Laser Gun", Items.WOODEN_HOE)
-        .damage(12.0f)
+        .damage(8.0f)
         .ammo(15, 450)
         .delay(8)
         .reload(20)
@@ -106,7 +106,7 @@ public enum WeaponType {
         .build()),
 
     DOUBLE_BARREL(WeaponData.builder("Double Barrel", Items.IRON_HOE)
-        .damage(4.0f)
+        .damage(2.5f)
         .bullets(12, 1.05)
         .ammo(8, 120)
         .delay(18)
@@ -126,7 +126,7 @@ public enum WeaponType {
         .build()),
 
     RAILGUN(WeaponData.builder("Railgun", Items.WOODEN_SHOVEL)
-        .damage(50.0f)
+        .damage(16.0f)
         .ammo(6, 60)
         .delay(25)
         .reload(30)
@@ -136,7 +136,7 @@ public enum WeaponType {
         .build()),
 
     NUKE_LAUNCHER(WeaponData.builder("Nuke Launcher", Items.GOLDEN_SHOVEL)
-        .damage(60.0f)
+        .damage(11.0f)
         .ammo(4, 40)
         .delay(30)
         .reload(45)

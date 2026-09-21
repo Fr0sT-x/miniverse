@@ -38,6 +38,8 @@ public class Miniverse implements ModInitializer {
 
 		NetworkConstants.registerPayloadTypes();
 
+		dev.frost.miniverse.minigame.core.item.ProtectedItemService.getInstance();
+		dev.frost.miniverse.minigame.core.item.ProtectedItemTags.isProtected(net.minecraft.item.ItemStack.EMPTY);
 		dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjectiveRegistry.register();
 		MiniverseGames.registerAll();
 		SessionRegistry.cleanupSessionsOnStartup();

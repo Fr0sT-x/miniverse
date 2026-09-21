@@ -209,5 +209,19 @@ public class ZombiesConfigAndLogicTest {
         Assert.assertEquals(35.0f, fromNbt.weaponConfig().getDamage("KNIFE"), 0.001f);
         Assert.assertEquals(0.8f, fromNbt.difficultyConfig().getHealthMultiplier(ZombiesDifficulty.EASY), 0.001f);
     }
+
+    @Test
+    public void testUpdatedWeaponDamagesAndHardDifficulty() {
+        // Verify Hard Difficulty Health Multiplier is double baseline (2.0x)
+        Assert.assertEquals(2.0f, ZombiesDifficulty.HARD.getHealthMultiplier(), 0.001f);
+
+        // Verify WeaponCustomConfig defaults
+        dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig cfg = dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponCustomConfig.defaults();
+        Assert.assertEquals(1.8f, cfg.getDamage("SHOTGUN"), 0.001f);
+        Assert.assertEquals(12.0f, cfg.getDamage("SNIPER"), 0.001f);
+        Assert.assertEquals(7.0f, cfg.getDamage("ROCKET_LAUNCHER"), 0.001f);
+        Assert.assertEquals(2.5f, cfg.getDamage("DOUBLE_BARREL"), 0.001f);
+        Assert.assertEquals(11.0f, cfg.getDamage("NUKE_LAUNCHER"), 0.001f);
+    }
 }
 

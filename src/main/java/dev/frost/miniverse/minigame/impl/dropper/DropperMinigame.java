@@ -243,11 +243,14 @@ public class DropperMinigame extends AbstractMinigame implements
             Collections.shuffle(candidates);
         } else if ("RANDOM_N".equalsIgnoreCase(mode)) {
             Collections.shuffle(candidates);
-            int count = Math.min(this.settings.levelsToPlay(), candidates.size());
-            candidates = new ArrayList<>(candidates.subList(0, Math.max(1, count)));
+            // levelsToPlay <= 0 means "all" — no truncation
+            if (this.settings.levelsToPlay() > 0) {
+                int count = Math.min(this.settings.levelsToPlay(), candidates.size());
+                candidates = new ArrayList<>(candidates.subList(0, Math.max(1, count)));
+            }
         } else {
-            // ORDER
-            int count = Math.min(this.settings.levelsToPlay(), candidates.size());
+            // ORDER — levelsToPlay <= 0 means "all" — no truncation
+            int count = this.settings.levelsToPlay();
             if (count > 0 && count < candidates.size()) {
                 candidates = new ArrayList<>(candidates.subList(0, count));
             }

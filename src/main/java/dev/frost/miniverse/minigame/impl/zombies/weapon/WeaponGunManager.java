@@ -391,6 +391,7 @@ public class WeaponGunManager {
                 float damage = (this.instantKillSupplier != null && this.instantKillSupplier.get() && !isBoss) ? 9999.0f : baseDmg;
 
                 boolean wasAlive = mob.isAlive();
+                mob.timeUntilRegen = 0;
                 mob.damage(this.world.getDamageSources().playerAttack(player), damage);
                 if (wasAlive && (!mob.isAlive() || mob.getHealth() <= 0.0f) && this.killTracker != null) {
                     this.killTracker.accept(player);
@@ -455,6 +456,10 @@ public class WeaponGunManager {
                 boolean headshot = (hit.pos().y - mobBox.minY) >= (mobHeight * 0.72);
 
                 float finalDamage = this.weaponConfig != null ? this.weaponConfig.getDamage(type) : data.damage();
+                // 50% damage reduction for pierced targets after the first
+                if (hits > 1) {
+                    finalDamage *= 0.5f;
+                }
                 if (headshot) {
                     finalDamage *= 2.0f;
                     this.world.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.ENTITY_ARROW_HIT_PLAYER, SoundCategory.PLAYERS, 0.8f, 1.8f);
@@ -478,6 +483,7 @@ public class WeaponGunManager {
                 }
 
                 boolean wasAlive = mob.isAlive();
+                mob.timeUntilRegen = 0;
                 mob.damage(this.world.getDamageSources().playerAttack(player), finalDamage);
                 if (wasAlive && (!mob.isAlive() || mob.getHealth() <= 0.0f) && this.killTracker != null) {
                     this.killTracker.accept(player);

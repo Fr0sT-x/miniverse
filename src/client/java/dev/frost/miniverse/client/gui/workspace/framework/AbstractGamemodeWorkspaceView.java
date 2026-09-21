@@ -6,6 +6,7 @@ import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
+import dev.frost.miniverse.client.gui.ui.ThemedButtonWidget;
 import dev.frost.miniverse.client.gui.workspace.GamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.WorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid;
@@ -38,20 +39,35 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     protected String sessionName;
     protected ValidationResult status = null;
 
-    protected static boolean rightSidebarOpen = true;
+    public static boolean isRightSidebarOpen() {
+        return !SessionScreen.rightDockCollapsed;
+    }
+
+    public static void setRightSidebarOpen(boolean open) {
+        SessionScreen.setRightDockCollapsed(!open);
+    }
+
+    protected boolean draggingRightSplitter = false;
+    protected double rightSplitterDragStartMouseX = 0;
+    protected int rightSplitterDragStartWidth = StandardWorkspaceLayout.DEFAULT_DOCK_WIDTH;
+    protected UiLayout.Rect rightSplitterHitRect = null;
+    protected UiLayout.Rect dockArrowHandleRect = null;
+    protected UiLayout.Rect rightCollapseStripRect = null;
+    protected boolean lastDockAnimating = false;
+
     protected String activePresetName = "Default";
     protected PresetDropdownWidget presetDropdown;
     protected UiLayout.Rect savePresetBtnRect;
     protected UiLayout.Rect saveAsPresetBtnRect;
     protected UiLayout.Rect deletePresetBtnRect;
     protected UiLayout.Rect resetPresetBtnRect;
-    protected UiLayout.Rect dockToggleBtnRect;
     protected UiLayout.Rect dockCloseBtnRect;
     protected UiLayout.Rect lastWorkspaceRect;
     protected SessionScreen currentScreen;
 
     protected record TooltipZone(int x, int y, int width, int height, java.util.function.Supplier<String> text) {}
     protected final java.util.List<TooltipZone> activeTooltips = new java.util.ArrayList<>();
+    protected final java.util.List<ThemedButtonWidget> managedThemedButtons = new java.util.ArrayList<>();
 
     private TeamSelectionGrid rosterGrid;
     private MapThumbnailGrid mapGrid;
@@ -86,9 +102,13 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         this.currentScreen = screen;
         this.lastWorkspaceRect = workspace;
         this.activeTooltips.clear();
-        this.layout = new StandardWorkspaceLayout(workspace, rightSidebarOpen);
+        this.managedThemedButtons.clear();
+        SessionScreen.rightDockAnimation.tick();
+        float dockProgress = SessionScreen.rightDockAnimation.get();
+        int effectiveDockWidth = Math.round(dockProgress * SessionScreen.rightDockTargetWidth);
+        boolean isOpen = effectiveDockWidth > 4;
 
-        this.dockToggleBtnRect = this.layout.dockToggleRect();
+        this.layout = new StandardWorkspaceLayout(workspace, isOpen, effectiveDockWidth);
 
         if (this.layout.isRightSidebarOpen()) {
             UiLayout.Rect dock = this.layout.rightSidebar();
@@ -152,6 +172,70 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
     @Override
     public void renderBackground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
+        this.lastWorkspaceRect = workspace;
+        boolean wasAnimating = this.lastDockAnimating;
+        boolean nowAnimating = SessionScreen.rightDockAnimation.isAnimating();
+        this.lastDockAnimating = nowAnimating;
+        if (wasAnimating && !nowAnimating && this.currentScreen != null) {
+            this.syncStateFromWidgets();
+            this.currentScreen.rebuildWorkspaceChildren();
+        }
+
+        SessionScreen.rightDockAnimation.tick();
+        float dockProgress = SessionScreen.rightDockAnimation.get();
+        int effectiveDockWidth = Math.round(dockProgress * SessionScreen.rightDockTargetWidth);
+        boolean isOpen = effectiveDockWidth > 4;
+
+        this.layout = new StandardWorkspaceLayout(workspace, isOpen, effectiveDockWidth);
+        if (this.rosterGrid != null) {
+            this.rosterGrid.setBounds(this.layout.contentArea());
+            if (this.rosterGrid instanceof dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid) {
+                this.selectAllButtonRect = new UiLayout.Rect(this.layout.actionStartX(), this.layout.actionY(), 90, StandardWorkspaceLayout.BUTTON_HEIGHT);
+                this.clearButtonRect = new UiLayout.Rect(this.layout.actionStartX() + 98, this.layout.actionY(), 70, StandardWorkspaceLayout.BUTTON_HEIGHT);
+            }
+        }
+        if (this.mapGrid != null) {
+            this.mapGrid.setBounds(this.layout.contentArea());
+        }
+
+        // Dynamically update managed themed buttons so they track panel position seamlessly
+        for (ThemedButtonWidget btn : this.managedThemedButtons) {
+            btn.updatePosition(this.layout.mainPanel().x(), this.layout.mainPanel().y());
+            if (btn.getTooltipSupplier() != null) {
+                this.activeTooltips.add(new TooltipZone(btn.getX(), btn.getY(), btn.getWidth(), btn.getHeight(), btn.getTooltipSupplier()));
+            }
+        }
+
+        if (this.layout.isRightSidebarOpen()) {
+            UiLayout.Rect dock = this.layout.rightSidebar();
+            int dockX = dock.x();
+            int dockY = dock.y();
+            int dockW = dock.width();
+            int contentX = dockX + 10;
+            int contentW = dockW - 20;
+
+            this.dockCloseBtnRect = new UiLayout.Rect(dockX + dockW - 24, dockY + 7, 16, 16);
+
+            int curY = dockY + 40;
+            curY += 12;
+            if (this.presetDropdown != null) {
+                this.presetDropdown.setBounds(contentX, curY, contentW, 20);
+            }
+            curY += 24;
+            int btnW = (contentW - 4) / 2;
+            this.savePresetBtnRect = new UiLayout.Rect(contentX, curY, btnW, 19);
+            this.saveAsPresetBtnRect = new UiLayout.Rect(contentX + btnW + 4, curY, contentW - btnW - 4, 19);
+            curY += 23;
+            this.resetPresetBtnRect = new UiLayout.Rect(contentX, curY, btnW, 19);
+            this.deletePresetBtnRect = new UiLayout.Rect(contentX + btnW + 4, curY, contentW - btnW - 4, 19);
+        } else {
+            this.dockCloseBtnRect = null;
+            this.savePresetBtnRect = null;
+            this.saveAsPresetBtnRect = null;
+            this.deletePresetBtnRect = null;
+            this.resetPresetBtnRect = null;
+        }
+
         this.activeTooltips.clear();
         UiLayout.Rect mainPanel = this.layout.mainPanel();
         UiRenderer.panel(context, mainPanel.x(), mainPanel.y(), mainPanel.width(), mainPanel.height(), UiTheme.PANEL, UiTheme.BORDER_SUBTLE);
@@ -163,21 +247,12 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             context.drawText(textRenderer, Text.literal(active.description()), mainPanel.x() + 14, mainPanel.y() + 28, UiTheme.TEXT_DIM, false);
         }
 
-        // Header Dock Toggle Button
-        if (this.dockToggleBtnRect != null) {
-            boolean hover = this.dockToggleBtnRect.contains(mouseX, mouseY);
-            String toggleText = this.layout.isRightSidebarOpen() ? "Dock \u25B6" : "\u25F0 Dock";
-            this.renderActionButton(context, textRenderer, this.dockToggleBtnRect, toggleText, UiTheme.ACCENT_BLUE, hover);
-            this.activeTooltips.add(new TooltipZone(this.dockToggleBtnRect.x(), this.dockToggleBtnRect.y(), this.dockToggleBtnRect.width(), this.dockToggleBtnRect.height(), () -> this.layout.isRightSidebarOpen() ? "Collapse Match Dock" : "Expand Match Dock & Presets"));
-        }
-
         // When dock is collapsed, render collapsed Start Button and quick validation badge in the header!
         if (!this.layout.isRightSidebarOpen()) {
             UiLayout.Rect startBtn = this.layout.startButton();
             ValidationResult validation = this.validateGamemodeStart();
             boolean canStart = validation.canStart();
-            int startColor = canStart ? UiTheme.ACCENT_GREEN : UiTheme.BORDER_SUBTLE;
-            this.renderActionButton(context, textRenderer, startBtn, "\u25B6 Start", startColor, canStart && startBtn.contains(mouseX, mouseY));
+            this.renderActionButton(context, textRenderer, startBtn, "\u25B6 Start", UiTheme.ACCENT_GREEN, canStart && startBtn.contains(mouseX, mouseY), canStart);
             if (!canStart) {
                 this.activeTooltips.add(new TooltipZone(startBtn.x(), startBtn.y(), startBtn.width(), startBtn.height(), () -> "\u26A0 " + validation.message()));
             }
@@ -234,11 +309,81 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         if (this.layout.isRightSidebarOpen()) {
             this.renderRightDock(context, textRenderer, mouseX, mouseY, delta);
         }
+        this.renderRightSplitter(context, textRenderer, workspace, mouseX, mouseY);
+    }
+
+    private void renderRightSplitter(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY) {
+        boolean isClosed = SessionScreen.rightDockCollapsed || (this.layout.rightSidebar() != null && this.layout.rightSidebar().width() <= 20);
+        int handleWidth = 17; // 20% larger than 14px
+        int handleHeight = 44; // 20% larger than 36px
+        int handleY = workspace.y() + (workspace.height() - handleHeight) / 2;
+
+        int screenWidth = this.client != null && this.client.getWindow() != null
+            ? this.client.getWindow().getScaledWidth()
+            : (workspace.x() + workspace.width() + 12);
+
+        if (isClosed) {
+            int stripWidth = 26;
+            int stripX = screenWidth - stripWidth;
+            int stripY = workspace.y();
+            int stripHeight = workspace.height();
+            this.rightCollapseStripRect = new UiLayout.Rect(stripX, stripY, stripWidth, stripHeight);
+            this.rightSplitterHitRect = null;
+
+            int handleX = stripX + (stripWidth - handleWidth) / 2;
+            this.dockArrowHandleRect = new UiLayout.Rect(handleX, handleY, handleWidth, handleHeight);
+
+            boolean isStripHovered = this.rightCollapseStripRect.contains(mouseX, mouseY);
+            boolean isHandleHovered = this.dockArrowHandleRect.contains(mouseX, mouseY);
+            boolean active = isStripHovered || isHandleHovered;
+
+            // Full-height colored gutter strip in right padding all the way to physical screen edge
+            int fill = active ? 0x335294E2 : 0x18304860;
+            int border = active ? UiTheme.ACCENT : 0x405294E2;
+            context.fill(stripX + 1, stripY, screenWidth, stripY + stripHeight, fill);
+            context.fill(stripX, stripY, stripX + 1, stripY + stripHeight, border);
+
+            // Centered 17x44 pill button
+            int pillBg = isHandleHovered ? 0xFA1E2C3D : 0xEE141F2B;
+            int pillBorder = isHandleHovered ? UiTheme.ACCENT : (active ? 0xAA5294E2 : UiTheme.BORDER_STRONG);
+            UiRenderer.panel(context, handleX, handleY, handleWidth, handleHeight, pillBg, pillBorder);
+
+            String arrow = "\u276E"; // ❮ pointing left to expand
+            int arrowColor = isHandleHovered ? UiTheme.ACCENT : (active ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal(arrow), handleX + handleWidth / 2, handleY + (handleHeight - 8) / 2, arrowColor);
+        } else {
+            this.rightCollapseStripRect = null;
+            int splitterLineX = this.layout.mainPanel().x() + this.layout.mainPanel().width() + StandardWorkspaceLayout.PANEL_GAP / 2;
+            this.rightSplitterHitRect = new UiLayout.Rect(splitterLineX - 4, workspace.y(), 8, workspace.height());
+
+            int handleX = splitterLineX - handleWidth / 2;
+            this.dockArrowHandleRect = new UiLayout.Rect(handleX, handleY, handleWidth, handleHeight);
+
+            boolean isSplitterHovered = this.rightSplitterHitRect.contains(mouseX, mouseY);
+            boolean isHandleHovered = this.dockArrowHandleRect.contains(mouseX, mouseY);
+            boolean active = isSplitterHovered || isHandleHovered || this.draggingRightSplitter;
+
+            int lineColor = this.draggingRightSplitter ? UiTheme.ACCENT : (active ? 0x885294E2 : 0x22FFFFFF);
+            context.fill(splitterLineX - 1, workspace.y() + 4, splitterLineX, workspace.y() + workspace.height() - 4, lineColor);
+
+            // Centered 17x44 pill button
+            int pillBg = isHandleHovered ? 0xFA1E2C3D : 0xEE141F2B;
+            int pillBorder = isHandleHovered ? UiTheme.ACCENT : (active ? 0xAA5294E2 : UiTheme.BORDER_STRONG);
+            UiRenderer.panel(context, handleX, handleY, handleWidth, handleHeight, pillBg, pillBorder);
+
+            String arrow = "\u276F"; // ❯ pointing right to collapse
+            int arrowColor = isHandleHovered ? UiTheme.ACCENT : (active ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal(arrow), handleX + handleWidth / 2, handleY + (handleHeight - 8) / 2, arrowColor);
+
+            this.activeTooltips.add(new TooltipZone(handleX, handleY, handleWidth, handleHeight, () -> "Collapse Match Dock"));
+        }
     }
 
     private void renderRightDock(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
         UiLayout.Rect dock = this.layout.rightSidebar();
-        if (dock == null) return;
+        if (dock == null || dock.width() <= 4) return;
+
+        context.enableScissor(dock.x(), dock.y(), dock.x() + dock.width(), dock.y() + dock.height());
 
         int dockX = dock.x();
         int dockY = dock.y();
@@ -369,11 +514,12 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
         // Section 4: Start Match Button
         UiLayout.Rect startBtn = this.layout.startButton();
-        int startFill = canStart ? UiTheme.ACCENT_GREEN : UiTheme.BORDER_SUBTLE;
-        this.renderActionButton(context, textRenderer, startBtn, "\u25B6 START MATCH", startFill, canStart && startBtn.contains(mouseX, mouseY));
+        this.renderActionButton(context, textRenderer, startBtn, "\u25B6 START MATCH", UiTheme.ACCENT_GREEN, canStart && startBtn.contains(mouseX, mouseY), canStart);
         if (!canStart) {
             this.activeTooltips.add(new TooltipZone(startBtn.x(), startBtn.y(), startBtn.width(), startBtn.height(), () -> "Cannot start: " + validation.message()));
         }
+
+        context.disableScissor();
     }
 
     protected Text formatSummaryLine(Text raw) {
@@ -432,10 +578,13 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.presetDropdown.renderDropdown(context, textRenderer, mouseX, mouseY);
         }
 
-        for (TooltipZone zone : this.activeTooltips) {
-            if (mouseX >= zone.x() && mouseX < zone.x() + zone.width() && mouseY >= zone.y() && mouseY < zone.y() + zone.height()) {
-                context.drawTooltip(textRenderer, Text.literal(zone.text().get()), mouseX, mouseY);
-                break;
+        boolean suppressTooltips = this.presetDropdown != null && this.presetDropdown.isOpen() && this.presetDropdown.contains(mouseX, mouseY);
+        if (!suppressTooltips) {
+            for (TooltipZone zone : this.activeTooltips) {
+                if (mouseX >= zone.x() && mouseX < zone.x() + zone.width() && mouseY >= zone.y() && mouseY < zone.y() + zone.height()) {
+                    context.drawTooltip(textRenderer, Text.literal(zone.text().get()), mouseX, mouseY);
+                    break;
+                }
             }
         }
     }
@@ -446,25 +595,33 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button != 0) return false;
 
-        if (this.dockToggleBtnRect != null && this.dockToggleBtnRect.contains(mouseX, mouseY)) {
-            rightSidebarOpen = !rightSidebarOpen;
-            if (this.currentScreen != null && this.lastWorkspaceRect != null) {
-                this.init(this.currentScreen, this.lastWorkspaceRect);
-                this.currentScreen.rebuildWorkspaceChildren();
-            }
+        boolean isClosed = SessionScreen.rightDockCollapsed || (this.layout.rightSidebar() != null && this.layout.rightSidebar().width() <= 20);
+        if (isClosed && this.rightCollapseStripRect != null && this.rightCollapseStripRect.contains(mouseX, mouseY)) {
+            SessionScreen.rightDockCollapsed = false;
+            SessionScreen.rightDockAnimation.animateTo(1.0F, 220, UiAnimation::easeOutCubic);
+            return true;
+        }
+
+        if (this.dockArrowHandleRect != null && this.dockArrowHandleRect.contains(mouseX, mouseY)) {
+            SessionScreen.rightDockCollapsed = !SessionScreen.rightDockCollapsed;
+            SessionScreen.rightDockAnimation.animateTo(SessionScreen.rightDockCollapsed ? 0.0F : 1.0F, 220, UiAnimation::easeInOutQuad);
             return true;
         }
 
         if (this.dockCloseBtnRect != null && this.dockCloseBtnRect.contains(mouseX, mouseY)) {
-            rightSidebarOpen = false;
-            if (this.currentScreen != null && this.lastWorkspaceRect != null) {
-                this.init(this.currentScreen, this.lastWorkspaceRect);
-                this.currentScreen.rebuildWorkspaceChildren();
-            }
+            SessionScreen.rightDockCollapsed = true;
+            SessionScreen.rightDockAnimation.animateTo(0.0F, 220, UiAnimation::easeInOutQuad);
             return true;
         }
 
-        if (this.layout.isRightSidebarOpen()) {
+        if (this.rightSplitterHitRect != null && this.rightSplitterHitRect.contains(mouseX, mouseY) && !SessionScreen.rightDockCollapsed && this.layout.isRightSidebarOpen()) {
+            this.draggingRightSplitter = true;
+            this.rightSplitterDragStartMouseX = mouseX;
+            this.rightSplitterDragStartWidth = SessionScreen.rightDockTargetWidth;
+            return true;
+        }
+
+        if (this.layout.isRightSidebarOpen() && this.layout.rightSidebar() != null && this.layout.rightSidebar().width() >= 120) {
             if (this.presetDropdown != null && this.presetDropdown.isOpen()) {
                 return this.presetDropdown.mouseClicked(mouseX, mouseY, button);
             }
@@ -653,6 +810,14 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && this.draggingRightSplitter) {
+            this.draggingRightSplitter = false;
+            if (this.currentScreen != null) {
+                this.syncStateFromWidgets();
+                this.currentScreen.rebuildWorkspaceChildren();
+            }
+            return true;
+        }
         if (this.rosterGrid != null && (this.moduleManager.isActive("players") || this.moduleManager.isActive("teams"))) {
             return this.rosterGrid.mouseReleased(mouseX, mouseY, button);
         }
@@ -661,6 +826,14 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == 0 && this.draggingRightSplitter) {
+            int delta = (int) (this.rightSplitterDragStartMouseX - mouseX);
+            int newW = this.rightSplitterDragStartWidth + delta;
+            SessionScreen.rightDockTargetWidth = Math.max(StandardWorkspaceLayout.MIN_DOCK_WIDTH, Math.min(StandardWorkspaceLayout.MAX_DOCK_WIDTH, newW));
+            SessionScreen.rightDockAnimation.set(1.0F);
+            SessionScreen.rightDockCollapsed = false;
+            return true;
+        }
         if (this.rosterGrid != null && (this.moduleManager.isActive("players") || this.moduleManager.isActive("teams"))) {
             return this.rosterGrid.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
         }
@@ -702,38 +875,73 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         this.moduleManager.setActiveModuleId(moduleId);
     }
 
-    protected void renderActionButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered) {
+    protected void renderActionButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered, boolean enabled) {
+        if (!enabled) {
+            // Visually obvious greyed-out / disabled state
+            int fill = 0x4010151E;
+            int border = 0x502C3848;
+            UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), fill, border);
+            int textColor = 0xFF586676; // Muted stone grey
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal(label), rect.x() + rect.width() / 2, rect.y() + (rect.height() - 8) / 2, textColor);
+            return;
+        }
         int fill = UiAnimation.lerpColor(UiTheme.PANEL_RAISED, UiAnimation.alpha(accent, 0.34F), hovered ? 1.0F : 0.0F);
         int border = UiAnimation.lerpColor(UiTheme.BORDER_SUBTLE, accent, hovered ? 1.0F : 0.0F);
         UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), fill, border);
-        context.drawCenteredTextWithShadow(textRenderer, Text.literal(label), rect.x() + rect.width() / 2, rect.y() + 7, UiTheme.TEXT);
+        context.drawCenteredTextWithShadow(textRenderer, Text.literal(label), rect.x() + rect.width() / 2, rect.y() + (rect.height() - 8) / 2, UiTheme.TEXT);
+    }
+
+    protected void renderActionButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, int accent, boolean hovered) {
+        this.renderActionButton(context, textRenderer, rect, label, accent, hovered, true);
     }
 
     protected void addStepper(SessionScreen screen, TextFieldWidget field, int x, int y, int min, int max, int step) {
-        screen.addWidget(ButtonWidget.builder(Text.literal("-"), btn -> {
+        int relX = x - this.layout.mainPanel().x();
+        int relY = y - this.layout.mainPanel().y();
+        ThemedButtonWidget minusBtn = new ThemedButtonWidget(x, y, 20, 20, Text.literal("-"), UiTheme.ACCENT_BLUE, () -> {
             try {
                 int val = Integer.parseInt(field.getText().trim());
                 field.setText(Integer.toString(Math.max(min, val - step)));
             } catch (Exception ignored) {}
-        }).dimensions(x, y, 20, 20).build());
-        screen.addWidget(ButtonWidget.builder(Text.literal("+"), btn -> {
+        });
+        minusBtn.setRelative(relX, relY);
+        screen.addWidget(minusBtn);
+        this.managedThemedButtons.add(minusBtn);
+
+        ThemedButtonWidget plusBtn = new ThemedButtonWidget(x + 22, y, 20, 20, Text.literal("+"), UiTheme.ACCENT_BLUE, () -> {
             try {
                 int val = Integer.parseInt(field.getText().trim());
                 field.setText(Integer.toString(Math.min(max, val + step)));
             } catch (Exception ignored) {}
-        }).dimensions(x + 22, y, 20, 20).build());
+        });
+        plusBtn.setRelative(relX + 22, relY);
+        screen.addWidget(plusBtn);
+        this.managedThemedButtons.add(plusBtn);
     }
 
-    private ButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, java.util.function.Supplier<String> tooltip, Runnable action) {
-        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(label), b -> action.run())
-            .dimensions(x, y, width, 20)
-            .build();
-        screen.addWidget(btn);
+    protected ThemedButtonWidget addThemedButton(SessionScreen screen, String label, int x, int y, int width, int accent, String tooltip, Runnable action) {
+        int relX = x - this.layout.mainPanel().x();
+        int relY = y - this.layout.mainPanel().y();
+        ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(label), accent, action);
+        btn.setRelative(relX, relY);
         if (tooltip != null) {
-            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-            int zoneW = (x + width) - zoneX;
-            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
+            btn.setTooltipSupplier(() -> tooltip);
         }
+        screen.addWidget(btn);
+        this.managedThemedButtons.add(btn);
+        return btn;
+    }
+
+    private ThemedButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, java.util.function.Supplier<String> tooltip, Runnable action) {
+        int relX = x - this.layout.mainPanel().x();
+        int relY = y - this.layout.mainPanel().y();
+        ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(label), UiTheme.ACCENT_BLUE, action);
+        btn.setRelative(relX, relY);
+        if (tooltip != null) {
+            btn.setTooltipSupplier(tooltip);
+        }
+        screen.addWidget(btn);
+        this.managedThemedButtons.add(btn);
         return btn;
     }
 
@@ -795,51 +1003,43 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         return this.addIntField(screen, x, y, value, 120, placeholder, tooltipFormatter);
     }
 
-    protected ButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, BinaryTooltip tooltip, Runnable onToggle) {
-        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")), b -> {
+    protected ThemedButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, BinaryTooltip tooltip, Runnable onToggle) {
+        int relX = x - this.layout.mainPanel().x();
+        int relY = y - this.layout.mainPanel().y();
+        ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")), b -> {
             onToggle.run();
             b.setMessage(Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")));
-        }).dimensions(x, y, width, 20).build();
+        });
+        btn.setAccent(UiTheme.ACCENT);
+        btn.setRelative(relX, relY);
+        if (tooltip != null) {
+            btn.setTooltipSupplier(() -> tooltip.resolve(stateSupplier.get()));
+        }
         screen.addWidget(btn);
-        
-        int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-        int zoneW = (x + width) - zoneX;
-        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> tooltip.resolve(stateSupplier.get())));
-        
+        this.managedThemedButtons.add(btn);
         return btn;
     }
 
-
-
-    protected ButtonWidget addCycleButton(SessionScreen screen, java.util.function.Supplier<String> labelSupplier, java.util.function.Supplier<Integer> cycleIndexSupplier, int x, int y, int width, String[] stateTooltips, int cycleLength, Runnable onCycle) {
+    protected ThemedButtonWidget addCycleButton(SessionScreen screen, java.util.function.Supplier<String> labelSupplier, java.util.function.Supplier<Integer> cycleIndexSupplier, int x, int y, int width, String[] stateTooltips, int cycleLength, Runnable onCycle) {
         if (stateTooltips.length != cycleLength) {
             throw new IllegalArgumentException("addCycleButton: stateTooltips length (" + stateTooltips.length + ") must match cycle length (" + cycleLength + ")");
         }
-        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(labelSupplier.get()), b -> {
+        int relX = x - this.layout.mainPanel().x();
+        int relY = y - this.layout.mainPanel().y();
+        ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(labelSupplier.get()), b -> {
             onCycle.run();
             b.setMessage(Text.literal(labelSupplier.get()));
-        }).dimensions(x, y, width, 20).build();
+        });
+        btn.setAccent(UiTheme.ACCENT_BLUE);
+        btn.setRelative(relX, relY);
+        btn.setTooltipSupplier(() -> stateTooltips[cycleIndexSupplier.get()]);
         screen.addWidget(btn);
-
-        int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-        int zoneW = (x + width) - zoneX;
-        this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> stateTooltips[cycleIndexSupplier.get()]));
-
+        this.managedThemedButtons.add(btn);
         return btn;
     }
 
-    protected ButtonWidget addActionButton(SessionScreen screen, String label, int x, int y, int width, String tooltip, Runnable action) {
-        ButtonWidget btn = new ButtonWidget.Builder(Text.literal(label), b -> action.run())
-            .dimensions(x, y, width, 20)
-            .build();
-        screen.addWidget(btn);
-        
-        if (tooltip != null) {
-            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-            int zoneW = (x + width) - zoneX;
-            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, () -> tooltip));
-        }
-        return btn;
+    protected ThemedButtonWidget addActionButton(SessionScreen screen, String label, int x, int y, int width, String tooltip, Runnable action) {
+        return this.addThemedButton(screen, label, x, y, width, UiTheme.ACCENT_BLUE, tooltip, action);
     }
 
     protected void drawLabel(DrawContext context, TextRenderer textRenderer, String label, int x, int y) {

@@ -884,13 +884,29 @@ public class ZombiesMinigame extends AbstractMinigame implements
     }
 
     private void handleArmorShop(ServerPlayerEntity player, ZombiesArmorShop shop) {
+        ZombiesArmorShop.ArmorQuality q = shop.getQuality();
+
+        // Block purchase if player already has the same (or better) quality equipped
+        if (shop.getPart() == ZombiesArmorShop.ArmorPart.UPPER_BODY) {
+            net.minecraft.item.Item currentHelm = player.getEquippedStack(EquipmentSlot.HEAD).getItem();
+            if (currentHelm == q.getHelmet()) {
+                player.sendMessage(Text.literal("✘ You already have " + q.name() + " upper armor!").formatted(Formatting.YELLOW), true);
+                return;
+            }
+        } else {
+            net.minecraft.item.Item currentLegs = player.getEquippedStack(EquipmentSlot.LEGS).getItem();
+            if (currentLegs == q.getLeggings()) {
+                player.sendMessage(Text.literal("✘ You already have " + q.name() + " lower armor!").formatted(Formatting.YELLOW), true);
+                return;
+            }
+        }
+
         int cost = shop.getPrice();
         if (!spendGold(player, cost)) {
             player.sendMessage(Text.literal("Not enough gold! (" + cost + "g required)").formatted(Formatting.RED), true);
             return;
         }
 
-        ZombiesArmorShop.ArmorQuality q = shop.getQuality();
         if (shop.getPart() == ZombiesArmorShop.ArmorPart.UPPER_BODY) {
             ItemStack helm = new ItemStack(q.getHelmet());
             dev.frost.miniverse.minigame.core.item.ProtectedItemTags.mark(helm, ProtectedItemTypes.ZOMBIES_ARMOR);

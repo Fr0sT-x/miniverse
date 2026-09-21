@@ -176,8 +176,8 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
     @Override
     protected ValidationResult validateGamemodeStart() {
         this.syncStateFromWidgets();
-        if (SessionSnapshotData.roster().isEmpty()) {
-            return ValidationResult.error("No players online.");
+        if (this.playerGrid.getMembers("selected").isEmpty()) {
+            return ValidationResult.error("Select at least one player to participate.");
         }
         if (this.blockPool.isEmpty()) {
             return ValidationResult.error("DeathObjective pool cannot be empty.");

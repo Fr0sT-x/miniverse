@@ -5,7 +5,7 @@ import net.minecraft.util.Formatting;
 public enum ZombiesDifficulty {
     EASY("Easy", 1.0f, 1.0f, 1.0f, 1.0f, 14, 3, 28, 32, 24, 1.0f, Formatting.GREEN),
     NORMAL("Normal", 1.35f, 1.5f, 1.05f, 1.25f, 16, 4, 32, 24, 20, 1.3f, Formatting.GOLD),
-    HARD("Hard", 1.8f, 2.0f, 1.10f, 1.55f, 18, 5, 36, 18, 16, 1.6f, Formatting.DARK_RED);
+    HARD("Hard", 2.0f, 2.0f, 1.10f, 1.55f, 18, 5, 36, 18, 16, 1.6f, Formatting.DARK_RED);
 
     private final String displayName;
     private final float healthMultiplier;

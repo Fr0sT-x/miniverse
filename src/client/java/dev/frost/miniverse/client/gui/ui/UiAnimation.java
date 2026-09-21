@@ -93,5 +93,10 @@ public final class UiAnimation {
             this.tick();
             return this.current;
         }
+
+        public boolean isAnimating() {
+            this.tick();
+            return this.animating;
+        }
     }
 }

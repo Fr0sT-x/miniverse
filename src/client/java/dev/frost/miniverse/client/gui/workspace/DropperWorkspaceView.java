@@ -46,7 +46,7 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
     private IntFieldWidget timeLimitField;
     private IntFieldWidget skipThresholdField;
 
-    private int levelsToPlay = 5;
+    private int levelsToPlay = 0;
     private String selectionMode = "ORDER"; // ORDER, RANDOM_N, SHUFFLE
     private int finalCountdownSeconds = 60;
     private int timeLimitSeconds = 600;
@@ -116,9 +116,12 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     private void updateLevelsToPlayClamp() {
         if (this.levelsToPlayField != null) {
-            int max = Math.max(1, this.enabledLevelIds.size());
-            this.levelsToPlay = Math.min(this.levelsToPlay, max);
-            this.levelsToPlayField.setText(String.valueOf(this.levelsToPlay));
+            // 0 is the "all" sentinel — never clamp it
+            if (this.levelsToPlay > 0) {
+                int max = Math.max(1, this.enabledLevelIds.size());
+                this.levelsToPlay = Math.min(this.levelsToPlay, max);
+            }
+            this.levelsToPlayField.setText(this.levelsToPlay == 0 ? "All" : String.valueOf(this.levelsToPlay));
         }
     }
 
@@ -198,8 +201,13 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
 
             this.rulesLayout.addRow(
                 "Levels to Play", (s, x, y, w) -> {
-                    int max = Math.max(1, this.enabledLevelIds.isEmpty() ? 10 : this.enabledLevelIds.size());
-                    this.levelsToPlayField = this.addIntField(s, x, y, Math.min(this.levelsToPlay, max), w, "Levels", val -> "Play " + val + " level(s) in this match.");
+                    this.levelsToPlayField = this.addIntField(s, x, y, this.levelsToPlay, w, "Levels",
+                        "Play all available levels (default).",
+                        val -> "Play " + val + " level(s) in this match."
+                    );
+                    this.levelsToPlayField.setText(this.levelsToPlay == 0 ? "All" : String.valueOf(this.levelsToPlay));
+                    // Also accept 'All' as text input (reads back as 0 = all levels)
+                    this.levelsToPlayField.setTextPredicate(s2 -> s2.isEmpty() || s2.equalsIgnoreCase("All") || s2.matches("\\d+"));
                 },
                 "Selection Mode", (s, x, y, w) -> {
                     this.addCycleButton(s,
@@ -270,7 +278,12 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
     protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
             int maxLevels = Math.max(1, this.enabledLevelIds.isEmpty() ? 50 : this.enabledLevelIds.size());
-            this.levelsToPlay = readClamped(this.levelsToPlayField, this.levelsToPlay, 1, maxLevels);
+            // 0 means "All" — allow 0 as minimum so the user can type "All" or "0"
+            if (this.levelsToPlayField != null && "all".equalsIgnoreCase(this.levelsToPlayField.getText().trim())) {
+                this.levelsToPlay = 0;
+            } else {
+                this.levelsToPlay = readClamped(this.levelsToPlayField, this.levelsToPlay, 0, maxLevels);
+            }
             this.finalCountdownSeconds = readClamped(this.finalCountdownField, this.finalCountdownSeconds, 5, 300);
             this.timeLimitSeconds = readClamped(this.timeLimitField, this.timeLimitSeconds, 0, 3600);
             this.skipFailsThreshold = readClamped(this.skipThresholdField, this.skipFailsThreshold, 1, 100);
@@ -454,7 +467,7 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
             Text.literal("Map: §e" + (!this.selectedMapId.isBlank() ? this.selectedMapId : "None")),
             Text.literal("Detected Levels: §e" + this.detectedLevels.size()),
             Text.literal("Active in Pool: §a" + this.enabledLevelIds.size() + " levels"),
-            Text.literal("Levels to Play: §b" + this.levelsToPlay + " §7(" + formatMode(this.selectionMode) + ")"),
+            Text.literal("Levels to Play: §b" + (this.levelsToPlay == 0 ? "All" : this.levelsToPlay) + " §7(" + formatMode(this.selectionMode) + ")"),
             Text.literal("Final Countdown: §e" + this.finalCountdownSeconds + "s"),
             Text.literal("Max Match Time: §e" + (this.timeLimitSeconds > 0 ? this.timeLimitSeconds + "s" : "Unlimited")),
             Text.literal("Skip on Fails: §e" + (this.allowSkip ? "After " + this.skipFailsThreshold + " fails" : "Disabled")),
@@ -519,7 +532,7 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.selectedMapId = settings.getString("mapId");
         }
         if (settings.contains("levelsToPlay", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
-            this.levelsToPlay = settings.getInt("levelsToPlay");
+            this.levelsToPlay = settings.getInt("levelsToPlay"); // 0 = All
         }
         if (settings.contains("selectionMode", net.minecraft.nbt.NbtElement.STRING_TYPE)) {
             this.selectionMode = settings.getString("selectionMode");
@@ -548,7 +561,7 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.skipFailsThreshold = settings.getInt("skipFailsThreshold");
         }
 
-        if (this.levelsToPlayField != null) this.levelsToPlayField.setText(String.valueOf(this.levelsToPlay));
+        if (this.levelsToPlayField != null) this.levelsToPlayField.setText(this.levelsToPlay == 0 ? "All" : String.valueOf(this.levelsToPlay));
         if (this.finalCountdownField != null) this.finalCountdownField.setText(String.valueOf(this.finalCountdownSeconds));
         if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitSeconds));
         if (this.skipThresholdField != null) this.skipThresholdField.setText(String.valueOf(this.skipFailsThreshold));
@@ -556,14 +569,14 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
 
     @Override
     protected void resetToDefaultSettings() {
-        this.levelsToPlay = 1;
-        this.selectionMode = "RANDOM";
-        this.finalCountdownSeconds = 30;
-        this.timeLimitSeconds = 300;
-        this.allowSkip = false;
-        this.skipFailsThreshold = 5;
+        this.levelsToPlay = 0; // 0 = All
+        this.selectionMode = "ORDER";
+        this.finalCountdownSeconds = 60;
+        this.timeLimitSeconds = 600;
+        this.allowSkip = true;
+        this.skipFailsThreshold = 20;
 
-        if (this.levelsToPlayField != null) this.levelsToPlayField.setText(String.valueOf(this.levelsToPlay));
+        if (this.levelsToPlayField != null) this.levelsToPlayField.setText("All");
         if (this.finalCountdownField != null) this.finalCountdownField.setText(String.valueOf(this.finalCountdownSeconds));
         if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitSeconds));
         if (this.skipThresholdField != null) this.skipThresholdField.setText(String.valueOf(this.skipFailsThreshold));

@@ -333,11 +333,9 @@ public class ZombieEntityManager {
                 mob.setCustomName(Text.literal("Broodmother §d" + (int) mob.getHealth() + "❤").formatted(Formatting.DARK_PURPLE, Formatting.BOLD));
             }
 
-            // Glowing outline only when <= 3 mobs remain, spawn queue is completely empty,
-            // AND players haven't killed any mob for more than 20s
-            boolean queueEmpty = this.spawnQueueEmptySupplier != null && this.spawnQueueEmptySupplier.getAsBoolean();
+            // Glowing outline when players haven't killed any zombie for 20s
             long timeSinceLastKill = System.currentTimeMillis() - this.lastMobKilledTime;
-            if (queueEmpty && this.activeMobs.size() <= 3 && timeSinceLastKill >= 20000L) {
+            if (timeSinceLastKill >= 20000L) {
                 mob.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.GLOWING, 25, 0, false, false, false));
             }
 

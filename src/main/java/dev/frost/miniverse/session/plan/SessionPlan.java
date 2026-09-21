@@ -131,7 +131,7 @@ public final class SessionPlan {
     }
 
     public boolean shouldAssignAllOnlinePlayers(SessionGameDescriptor gameType) {
-        return this.explicitPlan && this.matches(gameType) && this.teams.isEmpty();
+        return !this.explicitPlan && this.matches(gameType) && this.teams.isEmpty();
     }
 
     public NbtCompound settingsWithTeamRoles() {

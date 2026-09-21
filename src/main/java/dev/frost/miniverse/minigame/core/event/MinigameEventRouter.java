@@ -1,34 +1,33 @@
 package dev.frost.miniverse.minigame.core.event;
 
+import org.jetbrains.annotations.Nullable;
+
 import dev.frost.miniverse.chat.ChatRouter;
+import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.MinigameSessionStore;
-import dev.frost.miniverse.minigame.core.SessionBootstrapper;
-import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
 import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
-import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
-import dev.frost.miniverse.minigame.core.freeze.FreezeService;
-import net.minecraft.entity.EntityPose;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.protection.MapProtectionManager;
 import dev.frost.miniverse.minigame.core.region.RegionTriggerService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.player.PlayerEntity;
@@ -43,7 +42,6 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.World;
-import org.jetbrains.annotations.Nullable;
 
 public final class MinigameEventRouter {
     private final MatchLifecycleController matchLifecycleController;

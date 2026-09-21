@@ -1,15 +1,14 @@
 package dev.frost.miniverse.minigame.impl.zombies.weapon;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LoreComponent;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public final class WeaponItemHelper {
     public static final String KEY_WEAPON_TYPE = "zombies_weapon";

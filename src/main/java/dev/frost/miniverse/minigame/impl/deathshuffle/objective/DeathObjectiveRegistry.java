@@ -1,9 +1,6 @@
 package dev.frost.miniverse.minigame.impl.deathshuffle.objective;
 
 import net.fabricmc.fabric.api.event.registry.DynamicRegistries;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.Identifier;
 
 public final class DeathObjectiveRegistry {
     private DeathObjectiveRegistry() {

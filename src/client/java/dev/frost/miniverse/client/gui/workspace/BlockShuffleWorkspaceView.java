@@ -1,11 +1,14 @@
 package dev.frost.miniverse.client.gui.workspace;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import dev.frost.miniverse.client.gui.SessionScreen;
-import dev.frost.miniverse.client.gui.SessionSnapshotData;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorContext;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorScreen;
 import dev.frost.miniverse.client.gui.selector.RegistrySelectorState;
 import dev.frost.miniverse.client.gui.selector.providers.BlockRegistryProvider;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
@@ -17,16 +20,11 @@ import net.minecraft.block.Block;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-
-import java.util.Set;
-import java.util.stream.Collectors;
 
 public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();

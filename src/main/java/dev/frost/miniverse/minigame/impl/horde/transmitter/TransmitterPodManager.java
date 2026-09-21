@@ -1,10 +1,11 @@
 package dev.frost.miniverse.minigame.impl.horde.transmitter;
 
+import java.util.Random;
+
 import dev.frost.miniverse.minigame.core.shop.ShopGui;
 import dev.frost.miniverse.minigame.impl.horde.HordeSurvivalMinigame;
 import dev.frost.miniverse.minigame.impl.horde.shop.HordeShopProvider;
 import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.passive.WanderingTraderEntity;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
@@ -18,8 +19,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.Heightmap;
-
-import java.util.Random;
 
 public class TransmitterPodManager {
     private final HordeSurvivalMinigame minigame;

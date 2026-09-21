@@ -1,31 +1,37 @@
 package dev.frost.miniverse.minigame.impl.zombies;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.map.MapPosition;
-import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.SessionRoster;
 import dev.frost.miniverse.minigame.core.event.BlockAttackAware;
 import dev.frost.miniverse.minigame.core.event.ItemUseAware;
 import dev.frost.miniverse.minigame.core.event.ItemUseOnBlockAware;
 import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
-import dev.frost.miniverse.minigame.core.SessionRoster;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemRule;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
+import dev.frost.miniverse.minigame.core.item.ProtectedItemTypes;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator;
 import dev.frost.miniverse.minigame.core.protection.BlockProtectionProvider;
 import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.item.ProtectedItemRule;
-import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
-import dev.frost.miniverse.minigame.core.item.ProtectedItemTypes;
 import dev.frost.miniverse.minigame.impl.zombies.item.ZombiesHotbarManager;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesArmorShop;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesDoor;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesMapConfig;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesPerkMachine;
-import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesPowerSwitch;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesWeaponShop;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesWindow;
 import dev.frost.miniverse.minigame.impl.zombies.mob.ZombieEntityManager;
@@ -38,7 +44,6 @@ import dev.frost.miniverse.minigame.impl.zombies.station.ZombiesLuckyChestManage
 import dev.frost.miniverse.minigame.impl.zombies.station.ZombiesTeamMachineManager;
 import dev.frost.miniverse.minigame.impl.zombies.station.ZombiesUltimateMachine;
 import dev.frost.miniverse.minigame.impl.zombies.wave.ZombieWaveEngine;
-import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponData;
 import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponGunManager;
 import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponItemHelper;
 import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponType;
@@ -67,15 +72,6 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
 import net.minecraft.world.World;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class ZombiesMinigame extends AbstractMinigame implements
     TeamManagerProvider,

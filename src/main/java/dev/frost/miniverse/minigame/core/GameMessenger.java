@@ -1,11 +1,10 @@
 package dev.frost.miniverse.minigame.core;
 
+import java.util.Collection;
+
 import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
-import java.util.Collection;
 
 public final class GameMessenger {
     private GameMessenger() {

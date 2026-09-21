@@ -1,13 +1,12 @@
 package dev.frost.miniverse.minigame.impl.deathswap.death;
 
+import org.jetbrains.annotations.Nullable;
+
 import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.policy.RespawnStrategy;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorSession;
 import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapMinigame;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import org.jetbrains.annotations.Nullable;
 
 public class DeathSwapRespawnStrategy implements RespawnStrategy {
     private final DeathSwapMinigame minigame;

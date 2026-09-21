@@ -1,18 +1,17 @@
 package dev.frost.miniverse.minigame.impl.deathshuffle.objective.generator;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+
 import dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjective;
 import dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjectiveSource;
 import dev.frost.miniverse.minigame.impl.deathshuffle.objective.DifficultyTier;
 import net.minecraft.predicate.DamagePredicate;
-import net.minecraft.predicate.entity.EntityPredicate;
 import net.minecraft.predicate.entity.LocationPredicate;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
 
 public class ConditionObjectiveGenerator implements DeathObjectiveGenerator {
 

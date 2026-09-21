@@ -1,18 +1,18 @@
 package dev.frost.miniverse.minigame.impl.manhunt.death;
 
+import java.util.UUID;
+
+import com.google.gson.JsonObject;
+
 import dev.frost.miniverse.minigame.core.death.CancellationReason;
 import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.policy.PostDeathPolicy;
 import dev.frost.miniverse.minigame.core.death.policy.impl.TimedRespawnPolicy;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame.ManhuntRole;
-import dev.frost.miniverse.minigame.impl.manhunt.ManhuntSettings;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-
-import java.util.UUID;
-import com.google.gson.JsonObject;
 
 public class ManhuntPostDeathPolicy implements PostDeathPolicy {
     private final ManhuntMinigame minigame;

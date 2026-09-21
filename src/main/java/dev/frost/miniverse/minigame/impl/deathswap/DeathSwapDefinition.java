@@ -1,14 +1,14 @@
 package dev.frost.miniverse.minigame.impl.deathswap;
 
+import java.util.Properties;
+
 import com.mojang.brigadier.CommandDispatcher;
+
 import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameMetadata;
-import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapGameEvents;
 import dev.frost.miniverse.session.SessionTopology;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.command.ServerCommandSource;
-
-import java.util.Properties;
 
 public final class DeathSwapDefinition implements MinigameDefinition {
     public static final String ID = "deathswap";

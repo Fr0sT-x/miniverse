@@ -1,19 +1,20 @@
 package dev.frost.miniverse.minigame.impl.bedwars;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
 import dev.frost.miniverse.map.MapDescriptor;
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.MapValidationResult;
 import dev.frost.miniverse.map.editor.MapEditorMarkerStore;
 import net.minecraft.util.math.BlockPos;
-
-import org.jetbrains.annotations.Nullable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiConsumer;
 
 public record BedwarsMapConfig(
     Map<String, BedwarsTeamConfig> teams,

@@ -1,7 +1,7 @@
 package dev.frost.miniverse.client.gui.workspace;
 
 import dev.frost.miniverse.client.gui.SessionScreen;
-import dev.frost.miniverse.client.gui.SessionSnapshotData;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
@@ -11,12 +11,9 @@ import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapDefinition;
 import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapSettings;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
-import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
-
-import java.util.List;
 
 public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();

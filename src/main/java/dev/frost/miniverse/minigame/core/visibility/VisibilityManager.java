@@ -1,18 +1,17 @@
 package dev.frost.miniverse.minigame.core.visibility;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import dev.frost.miniverse.minigame.core.role.RoleManager;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
-import net.minecraft.scoreboard.AbstractTeam.VisibilityRule;
+import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import net.minecraft.scoreboard.AbstractTeam;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class VisibilityManager {
     private final VanillaTeamAdapter teamAdapter;

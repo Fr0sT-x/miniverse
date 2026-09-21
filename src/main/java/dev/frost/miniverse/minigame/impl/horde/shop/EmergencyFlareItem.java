@@ -1,6 +1,7 @@
 package dev.frost.miniverse.minigame.impl.horde.shop;
 
-import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
+import java.util.List;
+
 import dev.frost.miniverse.minigame.impl.horde.HordeSurvivalMinigame;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LoreComponent;
@@ -11,8 +12,6 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
-import java.util.List;
 
 public final class EmergencyFlareItem {
     public static final String FLARE_ID = "horde_emergency_flare";

@@ -1,18 +1,17 @@
 package dev.frost.miniverse.minigame.impl.deathshuffle.objective;
 
+import java.util.Optional;
+
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.item.Item;
+
 import net.minecraft.predicate.DamagePredicate;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.text.Text;
 import net.minecraft.text.TextCodecs;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.StringIdentifiable;
-
-import java.util.Optional;
 
 public record DeathObjective(
     Text displayName, 

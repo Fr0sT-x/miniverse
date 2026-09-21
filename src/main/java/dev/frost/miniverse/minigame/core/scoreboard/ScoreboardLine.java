@@ -1,12 +1,11 @@
 package dev.frost.miniverse.minigame.core.scoreboard;
 
+import java.util.Optional;
+
 import net.minecraft.network.packet.s2c.play.ScoreboardScoreUpdateS2CPacket;
 import net.minecraft.scoreboard.number.BlankNumberFormat;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-
-import java.util.Optional;
-import java.util.Set;
 
 public class ScoreboardLine {
     private final ScoreboardTemplate template;

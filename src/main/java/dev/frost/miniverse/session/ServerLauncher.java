@@ -1,14 +1,5 @@
 package dev.frost.miniverse.session;
 
-import dev.frost.miniverse.Miniverse;
-import dev.frost.miniverse.common.MiniverseFileUtils;
-import dev.frost.miniverse.common.MiniversePaths;
-import dev.frost.miniverse.map.MapStore;
-import dev.frost.miniverse.minigame.core.MinigameDefinition;
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.nbt.NbtCompound;
-
-
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -24,8 +15,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.function.Consumer;
+
+import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.common.MiniverseFileUtils;
+import dev.frost.miniverse.common.MiniversePaths;
+import dev.frost.miniverse.map.MapStore;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class ServerLauncher {

@@ -1,19 +1,19 @@
 package dev.frost.miniverse.minigame.core.layout;
 
-import com.google.gson.JsonObject;
-import dev.frost.miniverse.player.PlayerDataStore;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.player.PlayerDataStore;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.NbtComponent;
+import net.minecraft.item.ItemStack;
+import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class InventoryLayoutFramework {
     private static final Map<String, Set<String>> REGISTERED_GAMEMODES = new ConcurrentHashMap<>();

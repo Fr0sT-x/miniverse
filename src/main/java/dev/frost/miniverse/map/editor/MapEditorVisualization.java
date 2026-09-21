@@ -1,12 +1,10 @@
 package dev.frost.miniverse.map.editor;
 
-import dev.frost.miniverse.map.MapPosition;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-
 import java.util.List;
 import java.util.Map;
+
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class MapEditorVisualization {
     private MapEditorVisualization() {

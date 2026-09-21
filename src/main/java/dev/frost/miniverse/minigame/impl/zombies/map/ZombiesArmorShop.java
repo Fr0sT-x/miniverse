@@ -1,7 +1,6 @@
 package dev.frost.miniverse.minigame.impl.zombies.map;
 
 import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 

@@ -1,12 +1,16 @@
 package dev.frost.miniverse.client.gui.workspace.framework;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import dev.frost.miniverse.client.gui.SessionScreen;
 import dev.frost.miniverse.client.gui.SessionSnapshotData;
+import dev.frost.miniverse.client.gui.ui.ThemedButtonWidget;
 import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
-import dev.frost.miniverse.client.gui.ui.ThemedButtonWidget;
 import dev.frost.miniverse.client.gui.workspace.GamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.WorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.components.MapThumbnailGrid;
@@ -18,14 +22,9 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
-
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider, GamemodeWorkspaceView.RosterRefreshable {
     protected static final Map<String, String> LAST_ACTIVE_PRESET_NAMES = new ConcurrentHashMap<>();

@@ -1,6 +1,5 @@
 package dev.frost.miniverse.minigame.impl.zombies.map;
 
-import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.editor.RegionPart;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;

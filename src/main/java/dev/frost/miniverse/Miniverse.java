@@ -1,26 +1,26 @@
 package dev.frost.miniverse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.map.MapEditorCommands;
 import dev.frost.miniverse.map.MapEditorEvents;
 import dev.frost.miniverse.map.editor.MapEditorNetwork;
 import dev.frost.miniverse.map.editor.MapEditorPlacementController;
 import dev.frost.miniverse.minigame.MiniverseGames;
-import dev.frost.miniverse.minigame.core.event.MinigameEventRouter;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleCommands;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
-import dev.frost.miniverse.session.SessionCommands;
-import dev.frost.miniverse.session.SessionRecoveryService;
-import dev.frost.miniverse.session.SessionRoutingEvents;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleCommands;
+import dev.frost.miniverse.network.ClientConnectionHosts;
 import dev.frost.miniverse.network.SessionNetwork;
 import dev.frost.miniverse.network.TransitionTransferCoordinator;
-import dev.frost.miniverse.network.ClientConnectionHosts;
+import dev.frost.miniverse.session.SessionCommands;
+import dev.frost.miniverse.session.SessionRecoveryService;
 import dev.frost.miniverse.session.SessionRegistry;
+import dev.frost.miniverse.session.SessionRoutingEvents;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class Miniverse implements ModInitializer {
 	public static final String MOD_ID = "miniverse";

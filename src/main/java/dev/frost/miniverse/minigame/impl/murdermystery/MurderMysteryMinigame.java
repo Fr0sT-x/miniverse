@@ -1,38 +1,39 @@
 package dev.frost.miniverse.minigame.impl.murdermystery;
 
-import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
-import dev.frost.miniverse.minigame.core.PersistentMinigame;
-import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.corpse.CorpseManager;
-import dev.frost.miniverse.minigame.core.event.ItemUseAware;
-import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
-import dev.frost.miniverse.minigame.core.event.PlayerJoinAware;
-import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
-import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleConfig;
+import dev.frost.miniverse.minigame.core.death.policy.impl.SpectateForeverPolicy;
 import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.role.RoleManager;
-import dev.frost.miniverse.minigame.core.spectator.SpectatorMode;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorTargetProviders;
 import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
 import dev.frost.miniverse.minigame.core.visibility.VisibilityManager;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryDeathCallbacks;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryDeathPolicy;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryRespawnStrategy;
+import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysterySpectatorPolicy;
 import dev.frost.miniverse.minigame.impl.murdermystery.role.DetectiveRole;
 import dev.frost.miniverse.minigame.impl.murdermystery.role.InnocentRole;
 import dev.frost.miniverse.minigame.impl.murdermystery.role.MurdererRole;
 import dev.frost.miniverse.minigame.impl.murdermystery.role.SpectatorRole;
-import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.projectile.ArrowEntity;
 import net.minecraft.server.MinecraftServer;
@@ -44,22 +45,6 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.World;
-import com.google.gson.JsonObject;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-
-import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
-import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
-import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleConfig;
-import dev.frost.miniverse.minigame.core.death.policy.impl.SpectateForeverPolicy;
-import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryDeathCallbacks;
-import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryDeathPolicy;
-import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysteryRespawnStrategy;
-import dev.frost.miniverse.minigame.impl.murdermystery.death.MurderMysterySpectatorPolicy;
 
 public class MurderMysteryMinigame extends AbstractMinigame implements DeathAwareMinigame, SpawnPointAware {
 

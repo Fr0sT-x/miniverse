@@ -1,40 +1,5 @@
 package dev.frost.miniverse.minigame.impl.resourcesprint;
 
-import dev.frost.miniverse.team.TeamColorPalette;
-import dev.frost.miniverse.team.TeamManager;
-import dev.frost.miniverse.team.TeamManagerProvider;
-import dev.frost.miniverse.team.TeamRole;
-import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
-import dev.frost.miniverse.minigame.core.GameMessenger;
-import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.MinigameContext;
-import dev.frost.miniverse.minigame.core.Minigame;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
-import dev.frost.miniverse.minigame.core.PersistentMinigame;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
-import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
-import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
-import dev.frost.miniverse.minigame.core.event.ServerTickAware;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.scoreboard.AbstractTeam;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -46,7 +11,34 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.jetbrains.annotations.Nullable;
+
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.GameMessenger;
+import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
+import dev.frost.miniverse.minigame.core.PersistentMinigame;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import dev.frost.miniverse.team.TeamColorPalette;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamRole;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
+import net.minecraft.scoreboard.AbstractTeam;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import net.minecraft.util.Identifier;
 
 public class ResourceSprintMinigame extends AbstractMinigame implements TeamManagerProvider, PauseAwareMinigame, PersistentMinigame {
     private static final int TICKS_PER_SECOND = 20;

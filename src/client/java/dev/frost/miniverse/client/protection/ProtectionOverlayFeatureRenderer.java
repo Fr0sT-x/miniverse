@@ -2,7 +2,6 @@ package dev.frost.miniverse.client.protection;
 
 import dev.frost.miniverse.minigame.core.protection.ProtectionOverlayRenderMode;
 import dev.frost.miniverse.minigame.core.protection.ProtectionOverlaySettings;
-import dev.frost.miniverse.minigame.core.protection.ProtectionOverlayStyle;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;

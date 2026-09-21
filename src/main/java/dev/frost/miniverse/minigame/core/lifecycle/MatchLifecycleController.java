@@ -1,38 +1,5 @@
 package dev.frost.miniverse.minigame.core.lifecycle;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import dev.frost.miniverse.Miniverse;
-import dev.frost.miniverse.chat.ChatRouter;
-import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.Minigame;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
-import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
-import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
-import dev.frost.miniverse.minigame.core.freeze.FreezeService;
-import net.minecraft.entity.EntityPose;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.network.TransitionTransferCoordinator;
-import dev.frost.miniverse.session.SessionPermissions;
-import dev.frost.miniverse.session.SessionRegistry;
-import dev.frost.miniverse.session.SessionRuntimeConfig;
-import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
-import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.world.GameMode;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -40,6 +7,38 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.jetbrains.annotations.Nullable;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.chat.ChatRouter;
+import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
+import dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker;
+import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
+import dev.frost.miniverse.minigame.core.freeze.FreezeService;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.network.TransitionTransferCoordinator;
+import dev.frost.miniverse.session.SessionPermissions;
+import dev.frost.miniverse.session.SessionRegistry;
+import dev.frost.miniverse.session.SessionRuntimeConfig;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.entity.EntityPose;
+import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
+import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import net.minecraft.world.GameMode;
 
 public final class MatchLifecycleController {
     private static final int TICKS_PER_SECOND = 20;

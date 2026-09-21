@@ -1,11 +1,5 @@
 package dev.frost.miniverse.session;
 
-import com.google.gson.JsonObject;
-import dev.frost.miniverse.Miniverse;
-import dev.frost.miniverse.common.MiniversePaths;
-import dev.frost.miniverse.minigame.core.MinigameSessionStore;
-import net.minecraft.server.MinecraftServer;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +9,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.common.MiniversePaths;
+import net.minecraft.server.MinecraftServer;
 
 public final class SessionRecoveryService {
     private static final boolean AUTO_RELAUNCH = Boolean.parseBoolean(System.getProperty("miniverse.recovery.autoRelaunch", "false"));

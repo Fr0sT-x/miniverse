@@ -1,15 +1,12 @@
 package dev.frost.miniverse.client.gui.workspace.components;
 
+import java.util.function.Consumer;
+
 import dev.frost.miniverse.client.gui.ui.AbstractPopupScreen;
-import dev.frost.miniverse.client.gui.ui.UiRenderer;
-import dev.frost.miniverse.client.gui.ui.UiTheme;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.Text;
-
-import java.util.function.Consumer;
 
 public class GeneratorLimitPopupScreen extends AbstractPopupScreen {
     private TextFieldWidget inputField;

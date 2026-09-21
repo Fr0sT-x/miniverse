@@ -2,7 +2,6 @@ package dev.frost.miniverse.minigame.impl.bountyhunt.death;
 
 import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.policy.DeathPolicy;
-import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 public class BountyHuntDeathPolicy implements DeathPolicy {

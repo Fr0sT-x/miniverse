@@ -1,22 +1,22 @@
 package dev.frost.miniverse.chat;
 
+import java.util.Collection;
+import java.util.List;
+
+import org.jetbrains.annotations.Nullable;
+
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
+import dev.frost.miniverse.team.TeamColorPalette;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamSnapshot;
-import dev.frost.miniverse.team.TeamColorPalette;
 import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SignedMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.Collection;
-import java.util.List;
 
 public final class ChatRouter {
     public static final String GLOBAL_PREFIX = "!";

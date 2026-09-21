@@ -1,14 +1,13 @@
 package dev.frost.miniverse.minigame.core.kit;
 
+import java.util.List;
+import java.util.Set;
+
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
 
 public class Kit {
     private final Identifier id;

@@ -1,7 +1,20 @@
 package dev.frost.miniverse.minigame.impl.dropper;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.MapValidationResult;
 import dev.frost.miniverse.map.editor.MapMarker;
@@ -9,6 +22,7 @@ import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.SessionRoster;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
@@ -25,11 +39,11 @@ import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRegionAware;
 import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator;
 import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorMode;
-import dev.frost.miniverse.minigame.core.spectator.SpectatorSession;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorTargetProviders;
 import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
@@ -41,8 +55,6 @@ import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
 import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
-import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -53,17 +65,6 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.GameRules;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
 public class DropperMinigame extends AbstractMinigame implements
     PlayerDamageAware,

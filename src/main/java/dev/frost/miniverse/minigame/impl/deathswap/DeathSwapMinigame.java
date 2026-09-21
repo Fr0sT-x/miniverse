@@ -1,39 +1,46 @@
 package dev.frost.miniverse.minigame.impl.deathswap;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameMessenger;
 import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
-import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameContext;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
-import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
 import dev.frost.miniverse.minigame.core.countdown.CountdownService;
-import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
-import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
-import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
-import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
-import dev.frost.miniverse.minigame.core.event.ServerTickAware;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
-import dev.frost.miniverse.minigame.impl.deathswap.RespawnMode;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
-import dev.frost.miniverse.minigame.impl.deathswap.death.DeathSwapDeathLifecycleConfig;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.swap.DerangementAssignment;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import dev.frost.miniverse.minigame.impl.deathswap.death.DeathSwapDeathLifecycleConfig;
+import dev.frost.miniverse.team.TeamColorPalette;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamRole;
-import dev.frost.miniverse.team.TeamColorPalette;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -47,25 +54,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
-import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.PersistentMinigame;
-import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
-import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
-import dev.frost.miniverse.team.TeamManagerProvider;
 
 public class DeathSwapMinigame extends AbstractMinigame implements PersistentMinigame, PlayerDamageAware, PlayerRespawnAware, TeamManagerProvider, DeathAwareMinigame {
     private static final String NAME = "Death Swap";

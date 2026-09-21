@@ -1,23 +1,38 @@
 package dev.frost.miniverse.minigame.impl.bedwars;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.map.MapValidationResult;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.PersistentMinigame;
 import dev.frost.miniverse.minigame.core.SessionRoster;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
-import dev.frost.miniverse.minigame.core.event.*;
+import dev.frost.miniverse.minigame.core.event.BlockAttackAware;
+import dev.frost.miniverse.minigame.core.event.BlockBreakAware;
+import dev.frost.miniverse.minigame.core.event.EntityDamageAware;
+import dev.frost.miniverse.minigame.core.event.EntityInteractAware;
+import dev.frost.miniverse.minigame.core.event.ItemUseAware;
+import dev.frost.miniverse.minigame.core.event.ItemUseOnBlockAware;
+import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.event.RosterAware;
+import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
 import dev.frost.miniverse.minigame.core.layout.InventoryLayoutAware;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchProgressionValidator;
-import dev.frost.miniverse.minigame.core.PersistentMinigame;
-import dev.frost.miniverse.map.MapValidationResult;
-import dev.frost.miniverse.team.GameTeam;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamMembership;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.TntEntity;
 import net.minecraft.item.Items;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -25,17 +40,6 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
-
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Set;
-import java.util.List;
-import com.google.gson.JsonObject;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
-
-import dev.frost.miniverse.minigame.core.event.EntityDamageAware;
 
 public class BedwarsMinigame extends AbstractMinigame implements
     DeathAwareMinigame, TeamManagerProvider, BlockBreakAware, EntityInteractAware, 

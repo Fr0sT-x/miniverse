@@ -1,5 +1,13 @@
 package dev.frost.miniverse.minigame.impl.zombies.wave;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.Random;
+import java.util.Set;
+import java.util.function.Consumer;
+
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficulty;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesSettings;
@@ -14,15 +22,6 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
-import java.util.Random;
-import java.util.Set;
-import java.util.function.Consumer;
 
 public class ZombieWaveEngine {
     public static final int MAX_ROUNDS = 30;

@@ -1,8 +1,10 @@
 package dev.frost.miniverse.minigame.impl.bedwars.death;
 
-import dev.frost.miniverse.minigame.core.death.CancellationReason;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
 import dev.frost.miniverse.minigame.core.death.DeathContext;
-import dev.frost.miniverse.minigame.core.death.DeathState;
 import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleCallbacks;
 import dev.frost.miniverse.minigame.core.visibility.TeamGlowVisibility;
 import dev.frost.miniverse.minigame.impl.bedwars.BedTeamState;
@@ -11,10 +13,6 @@ import dev.frost.miniverse.minigame.impl.bedwars.BedwarsMinigame;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.server.network.ServerPlayerEntity;
-
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
 public final class BedwarsDeathCallbacks implements DeathLifecycleCallbacks {
     private final BedwarsMinigame minigame;

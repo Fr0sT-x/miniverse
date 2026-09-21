@@ -1,20 +1,19 @@
 package dev.frost.miniverse.minigame.core.role;
 
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import org.jetbrains.annotations.Nullable;
+
 import dev.frost.miniverse.minigame.core.FrameworkModule;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
 
 public class RoleManager implements FrameworkModule {
     private final Map<UUID, Set<Role>> playerRoles = new ConcurrentHashMap<>();

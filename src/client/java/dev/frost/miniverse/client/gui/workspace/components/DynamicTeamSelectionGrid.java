@@ -1,8 +1,13 @@
 package dev.frost.miniverse.client.gui.workspace.components;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
 import dev.frost.miniverse.client.gui.SessionSnapshotData;
 import dev.frost.miniverse.client.gui.TeamDraft;
-import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
@@ -10,12 +15,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.text.Text;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 
 public class DynamicTeamSelectionGrid extends TeamSelectionGrid {
     private static final int TEAM_ROW_HEIGHT = 36;

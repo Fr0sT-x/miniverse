@@ -1,26 +1,29 @@
 package dev.frost.miniverse.minigame.impl.speedrun;
 
-import dev.frost.miniverse.minigame.core.GameState;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+import org.jetbrains.annotations.Nullable;
+
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
 import dev.frost.miniverse.minigame.core.GameMessenger;
-import dev.frost.miniverse.minigame.core.MinigameContext;
-import dev.frost.miniverse.minigame.core.Minigame;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.RuntimeContextAware;
+import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
+import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
+import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
 import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
 import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.minigame.core.event.ServerTickAware;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
-import dev.frost.miniverse.minigame.core.util.StandardEndSequence;
+import dev.frost.miniverse.minigame.impl.speedrun.death.SpeedrunDeathLifecycleConfig;
 import dev.frost.miniverse.team.TeamMembership;
 import dev.frost.miniverse.team.TeamRole;
 import dev.frost.miniverse.team.TeamSnapshot;
@@ -35,17 +38,6 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-
-import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
-import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
-import dev.frost.miniverse.minigame.impl.speedrun.death.SpeedrunDeathLifecycleConfig;
 
 /**
  * MCSR-style speedrun session implementation.

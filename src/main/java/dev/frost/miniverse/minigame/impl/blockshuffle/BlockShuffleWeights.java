@@ -1,12 +1,11 @@
 package dev.frost.miniverse.minigame.impl.blockshuffle;
 
-import net.minecraft.util.Identifier;
-
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+
+import net.minecraft.util.Identifier;
 
 public final class BlockShuffleWeights {
     public static final Map<Identifier, Integer> WEIGHTS = new HashMap<>();

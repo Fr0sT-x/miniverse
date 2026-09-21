@@ -1,13 +1,14 @@
 package dev.frost.miniverse.minigame.impl.zombies;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import net.minecraft.nbt.NbtCompound;
-
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import net.minecraft.nbt.NbtCompound;
 
 public final class ZombiesDifficultyConfig {
     public record DifficultyEntry(

@@ -1,9 +1,11 @@
 package dev.frost.miniverse.minigame.core.lifecycle;
 
+import static net.minecraft.server.command.CommandManager.literal;
+
 import com.mojang.brigadier.CommandDispatcher;
+
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.MinigameSessionStore;
 import dev.frost.miniverse.session.SessionPermissions;
 import dev.frost.miniverse.session.SessionRegistry;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
@@ -11,8 +13,6 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
-import static net.minecraft.server.command.CommandManager.literal;
 
 public final class MatchLifecycleCommands {
     private MatchLifecycleCommands() {

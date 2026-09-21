@@ -3,7 +3,6 @@ package dev.frost.miniverse.minigame.impl.bountyhunt.death;
 import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleCallbacks;
 import dev.frost.miniverse.minigame.impl.bountyhunt.BountyHuntMinigame;
-import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 public class BountyHuntDeathCallbacks implements DeathLifecycleCallbacks {

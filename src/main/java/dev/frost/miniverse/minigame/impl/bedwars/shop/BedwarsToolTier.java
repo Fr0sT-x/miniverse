@@ -1,14 +1,14 @@
 package dev.frost.miniverse.minigame.impl.bedwars.shop;
 
+import org.jetbrains.annotations.Nullable;
+
 import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.Enchantments;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.RegistryWrapper;
-import org.jetbrains.annotations.Nullable;
 
 public enum BedwarsToolTier {
     // Pickaxe family (tier 0-3)

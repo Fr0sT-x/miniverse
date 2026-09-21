@@ -1,12 +1,11 @@
 package dev.frost.miniverse.minigame.impl.bedwars.shop.items;
 
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.shop.ShopCurrency;
 import dev.frost.miniverse.minigame.core.shop.ShopItem;
-import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamManager;
-import dev.frost.miniverse.team.GameTeam;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.team.TeamManagerProvider;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;

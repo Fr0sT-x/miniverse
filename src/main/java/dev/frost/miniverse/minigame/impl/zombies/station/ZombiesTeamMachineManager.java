@@ -1,5 +1,10 @@
 package dev.frost.miniverse.minigame.impl.zombies.station;
 
+import java.util.List;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
 import dev.frost.miniverse.minigame.impl.zombies.mob.ZombieEntityManager;
 import dev.frost.miniverse.minigame.impl.zombies.revive.ZombiesReviveManager;
 import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponItemHelper;
@@ -17,15 +22,9 @@ import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
-import java.util.List;
-import java.util.function.BiPredicate;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 public class ZombiesTeamMachineManager {
     public static final int COST_AMMO_REFILL = 500;

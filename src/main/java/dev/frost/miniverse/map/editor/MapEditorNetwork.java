@@ -1,8 +1,12 @@
 package dev.frost.miniverse.map.editor;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.map.MapPosition;
-import dev.frost.miniverse.map.MapStore;
 import dev.frost.miniverse.session.BackendLaunchMode;
 import dev.frost.miniverse.session.SessionConfigJson;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
@@ -13,11 +17,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 public final class MapEditorNetwork {
     private MapEditorNetwork() {

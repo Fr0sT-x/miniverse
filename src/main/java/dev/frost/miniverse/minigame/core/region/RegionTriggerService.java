@@ -1,30 +1,24 @@
 package dev.frost.miniverse.minigame.core.region;
 
-import dev.frost.miniverse.map.editor.MapEditorExtension;
-import dev.frost.miniverse.map.editor.MapEditorExtensionRegistry;
-import dev.frost.miniverse.map.editor.MapEditorMarkerStore;
-import dev.frost.miniverse.map.editor.MapMarker;
-import dev.frost.miniverse.map.editor.MarkerDefinition;
-import dev.frost.miniverse.map.editor.MarkerType;
-import dev.frost.miniverse.map.region.TriggerType;
-import dev.frost.miniverse.minigame.core.Minigame;
-import dev.frost.miniverse.minigame.core.MinigameContext;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.event.PlayerRegionAware;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkPos;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
+import dev.frost.miniverse.map.editor.MapEditorExtension;
+import dev.frost.miniverse.map.editor.MapMarker;
+import dev.frost.miniverse.map.region.TriggerType;
+import dev.frost.miniverse.minigame.core.Minigame;
+import dev.frost.miniverse.minigame.core.MinigameContext;
+import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.event.PlayerRegionAware;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.ChunkPos;
 
 public class RegionTriggerService {
     private static final RegionTriggerService INSTANCE = new RegionTriggerService();

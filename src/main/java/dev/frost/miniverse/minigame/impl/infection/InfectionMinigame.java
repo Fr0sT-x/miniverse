@@ -1,42 +1,5 @@
 package dev.frost.miniverse.minigame.impl.infection;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import dev.frost.miniverse.map.MapPosition;
-import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.Minigame;
-import dev.frost.miniverse.minigame.core.MinigameContext;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.PersistentMinigame;
-import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
-import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
-import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
-import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
-import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
-import dev.frost.miniverse.minigame.core.event.ServerTickAware;
-import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
-import dev.frost.miniverse.team.TeamManager;
-import dev.frost.miniverse.team.TeamManagerProvider;
-import dev.frost.miniverse.team.TeamRole;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.network.packet.s2c.play.PositionFlag;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.world.GameMode;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -45,11 +8,41 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.jetbrains.annotations.Nullable;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.MinigameContext;
+import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import dev.frost.miniverse.minigame.impl.infection.death.InfectionDeathLifecycleConfig;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
+import dev.frost.miniverse.team.TeamRole;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import net.minecraft.world.GameMode;
 
 public final class InfectionMinigame extends AbstractMinigame implements PlayerRespawnAware, PlayerDamageAware, SpawnPointAware, TeamManagerProvider, DeathAwareMinigame {
     private static final String NAME = "Infection";

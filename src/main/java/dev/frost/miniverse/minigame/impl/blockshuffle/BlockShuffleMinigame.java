@@ -1,32 +1,5 @@
 package dev.frost.miniverse.minigame.impl.blockshuffle;
 
-import dev.frost.miniverse.minigame.core.GameMessenger;
-import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.Minigame;
-import dev.frost.miniverse.minigame.core.MinigameContext;
-import dev.frost.miniverse.minigame.core.MinigameManager;
-import dev.frost.miniverse.minigame.core.MinigameRuntime;
-import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
-import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
-import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
-import dev.frost.miniverse.minigame.core.event.ServerTickAware;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
-import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
-import dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason;
-import dev.frost.miniverse.minigame.core.spectator.SpectatorTargetProviders;
-import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
-import net.minecraft.block.BlockState;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,21 +11,38 @@ import java.util.stream.Collectors;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
-import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
-import dev.frost.miniverse.minigame.core.PersistentMinigame;
 
 import dev.frost.miniverse.minigame.core.AbstractMinigame;
+import dev.frost.miniverse.minigame.core.GameMessenger;
+import dev.frost.miniverse.minigame.core.GameState;
+import dev.frost.miniverse.minigame.core.MinigameManager;
+import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
+import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardLine;
+import dev.frost.miniverse.minigame.core.scoreboard.ScoreboardTemplate;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorStopReason;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorTargetProviders;
+import dev.frost.miniverse.minigame.core.spectator.policies.SpectatorPolicies;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
 import dev.frost.miniverse.minigame.impl.blockshuffle.death.BlockShuffleDeathLifecycleConfig;
+import dev.frost.miniverse.team.TeamColorPalette;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamRole;
-import dev.frost.miniverse.team.TeamColorPalette;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import net.minecraft.block.BlockState;
+import net.minecraft.registry.Registries;
 import net.minecraft.scoreboard.AbstractTeam;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 
 public class BlockShuffleMinigame extends AbstractMinigame implements DeathAwareMinigame, TeamManagerProvider {
     private static final int TICKS_PER_SECOND = 20;

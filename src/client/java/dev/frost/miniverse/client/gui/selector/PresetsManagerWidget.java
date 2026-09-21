@@ -1,5 +1,9 @@
 package dev.frost.miniverse.client.gui.selector;
 
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import dev.frost.miniverse.client.gui.selector.storage.Preset;
 import dev.frost.miniverse.client.gui.selector.storage.SelectorDataManager;
 import net.minecraft.client.gui.DrawContext;
@@ -8,11 +12,6 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 public class PresetsManagerWidget<T> extends Screen {
     private final RegistrySelectorScreen<T> parent;

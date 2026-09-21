@@ -1,81 +1,68 @@
 package dev.frost.miniverse.minigame.impl.manhunt;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import dev.frost.miniverse.minigame.core.GameState;
-import dev.frost.miniverse.minigame.core.DynamicParticipantMinigame;
+
 import dev.frost.miniverse.minigame.core.GameMessenger;
-import dev.frost.miniverse.minigame.core.MinigameContext;
-import dev.frost.miniverse.minigame.core.Minigame;
+import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.PersistentMinigame;
-import dev.frost.miniverse.minigame.core.PauseAwareMinigame;
-import dev.frost.miniverse.minigame.core.RuntimeContextAware;
-import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
-import dev.frost.miniverse.minigame.core.event.ItemUseAware;
-import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
-import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
-import dev.frost.miniverse.minigame.impl.manhunt.death.ManhuntDeathLifecycleConfig;
-import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
-import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
 import dev.frost.miniverse.minigame.core.item.ProtectedItemRule;
 import dev.frost.miniverse.minigame.core.item.ProtectedItemService;
 import dev.frost.miniverse.minigame.core.item.ProtectedItemTags;
 import dev.frost.miniverse.minigame.core.item.ProtectedItemTypes;
-import dev.frost.miniverse.minigame.core.item.TrackingItemNameFormatter;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
-import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleController;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
 import dev.frost.miniverse.minigame.core.persistence.SessionData;
-import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
-import dev.frost.miniverse.minigame.core.freeze.FreezeService;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
+import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
+import dev.frost.miniverse.minigame.core.tracker.PlayerTracker;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamDescriptor;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamOptions;
+import dev.frost.miniverse.minigame.impl.manhunt.death.ManhuntDeathLifecycleConfig;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamMembership;
 import dev.frost.miniverse.team.TeamRole;
 import dev.frost.miniverse.team.TeamSnapshot;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LodestoneTrackerComponent;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.ExperienceOrbEntity;
-import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
-import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.scoreboard.AbstractTeam;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import org.jetbrains.annotations.Nullable;
-
-import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import dev.frost.miniverse.minigame.core.tracker.PlayerTracker;
-
-import dev.frost.miniverse.minigame.core.death.ImmediateRespawnNotifier;
 /**
  * Manhunt minigame implementation.
  * In this game, Speedrunners try to reach the End while Hunters try to stop them.

@@ -1,19 +1,19 @@
 package dev.frost.miniverse.player;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import dev.frost.miniverse.Miniverse;
-import dev.frost.miniverse.common.MiniversePaths;
-
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.UUID;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.common.MiniversePaths;
 
 public final class PlayerDataStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();

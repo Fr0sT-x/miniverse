@@ -1,43 +1,39 @@
 package dev.frost.miniverse.minigame.impl.duels;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.UUID;
+
 import dev.frost.miniverse.minigame.arena.ArenaManager;
+import dev.frost.miniverse.minigame.core.AbstractMinigame;
 import dev.frost.miniverse.minigame.core.GameState;
 import dev.frost.miniverse.minigame.core.death.DeathAwareMinigame;
 import dev.frost.miniverse.minigame.core.death.DeathLifecycleManager;
 import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleConfig;
 import dev.frost.miniverse.minigame.core.death.policy.impl.SpectateForeverPolicy;
-import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
-import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
-import dev.frost.miniverse.minigame.core.event.ServerTickAware;
+import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
 import dev.frost.miniverse.minigame.core.kit.Kit;
 import dev.frost.miniverse.minigame.core.kit.KitRegistry;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
+import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
 import dev.frost.miniverse.minigame.impl.duels.death.DuelsDeathCallbacks;
 import dev.frost.miniverse.minigame.impl.duels.death.DuelsDeathPolicy;
 import dev.frost.miniverse.minigame.impl.duels.death.DuelsRespawnStrategy;
 import dev.frost.miniverse.minigame.impl.duels.death.DuelsSpectatorPolicy;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
+import dev.frost.miniverse.team.TeamManager;
+import dev.frost.miniverse.team.TeamManagerProvider;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
-import net.minecraft.world.GameRules;
 import net.minecraft.world.GameMode;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Properties;
-
-import dev.frost.miniverse.minigame.core.AbstractMinigame;
-import dev.frost.miniverse.minigame.core.event.SpawnPointAware;
-import dev.frost.miniverse.team.TeamManagerProvider;
-import dev.frost.miniverse.team.TeamManager;
-import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
-import java.util.UUID;
+import net.minecraft.world.GameRules;
 
 public class DuelsMinigame extends AbstractMinigame implements DeathAwareMinigame, SpawnPointAware, TeamManagerProvider {
 

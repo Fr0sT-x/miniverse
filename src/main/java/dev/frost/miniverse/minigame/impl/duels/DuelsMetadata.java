@@ -1,15 +1,15 @@
 package dev.frost.miniverse.minigame.impl.duels;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import dev.frost.miniverse.minigame.arena.ArenaRegion;
-import net.minecraft.util.math.Vec3d;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.minigame.arena.ArenaRegion;
+import net.minecraft.util.math.Vec3d;
 
 public record DuelsMetadata(
     List<String> supportedDuelTypes,

@@ -1,5 +1,15 @@
 package dev.frost.miniverse.minigame.core.death;
 
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.jetbrains.annotations.Nullable;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
 import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleCallbacks;
 import dev.frost.miniverse.minigame.core.death.config.DeathLifecycleConfig;
 import dev.frost.miniverse.minigame.core.death.policy.PostDeathPolicy;
@@ -7,25 +17,15 @@ import dev.frost.miniverse.minigame.core.death.policy.RespawnStrategy;
 import dev.frost.miniverse.minigame.core.death.state.PlayerDeathStateMachine;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorSession;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
 import net.minecraft.entity.Entity;
-import net.minecraft.world.World;
-import net.minecraft.world.GameMode;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.GameMode;
+import net.minecraft.world.World;
 
 public class DeathLifecycleManager {
 

@@ -1,22 +1,9 @@
 package dev.frost.miniverse.session;
 
-import dev.frost.miniverse.Miniverse;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import dev.frost.miniverse.common.MiniverseFileUtils;
-import dev.frost.miniverse.common.MiniversePaths;
-import dev.frost.miniverse.minigame.core.MinigameSessionStore;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.StringNbtReader;
-
 import java.io.IOException;
 import java.io.Reader;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -29,6 +16,16 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import dev.frost.miniverse.Miniverse;
+import dev.frost.miniverse.common.MiniverseFileUtils;
+import dev.frost.miniverse.common.MiniversePaths;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.StringNbtReader;
 
 public final class SessionRegistry {
     private static final String SESSION_JSON_FILE_NAME = "session.json";

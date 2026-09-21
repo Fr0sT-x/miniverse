@@ -1,15 +1,20 @@
 package dev.frost.miniverse.minigame.impl.zombies.perk;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
+import java.util.function.BiConsumer;
+
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesMapConfig;
 import dev.frost.miniverse.minigame.impl.zombies.map.ZombiesWindow;
 import dev.frost.miniverse.minigame.impl.zombies.mob.ZombieEntityManager;
-import dev.frost.miniverse.minigame.impl.zombies.mob.ZombieType;
 import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponItemHelper;
 import dev.frost.miniverse.minigame.impl.zombies.weapon.WeaponType;
-import net.minecraft.entity.boss.BossBar;
-import net.minecraft.entity.boss.ServerBossBar;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.boss.BossBar;
+import net.minecraft.entity.boss.ServerBossBar;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -19,12 +24,6 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Random;
-import java.util.function.BiConsumer;
 
 public class PerkDropManager {
     public static final double PICKUP_RADIUS_SQ = 2.25; // 1.5 blocks

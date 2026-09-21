@@ -1,14 +1,12 @@
 package dev.frost.miniverse.minigame.impl.bountyhunt.death;
 
+import org.jetbrains.annotations.Nullable;
+
 import dev.frost.miniverse.minigame.core.death.DeathContext;
 import dev.frost.miniverse.minigame.core.death.policy.RespawnStrategy;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorSession;
 import dev.frost.miniverse.minigame.impl.bountyhunt.BountyHuntMinigame;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import org.jetbrains.annotations.Nullable;
 
 public class BountyHuntRespawnStrategy implements RespawnStrategy {
     private final BountyHuntMinigame minigame;

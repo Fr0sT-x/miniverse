@@ -1,7 +1,13 @@
 package dev.frost.miniverse.client.gui.workspace;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
+
 import dev.frost.miniverse.client.gui.ui.AbstractPopupScreen;
-import dev.frost.miniverse.client.gui.ui.UiTheme;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -10,13 +16,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Consumer;
 
 public class BlockWeightConfigScreen extends AbstractPopupScreen {
     private final Consumer<Map<Identifier, Integer>> onSave;

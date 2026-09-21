@@ -1,13 +1,11 @@
 package dev.frost.miniverse.minigame.impl.deathshuffle;
 
-import dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjective;
-import net.minecraft.registry.Registry;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.Identifier;
-import org.jetbrains.annotations.Nullable;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjective;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.random.Random;
 
 public final class DeathShuffleWeights {

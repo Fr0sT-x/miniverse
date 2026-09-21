@@ -1,13 +1,13 @@
 package dev.frost.miniverse.map;
 
-import dev.frost.miniverse.session.BackendLaunchMode;
-import dev.frost.miniverse.session.SessionRuntimeConfig;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.server.network.ServerPlayerEntity;
+import java.util.Optional;
+
 import com.google.gson.JsonObject;
 
-import java.util.Optional;
+import dev.frost.miniverse.session.BackendLaunchMode;
+import dev.frost.miniverse.session.SessionRuntimeConfig;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 
 public final class MapEditorEvents {
     private static int emptyTicks = 0;

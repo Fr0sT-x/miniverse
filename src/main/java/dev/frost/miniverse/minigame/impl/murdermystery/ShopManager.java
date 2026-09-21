@@ -1,22 +1,20 @@
 package dev.frost.miniverse.minigame.impl.murdermystery;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import dev.frost.miniverse.map.MapPosition;
+import dev.frost.miniverse.minigame.core.role.RoleManager;
+import dev.frost.miniverse.minigame.impl.murdermystery.role.MurdererRole;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.screen.GenericContainerScreenHandler;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import dev.frost.miniverse.minigame.core.role.RoleManager;
-import dev.frost.miniverse.minigame.impl.murdermystery.role.MurdererRole;
 
 public class ShopManager {
     private final VirtualEconomyManager economy;

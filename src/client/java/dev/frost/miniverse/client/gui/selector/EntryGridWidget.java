@@ -1,14 +1,13 @@
 package dev.frost.miniverse.client.gui.selector;
 
-import dev.frost.miniverse.client.gui.ui.UiRenderer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
 import net.minecraft.text.Text;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
 
 public class EntryGridWidget<T> extends AlwaysSelectedEntryListWidget<EntryGridWidget.RowEntry<T>> {
     private final RegistrySelectorScreen<T> screen;

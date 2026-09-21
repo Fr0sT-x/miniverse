@@ -3,14 +3,10 @@ package dev.frost.miniverse.client.gui.map;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.frost.miniverse.client.gui.SessionSnapshotData;
+
 import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
 import net.minecraft.text.Text;
-
-import java.util.function.BiConsumer;
 
 public final class DuelsEditorClient {
     public static void register() {

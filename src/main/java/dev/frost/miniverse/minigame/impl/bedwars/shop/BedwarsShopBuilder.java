@@ -1,23 +1,22 @@
 package dev.frost.miniverse.minigame.impl.bedwars.shop;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import dev.frost.miniverse.minigame.core.shop.ShopCategory;
 import dev.frost.miniverse.minigame.core.shop.ShopItem;
-import dev.frost.miniverse.minigame.core.shop.ShopCurrency;
 import dev.frost.miniverse.minigame.impl.bedwars.economy.BedwarsCurrency;
+import dev.frost.miniverse.minigame.impl.bedwars.shop.items.ArmorUpgradeItem;
 import dev.frost.miniverse.minigame.impl.bedwars.shop.items.SimpleShopItem;
 import dev.frost.miniverse.minigame.impl.bedwars.shop.items.TeamColoredBlockItem;
 import dev.frost.miniverse.minigame.impl.bedwars.shop.items.TieredToolItem;
-import dev.frost.miniverse.minigame.impl.bedwars.shop.items.ArmorUpgradeItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
 
 public class BedwarsShopBuilder {
 

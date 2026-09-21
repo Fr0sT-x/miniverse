@@ -1,9 +1,24 @@
 package dev.frost.miniverse.minigame.core;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.function.Supplier;
+
+import org.jetbrains.annotations.Nullable;
+
 import com.google.gson.JsonObject;
+
 import dev.frost.miniverse.map.editor.MapMarker;
 import dev.frost.miniverse.minigame.core.corpse.CorpseManager;
-import dev.frost.miniverse.minigame.core.event.*;
+import dev.frost.miniverse.minigame.core.event.BlockAttackAware;
+import dev.frost.miniverse.minigame.core.event.EntityDeathAware;
+import dev.frost.miniverse.minigame.core.event.ItemUseAware;
+import dev.frost.miniverse.minigame.core.event.PlayerDamageAware;
+import dev.frost.miniverse.minigame.core.event.PlayerJoinAware;
+import dev.frost.miniverse.minigame.core.event.PlayerLeaveAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRegionAware;
+import dev.frost.miniverse.minigame.core.event.PlayerRespawnAware;
+import dev.frost.miniverse.minigame.core.event.ServerTickAware;
 import dev.frost.miniverse.minigame.core.role.RoleManager;
 import dev.frost.miniverse.minigame.core.spectator.SpectatorService;
 import dev.frost.miniverse.minigame.core.vanilla.VanillaTeamAdapter;
@@ -14,13 +29,6 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.world.World;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * Base class for all minigames enforcing the core framework features.

@@ -1,5 +1,11 @@
 package dev.frost.miniverse.client.gui.selector.providers;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
 import dev.frost.miniverse.client.gui.selector.RegistryCategory;
 import dev.frost.miniverse.client.gui.selector.RegistryContentProvider;
 import net.minecraft.block.Block;
@@ -8,16 +14,9 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.TagKey;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 public class BlockRegistryProvider implements RegistryContentProvider<Block> {
 

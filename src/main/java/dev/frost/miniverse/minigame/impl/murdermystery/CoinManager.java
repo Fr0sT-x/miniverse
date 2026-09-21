@@ -1,5 +1,8 @@
 package dev.frost.miniverse.minigame.impl.murdermystery;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.item.ItemStack;
@@ -8,10 +11,6 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 
 public class CoinManager {
     private final VirtualEconomyManager economy;

@@ -1,6 +1,7 @@
 package dev.frost.miniverse.client.gui.workspace;
 
-import dev.frost.miniverse.client.gui.ui.UiRenderer;
+import java.util.Locale;
+
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.core.kit.Kit;
@@ -12,9 +13,6 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-
-import java.util.Locale;
-import java.util.stream.Collectors;
 
 public class KitCreatorScreen extends Screen {
     private final Screen parent;

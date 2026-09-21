@@ -1,14 +1,13 @@
 package dev.frost.miniverse.minigame.impl.zombies.mob.attack;
 
-import net.minecraft.entity.Entity;
+import java.util.List;
+
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
-
-import java.util.List;
 
 public final class ZombieExplosion {
     private ZombieExplosion() {}

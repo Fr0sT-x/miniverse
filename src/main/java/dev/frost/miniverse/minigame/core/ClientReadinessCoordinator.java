@@ -1,5 +1,11 @@
 package dev.frost.miniverse.minigame.core;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+
 import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.minigame.core.freeze.FreezeReason;
@@ -12,13 +18,6 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
-
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.UUID;
 
 public class ClientReadinessCoordinator {
     private static final int CLIENT_READY_TIMEOUT_TICKS = 60 * 20;

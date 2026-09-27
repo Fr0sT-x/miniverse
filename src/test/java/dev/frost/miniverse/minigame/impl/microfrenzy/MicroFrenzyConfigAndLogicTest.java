@@ -1,0 +1,609 @@
+package dev.frost.miniverse.minigame.impl.microfrenzy;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import dev.frost.miniverse.map.MapPosition;
+import dev.frost.miniverse.map.MapValidationResult;
+import dev.frost.miniverse.map.editor.RegionPart;
+import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRuleRegistry;
+import dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl.*;
+import org.junit.Assert;
+import org.junit.Test;
+
+import java.util.List;
+import java.util.Properties;
+import java.util.UUID;
+
+public class MicroFrenzyConfigAndLogicTest {
+
+    @Test
+    public void testSettingsSerialization() {
+        MicroFrenzySettings original = new MicroFrenzySettings("disco_arena", 5, 30, "SURVIVAL", true, 3);
+        Properties props = new Properties();
+        original.writeTo(props);
+
+        MicroFrenzySettings restored = MicroFrenzySettings.fromProperties(props);
+        Assert.assertEquals("disco_arena", restored.mapId());
+        Assert.assertEquals(5, restored.startingLives());
+        Assert.assertEquals(30, restored.maxRounds());
+        Assert.assertEquals("SURVIVAL", restored.gameMode());
+        Assert.assertTrue(restored.speedScaling());
+        Assert.assertEquals(3, restored.intermissionSeconds());
+    }
+
+    @Test
+    public void testSettingsDefaults() {
+        MicroFrenzySettings defaults = MicroFrenzySettings.defaults();
+        Assert.assertEquals("", defaults.mapId());
+        Assert.assertEquals(3, defaults.startingLives());
+        Assert.assertEquals(25, defaults.maxRounds());
+        Assert.assertEquals("SURVIVAL", defaults.gameMode());
+        Assert.assertTrue(defaults.speedScaling());
+        Assert.assertEquals(2, defaults.intermissionSeconds());
+    }
+
+    @Test
+    public void testMapConfigParsingAndValidation() {
+        JsonObject root = new JsonObject();
+
+        // arenaBounds
+        JsonArray boundsArr = new JsonArray();
+        JsonObject bound = new JsonObject();
+        JsonArray regions = new JsonArray();
+        JsonObject r = new JsonObject();
+        r.add("min", MapPosition.of(-15, 60, -15).toJson());
+        r.add("max", MapPosition.of(15, 90, 15).toJson());
+        regions.add(r);
+        bound.add("regions", regions);
+        boundsArr.add(bound);
+        root.add("arenaBounds", boundsArr);
+
+        // arenaCenter
+        JsonArray centerArr = new JsonArray();
+        centerArr.add(MapPosition.of(0, 64, 0).toJson());
+        root.add("arenaCenter", centerArr);
+
+        // playerSpawns
+        JsonArray spawnsArr = new JsonArray();
+        spawnsArr.add(MapPosition.of(-5, 64, -5).toJson());
+        spawnsArr.add(MapPosition.of(5, 64, 5).toJson());
+        root.add("playerSpawns", spawnsArr);
+
+        // colorZones
+        JsonArray colorArr = new JsonArray();
+        JsonObject redZone = new JsonObject();
+        JsonObject redProps = new JsonObject();
+        redProps.addProperty("color", "RED");
+        redZone.add("properties", redProps);
+        JsonArray redRegions = new JsonArray();
+        JsonObject rr = new JsonObject();
+        rr.add("min", MapPosition.of(-10, 64, -10).toJson());
+        rr.add("max", MapPosition.of(-2, 66, -2).toJson());
+        redRegions.add(rr);
+        redZone.add("regions", redRegions);
+        colorArr.add(redZone);
+        root.add("colorZones", colorArr);
+
+        MicroFrenzyMapConfig config = MicroFrenzyMapConfig.fromJson(root);
+        Assert.assertFalse(config.arenaBounds().isEmpty());
+        Assert.assertEquals(2, config.playerSpawns().size());
+        Assert.assertEquals(1, config.colorZones().size());
+        Assert.assertEquals("RED", config.colorZones().get(0).color());
+
+        MapValidationResult validation = MicroFrenzyMapConfig.validate(null, root);
+        Assert.assertTrue("Config should be valid: " + validation.errors(), validation.valid());
+    }
+
+    @Test
+    public void testMapConfigSingleJsonObjectParsingAndValidation() {
+        JsonObject root = new JsonObject();
+
+        // arenaBounds as a single JsonObject (saved when maxCount == 1)
+        JsonObject bound = new JsonObject();
+        bound.addProperty("id", "test-bounds-id");
+        bound.addProperty("name", "Arena Bounds");
+        JsonArray regions = new JsonArray();
+        JsonObject r = new JsonObject();
+        r.add("min", MapPosition.of(-20, 97, -19).toJson());
+        r.add("max", MapPosition.of(19, 97, 20).toJson());
+        regions.add(r);
+        bound.add("regions", regions);
+        root.add("arenaBounds", bound);
+
+        // arenaCenter as a single JsonObject (saved when maxCount == 1)
+        JsonObject center = new JsonObject();
+        center.addProperty("id", "test-center-id");
+        center.addProperty("name", "Arena Center");
+        center.addProperty("x", 0.0);
+        center.addProperty("y", 98.0);
+        center.addProperty("z", 0.0);
+        root.add("arenaCenter", center);
+
+        // playerSpawns as array
+        JsonArray spawnsArr = new JsonArray();
+        spawnsArr.add(MapPosition.of(-5, 98, 0).toJson());
+        spawnsArr.add(MapPosition.of(5, 98, 0).toJson());
+        root.add("playerSpawns", spawnsArr);
+
+        MicroFrenzyMapConfig config = MicroFrenzyMapConfig.fromJson(root);
+        Assert.assertFalse("arenaBounds should not be empty", config.arenaBounds().isEmpty());
+        Assert.assertEquals(1, config.arenaBounds().size());
+        Assert.assertEquals(0.0, config.arenaCenter().x(), 0.001);
+        Assert.assertEquals(98.0, config.arenaCenter().y(), 0.001);
+        Assert.assertEquals(2, config.playerSpawns().size());
+
+        MapValidationResult validation = MicroFrenzyMapConfig.validate(null, root);
+        Assert.assertTrue("Validation should pass: " + validation.errors(), validation.valid());
+    }
+
+    @Test
+    public void testMapConfigValidationErrors() {
+        JsonObject empty = new JsonObject();
+        MapValidationResult validation = MicroFrenzyMapConfig.validate(null, empty);
+        Assert.assertFalse(validation.valid());
+        Assert.assertTrue(validation.errors().stream().anyMatch(e -> e.contains("Arena Bounds")));
+    }
+
+    @Test
+    public void testMicroRuleRegistry() {
+        MicroFrenzyMapConfig fullConfig = new MicroFrenzyMapConfig(
+            List.of(new RegionPart(MapPosition.of(0, 0, 0), MapPosition.of(10, 10, 10))),
+            MapPosition.of(5, 5, 5),
+            List.of(MapPosition.of(1, 1, 1), MapPosition.of(2, 2, 2)),
+            List.of(),
+            List.of(new MicroFrenzyMapConfig.ColorZone("z1", "BLUE", List.of())),
+            List.of(new RegionPart(MapPosition.of(0, 10, 0), MapPosition.of(5, 12, 5))),
+            List.of()
+        );
+
+        List<MicroRule> applicable = MicroRuleRegistry.getApplicableRules(fullConfig);
+        Assert.assertTrue("Should have at least 10 rules", applicable.size() >= 10);
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("statue")));
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("color_rush")));
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("high_ground")));
+    }
+
+    @Test
+    public void testPlayerPerformanceTracker() {
+        PlayerPerformanceTracker tracker = new PlayerPerformanceTracker(3);
+        UUID player1 = UUID.randomUUID();
+        tracker.initPlayer(player1);
+
+        Assert.assertEquals(3, tracker.getLives(player1));
+        Assert.assertTrue(tracker.isAlive(player1));
+
+        int livesLeft = tracker.deductLife(player1);
+        Assert.assertEquals(2, livesLeft);
+        Assert.assertEquals(1, tracker.getFails(player1));
+
+        tracker.recordPass(player1, 100);
+        Assert.assertEquals(1, tracker.getPasses(player1));
+        Assert.assertEquals(100, tracker.getPoints(player1));
+        Assert.assertTrue(tracker.hasPassedCurrentRound(player1));
+
+        tracker.incrementSneak(player1);
+        tracker.incrementSneak(player1);
+        Assert.assertEquals(2, tracker.getSneakCount(player1));
+
+        tracker.incrementJump(player1);
+        Assert.assertEquals(1, tracker.getJumpCount(player1));
+
+        tracker.resetRoundState(player1);
+        Assert.assertFalse(tracker.hasPassedCurrentRound(player1));
+        Assert.assertEquals(0, tracker.getSneakCount(player1));
+        Assert.assertEquals(0, tracker.getJumpCount(player1));
+        // Persistent counts should remain untouched
+        Assert.assertEquals(2, tracker.getLives(player1));
+        Assert.assertEquals(1, tracker.getPasses(player1));
+    }
+
+    @Test
+    public void testMarkerDefinitionsAndDescriptions() {
+        var markers = MicroFrenzyDefinition.EXTENSION.markers();
+        Assert.assertEquals(7, markers.size());
+
+        List<String> expectedKeys = List.of(
+            MicroFrenzyDefinition.ARENA_BOUNDS,
+            MicroFrenzyDefinition.ARENA_CENTER,
+            MicroFrenzyDefinition.PLAYER_SPAWN,
+            MicroFrenzyDefinition.LOBBY_SPAWN,
+            MicroFrenzyDefinition.COLOR_ZONE,
+            MicroFrenzyDefinition.HIGH_GROUND,
+            MicroFrenzyDefinition.TARGET_POINT
+        );
+
+        for (String expectedKey : expectedKeys) {
+            var markerOpt = markers.stream().filter(m -> m.key().equals(expectedKey)).findFirst();
+            Assert.assertTrue("Missing marker definition: " + expectedKey, markerOpt.isPresent());
+            var marker = markerOpt.get();
+
+            // Verify description is non-blank and provides actionable guide information
+            String desc = marker.description();
+            Assert.assertNotNull(desc);
+            Assert.assertFalse("Description should not be blank for " + expectedKey, desc.isBlank());
+            Assert.assertTrue("Description should include Purpose for " + expectedKey, desc.contains("Purpose:"));
+            Assert.assertTrue("Description should include Placement for " + expectedKey, desc.contains("Placement:"));
+            Assert.assertTrue("Description should include quantity info for " + expectedKey,
+                desc.contains("Required:") || desc.contains("Optional:"));
+        }
+    }
+
+    @Test
+    public void testMarkerDescriptionNbtSerialization() {
+        dev.frost.miniverse.map.editor.MapEditorExtensionRegistry.register(MicroFrenzyDefinition.EXTENSION);
+
+        // Ensure that MapEditorNbt preserves the marker description across network sync
+        net.minecraft.nbt.NbtList nbtExtensions = dev.frost.miniverse.map.editor.MapEditorNbt.extensionsToNbt();
+        boolean foundMicroFrenzy = false;
+
+        for (int i = 0; i < nbtExtensions.size(); i++) {
+            net.minecraft.nbt.NbtCompound comp = nbtExtensions.getCompound(i);
+            if (MicroFrenzyDefinition.ID.equals(comp.getString("gameId"))) {
+                foundMicroFrenzy = true;
+                net.minecraft.nbt.NbtList markerList = comp.getList("markers", net.minecraft.nbt.NbtElement.COMPOUND_TYPE);
+                Assert.assertEquals(7, markerList.size());
+
+                for (int m = 0; m < markerList.size(); m++) {
+                    net.minecraft.nbt.NbtCompound markerCompound = markerList.getCompound(m);
+                    String desc = markerCompound.getString("description");
+                    Assert.assertFalse("NBT serialized description should not be empty", desc.isBlank());
+                    Assert.assertTrue("NBT serialized description should contain Purpose", desc.contains("Purpose:"));
+                }
+            }
+        }
+        Assert.assertTrue("MicroFrenzy extension must be registered in MapEditorExtensionRegistry", foundMicroFrenzy);
+    }
+
+    @Test
+    public void testFlatMapProceduralApplicability() {
+        // Minimal flat map config with only arena bounds and 2 player spawns
+        MicroFrenzyMapConfig flatConfig = new MicroFrenzyMapConfig(
+            List.of(new RegionPart(MapPosition.of(-15, 99, -15), MapPosition.of(15, 115, 15))),
+            null, // No arenaCenter set!
+            List.of(MapPosition.of(-5, 100, -5), MapPosition.of(5, 100, 5)),
+            List.of(MapPosition.of(0, 110, 0)),
+            List.of(), // No color zones!
+            List.of(), // No high ground!
+            List.of()  // No targets!
+        );
+
+        List<MicroRule> applicable = MicroRuleRegistry.getApplicableRules(flatConfig);
+        Assert.assertTrue("All rules should be applicable on a flat platform", applicable.size() >= 22);
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("color_rush")));
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("high_ground")));
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("target_shoot")));
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("collect_coin")));
+        Assert.assertTrue(applicable.stream().anyMatch(r -> r.id().equals("hot_potato")));
+    }
+
+    @Test
+    public void testArenaCenterCentroidFallback() {
+        JsonObject json = new JsonObject();
+        JsonObject bounds = new JsonObject();
+        JsonArray regions = new JsonArray();
+        JsonObject r = new JsonObject();
+        JsonObject min = new JsonObject();
+        min.addProperty("x", -20.0);
+        min.addProperty("y", 90.0);
+        min.addProperty("z", -10.0);
+        JsonObject max = new JsonObject();
+        max.addProperty("x", 20.0);
+        max.addProperty("y", 120.0);
+        max.addProperty("z", 30.0);
+        r.add("min", min);
+        r.add("max", max);
+        regions.add(r);
+        bounds.add("regions", regions);
+        json.add("arenaBounds", bounds);
+
+        JsonArray spawns = new JsonArray();
+        JsonObject s1 = new JsonObject();
+        s1.addProperty("x", 0.0);
+        s1.addProperty("y", 95.0);
+        s1.addProperty("z", 0.0);
+        JsonObject s2 = new JsonObject();
+        s2.addProperty("x", 2.0);
+        s2.addProperty("y", 95.0);
+        s2.addProperty("z", 2.0);
+        spawns.add(s1);
+        spawns.add(s2);
+        json.add("playerSpawns", spawns);
+
+        MicroFrenzyMapConfig parsed = MicroFrenzyMapConfig.fromJson(json);
+        Assert.assertNotNull(parsed.arenaCenter());
+        Assert.assertEquals(0.0, parsed.arenaCenter().x(), 0.01);
+        Assert.assertEquals(10.0, parsed.arenaCenter().z(), 0.01);
+        Assert.assertEquals(95.0, parsed.arenaCenter().y(), 0.01);
+    }
+
+    @Test
+    public void testTemporaryBlockManagerBasics() {
+        TemporaryBlockManager manager = new TemporaryBlockManager();
+        Assert.assertFalse(manager.hasTrackedBlocks());
+        Assert.assertEquals(0, manager.trackedBlockCount());
+        manager.restoreAll(null);
+        Assert.assertFalse(manager.hasTrackedBlocks());
+    }
+
+    @Test
+    public void testMicroFrenzyArenaHelper2D() {
+        MicroFrenzyMapConfig config = new MicroFrenzyMapConfig(
+            List.of(new RegionPart(MapPosition.of(-10, 100, -20), MapPosition.of(10, 110, 20))),
+            MapPosition.of(0, 100, 0),
+            List.of(MapPosition.of(-5, 100, -5), MapPosition.of(5, 100, 5)),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+        );
+
+        MicroFrenzyArenaHelper.ArenaBounds2D b2d = MicroFrenzyArenaHelper.getBounds2D(config);
+        Assert.assertEquals(-10, b2d.minX());
+        Assert.assertEquals(10, b2d.maxX());
+        Assert.assertEquals(-20, b2d.minZ());
+        Assert.assertEquals(20, b2d.maxZ());
+        Assert.assertEquals(21, b2d.width());
+        Assert.assertEquals(41, b2d.depth());
+        Assert.assertEquals(0, b2d.centerX());
+        Assert.assertEquals(0, b2d.centerZ());
+        Assert.assertEquals(100, MicroFrenzyArenaHelper.getFloorY(config));
+    }
+
+    @Test
+    public void testSpeedUpPhaseEnum() {
+        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("SPEED_UP"));
+        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("INTERMISSION"));
+        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("ANNOUNCEMENT"));
+        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("ACTIVE"));
+        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("RESOLVING"));
+    }
+
+    @Test
+    public void testSmartScalingRules() {
+        JumpCountRule jumpRule = new JumpCountRule();
+        Assert.assertEquals(8, jumpRule.baseDurationSeconds());
+        Assert.assertEquals(4, JumpCountRule.getRequiredJumps(null));
+        Assert.assertTrue(jumpRule.instruction(null).getString().contains("4"));
+
+        RapidCrouchRule crouchRule = new RapidCrouchRule();
+        Assert.assertEquals(8, crouchRule.baseDurationSeconds());
+        Assert.assertEquals(5, RapidCrouchRule.getRequiredCrouches(null));
+        Assert.assertTrue(crouchRule.instruction(null).getString().contains("5"));
+
+        SpinRule spinRule = new SpinRule();
+        Assert.assertEquals(8, spinRule.baseDurationSeconds());
+        Assert.assertEquals(340.0f, SpinRule.getRequiredRotation(null), 0.01f);
+        Assert.assertTrue(spinRule.instruction(null).getString().contains("360°"));
+
+        CenterStageRule centerRule = new CenterStageRule();
+        Assert.assertEquals(8, centerRule.baseDurationSeconds());
+        Assert.assertEquals(3.5, CenterStageRule.getMaxDistance(null), 0.01);
+
+        CollectCoinRule coinRule = new CollectCoinRule();
+        Assert.assertEquals(8, coinRule.baseDurationSeconds());
+        Assert.assertEquals(2, CollectCoinRule.getRequiredCoins(null));
+
+        HotPotatoRule potatoRule = new HotPotatoRule();
+        Assert.assertEquals(8, potatoRule.baseDurationSeconds());
+        // Verify potato rule duration clamped to at least 100 ticks (5s) even if factor is low
+        Assert.assertTrue(potatoRule.getDurationTicks(null) >= 100);
+
+        ColorRushRule colorRule = new ColorRushRule();
+        Assert.assertEquals(8, colorRule.baseDurationSeconds());
+        Assert.assertTrue(colorRule.getDurationTicks(null) >= 80);
+
+        HighGroundRule highGroundRule = new HighGroundRule();
+        Assert.assertEquals(8, highGroundRule.baseDurationSeconds());
+        Assert.assertTrue(highGroundRule.getDurationTicks(null) >= 80);
+
+        TargetShootRule targetRule = new TargetShootRule();
+        Assert.assertEquals(8, targetRule.baseDurationSeconds());
+        Assert.assertTrue(targetRule.getDurationTicks(null) >= 70);
+
+        PunchFriendRule punchRule = new PunchFriendRule();
+        Assert.assertEquals(8, punchRule.baseDurationSeconds());
+        Assert.assertTrue(punchRule.getDurationTicks(null) >= 80);
+    }
+
+    @Test
+    public void testAnvilDodgeRuleFeatures() {
+        AnvilDodgeRule anvilRule = new AnvilDodgeRule();
+        Assert.assertEquals(8, anvilRule.baseDurationSeconds());
+        Assert.assertEquals("anvil_dodge", anvilRule.id());
+        Assert.assertTrue(anvilRule.title().getString().contains("ANVILS"));
+        Assert.assertTrue(anvilRule.instruction().getString().contains("Watch"));
+    }
+
+    @Test
+    public void testGetAllRulesMetadata() {
+        List<MicroRule> all = MicroRuleRegistry.getAllRules();
+        Assert.assertEquals("Should have exactly 38 micro-rules", 38, all.size());
+        for (MicroRule rule : all) {
+            Assert.assertNotNull("Rule id must not be null", rule.id());
+            Assert.assertFalse("Rule id must not be blank", rule.id().isBlank());
+            Assert.assertNotNull("Rule name must not be null for " + rule.id(), rule.name());
+            Assert.assertFalse("Rule name must not be blank for " + rule.id(), rule.name().isBlank());
+            Assert.assertNotNull("Rule description must not be null for " + rule.id(), rule.description());
+            Assert.assertFalse("Rule description must not be blank for " + rule.id(), rule.description().isBlank());
+        }
+    }
+
+    @Test
+    public void testEnabledRulesSettingsSerialization() {
+        MicroFrenzySettings settings = new MicroFrenzySettings(
+            "test_map", 3, 20, "SURVIVAL", true, 2, java.util.Set.of("statue", "jump_count")
+        );
+        Assert.assertTrue(settings.isRuleEnabled("statue"));
+        Assert.assertTrue(settings.isRuleEnabled("jump_count"));
+        Assert.assertFalse(settings.isRuleEnabled("hot_potato"));
+
+        // Properties serialization
+        Properties props = new Properties();
+        settings.writeTo(props);
+        Assert.assertTrue(props.getProperty("microfrenzy.enabledRules").contains("statue"));
+        Assert.assertTrue(props.getProperty("microfrenzy.enabledRules").contains("jump_count"));
+
+        MicroFrenzySettings restored = MicroFrenzySettings.fromProperties(props);
+        Assert.assertTrue(restored.isRuleEnabled("statue"));
+        Assert.assertTrue(restored.isRuleEnabled("jump_count"));
+        Assert.assertFalse(restored.isRuleEnabled("hot_potato"));
+
+        // NBT serialization
+        net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
+        nbt.putString("mapId", "test_map");
+        nbt.putString("enabledRules", "statue,hot_potato");
+        MicroFrenzySettings fromNbt = MicroFrenzySettings.fromNbt(nbt);
+        Assert.assertTrue(fromNbt.isRuleEnabled("statue"));
+        Assert.assertTrue(fromNbt.isRuleEnabled("hot_potato"));
+        Assert.assertFalse(fromNbt.isRuleEnabled("jump_count"));
+
+        // Empty rules -> all enabled
+        MicroFrenzySettings emptySettings = MicroFrenzySettings.defaults();
+        Assert.assertTrue(emptySettings.isRuleEnabled("statue"));
+        Assert.assertTrue(emptySettings.isRuleEnabled("anything"));
+    }
+
+    @Test
+    public void testNewMicroRulesFeatures() {
+        QuickMathRule mathRule = new QuickMathRule();
+        Assert.assertEquals(8, mathRule.baseDurationSeconds());
+        Assert.assertEquals("quick_math", mathRule.id());
+        Assert.assertEquals("Quick Math", mathRule.name());
+        mathRule.generateNewQuestion();
+        Assert.assertNotNull(mathRule.getCurrentQuestion());
+        Assert.assertTrue(mathRule.instruction().getString().contains(mathRule.getCurrentQuestion()));
+
+        EatFoodRule eatRule = new EatFoodRule();
+        Assert.assertEquals(8, eatRule.baseDurationSeconds());
+        Assert.assertEquals("eat_food", eatRule.id());
+        Assert.assertEquals("Feast", eatRule.name());
+
+        EquipArmorRule equipRule = new EquipArmorRule();
+        Assert.assertEquals(8, equipRule.baseDurationSeconds());
+        Assert.assertEquals("equip_armor", equipRule.id());
+        Assert.assertEquals("Gear Up", equipRule.name());
+
+        KeepMovingRule keepRule = new KeepMovingRule();
+        Assert.assertEquals(8, keepRule.baseDurationSeconds());
+        Assert.assertEquals("keep_moving", keepRule.id());
+        Assert.assertEquals("Don't Stop", keepRule.name());
+
+        FindOddItemRule oddRule = new FindOddItemRule();
+        Assert.assertEquals(8, oddRule.baseDurationSeconds());
+        Assert.assertEquals("find_odd_item", oddRule.id());
+        Assert.assertEquals("Find The Odd One", oddRule.name());
+
+        BlastRadiusRule blastRule = new BlastRadiusRule();
+        Assert.assertEquals(8, blastRule.baseDurationSeconds());
+        Assert.assertEquals("blast_radius", blastRule.id());
+        Assert.assertEquals("Blast Radius", blastRule.name());
+
+        SnowballFightRule snowballRule = new SnowballFightRule();
+        Assert.assertEquals(8, snowballRule.baseDurationSeconds());
+        Assert.assertEquals("snowball_fight", snowballRule.id());
+        Assert.assertEquals("Snowball Tag", snowballRule.name());
+        Assert.assertTrue(snowballRule.description().contains("3"));
+
+        SimonSaysRule simonRule = new SimonSaysRule();
+        Assert.assertEquals(7, simonRule.baseDurationSeconds());
+        Assert.assertEquals("simon_says", simonRule.id());
+        Assert.assertEquals("Simon Says", simonRule.name());
+
+        LawnMowerRule lawnRule = new LawnMowerRule();
+        Assert.assertEquals(8, lawnRule.baseDurationSeconds());
+        Assert.assertEquals("lawn_mower", lawnRule.id());
+        Assert.assertEquals("Mow The Lawn", lawnRule.name());
+
+        ChickenHuntRule chickenRule = new ChickenHuntRule();
+        Assert.assertEquals(7, chickenRule.baseDurationSeconds());
+        Assert.assertEquals("chicken_hunt", chickenRule.id());
+        Assert.assertEquals("Punch a Chicken", chickenRule.name());
+
+        StareDownRule stareRule = new StareDownRule();
+        Assert.assertEquals(6, stareRule.baseDurationSeconds());
+        Assert.assertEquals("stare_down", stareRule.id());
+        Assert.assertEquals("Stare Down", stareRule.name());
+
+        SweeperBarRule sweeperRule = new SweeperBarRule();
+        Assert.assertEquals(7, sweeperRule.baseDurationSeconds());
+        Assert.assertEquals("sweeper_bar", sweeperRule.id());
+        Assert.assertEquals("Jump the Sweeper", sweeperRule.name());
+
+        CountMobsRule countRule = new CountMobsRule();
+        Assert.assertEquals(7, countRule.baseDurationSeconds());
+        Assert.assertEquals("count_mobs", countRule.id());
+        Assert.assertEquals("Count the Sheep", countRule.name());
+
+        WordScrambleRule scrambleRule = new WordScrambleRule();
+        Assert.assertEquals(8, scrambleRule.baseDurationSeconds());
+        Assert.assertEquals("word_scramble", scrambleRule.id());
+        Assert.assertEquals("Word Scramble", scrambleRule.name());
+
+        EchoRule echoRule = new EchoRule();
+        Assert.assertEquals(8, echoRule.baseDurationSeconds());
+        Assert.assertEquals("echo_phrase", echoRule.id());
+        Assert.assertEquals("Echo", echoRule.name());
+
+        ColorRouletteRule rouletteRule = new ColorRouletteRule();
+        Assert.assertEquals(8, rouletteRule.baseDurationSeconds());
+        Assert.assertEquals("color_roulette", rouletteRule.id());
+        Assert.assertEquals("Color Roulette", rouletteRule.name());
+
+        FishingHookRule fishingRule = new FishingHookRule();
+        Assert.assertEquals(8, fishingRule.baseDurationSeconds());
+        Assert.assertEquals("fishing_hook", fishingRule.id());
+        Assert.assertEquals("Reel 'Em In", fishingRule.name());
+
+        MortarStrikeRule mortarRule = new MortarStrikeRule();
+        Assert.assertEquals(8, mortarRule.baseDurationSeconds());
+        Assert.assertEquals("mortar_strike", mortarRule.id());
+        Assert.assertEquals("Mortar Strike", mortarRule.name());
+
+        MlgBucketRule mlgRule = new MlgBucketRule();
+        Assert.assertEquals(7, mlgRule.baseDurationSeconds());
+        Assert.assertEquals("mlg_bucket", mlgRule.id());
+        Assert.assertEquals("MLG Water Drop", mlgRule.name());
+
+        MusicalBoatsRule boatRule = new MusicalBoatsRule();
+        Assert.assertEquals(7, boatRule.baseDurationSeconds());
+        Assert.assertEquals("musical_boats", boatRule.id());
+        Assert.assertEquals("Musical Boats", boatRule.name());
+
+        StopClockRule clockRule = new StopClockRule();
+        Assert.assertEquals(5, clockRule.baseDurationSeconds());
+        Assert.assertEquals("stop_clock", clockRule.id());
+        Assert.assertEquals("Stop the Clock", clockRule.name());
+
+        DarknessButtonRule darkRule = new DarknessButtonRule();
+        Assert.assertEquals(8, darkRule.baseDurationSeconds());
+        Assert.assertEquals("darkness_button", darkRule.id());
+        Assert.assertEquals("Blind Button", darkRule.name());
+        Assert.assertTrue(darkRule.title().getString().contains("BUTTON"));
+    }
+
+    @Test
+    public void testTotalRuleCountAndExclusions() {
+        List<MicroRule> all = MicroRuleRegistry.getAllRules();
+        Assert.assertEquals(38, all.size());
+        Assert.assertTrue(all.stream().noneMatch(r -> r.id().equals("floor_vanish")));
+    }
+
+    @Test
+    public void testChatInterceptAwareRules() {
+        MicroFrenzyMinigame minigame = new MicroFrenzyMinigame();
+        Assert.assertTrue(minigame instanceof dev.frost.miniverse.chat.ChatInterceptAware);
+
+        QuickMathRule mathRule = new QuickMathRule();
+        Assert.assertNotNull(mathRule);
+
+        WordScrambleRule scrambleRule = new WordScrambleRule();
+        Assert.assertNotNull(scrambleRule);
+
+        EchoRule echoRule = new EchoRule();
+        Assert.assertNotNull(echoRule);
+
+        CountMobsRule countRule = new CountMobsRule();
+        Assert.assertNotNull(countRule);
+    }
+}

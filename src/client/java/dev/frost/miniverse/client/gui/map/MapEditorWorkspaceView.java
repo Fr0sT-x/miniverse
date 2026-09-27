@@ -13,6 +13,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import dev.frost.miniverse.client.gui.ui.UiComponent;
 import dev.frost.miniverse.client.gui.ui.UiPrimitives.UiButton;
@@ -46,6 +47,9 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
     private UiLayout.Rect listArea = new UiLayout.Rect(0, 0, 0, 0);
     private SessionScreen screen;
     private String status = "";
+
+    private record MarkerTooltip(String title, String description) {}
+    private MarkerTooltip hoveredTooltip = null;
 
     public MapEditorWorkspaceView(MapEditorState state, Runnable refreshAction) {
         this(state, refreshAction, "", "", false);
@@ -233,6 +237,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
 
     @Override
     public void renderBackground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
+        this.hoveredTooltip = null;
         if (this.pendingRefreshTicks > 0) {
             this.pendingRefreshTicks--;
         } else if (this.pendingRefreshTicks == 0) {
@@ -276,6 +281,28 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 
                 String defStr = selected.definition.displayName();
                 context.drawText(textRenderer, Text.literal(defStr), crumbX, crumbY, UiTheme.TEXT, false);
+                crumbX += textRenderer.getWidth(defStr);
+
+                if (selected.definition.description() != null && !selected.definition.description().isBlank()) {
+                    int defIconX = crumbX + 8;
+                    int defIconY = crumbY - 3;
+                    int defIconSize = 14;
+                    boolean defIconHovered = mouseX >= defIconX && mouseX <= defIconX + defIconSize
+                        && mouseY >= defIconY && mouseY <= defIconY + defIconSize;
+
+                    int fill = defIconHovered ? 0x6038BDF8 : 0x2038BDF8;
+                    int border = defIconHovered ? 0xFF38BDF8 : 0x6038BDF8;
+                    UiRenderer.panel(context, defIconX, defIconY, defIconSize, defIconSize, fill, border);
+
+                    int charX = defIconX + (defIconSize - textRenderer.getWidth("i")) / 2;
+                    int charY = defIconY + (defIconSize - 9) / 2;
+                    context.drawText(textRenderer, Text.literal("i"), charX, charY, defIconHovered ? 0xFFFFFFFF : 0xFF7DD3FC, false);
+
+                    if (defIconHovered) {
+                        this.hoveredTooltip = new MarkerTooltip(selected.definition.displayName(), selected.definition.description());
+                    }
+                    crumbX += defIconSize + 8;
+                }
             }
         }
         
@@ -293,7 +320,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         if (selected.extension == null) {
             contentBottom = renderGeneral(context, textRenderer, panel);
         } else if (selected.definition == null) {
-            contentBottom = renderGamemodeOverview(context, textRenderer, panel, selected);
+            contentBottom = renderGamemodeOverview(context, textRenderer, panel, selected, mouseX, mouseY);
         } else {
             this.maxScrollY = Math.max(0, renderMarkerEditor(context, textRenderer, panel, selected, mouseX, mouseY) - panel.y() - panel.height() + 10);
         }
@@ -520,6 +547,12 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 
                 if (addBtn.contains(mouseX, adjustedMouseY)) {
                     this.startAdd(selected.extension, marker);
+                    return true;
+                }
+
+                int nameW = net.minecraft.client.MinecraftClient.getInstance().textRenderer.getWidth(marker.displayName());
+                UiLayout.Rect infoBtn = new UiLayout.Rect(headerRow.x() + 26 + nameW + 8, headerRow.y() + 10, 16, 16);
+                if (infoBtn.contains(mouseX, adjustedMouseY)) {
                     return true;
                 }
                 
@@ -770,7 +803,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         return y + (int) this.scrollY;
     }
 
-    private int renderGamemodeOverview(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel, Selected selected) {
+    private int renderGamemodeOverview(DrawContext context, TextRenderer textRenderer, UiLayout.Rect panel, Selected selected, int mouseX, int mouseY) {
         int rowY = this.listArea.y() + 10 - (int) this.scrollY;
         
         SessionSnapshotData.EditorGameState gameState = SessionSnapshotData.editorState().games().stream()
@@ -817,6 +850,30 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             String expandIcon = expanded ? "▼" : "▶";
             context.drawText(textRenderer, Text.literal(expandIcon), row.x() + 10, row.y() + 14, UiTheme.TEXT_DIM, false);
             context.drawText(textRenderer, Text.literal(marker.displayName()), row.x() + 26, row.y() + 14, UiTheme.TEXT, false);
+
+            int nameW = textRenderer.getWidth(marker.displayName());
+            int iconX = row.x() + 26 + nameW + 8;
+            int iconY = row.y() + 10;
+            int iconSize = 16;
+
+            boolean iconVisible = iconY + iconSize >= this.listArea.y() && iconY <= this.listArea.y() + this.listArea.height();
+            if (iconVisible) {
+                boolean iconHovered = this.listArea.contains(mouseX, mouseY)
+                    && mouseX >= iconX && mouseX <= iconX + iconSize
+                    && mouseY >= iconY && mouseY <= iconY + iconSize;
+
+                int fill = iconHovered ? 0x6038BDF8 : 0x2038BDF8;
+                int border = iconHovered ? 0xFF38BDF8 : 0x6038BDF8;
+                UiRenderer.panel(context, iconX, iconY, iconSize, iconSize, fill, border);
+
+                int charX = iconX + (iconSize - textRenderer.getWidth("i")) / 2;
+                int charY = iconY + (iconSize - 9) / 2 + 1;
+                context.drawText(textRenderer, Text.literal("i"), charX, charY, iconHovered ? 0xFFFFFFFF : 0xFF7DD3FC, false);
+
+                if (iconHovered && marker.description() != null && !marker.description().isBlank()) {
+                    this.hoveredTooltip = new MarkerTooltip(marker.displayName(), marker.description());
+                }
+            }
             
             SessionSnapshotData.EditorMarker drillDownParentMarker = this.drillDownParentId != null ? SessionSnapshotData.editorState().markers(selected.extension.gameId(), this.drillDownParentKey).stream().filter(m -> m.id().equals(this.drillDownParentId)).findFirst().orElse(null) : null;
             
@@ -1128,6 +1185,85 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
         if (net.minecraft.client.MinecraftClient.getInstance().player != null) {
             net.minecraft.client.MinecraftClient.getInstance().player.networkHandler.sendChatCommand(command);
         }
+    }
+
+    @Override
+    public void renderForeground(DrawContext context, TextRenderer textRenderer, UiLayout.Rect workspace, int mouseX, int mouseY, float delta) {
+        if (this.hoveredTooltip != null && !this.hoveredTooltip.description().isBlank()) {
+            renderMarkerTooltip(context, textRenderer, this.hoveredTooltip.title(), this.hoveredTooltip.description(), mouseX, mouseY);
+        }
+    }
+
+    private void renderMarkerTooltip(DrawContext context, TextRenderer textRenderer, String title, String description, int mouseX, int mouseY) {
+        List<Text> lines = new ArrayList<>();
+        lines.add(Text.literal("ℹ " + title).formatted(Formatting.AQUA, Formatting.BOLD));
+
+        int maxLineWidth = 250;
+        String[] rawLines = description.split("\n");
+        boolean hasHeaderSpacer = false;
+
+        for (String rawLine : rawLines) {
+            String trimmed = rawLine.trim();
+            if (trimmed.isEmpty()) {
+                lines.add(Text.empty());
+                continue;
+            }
+            if (!hasHeaderSpacer) {
+                lines.add(Text.empty());
+                hasHeaderSpacer = true;
+            }
+
+            if (trimmed.startsWith("•") || trimmed.startsWith("-")) {
+                int colonIdx = trimmed.indexOf(':');
+                if (colonIdx > 0) {
+                    String prefix = trimmed.substring(0, colonIdx + 1);
+                    String body = trimmed.substring(colonIdx + 1).trim();
+
+                    List<String> wrapped = wrapWords(prefix + " " + body, maxLineWidth, textRenderer);
+                    for (int i = 0; i < wrapped.size(); i++) {
+                        String part = wrapped.get(i);
+                        if (i == 0 && part.startsWith(prefix)) {
+                            lines.add(Text.literal(prefix).formatted(Formatting.YELLOW)
+                                .append(Text.literal(part.substring(prefix.length())).formatted(Formatting.WHITE)));
+                        } else {
+                            lines.add(Text.literal("  " + part).formatted(Formatting.WHITE));
+                        }
+                    }
+                } else {
+                    List<String> wrapped = wrapWords(trimmed, maxLineWidth, textRenderer);
+                    for (String part : wrapped) {
+                        lines.add(Text.literal(part).formatted(Formatting.YELLOW));
+                    }
+                }
+            } else {
+                List<String> wrapped = wrapWords(trimmed, maxLineWidth, textRenderer);
+                for (String part : wrapped) {
+                    lines.add(Text.literal(part).formatted(Formatting.GRAY));
+                }
+            }
+        }
+
+        context.drawTooltip(textRenderer, lines, mouseX, mouseY);
+    }
+
+    private static List<String> wrapWords(String text, int maxWidth, TextRenderer textRenderer) {
+        List<String> result = new ArrayList<>();
+        String[] words = text.split(" ");
+        StringBuilder current = new StringBuilder();
+        for (String word : words) {
+            if (word.isEmpty()) continue;
+            if (current.length() > 0 && textRenderer.getWidth(current + " " + word) > maxWidth) {
+                result.add(current.toString());
+                current = new StringBuilder(word);
+            } else {
+                if (current.length() > 0) current.append(" ");
+                current.append(word);
+            }
+        }
+        if (current.length() > 0) {
+            result.add(current.toString());
+        }
+        return result;
     }
 
     private record Selected(SessionSnapshotData.EditorExtension extension, SessionSnapshotData.EditorMarkerDefinition definition) {

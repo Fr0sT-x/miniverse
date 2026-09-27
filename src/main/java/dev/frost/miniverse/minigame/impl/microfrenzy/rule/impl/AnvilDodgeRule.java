@@ -1,0 +1,181 @@
+package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+
+import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
+import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import net.minecraft.block.Blocks;
+import net.minecraft.entity.FallingBlockEntity;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageTypes;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
+import net.minecraft.util.math.BlockPos;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+public class AnvilDodgeRule implements MicroRule {
+    private final Random random = new Random();
+    private final List<FallingBlockEntity> spawnedAnvils = new ArrayList<>();
+    private final List<BlockPos> landedAnvilBlocks = new ArrayList<>();
+    private boolean secondWaveSpawned = false;
+
+    @Override
+    public String id() {
+        return "anvil_dodge";
+    }
+
+    @Override
+    public String name() {
+        return "Anvil Dodge";
+    }
+
+    @Override
+    public String description() {
+        return "Watch the ground shadows and dodge the falling anvils.";
+    }
+
+    @Override
+    public Text title() {
+        return Text.literal("DODGE THE ANVILS!").formatted(Formatting.GRAY, Formatting.BOLD);
+    }
+
+    @Override
+    public Text instruction() {
+        return Text.literal("Watch the shadows on the ground and dodge!").formatted(Formatting.YELLOW);
+    }
+
+    @Override
+    public int baseDurationSeconds() {
+        return 8;
+    }
+
+    @Override
+    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+        spawnedAnvils.clear();
+        landedAnvilBlocks.clear();
+        secondWaveSpawned = false;
+
+        for (ServerPlayerEntity p : game.getLivingPlayers()) {
+            game.getTracker().setPassedCurrentRound(p.getUuid(), true); // Default pass unless crushed
+        }
+
+        ServerWorld world = game.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        // Spawn initial wave across the entire arena bounds
+        spawnAnvilWave(game, world, 0);
+    }
+
+    private void spawnAnvilWave(MicroFrenzyMinigame game, ServerWorld world, int waveIndex) {
+        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+        int spawnY = floorY + 12;
+
+        // With step 3, in each 3x3 pocket we pick at most 1 anvil drop location.
+        // Staggering by waveIndex ensures wave 2 drops in different grid corridors.
+        int offset = (waveIndex % 2 == 0) ? 0 : 1;
+
+        for (int x = bounds.minX() + 1 + offset; x <= bounds.maxX() - 1; x += 3) {
+            for (int z = bounds.minZ() + 1 + offset; z <= bounds.maxZ() - 1; z += 3) {
+                // Ensure platform beneath exists (skip void or holes in platform)
+                BlockPos floorPos = new BlockPos(x, floorY - 1, z);
+                if (world.getBlockState(floorPos).isAir()) {
+                    continue;
+                }
+
+                // ~55% probability in each 3x3 cell, leaving ~45% clear pockets and 2-block gaps everywhere
+                if (random.nextFloat() < 0.55f) {
+                    BlockPos dropPos = new BlockPos(x, spawnY, z);
+                    BlockPos groundPos = new BlockPos(x, floorY, z);
+
+                    // Ground warning particles
+                    world.spawnParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, groundPos.getX() + 0.5, groundPos.getY() + 0.1, groundPos.getZ() + 0.5, 5, 0.2, 0.05, 0.2, 0.01);
+                    world.spawnParticles(ParticleTypes.ANGRY_VILLAGER, groundPos.getX() + 0.5, groundPos.getY() + 0.2, groundPos.getZ() + 0.5, 1, 0.1, 0.05, 0.1, 0.01);
+
+                    FallingBlockEntity anvil = FallingBlockEntity.spawnFromBlock(world, dropPos, Blocks.DAMAGED_ANVIL.getDefaultState());
+                    anvil.setHurtEntities(2.0f, 40);
+                    spawnedAnvils.add(anvil);
+                    landedAnvilBlocks.add(groundPos);
+                }
+            }
+        }
+
+        world.playSound(null, bounds.centerX(), floorY, bounds.centerZ(), SoundEvents.BLOCK_ANVIL_FALL, SoundCategory.BLOCKS, 1.0f, 0.8f);
+    }
+
+    @Override
+    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+        ServerWorld world = game.getWorld();
+        if (world == null) return;
+
+        // If round is long (>= 6s, remainingTicks <= totalTicks - 50), trigger second staggered wave
+        int durationTicks = getDurationTicks(game);
+        if (durationTicks >= 120 && !secondWaveSpawned && remainingTicks <= durationTicks - 50) {
+            secondWaveSpawned = true;
+            cleanLandedAnvilBlocks(world);
+            spawnAnvilWave(game, world, 1);
+        }
+    }
+
+    private void cleanLandedAnvilBlocks(ServerWorld world) {
+        if (world == null) return;
+        for (BlockPos pos : landedAnvilBlocks) {
+            if (world.getBlockState(pos).isOf(Blocks.DAMAGED_ANVIL) || world.getBlockState(pos).isOf(Blocks.ANVIL) || world.getBlockState(pos).isOf(Blocks.CHIPPED_ANVIL)) {
+                world.setBlockState(pos, Blocks.AIR.getDefaultState());
+            }
+        }
+    }
+
+    @Override
+    public boolean onPlayerDamage(ServerPlayerEntity player, DamageSource source, float amount, MicroFrenzyMinigame game) {
+        if (source.isOf(DamageTypes.FALLING_ANVIL) || source.isOf(DamageTypes.FALLING_BLOCK)) {
+            game.getTracker().setPassedCurrentRound(player.getUuid(), false);
+            player.sendMessage(Text.literal("§c💥 Clang! An anvil crushed you!"), true);
+            player.playSoundToPlayer(SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 1.0f, 1.0f);
+            return false; // Prevent lethal damage, round resolution deducts life
+        }
+        return false;
+    }
+
+    @Override
+    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+        return game.getTracker().hasPassedCurrentRound(player.getUuid());
+    }
+
+    @Override
+    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+        ServerWorld world = game.getWorld();
+        for (FallingBlockEntity anvil : spawnedAnvils) {
+            if (anvil != null && anvil.isAlive()) {
+                anvil.discard();
+            }
+        }
+        spawnedAnvils.clear();
+
+        // Complete arena sweep for any landed anvil blocks
+        if (world != null && game.getMapConfig() != null) {
+            MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+            int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+
+            BlockPos.iterate(
+                new BlockPos(bounds.minX() - 2, floorY - 1, bounds.minZ() - 2),
+                new BlockPos(bounds.maxX() + 2, floorY + 4, bounds.maxZ() + 2)
+            ).forEach(pos -> {
+                if (world.getBlockState(pos).isOf(Blocks.DAMAGED_ANVIL) || world.getBlockState(pos).isOf(Blocks.ANVIL) || world.getBlockState(pos).isOf(Blocks.CHIPPED_ANVIL)) {
+                    world.setBlockState(pos, Blocks.AIR.getDefaultState());
+                }
+            });
+        }
+        landedAnvilBlocks.clear();
+    }
+}

@@ -42,6 +42,15 @@ public final class ChatRouter {
             return true;
         }
 
+        // Check if active minigame intercepts chat messages (e.g. Quick Math)
+        dev.frost.miniverse.minigame.core.Minigame active = MinigameManager.getInstance().getActiveMinigame();
+        if (active instanceof ChatInterceptAware interceptAware) {
+            ChatInterceptResult result = interceptAware.onChatMessage(sender, content);
+            if (result == ChatInterceptResult.CONSUME_SILENT) {
+                return true; // Suppressed silently!
+            }
+        }
+
         if (channel == ChatChannel.TEAM) {
             sendTeamChat(sender, content);
             return true;

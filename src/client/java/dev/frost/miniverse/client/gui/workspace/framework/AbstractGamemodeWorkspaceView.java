@@ -894,6 +894,38 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         this.renderActionButton(context, textRenderer, rect, label, accent, hovered, true);
     }
 
+    protected void renderToggleRowButton(DrawContext context, TextRenderer textRenderer, UiLayout.Rect rect, String label, boolean enabled, boolean hovered) {
+        int accent = enabled ? UiTheme.ACCENT_GREEN : 0x7C8088;
+        int fill = UiAnimation.lerpColor(UiTheme.PANEL_RAISED, UiAnimation.alpha(accent, 0.28F), hovered ? 1.0F : 0.0F);
+        int border = UiAnimation.lerpColor(UiTheme.BORDER_SUBTLE, accent, hovered ? 1.0F : 0.0F);
+        UiRenderer.panel(context, rect.x(), rect.y(), rect.width(), rect.height(), fill, border);
+
+        // 1. Square-sized checkbox area on the left of the button
+        int squareSize = rect.height();
+        int dividerX = rect.x() + squareSize;
+
+        // Subtle darker inset behind the square tick area
+        context.fill(rect.x() + 1, rect.y() + 1, dividerX, rect.y() + rect.height() - 1, 0x30000000);
+
+        // 2. White vertical divider between tick and text
+        context.fill(dividerX, rect.y() + 2, dividerX + 1, rect.y() + rect.height() - 2, 0xD0FFFFFF);
+
+        // 3. Center the tick inside the square checkbox area
+        int textY = rect.y() + (rect.height() - 8) / 2;
+        String tick = enabled ? "✓" : "—";
+        int tickWidth = textRenderer.getWidth(tick);
+        int tickX = rect.x() + (squareSize - tickWidth) / 2;
+        int tickColor = enabled ? UiTheme.ACCENT_GREEN : UiTheme.TEXT_DIM;
+        context.drawTextWithShadow(textRenderer, Text.literal(tick), tickX, textY, tickColor);
+
+        // 4. Label text starting after the white divider
+        int textX = dividerX + 6;
+        int maxTextWidth = Math.max(10, rect.width() - squareSize - 8);
+        String trimmedLabel = textRenderer.trimToWidth(label, maxTextWidth);
+        int textColor = enabled ? UiTheme.TEXT : UiTheme.TEXT_MUTED;
+        context.drawTextWithShadow(textRenderer, Text.literal(trimmedLabel), textX, textY, textColor);
+    }
+
     protected void addStepper(SessionScreen screen, TextFieldWidget field, int x, int y, int min, int max, int step) {
         int relX = x - this.layout.mainPanel().x();
         int relY = y - this.layout.mainPanel().y();
@@ -1052,7 +1084,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         int moduleHeight = this.layout.mainPanel().height() - 104;
         UiRenderer.panel(context, moduleX, moduleY, moduleWidth, moduleHeight, UiTheme.CARD, UiTheme.BORDER_SUBTLE);
         context.fill(moduleX, moduleY, moduleX + 3, moduleY + moduleHeight, accent);
-        context.drawText(textRenderer, Text.literal(title), moduleX + 12, moduleY + 12, accent, false);
+        context.drawText(textRenderer, Text.literal(title), moduleX + 12, moduleY + 8, accent, false);
     }
 
     protected int readClamped(dev.frost.miniverse.client.gui.ui.IntFieldWidget field, int fallback, int min, int max) {

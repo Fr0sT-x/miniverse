@@ -108,10 +108,16 @@ public final class MapEditorPlacementController {
             session.setupPointInventory(player);
             if (definition.type() == MarkerType.MULTI_POINT) {
                 player.sendMessage(Text.literal("§e§l[POINT PLACER] §7Left-click blocks to add route points. Right-click [Lime Dye] to save, [Barrier] to cancel.").formatted(Formatting.YELLOW), false);
+            } else if (definition.maxCount() > 1) {
+                player.sendMessage(Text.literal("§e§l[POINT PLACER] §7Left-click blocks to place " + definition.displayName() + " points (up to " + definition.maxCount() + "). Right-click [Lime Dye] to save, [Barrier] to cancel.").formatted(Formatting.YELLOW), false);
             } else {
                 player.sendMessage(Text.literal("§e§l[POINT PLACER] §7Left-click a block to position " + definition.displayName() + ". Right-click [Lime Dye] to save, [Barrier] to cancel.").formatted(Formatting.YELLOW), false);
             }
-            player.sendMessage(Text.literal("§6[Placing: " + definition.displayName() + "] §eLeft-Click: §fPosition | §a[Lime Dye]: §fSave | §c[Barrier]: §fCancel").formatted(Formatting.GOLD), true);
+            if (definition.maxCount() > 1 || definition.type() == MarkerType.MULTI_POINT) {
+                player.sendMessage(Text.literal("§6[Placing: " + definition.displayName() + "] §eLeft-Click: §fAdd Point | §a[Lime Dye]: §fSave | §c[Barrier]: §fCancel").formatted(Formatting.GOLD), true);
+            } else {
+                player.sendMessage(Text.literal("§6[Placing: " + definition.displayName() + "] §eLeft-Click: §fPosition | §a[Lime Dye]: §fSave | §c[Barrier]: §fCancel").formatted(Formatting.GOLD), true);
+            }
         }
     }
 
@@ -237,7 +243,7 @@ public final class MapEditorPlacementController {
                 Items.COMPASS,
                 Text.literal("Point Placer: " + this.definition.displayName()).formatted(Formatting.GOLD, Formatting.BOLD),
                 List.of(
-                    Text.literal("Left-Click a block: ").formatted(Formatting.YELLOW).append(Text.literal(this.definition.type() == MarkerType.MULTI_POINT ? "Add route point" : "Set point position").formatted(Formatting.WHITE)),
+                    Text.literal("Left-Click a block: ").formatted(Formatting.YELLOW).append(Text.literal(this.definition.type() == MarkerType.MULTI_POINT || this.definition.maxCount() > 1 ? "Add point" : "Set point position").formatted(Formatting.WHITE)),
                     Text.literal("Right-Click [Lime Dye]: ").formatted(Formatting.GREEN).append(Text.literal("Save and finish").formatted(Formatting.WHITE)),
                     Text.literal("Right-Click [Barrier]: ").formatted(Formatting.RED).append(Text.literal("Cancel without saving").formatted(Formatting.WHITE))
                 )
@@ -335,15 +341,33 @@ public final class MapEditorPlacementController {
             }
 
             // POINT PLACEMENT
-            this.pushPointHistory();
             MapPosition position = new MapPosition(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, player.getYaw(), 0.0F);
 
             if (this.definition.type() == MarkerType.MULTI_POINT) {
+                this.pushPointHistory();
                 this.selectedPoints.add(position);
                 player.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 0.8f, 1.2f + (this.selectedPoints.size() * 0.05f));
                 this.sendPointSummary(player);
                 player.sendMessage(Text.literal("§aAdded point #" + this.selectedPoints.size() + " at (" + (pos.getX() + 0.5) + ", " + (pos.getY() + 1.0) + ", " + (pos.getZ() + 0.5) + ") — §eRight-click [Lime Dye] to save!").formatted(Formatting.GREEN), true);
+            } else if (this.definition.maxCount() > 1) {
+                List<MapMarker> existing = MapEditorMarkerStore.load(this.mapId, this.extension, this.definition);
+                int totalPoints = existing.size() + this.selectedPoints.size();
+                if (totalPoints >= this.definition.maxCount()) {
+                    player.sendMessage(Text.literal("§cYou already placed " + totalPoints + " points.").formatted(Formatting.RED), false);
+                    player.playSoundToPlayer(SoundEvents.BLOCK_DISPENSER_FAIL, SoundCategory.PLAYERS, 0.8f, 1.0f);
+                    return true;
+                }
+                this.pushPointHistory();
+                this.selectedPoints.add(position);
+                int currentTotal = existing.size() + this.selectedPoints.size();
+                player.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 0.8f, 1.2f + (this.selectedPoints.size() * 0.05f));
+                this.sendPointSummary(player);
+                if (currentTotal >= this.definition.maxCount()) {
+                    player.sendMessage(Text.literal("§cYou already placed " + currentTotal + " points.").formatted(Formatting.RED), false);
+                }
+                player.sendMessage(Text.literal("§aAdded point #" + currentTotal + " (" + this.selectedPoints.size() + " in session) — §eRight-click [Lime Dye] to save!").formatted(Formatting.GREEN), true);
             } else {
+                this.pushPointHistory();
                 this.selectedPoints.clear();
                 this.selectedPoints.add(position);
                 player.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), SoundCategory.PLAYERS, 0.8f, 1.4f);
@@ -724,6 +748,25 @@ public final class MapEditorPlacementController {
                     markers.add(new MapMarker(id, this.definition.key(), markerName, this.definition.type(), new ArrayList<>(this.selectedPoints), List.of(), this.properties));
                     this.save(player, markers, "Saved " + markerName + " with " + this.selectedPoints.size() + " points.");
                 }
+            } else if (this.definition.maxCount() > 1) {
+                // Multi-allowed POINT marker (e.g. Player Spawns)
+                int addedCount = 0;
+                int startIdx = 1;
+                for (MapPosition pt : this.selectedPoints) {
+                    if (markers.size() >= this.definition.maxCount()) {
+                        break;
+                    }
+                    String markerName;
+                    if (this.name != null && !this.name.isBlank()) {
+                        markerName = this.selectedPoints.size() == 1 ? this.name : this.name + " #" + startIdx++;
+                    } else {
+                        markerName = this.computeMarkerName(markers);
+                    }
+                    String id = UUID.randomUUID().toString();
+                    markers.add(new MapMarker(id, this.definition.key(), markerName, this.definition.type(), List.of(pt), List.of(), this.properties));
+                    addedCount++;
+                }
+                this.save(player, markers, "Saved " + addedCount + " " + this.definition.displayName() + " point(s).");
             } else {
                 if (this.definition.single()) {
                     markers.clear();

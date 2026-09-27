@@ -75,6 +75,8 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<SaveGamemodePresetPayload> SAVE_GAMEMODE_PRESET_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "save_gamemode_preset"));
     public static final CustomPayload.Id<DeleteGamemodePresetPayload> DELETE_GAMEMODE_PRESET_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "delete_gamemode_preset"));
     public static final CustomPayload.Id<SyncGamemodePresetsPayload> SYNC_GAMEMODE_PRESETS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_gamemode_presets"));
+    public static final CustomPayload.Id<StopClockStartPayload> STOP_CLOCK_START_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "stop_clock_start"));
+    public static final CustomPayload.Id<StopClockStopPayload> STOP_CLOCK_STOP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "stop_clock_stop"));
 
     private static boolean payloadTypesRegistered;
 
@@ -147,6 +149,8 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playC2S().register(SAVE_GAMEMODE_PRESET_ID, SaveGamemodePresetPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(DELETE_GAMEMODE_PRESET_ID, DeleteGamemodePresetPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SYNC_GAMEMODE_PRESETS_ID, SyncGamemodePresetsPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(STOP_CLOCK_START_ID, StopClockStartPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(STOP_CLOCK_STOP_ID, StopClockStopPayload.CODEC);
         
         payloadTypesRegistered = true;
     }
@@ -1086,6 +1090,36 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return SYNC_GAMEMODE_PRESETS_ID;
+        }
+    }
+
+    public record StopClockStartPayload(int durationMs, int targetRemainingMs, int toleranceMs) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, StopClockStartPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.VAR_INT,
+            StopClockStartPayload::durationMs,
+            PacketCodecs.VAR_INT,
+            StopClockStartPayload::targetRemainingMs,
+            PacketCodecs.VAR_INT,
+            StopClockStartPayload::toleranceMs,
+            StopClockStartPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return STOP_CLOCK_START_ID;
+        }
+    }
+
+    public record StopClockStopPayload(int stoppedElapsedMs) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, StopClockStopPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.VAR_INT,
+            StopClockStopPayload::stoppedElapsedMs,
+            StopClockStopPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return STOP_CLOCK_STOP_ID;
         }
     }
 }

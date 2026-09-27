@@ -39,19 +39,35 @@ public final class DropperDefinition implements MinigameDefinition {
         List.of(
             new MarkerDefinition(
                 LEVEL_CONFIG, "Dropper Level", MarkerType.POINT, "levels", 1, 100,
-                null, null, "Defines a dropper level. Drill down into it to place its Spawn Point and Goal Region."
+                null, null,
+                "Defines a dropper level within the map course.\n" +
+                "• Required: 1 to 100 levels.\n" +
+                "• Purpose: Parent container for a single drop challenge. Drill down into this level to place its Spawn Point and Goal Region.\n" +
+                "• Placement: Place at the top entrance of the dropper shaft. Name it (e.g. 'Level 1: Industrial', 'Level 2: Atlantis')."
             ),
             new MarkerDefinition(
                 LEVEL_SPAWN, "Level Spawn", MarkerType.POINT, "levelSpawns", 1, 100,
-                null, MarkerGrouping.logical(LEVEL_CONFIG, "levelId"), "Starting drop position at the top of the level."
+                null, MarkerGrouping.logical(LEVEL_CONFIG, "levelId"),
+                "Drop starting platform for this specific level.\n" +
+                "• Required: 1 to 100 points (at least 1 per level).\n" +
+                "• Purpose: Players teleport here when starting or restarting this dropper level before leaping into the drop shaft.\n" +
+                "• Placement: Place on the starting jump ledge at the very top of the dropper shaft facing downward into the obstacles."
             ),
             new MarkerDefinition(
                 LEVEL_GOAL, "Level Goal", MarkerType.REGION, "levelGoals", 1, 100,
-                List.of(TriggerType.PLAYER_ENTER), MarkerGrouping.logical(LEVEL_CONFIG, "levelId"), "Water or slime landing pool at the bottom to complete the level."
+                List.of(TriggerType.PLAYER_ENTER), MarkerGrouping.logical(LEVEL_CONFIG, "levelId"),
+                "Landing pool volume at the bottom of the level shaft.\n" +
+                "• Required: 1 to 100 regions (at least 1 per level).\n" +
+                "• Purpose: Landing safely inside this region triggers level completion and advances the player to the next level.\n" +
+                "• Placement: Define a 3D box enclosing the water pool, slime blocks, or cobweb landing zone at the base of the drop."
             ),
             new MarkerDefinition(
                 LOBBY_SPAWN, "Lobby Spawn", MarkerType.POINT, "lobbySpawns", 0, 16,
-                null, null, "Optional spawn point for pre-game waiting area or lobby platform."
+                null, null,
+                "Pre-game waiting area and post-game winners lounge.\n" +
+                "• Optional: Up to 16 points.\n" +
+                "• Purpose: Players spawn here before the match begins and return here upon completing all levels in the dropper map.\n" +
+                "• Placement: Place in an open lobby, spectator platform, or trophy room overlooking the dropper shafts."
             )
         ),
         List.of(DropperMapConfig::validateEditor)

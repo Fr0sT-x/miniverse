@@ -13,33 +13,33 @@
 
 **Legend:** ✅ Fully Used · ⚠️ Partially Used · ❌ Not Used · 🔄 Migration In Progress
 
-| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune | HordeSurvival | Dropper | Zombies |
-|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|:-------------:|:-------:|:-------:|
-| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ |
-| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
-| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** | **N/A** | **75%** | **78%** | **75%** |
+| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune | HordeSurvival | Dropper | Zombies | MicroFrenzy |
+|-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|:-------------:|:-------:|:-------:|:-----------:|
+| F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F03 Freeze | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F04 Spectator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F05 Death Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F06 Persistence | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F07 Global Rules | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F08 Team | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| F09 Map Protection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F10 Region Trigger | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
+| F11 Map Editor | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| F12 Scoreboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F13 Protected Items | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| F14 Kit | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F15 Role | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F16 Visibility | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F17 Corpse | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F18 Arena | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F19 Countdown Svc | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ |
+| F20 Player Snapshot | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| F21 Derangement | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F22 Respawn Policy | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F23 Inventory Layout | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| F24 Shop Framework | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | 🔄 | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| **Compliance %** | **76%** | **62%** | **74%** | **68%** | **62%** | **63%** | **64%** | **71%** | **76%** | **79%** | **66%** | **N/A** | **75%** | **78%** | **75%** | **77%** |
 
 ---
 
@@ -50,7 +50,7 @@
 > - **Where Leaf Decay is OFF**:
 >   1. **Map Editor sessions** (`SessionMode.MAP_EDITOR`).
 >   2. **Inspection sessions** (`SessionMode.INSPECTION_SESSION`).
->   3. **All 8 Map-based Gamemodes**: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper (identified via `MapWorldRules.isLeafDecayDisabled(world)`).
+>   3. **All 9 Map-based Gamemodes**: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper, Micro-Frenzy (identified via `MapWorldRules.isLeafDecayDisabled(world)`).
 > - **How it works**:
 >   - `LeavesBlockMixin` intercepts `LeavesBlock.randomTick` at `HEAD` and cancels decay whenever `MapWorldRules.isLeafDecayDisabled(world)` is true.
 >   - Leaves placed during map construction (oak, birch, spruce, jungle, acacia, dark oak, mangrove, cherry, azalea) will **never** decay, despawn, or drop saplings/apples.
@@ -528,6 +528,37 @@ any code. Add the gamemode column to the matrix above.
 
 ---
 
+### Micro-Frenzy (Micro-frezy)
+
+**Main class:** `MicroFrenzyMinigame`
+**Status:** Production-ready · **Compliance:** 77%
+**Last reviewed:** 2026-09-26
+
+**Gamerules:** `doImmediateRespawn=false`, `keepInventory=true`, `fallDamage=false`, `doMobSpawning=false`, `doDaylightCycle=false`
+
+**Frameworks actively used:**
+- F01 Session, F02 Match Lifecycle, F03 Freeze (intermission breathers and start countdown)
+- F04 Spectator (`SpectatorPolicies.unrestricted()`, `SpectatorTargetProviders.roster()`)
+- F05 Death Lifecycle (Damage cancellation on void/hazards, life pool management, spectator transition on elimination)
+- F06 Persistence / F20 Player Snapshot (Round count, active rule, completed states)
+- F09 Map Protection (Full arena protection from breaking, temporary entity cleanup, leaf decay disabled)
+- F10 Region Trigger (Bounds exit fail detection via `ARENA_BOUNDS`, `COLOR_ZONE`, and `HIGH_GROUND` triggers)
+- F11 Map Editor (`arena_bounds`, `arena_center`, `player_spawns`, `lobby_spawns`, `color_zones`, `high_ground`, `targets`)
+- F12 Scoreboard (Dynamic sidebar displaying Round, Speed multiplier, Task prompt, Timer, and Player Lives `♥♥♥`)
+- F19 Countdown Svc (Micro-timer visible announcements and SFX cues)
+
+**Key Mechanics & Modules:**
+- **MicroRule Engine**: Extensible rule deck cycling through rapid 3–8s micro-challenges (Statue, Rapid Crouch, Jump Mania, Look Up, Look Down, 360 Spin, Slap a Friend, Drop Item, Reverse Psychology, Center Stage, Color Rush, Floor is Lava, Anvil Dodge).
+- **Speed-Up Escalation**: Every 5 rounds, tempo accelerates (+pitch, faster countdowns, Speed I/II effects).
+- **Survival & Points Modes**: Configurable lives (default 3) elimination or fixed round point rush.
+- **Dynamic Fallback**: Operates on any map with simple bounds and spawns, activating color/high-ground rules dynamically if markers exist.
+
+**Known issues / debt:**
+- None.
+
+**Migration target:** None currently.
+
+---
 
 ## Adding a New Gamemode
 

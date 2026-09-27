@@ -80,7 +80,9 @@ public class SessionScreen extends Screen {
         Map.entry("pillarsoffortune", SessionScreen::openPillarsOfFortune),
         Map.entry("horde_survival", SessionScreen::openHordeSurvival),
         Map.entry("zombies", SessionScreen::openZombies),
-        Map.entry("dropper", SessionScreen::openDropper)
+        Map.entry("dropper", SessionScreen::openDropper),
+        Map.entry("microfrenzy", SessionScreen::openMicroFrenzy),
+        Map.entry("microfrezy", SessionScreen::openMicroFrenzy)
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -1986,6 +1988,10 @@ public class SessionScreen extends Screen {
 
     private void openDropper() {
         this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.DropperWorkspaceView());
+    }
+
+    private void openMicroFrenzy() {
+        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.MicroFrenzyWorkspaceView());
     }
 
     public void openGenericSetup(MinigameEntry entry) {

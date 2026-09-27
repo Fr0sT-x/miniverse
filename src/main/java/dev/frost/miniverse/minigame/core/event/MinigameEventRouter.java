@@ -291,6 +291,15 @@ public final class MinigameEventRouter {
     }
 
     private boolean onAllowChatMessage(SignedMessage message, ServerPlayerEntity player, MessageType.Parameters parameters) {
+        Minigame active = this.activeMinigame();
+        if (active instanceof dev.frost.miniverse.chat.ChatInterceptAware interceptAware) {
+            String raw = message.getContent().getString();
+            String content = raw.startsWith("!") ? raw.substring(1).trim() : raw.trim();
+            dev.frost.miniverse.chat.ChatInterceptResult result = interceptAware.onChatMessage(player, content);
+            if (result == dev.frost.miniverse.chat.ChatInterceptResult.CONSUME_SILENT) {
+                return false; // Suppressed from vanilla chat
+            }
+        }
         return !ChatRouter.handleChatMessage(message, player, parameters);
     }
 

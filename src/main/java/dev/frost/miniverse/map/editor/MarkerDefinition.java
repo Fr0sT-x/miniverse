@@ -27,7 +27,10 @@ public record MarkerDefinition(
             maxCount = minCount;
         }
         triggers = triggers == null ? List.of() : List.copyOf(triggers);
-        description = description == null ? "" : description.trim();
+        if (description == null || description.isBlank()) {
+            throw new IllegalArgumentException("MarkerDefinition '" + key + "' must provide a non-blank description explaining its purpose and placement to map creators.");
+        }
+        description = description.trim();
     }
 
     public MarkerDefinition(

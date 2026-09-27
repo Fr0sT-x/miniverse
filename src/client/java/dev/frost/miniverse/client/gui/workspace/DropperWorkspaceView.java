@@ -24,7 +24,7 @@ import java.util.Set;
 
 public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
     public record DetectedLevel(String id, String name) {}
-    public record LevelRowButton(UiLayout.Rect rect, String levelId, String label) {}
+    public record LevelRowButton(UiLayout.Rect rect, String levelId, String levelName, String numberText) {}
 
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
@@ -169,10 +169,8 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
         for (int i = 0; i < maxRows && (i + this.levelListScrollOffset) < total; i++) {
             int index = i + this.levelListScrollOffset;
             DetectedLevel level = this.detectedLevels.get(index);
-            boolean enabled = this.enabledLevelIds.contains(level.id());
-            String btnLabel = (enabled ? "[✓] " : "[  ] ") + (index + 1) + ". " + level.name();
             int currentY = rowY + (i * 24);
-            this.levelRowButtons.add(new LevelRowButton(new UiLayout.Rect(startX, currentY, 320, 20), level.id(), btnLabel));
+            this.levelRowButtons.add(new LevelRowButton(new UiLayout.Rect(startX + 24, currentY, 296, 20), level.id(), level.name(), (index + 1) + "."));
         }
 
         if (total > maxRows) {
@@ -329,11 +327,11 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
                     this.renderActionButton(context, textRenderer, this.deselectAllRect, "Deselect All", UiTheme.ACCENT, this.deselectAllRect.contains(mouseX, mouseY));
                 }
 
-                // Level rows using mod-themed buttons
+                // Level rows using mod-themed buttons with left-aligned ticks
                 for (LevelRowButton btn : this.levelRowButtons) {
                     boolean enabled = this.enabledLevelIds.contains(btn.levelId());
-                    int accent = enabled ? UiTheme.ACCENT_GREEN : 0x7C8088;
-                    this.renderActionButton(context, textRenderer, btn.rect(), btn.label(), accent, btn.rect().contains(mouseX, mouseY));
+                    context.drawText(textRenderer, Text.literal(btn.numberText()), startX, btn.rect().y() + 6, UiTheme.TEXT_MUTED, false);
+                    this.renderToggleRowButton(context, textRenderer, btn.rect(), btn.levelName(), enabled, btn.rect().contains(mouseX, mouseY));
                 }
 
                 // Pagination

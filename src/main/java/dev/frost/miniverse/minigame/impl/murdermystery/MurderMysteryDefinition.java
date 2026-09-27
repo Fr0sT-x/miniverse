@@ -66,19 +66,39 @@ public final class MurderMysteryDefinition implements MinigameDefinition {
     public void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
     }
 
+    public static final MapEditorExtension EXTENSION = new MapEditorExtension(
+        ID,
+        DISPLAY_NAME,
+        List.of(
+            new MarkerDefinition(
+                "spawn_point", "Spawn Point", MarkerType.POINT, "spawnPoints", 3, Integer.MAX_VALUE, null,
+                "Randomized spawn points for innocents, detectives, and murderers.\n" +
+                "• Required: At least 3 points (3 or more; 10 to 24 recommended).\n" +
+                "• Purpose: Players spawn across these locations at round start so roles remain hidden and distributed.\n" +
+                "• Placement: Scatter throughout the map across corridors, rooms, and open squares away from direct line-of-sight."
+            ),
+            new MarkerDefinition(
+                "coin_spawn", "Coin Spawn", MarkerType.POINT, "coinSpawns", 1, Integer.MAX_VALUE, null,
+                "Periodic gold coin spawn locations across the map.\n" +
+                "• Required: At least 1 point (1 or more; 15 to 30 recommended).\n" +
+                "• Purpose: Gold ingots spawn here periodically. Innocents collecting 10 coins receive a defensive one-shot bow.\n" +
+                "• Placement: Place on floor tiles in hallways, dead-ends, secret rooms, and high-risk central courtyards."
+            ),
+            new MarkerDefinition(
+                "shop_npc", "Shop NPC", MarkerType.POINT, "shopNpcs", 1, Integer.MAX_VALUE, null,
+                "Merchant NPC offering utility items and special perks.\n" +
+                "• Required: At least 1 point (1 or more).\n" +
+                "• Purpose: Players can interact with this NPC to purchase detective tracking clues, speed boosts, or defensive shields.\n" +
+                "• Placement: Place against a wall or counter in a recognizable shop building or central marketplace."
+            )
+        ),
+        List.of()
+    );
+
     @Override
     public void registerEvents() {
         MapGamemodeRegistry.register(new MapGamemodeType(ID, DISPLAY_NAME, (map, config) -> dev.frost.miniverse.map.MapValidationResult.ok()));
-        MapEditorExtensionRegistry.register(new MapEditorExtension(
-            ID,
-            DISPLAY_NAME,
-            List.of(
-                new MarkerDefinition("spawn_point", "Spawn Point", MarkerType.POINT, "spawnPoints", 3, Integer.MAX_VALUE, null, "All players will spawn at these locations randomly."),
-                new MarkerDefinition("coin_spawn", "Coin Spawn", MarkerType.POINT, "coinSpawns", 1, Integer.MAX_VALUE, null, "Coins will spawn at these locations periodically."),
-                new MarkerDefinition("shop_npc", "Shop NPC", MarkerType.POINT, "shopNpcs", 1, Integer.MAX_VALUE, null, "Shop NPCs will be placed here.")
-            ),
-            List.of()
-        ));
+        MapEditorExtensionRegistry.register(EXTENSION);
         MurderMysteryGameEvents.register();
         MurderMysterySessionBootstrap.bootstrap();
     }

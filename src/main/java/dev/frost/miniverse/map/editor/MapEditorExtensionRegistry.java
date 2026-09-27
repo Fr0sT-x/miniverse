@@ -16,6 +16,11 @@ public final class MapEditorExtensionRegistry {
         if (extension == null || extension.gameId().isBlank()) {
             return;
         }
+        for (MarkerDefinition marker : extension.markers()) {
+            if (marker.description() == null || marker.description().isBlank()) {
+                throw new IllegalStateException("MarkerDefinition '" + marker.key() + "' in gamemode '" + extension.gameId() + "' must have a non-blank description tooltip.");
+            }
+        }
         EXTENSIONS.put(extension.gameId(), extension);
     }
 

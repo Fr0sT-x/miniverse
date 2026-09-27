@@ -30,10 +30,37 @@ public final class DuelsDefinition implements MinigameDefinition {
         ID,
         DISPLAY_NAME,
         List.of(
-            new MarkerDefinition(ARENA, "Duel Arena", MarkerType.REGION, "arenas", 1, Integer.MAX_VALUE, null, null, "A region defining a single 1v1 arena. Use properties menu to configure supported duel types and restrictions."),
-            new MarkerDefinition(PLAYER_1_SPAWN, "Player 1 Spawn", MarkerType.POINT, "player1Spawns", 1, Integer.MAX_VALUE, null, dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA), "Spawn point for Player 1. Place exactly one inside each Duel Arena."),
-            new MarkerDefinition(PLAYER_2_SPAWN, "Player 2 Spawn", MarkerType.POINT, "player2Spawns", 1, Integer.MAX_VALUE, null, dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA), "Spawn point for Player 2. Place exactly one inside each Duel Arena."),
-            new MarkerDefinition(SPECTATOR_SPAWN, "Spectator Spawn", MarkerType.POINT, "spectatorSpawns", 1, Integer.MAX_VALUE, null, dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA), "Spawn point for Spectators. Place exactly one inside each Duel Arena.")
+            new MarkerDefinition(
+                ARENA, "Duel Arena", MarkerType.REGION, "arenas", 1, Integer.MAX_VALUE, null, null,
+                "Defines the 3D playable boundary of a single 1v1 duel arena.\n" +
+                "• Required: At least 1 region (1 or more).\n" +
+                "• Purpose: Bounds the fight zone. Multiple arenas can exist in one map to host simultaneous matches in parallel.\n" +
+                "• Placement: Create a box enclosing the arena floor, walls, and ceiling. Configure supported duel types in Properties."
+            ),
+            new MarkerDefinition(
+                PLAYER_1_SPAWN, "Player 1 Spawn", MarkerType.POINT, "player1Spawns", 1, Integer.MAX_VALUE, null,
+                dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA),
+                "Starting spawn position for the first duelist.\n" +
+                "• Required: Exactly 1 per Duel Arena.\n" +
+                "• Purpose: Player 1 teleports here during the countdown and starts the duel facing Player 2.\n" +
+                "• Placement: Place on one side of the duel arena facing towards Player 2 Spawn across the center line."
+            ),
+            new MarkerDefinition(
+                PLAYER_2_SPAWN, "Player 2 Spawn", MarkerType.POINT, "player2Spawns", 1, Integer.MAX_VALUE, null,
+                dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA),
+                "Starting spawn position for the second duelist.\n" +
+                "• Required: Exactly 1 per Duel Arena.\n" +
+                "• Purpose: Player 2 teleports here during the countdown and starts the duel facing Player 1.\n" +
+                "• Placement: Place on the opposite side of the duel arena facing towards Player 1 Spawn across the center line."
+            ),
+            new MarkerDefinition(
+                SPECTATOR_SPAWN, "Spectator Spawn", MarkerType.POINT, "spectatorSpawns", 1, Integer.MAX_VALUE, null,
+                dev.frost.miniverse.map.editor.MarkerGrouping.spatial(ARENA),
+                "Viewing location for spectators watching the duel.\n" +
+                "• Required: At least 1 per Duel Arena (1 or more).\n" +
+                "• Purpose: Eliminated players and queueing spectators are teleported here to spectate the ongoing match.\n" +
+                "• Placement: Place on an elevated spectator platform, viewing balcony, or behind glass overlooking the duel arena."
+            )
         ),
         List.of(DuelsMapConfig::validateArenas)
     );

@@ -68,15 +68,23 @@ public final class InfectionDefinition implements MinigameDefinition {
     public void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
     }
 
+    public static final MapEditorExtension EXTENSION = new MapEditorExtension(
+        ID,
+        DISPLAY_NAME,
+        java.util.List.of(new MarkerDefinition(
+            "spawn_point", "Spawn Point", MarkerType.POINT, "spawnPoints", 2, Integer.MAX_VALUE, null,
+            "Randomized starting spawn points for survivors and initial infected.\n" +
+            "• Required: At least 2 points (2 or more; 8 to 16 recommended).\n" +
+            "• Purpose: All players spawn here randomly at round start before the Alpha Infected is chosen.\n" +
+            "• Placement: Distribute widely across the map in defensible and varied locations so players don't all cluster together."
+        )),
+        java.util.List.of()
+    );
+
     @Override
     public void registerEvents() {
         MapGamemodeRegistry.register(new MapGamemodeType(ID, DISPLAY_NAME, (map, config) -> InfectionMapConfig.fromJson(config).validate()));
-        MapEditorExtensionRegistry.register(new MapEditorExtension(
-            ID,
-            DISPLAY_NAME,
-            java.util.List.of(new MarkerDefinition("spawn_point", "Spawn Point", MarkerType.POINT, "spawnPoints", 2, Integer.MAX_VALUE, null, "All players will spawn at these locations randomly.")),
-            java.util.List.of()
-        ));
+        MapEditorExtensionRegistry.register(EXTENSION);
         InfectionGameEvents.register();
     }
 }

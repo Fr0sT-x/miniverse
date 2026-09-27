@@ -33,13 +33,55 @@ public final class BridgeDefinition implements MinigameDefinition {
         ID,
         DISPLAY_NAME,
         List.of(
-            new MarkerDefinition(RED_TEAM_SPAWN, "Red Team Spawn", MarkerType.POINT, "redTeamSpawns", 1, Integer.MAX_VALUE, null, "Players on the Red Team spawn here."),
-            new MarkerDefinition(BLUE_TEAM_SPAWN, "Blue Team Spawn", MarkerType.POINT, "blueTeamSpawns", 1, Integer.MAX_VALUE, null, "Players on the Blue Team spawn here."),
-            new MarkerDefinition(RED_TEAM_GOAL, "Red Team Goal", MarkerType.REGION, "redTeamGoal", 1, 1, List.of(TriggerType.PLAYER_ENTER), "Enemy team scores by entering this region."),
-            new MarkerDefinition(BLUE_TEAM_GOAL, "Blue Team Goal", MarkerType.REGION, "blueTeamGoal", 1, 1, List.of(TriggerType.PLAYER_ENTER), "Enemy team scores by entering this region."),
-            new MarkerDefinition(VOID_LEVEL, "Void Death Level Reference", MarkerType.POINT, "voidLevel", 1, 1, null, "Select a block. The insta-death void level will be set an offset below this point."),
-            new MarkerDefinition(HEIGHT_LIMIT, "Build Height Limit Reference", MarkerType.POINT, "heightLimit", 0, 1, null, "Select a block. The build height limit will be set to an offset above this point."),
-            new MarkerDefinition("custom_region", "Custom Region", MarkerType.REGION, "customRegions", 0, Integer.MAX_VALUE, null, "A generic region. Use this to apply custom restrictions like BUILD_DENIED anywhere on the map.")
+            new MarkerDefinition(
+                RED_TEAM_SPAWN, "Red Team Spawn", MarkerType.POINT, "redTeamSpawns", 1, Integer.MAX_VALUE, null,
+                "Spawn location for Red Team players.\n" +
+                "• Required: At least 1 point (1 or more).\n" +
+                "• Purpose: Red Team members spawn here at match start, round resets, and after respawning.\n" +
+                "• Placement: Place inside the Red base spawn cage facing outward toward the central bridge walkway."
+            ),
+            new MarkerDefinition(
+                BLUE_TEAM_SPAWN, "Blue Team Spawn", MarkerType.POINT, "blueTeamSpawns", 1, Integer.MAX_VALUE, null,
+                "Spawn location for Blue Team players.\n" +
+                "• Required: At least 1 point (1 or more).\n" +
+                "• Purpose: Blue Team members spawn here at match start, round resets, and after respawning.\n" +
+                "• Placement: Place inside the Blue base spawn cage facing outward toward the central bridge walkway."
+            ),
+            new MarkerDefinition(
+                RED_TEAM_GOAL, "Red Team Goal", MarkerType.REGION, "redTeamGoal", 1, 1, List.of(TriggerType.PLAYER_ENTER),
+                "The goal pit or portal inside the Red Team base.\n" +
+                "• Required: Exactly 1 region (1/1).\n" +
+                "• Purpose: Blue Team players leap into this region to score a goal against the Red Team.\n" +
+                "• Placement: Define the 3D volume of the goal hole/pit in front of the Red spawn cage."
+            ),
+            new MarkerDefinition(
+                BLUE_TEAM_GOAL, "Blue Team Goal", MarkerType.REGION, "blueTeamGoal", 1, 1, List.of(TriggerType.PLAYER_ENTER),
+                "The goal pit or portal inside the Blue Team base.\n" +
+                "• Required: Exactly 1 region (1/1).\n" +
+                "• Purpose: Red Team players leap into this region to score a goal against the Blue Team.\n" +
+                "• Placement: Define the 3D volume of the goal hole/pit in front of the Blue spawn cage."
+            ),
+            new MarkerDefinition(
+                VOID_LEVEL, "Void Death Level Reference", MarkerType.POINT, "voidLevel", 1, 1, null,
+                "Height reference point defining the instant-kill void threshold.\n" +
+                "• Required: Exactly 1 point (1/1).\n" +
+                "• Purpose: Any player whose Y coordinate falls below this marker's level is instantly eliminated and respawned.\n" +
+                "• Placement: Place at or below the lowest bridge walkway blocks where falling players should trigger a void reset."
+            ),
+            new MarkerDefinition(
+                HEIGHT_LIMIT, "Build Height Limit Reference", MarkerType.POINT, "heightLimit", 0, 1, null,
+                "Height reference point defining the maximum build height limit.\n" +
+                "• Optional: Up to 1 point (0 to 1).\n" +
+                "• Purpose: Prevents players from building excessively high towers or sky bridges above the playable bridge.\n" +
+                "• Placement: Place at the desired highest allowable block placement level above the bridge walkway."
+            ),
+            new MarkerDefinition(
+                "custom_region", "Custom Region", MarkerType.REGION, "customRegions", 0, Integer.MAX_VALUE, null,
+                "Custom bounding region for map-specific building or breaking rules.\n" +
+                "• Optional: Up to unlimited regions.\n" +
+                "• Purpose: Allows server admins to enforce restrictions like BUILD_DENIED or BREAK_DENIED on base structures.\n" +
+                "• Placement: Enclose base structures, portals, or spawn cages where block modification should be restricted."
+            )
         ),
         List.of()
     );

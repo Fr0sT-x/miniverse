@@ -65,7 +65,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
 
-public final class BridgeMinigame extends AbstractMinigame implements PlayerDamageAware, PlayerRegionAware, SpawnPointAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware, DeathAwareMinigame {
+public final class BridgeMinigame extends AbstractMinigame implements PlayerDamageAware, PlayerRegionAware, SpawnPointAware, TeamManagerProvider, PersistentMinigame, InventoryLayoutAware, DeathAwareMinigame, dev.frost.miniverse.chat.ChatRoutingAware {
 
     public static final String RED_TEAM = "red";
     public static final String BLUE_TEAM = "blue";
@@ -112,6 +112,11 @@ public final class BridgeMinigame extends AbstractMinigame implements PlayerDama
     public void applySettings(BridgeSettings settings, BridgeMapConfig mapConfig) {
         this.settings = settings == null ? BridgeSettings.fromNbt(null) : settings;
         this.mapConfig = mapConfig == null ? new BridgeMapConfig(List.of(), List.of(), null, null) : mapConfig;
+    }
+
+    @Override
+    public boolean isChatRoutingEnabled() {
+        return this.settings.teamChatEnabled();
     }
 
     public BridgeSettings getSettings() {

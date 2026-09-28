@@ -44,7 +44,7 @@ import net.minecraft.util.math.BlockPos;
 public class BedwarsMinigame extends AbstractMinigame implements
     DeathAwareMinigame, TeamManagerProvider, BlockBreakAware, EntityInteractAware, 
     SpawnPointAware, RosterAware, PlayerLeaveAware, PersistentMinigame, 
-    ServerTickAware, InventoryLayoutAware, ItemUseAware, ItemUseOnBlockAware, dev.frost.miniverse.minigame.core.event.BlockBreakBypassAware, EntityDamageAware, BlockAttackAware {
+    ServerTickAware, InventoryLayoutAware, ItemUseAware, ItemUseOnBlockAware, dev.frost.miniverse.minigame.core.event.BlockBreakBypassAware, EntityDamageAware, BlockAttackAware, dev.frost.miniverse.chat.ChatRoutingAware {
 
     private GameState state = GameState.WAITING_FOR_PLAYERS;
     private final TeamManager teamManager = new TeamManager();
@@ -99,6 +99,11 @@ public class BedwarsMinigame extends AbstractMinigame implements
     public void applySettings(BedwarsSettings settings, BedwarsMapConfig mapConfig) {
         this.settings = settings != null ? settings : BedwarsSettings.fromNbt(null);
         this.mapConfig = mapConfig != null ? mapConfig : new BedwarsMapConfig(Map.of(), List.of(), List.of(), List.of(), List.of(), null);
+    }
+
+    @Override
+    public boolean isChatRoutingEnabled() {
+        return this.settings.teamChatEnabled();
     }
 
     public void ensureTeamAssignment(ServerPlayerEntity player, String team) {

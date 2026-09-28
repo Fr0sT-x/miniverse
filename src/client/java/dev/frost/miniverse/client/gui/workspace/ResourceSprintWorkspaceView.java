@@ -274,6 +274,50 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
         }
     }
 
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("timeLimitSeconds")) this.timeLimitSeconds = settings.getInt("timeLimitSeconds");
+        if (settings.contains("mode")) {
+            String m = settings.getString("mode");
+            for (ResourceSprintSettings.Mode val : ResourceSprintSettings.Mode.values()) {
+                if (val.nbtValue().equalsIgnoreCase(m)) {
+                    this.mode = val;
+                    break;
+                }
+            }
+        }
+        if (settings.contains("objectiveDistributionMode")) {
+            String d = settings.getString("objectiveDistributionMode");
+            for (ResourceSprintSettings.ObjectiveDistributionMode val : ResourceSprintSettings.ObjectiveDistributionMode.values()) {
+                if (val.nbtValue().equalsIgnoreCase(d)) {
+                    this.distributionMode = val;
+                    break;
+                }
+            }
+        }
+        if (settings.contains("tieBreakRule")) {
+            String t = settings.getString("tieBreakRule");
+            for (ResourceSprintSettings.TieBreakRule val : ResourceSprintSettings.TieBreakRule.values()) {
+                if (val.nbtValue().equalsIgnoreCase(t)) {
+                    this.tieBreakRule = val;
+                    break;
+                }
+            }
+        }
+        if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitSeconds));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.mode = ResourceSprintSettings.Mode.FIRST_TO_COMPLETE;
+        this.distributionMode = ResourceSprintSettings.ObjectiveDistributionMode.SHARED;
+        this.tieBreakRule = ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
+        this.timeLimitSeconds = 3600;
+        if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitSeconds));
+    }
+
     private List<ResourceSprintSettings.ObjectiveEntry> parseObjectives() {
         if (this.objectivesPool == null || this.objectivesPool.isEmpty()) {
             return new ArrayList<>(ResourceSprintSettings.defaults().objectives());

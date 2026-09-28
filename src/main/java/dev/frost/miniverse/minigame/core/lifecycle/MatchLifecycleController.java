@@ -92,6 +92,7 @@ public final class MatchLifecycleController {
         runtime.setState(GameState.FROZEN);
         this.freezeParticipants(true);
         this.announceCountdown(this.options.freezeSeconds());
+        ChatRouter.syncRoutingStateToRoster(this.roster(), ChatRouter.isChatRoutingActive());
         return true;
     }
 
@@ -115,6 +116,7 @@ public final class MatchLifecycleController {
         runtime.setState(GameState.ENDING);
         this.unfreezeParticipants();
         this.showEndTitles();
+        ChatRouter.syncRoutingStateToRoster(this.roster(), false);
 
         if (!this.options.returnTeleportEnabled()) {
             this.completeLifecycle();
@@ -275,6 +277,7 @@ public final class MatchLifecycleController {
         this.unfreezeParticipants();
         this.phase = Phase.RUNNING;
         this.runtimeState(GameState.RUNNING);
+        ChatRouter.syncRoutingStateToRoster(this.roster(), ChatRouter.isChatRoutingActive());
         if (this.options.startSound() != null) {
             this.roster().forEach(player -> player.playSound(this.options.startSound(), 1.0F, 1.0F));
         }
@@ -561,6 +564,7 @@ public final class MatchLifecycleController {
         this.returnCompletionTicksRemaining = 0;
         this.unfreezeParticipants();
         this.cleanupTeams();
+        ChatRouter.syncRoutingStateToRoster(this.roster(), false);
         this.lifecyclePlayers.clear();
         this.startCallback = null;
         this.endResult = null;
@@ -575,6 +579,7 @@ public final class MatchLifecycleController {
         this.startOverlayReleased = false;
         this.unfreezeParticipants();
         this.cleanupTeams();
+        ChatRouter.syncRoutingStateToRoster(this.roster(), false);
         this.lifecyclePlayers.clear();
         this.startCallback = null;
         this.endResult = null;

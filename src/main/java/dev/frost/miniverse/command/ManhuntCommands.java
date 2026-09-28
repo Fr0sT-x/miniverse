@@ -74,6 +74,9 @@ public final class ManhuntCommands {
                 .then(literal("hunterRespawnDelay")
                     .then(argument("seconds", IntegerArgumentType.integer(0, 3600))
                         .executes(ManhuntCommands::setHunterRespawnDelay)))
+                .then(literal("teamChat")
+                    .then(argument("enabled", BoolArgumentType.bool())
+                        .executes(ManhuntCommands::setTeamChat)))
                 .then(literal("_latejoin_tp")
                     .then(argument("target", StringArgumentType.word())
                         .executes(ManhuntCommands::executeLateJoinTp)))
@@ -413,6 +416,20 @@ public final class ManhuntCommands {
         return 1;
     }
 
+    private static int setTeamChat(CommandContext<ServerCommandSource> context) {
+        ServerCommandSource source = context.getSource();
+        ManhuntMinigame manhunt = getOrCreatePendingManhunt(source);
+        if (manhunt == null) {
+            return 0;
+        }
+
+        boolean enabled = BoolArgumentType.getBool(context, "enabled");
+        ManhuntSettings current = manhunt.getSettings();
+        manhunt.applySettings(current.withTeamChatEnabled(enabled));
+        source.sendFeedback(() -> Text.literal("Set Manhunt team chat to " + enabled + "."), true);
+        return 1;
+    }
+
     private static int executeLateJoinTp(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
         if (!source.isExecutedByPlayer()) {
@@ -473,6 +490,7 @@ public final class ManhuntCommands {
         source.sendFeedback(() -> Text.literal("- Runner glow pulse: " + settings.runnerGlowPulseMinutes() + "m"), false);
         source.sendFeedback(() -> Text.literal("- Runner lives: " + formatLives(settings.runnerLives())), false);
         source.sendFeedback(() -> Text.literal("- Hunter lives: " + formatLives(settings.hunterLives())), false);
+        source.sendFeedback(() -> Text.literal("- Team chat: " + settings.teamChatEnabled()), false);
         source.sendFeedback(() -> Text.literal("- Unassigned: " + formatPlayers(manhunt.getUnassignedParticipants())), false);
 
         return 1;

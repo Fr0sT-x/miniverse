@@ -2,15 +2,21 @@ package dev.frost.miniverse.chat;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.jetbrains.annotations.Nullable;
 
+import dev.frost.miniverse.common.NetworkConstants;
+import dev.frost.miniverse.minigame.core.Minigame;
 import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.team.TeamColorPalette;
 import dev.frost.miniverse.team.TeamManager;
 import dev.frost.miniverse.team.TeamManagerProvider;
 import dev.frost.miniverse.team.TeamSnapshot;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SignedMessage;
 import net.minecraft.server.MinecraftServer;
@@ -21,14 +27,63 @@ import net.minecraft.text.Text;
 public final class ChatRouter {
     public static final String GLOBAL_PREFIX = "!";
     private static final Text TEAM_CHAT_NOTICE = Text.literal(
-        "You are now in Team Chat. Only players in your team can see your messages. To chat globally, start your message with !"
+        "§6[Miniverse] §eYou are in §bTeam Chat§e. Press §b[TAB]§e or toggle the chat button to switch to §aAll Chat§e (or use §a/a <msg>§e)."
     );
+
+    private static final Map<UUID, ChatChannel> PLAYER_DEFAULT_CHANNELS = new ConcurrentHashMap<>();
 
     private ChatRouter() {
     }
 
+    public static boolean isChatRoutingActive() {
+        if (!MinigameManager.getInstance().getMatchLifecycleController().isMatchActive()) {
+            return false;
+        }
+        Minigame active = MinigameManager.getInstance().getActiveMinigame();
+        return active instanceof ChatRoutingAware routingAware && routingAware.isChatRoutingEnabled();
+    }
+
+    public static ChatChannel getPlayerChannel(UUID uuid) {
+        return PLAYER_DEFAULT_CHANNELS.getOrDefault(uuid, ChatChannel.TEAM);
+    }
+
+    public static void setPlayerChannel(UUID uuid, ChatChannel channel) {
+        PLAYER_DEFAULT_CHANNELS.put(uuid, channel);
+    }
+
+    public static void setPlayerChannel(ServerPlayerEntity player, ChatChannel channel) {
+        PLAYER_DEFAULT_CHANNELS.put(player.getUuid(), channel);
+        if (ServerPlayNetworking.canSend(player, NetworkConstants.CHAT_CHANNEL_SYNC_ID)) {
+            ServerPlayNetworking.send(player, new NetworkConstants.ChatChannelSyncPayload(channel.name()));
+        }
+    }
+
+    public static void clearPlayerChannels() {
+        PLAYER_DEFAULT_CHANNELS.clear();
+    }
+
+    public static void syncRoutingStateToPlayer(ServerPlayerEntity player) {
+        boolean active = isChatRoutingActive();
+        ChatChannel channel = active ? getPlayerChannel(player.getUuid()) : ChatChannel.GLOBAL;
+        if (ServerPlayNetworking.canSend(player, NetworkConstants.CHAT_ROUTING_SYNC_ID)) {
+            ServerPlayNetworking.send(player, new NetworkConstants.ChatRoutingSyncPayload(active, channel.name()));
+        }
+    }
+
+    public static void syncRoutingStateToRoster(Collection<ServerPlayerEntity> players, boolean active) {
+        if (!active) {
+            clearPlayerChannels();
+        }
+        for (ServerPlayerEntity player : players) {
+            ChatChannel channel = active ? getPlayerChannel(player.getUuid()) : ChatChannel.GLOBAL;
+            if (ServerPlayNetworking.canSend(player, NetworkConstants.CHAT_ROUTING_SYNC_ID)) {
+                ServerPlayNetworking.send(player, new NetworkConstants.ChatRoutingSyncPayload(active, channel.name()));
+            }
+        }
+    }
+
     public static boolean handleChatMessage(SignedMessage message, ServerPlayerEntity sender, MessageType.Parameters parameters) {
-        if (!dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().isMatchActive()) {
+        if (!isChatRoutingActive()) {
             return false;
         }
         if (!MinigameManager.getInstance().isParticipant(sender)) {
@@ -36,14 +91,30 @@ public final class ChatRouter {
         }
 
         String raw = message.getContent().getString();
-        ChatChannel channel = resolveChannel(raw);
-        String content = stripPrefix(raw, channel);
+        ChatChannel channel;
+        String content;
+        if (raw.startsWith(GLOBAL_PREFIX)) {
+            channel = ChatChannel.GLOBAL;
+            content = raw.substring(GLOBAL_PREFIX.length()).stripLeading();
+        } else {
+            channel = getPlayerChannel(sender.getUuid());
+            content = raw;
+        }
+
+        if (content.isBlank()) {
+            return true;
+        }
+
+        return dispatchMessage(sender, content, channel);
+    }
+
+    public static boolean dispatchMessage(ServerPlayerEntity sender, String content, ChatChannel channel) {
         if (content.isBlank()) {
             return true;
         }
 
         // Check if active minigame intercepts chat messages (e.g. Quick Math)
-        dev.frost.miniverse.minigame.core.Minigame active = MinigameManager.getInstance().getActiveMinigame();
+        Minigame active = MinigameManager.getInstance().getActiveMinigame();
         if (active instanceof ChatInterceptAware interceptAware) {
             ChatInterceptResult result = interceptAware.onChatMessage(sender, content);
             if (result == ChatInterceptResult.CONSUME_SILENT) {
@@ -53,44 +124,34 @@ public final class ChatRouter {
 
         if (channel == ChatChannel.TEAM) {
             sendTeamChat(sender, content);
-            return true;
+        } else {
+            sendGlobalChat(sender, content);
         }
-
-        sendGlobalChat(sender, content);
         return true;
     }
 
     public static void sendTeamChatNotice(Collection<ServerPlayerEntity> players) {
+        if (!isChatRoutingActive()) {
+            return;
+        }
         for (ServerPlayerEntity player : players) {
             player.sendMessage(TEAM_CHAT_NOTICE, false);
+            syncRoutingStateToPlayer(player);
         }
     }
 
     public static void notifyPlayerIfMatchActive(ServerPlayerEntity player) {
-        if (!dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMatchLifecycleController().isMatchActive()) {
+        if (!isChatRoutingActive()) {
             return;
         }
         if (!MinigameManager.getInstance().isParticipant(player)) {
             return;
         }
         player.sendMessage(TEAM_CHAT_NOTICE, false);
+        syncRoutingStateToPlayer(player);
     }
 
-    private static ChatChannel resolveChannel(String raw) {
-        if (raw.startsWith(GLOBAL_PREFIX)) {
-            return ChatChannel.GLOBAL;
-        }
-        return ChatChannel.TEAM;
-    }
-
-    private static String stripPrefix(String raw, ChatChannel channel) {
-        if (channel == ChatChannel.GLOBAL && raw.startsWith(GLOBAL_PREFIX)) {
-            return raw.substring(GLOBAL_PREFIX.length()).stripLeading();
-        }
-        return raw;
-    }
-
-    private static void sendTeamChat(ServerPlayerEntity sender, String content) {
+    public static void sendTeamChat(ServerPlayerEntity sender, String content) {
         TeamManager teamManager = resolveTeamManager();
         if (!(sender.getEntityWorld() instanceof ServerWorld serverWorld)) {
             return;
@@ -117,7 +178,7 @@ public final class ChatRouter {
         }
     }
 
-    private static void sendGlobalChat(ServerPlayerEntity sender, String content) {
+    public static void sendGlobalChat(ServerPlayerEntity sender, String content) {
         if (!(sender.getEntityWorld() instanceof ServerWorld serverWorld)) {
             return;
         }

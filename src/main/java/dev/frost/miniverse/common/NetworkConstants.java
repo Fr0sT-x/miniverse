@@ -77,6 +77,8 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<SyncGamemodePresetsPayload> SYNC_GAMEMODE_PRESETS_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "sync_gamemode_presets"));
     public static final CustomPayload.Id<StopClockStartPayload> STOP_CLOCK_START_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "stop_clock_start"));
     public static final CustomPayload.Id<StopClockStopPayload> STOP_CLOCK_STOP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "stop_clock_stop"));
+    public static final CustomPayload.Id<ChatRoutingSyncPayload> CHAT_ROUTING_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "chat_routing_sync"));
+    public static final CustomPayload.Id<ChatChannelSyncPayload> CHAT_CHANNEL_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "chat_channel_sync"));
 
     private static boolean payloadTypesRegistered;
 
@@ -151,6 +153,9 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(SYNC_GAMEMODE_PRESETS_ID, SyncGamemodePresetsPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(STOP_CLOCK_START_ID, StopClockStartPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(STOP_CLOCK_STOP_ID, StopClockStopPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(CHAT_ROUTING_SYNC_ID, ChatRoutingSyncPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(CHAT_CHANNEL_SYNC_ID, ChatChannelSyncPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(CHAT_CHANNEL_SYNC_ID, ChatChannelSyncPayload.CODEC);
         
         payloadTypesRegistered = true;
     }
@@ -1120,6 +1125,34 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return STOP_CLOCK_STOP_ID;
+        }
+    }
+
+    public record ChatRoutingSyncPayload(boolean active, String defaultChannel) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, ChatRoutingSyncPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.BOOL,
+            ChatRoutingSyncPayload::active,
+            PacketCodecs.STRING,
+            ChatRoutingSyncPayload::defaultChannel,
+            ChatRoutingSyncPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return CHAT_ROUTING_SYNC_ID;
+        }
+    }
+
+    public record ChatChannelSyncPayload(String channel) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, ChatChannelSyncPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING,
+            ChatChannelSyncPayload::channel,
+            ChatChannelSyncPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return CHAT_CHANNEL_SYNC_ID;
         }
     }
 }

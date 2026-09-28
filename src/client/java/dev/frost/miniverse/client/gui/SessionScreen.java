@@ -49,6 +49,7 @@ public class SessionScreen extends Screen {
     private static final int CARD_HEIGHT = 84;
     private static final int CARD_GAP = 12;
     private static final int TOOLBAR_BUTTON_WIDTH = 84;
+    private static final int RESET_BUTTON_WIDTH = 80;
     private static final int SIDEBAR_HEADER_HEIGHT = 44;
     private static final int SIDEBAR_SECTION_HEIGHT = 28;
     private static final int SIDEBAR_ROW_HEIGHT = 26;
@@ -96,6 +97,15 @@ public class SessionScreen extends Screen {
     private TextFieldWidget searchField;
     private TextFieldWidget sidebarSearchField;
     private WorkspaceView workspaceView;
+
+    private static WorkspaceView lastActiveWorkspace = null;
+    private static final Map<String, WorkspaceView> WORKSPACE_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void clearWorkspaceCache() {
+        lastActiveWorkspace = null;
+        WORKSPACE_CACHE.clear();
+        dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView.clearAllCaches();
+    }
 
     public WorkspaceView getWorkspaceView() {
         return this.workspaceView;
@@ -512,7 +522,11 @@ public class SessionScreen extends Screen {
         super.init();
         this.openedAt = System.currentTimeMillis();
         this.rebuildEntries();
-        this.applyDefaultWorkspace();
+        if (lastActiveWorkspace != null) {
+            this.openWorkspaceView(lastActiveWorkspace);
+        } else {
+            this.applyDefaultWorkspace();
+        }
         this.resetExpandedSectionsForWorkspace();
         this.rebuildWorkspaceChildren();
         this.requestSnapshot();
@@ -528,6 +542,9 @@ public class SessionScreen extends Screen {
     }
 
     public void openSelectorWorkspace() {
+        if (this.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+            agw.flushWidgetState();
+        }
         if (this.historyIndex < this.history.size() - 1) {
             this.history.subList(this.historyIndex + 1, this.history.size()).clear();
         }
@@ -535,12 +552,16 @@ public class SessionScreen extends Screen {
         this.historyIndex++;
         
         this.workspaceView = null;
+        lastActiveWorkspace = null;
         this.statusMessage = "";
         this.syncExpandedSectionsForWorkspace();
         this.rebuildWorkspaceChildren();
     }
 
     public void openWorkspaceView(WorkspaceView view) {
+        if (this.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+            agw.flushWidgetState();
+        }
         if (this.historyIndex < this.history.size() - 1) {
             this.history.subList(this.historyIndex + 1, this.history.size()).clear();
         }
@@ -548,6 +569,7 @@ public class SessionScreen extends Screen {
         this.historyIndex++;
         
         this.workspaceView = view;
+        lastActiveWorkspace = view;
         this.statusMessage = "";
         this.defaultWorkspaceApplied = true;
         if (view instanceof GamemodeWorkspaceView) {
@@ -573,7 +595,11 @@ public class SessionScreen extends Screen {
     }
     
     private void restoreWorkspaceFromHistory(WorkspaceView view) {
+        if (this.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+            agw.flushWidgetState();
+        }
         this.workspaceView = view;
+        lastActiveWorkspace = view;
         this.statusMessage = "";
         this.defaultWorkspaceApplied = true;
         if (view instanceof GamemodeWorkspaceView) {
@@ -748,6 +774,9 @@ public class SessionScreen extends Screen {
         }
         if (this.workspaceView == null && !this.statusMessage.isEmpty()) {
             context.drawText(this.textRenderer, Text.literal(this.statusMessage), layout.cards().x(), layout.cards().y() + layout.cards().height() + 10, UiTheme.SUCCESS, false);
+        }
+        if (this.workspaceView != null && this.resetButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
+            context.drawTooltip(this.textRenderer, Text.literal("Reset current workspace to default settings"), mouseX, mouseY);
         }
     }
 
@@ -1148,6 +1177,10 @@ public class SessionScreen extends Screen {
         if (button == 0 && this.handleWorkspaceNavigationClick(layout.sidebar(), layout.sidebarSearch(), mouseX, mouseY)) {
             return true;
         }
+        if (button == 0 && this.workspaceView != null && this.resetButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
+            this.resetCurrentWorkspace();
+            return true;
+        }
         if (button == 0 && this.closeButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
             this.close();
             return true;
@@ -1507,6 +1540,18 @@ public class SessionScreen extends Screen {
     }
 
     private void renderToolbarClose(DrawContext context, UiLayout.Rect toolbar, int mouseX, int mouseY) {
+        if (this.workspaceView != null) {
+            UiLayout.Rect resetBounds = this.resetButtonBounds(toolbar);
+            boolean resetHovered = resetBounds.contains(mouseX, mouseY);
+            int resetFill = resetHovered ? 0x33EF4444 : UiTheme.PANEL;
+            int resetBorder = resetHovered ? 0xFFEF4444 : UiTheme.BORDER_SUBTLE;
+            UiRenderer.panel(context, resetBounds.x(), resetBounds.y(), resetBounds.width(), resetBounds.height(), resetFill, resetBorder);
+            int resetTextX = resetBounds.x() + (resetBounds.width() - this.textRenderer.getWidth("↺ Reset")) / 2;
+            int resetTextY = resetBounds.y() + (resetBounds.height() - 9) / 2;
+            int resetTextColor = resetHovered ? 0xFFFCA5A5 : UiTheme.TEXT_MUTED;
+            context.drawText(this.textRenderer, Text.literal("↺ Reset"), resetTextX, resetTextY, resetTextColor, false);
+        }
+
         UiLayout.Rect bounds = this.closeButtonBounds(toolbar);
         boolean hovered = bounds.contains(mouseX, mouseY);
         int fill = hovered ? UiTheme.PANEL_RAISED : UiTheme.PANEL;
@@ -1732,6 +1777,10 @@ public class SessionScreen extends Screen {
         return new UiLayout.Rect(toolbar.x() + toolbar.width() - TOOLBAR_BUTTON_WIDTH, toolbar.y() + 6, TOOLBAR_BUTTON_WIDTH, UiTheme.BUTTON_HEIGHT);
     }
 
+    private UiLayout.Rect resetButtonBounds(UiLayout.Rect toolbar) {
+        return new UiLayout.Rect(toolbar.x() + toolbar.width() - TOOLBAR_BUTTON_WIDTH - 6 - RESET_BUTTON_WIDTH, toolbar.y() + 6, RESET_BUTTON_WIDTH, UiTheme.BUTTON_HEIGHT);
+    }
+
     private Layout createLayout() {
         int margin = 12;
         leftSidebarAnimation.tick();
@@ -1889,12 +1938,53 @@ public class SessionScreen extends Screen {
         };
     }
 
+    private void openCachedWorkspace(String key, java.util.function.Supplier<WorkspaceView> factory) {
+        if (this.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+            agw.flushWidgetState();
+        }
+        WorkspaceView view = WORKSPACE_CACHE.computeIfAbsent(key, k -> factory.get());
+        this.openWorkspaceView(view);
+    }
+
+    public void resetCurrentWorkspace() {
+        if (this.workspaceView == null) {
+            return;
+        }
+        if (this.workspaceView instanceof GamemodeWorkspaceView gamemodeView) {
+            String gameId = gamemodeView.gameId();
+            String title = this.workspaceView.title();
+            WORKSPACE_CACHE.remove(gameId);
+            dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView.clearCacheForGame(gameId);
+            Consumer<SessionScreen> action = CUSTOM_SETUP_SCREENS.get(gameId);
+            if (action != null) {
+                action.accept(this);
+            } else {
+                this.openSelectorWorkspace();
+            }
+            if (this.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+                agw.setStatus(dev.frost.miniverse.client.gui.workspace.framework.ValidationResult.info("Reset to default settings."));
+            }
+            this.statusMessage = "Reset " + title + " to default.";
+        } else if (this.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.AppearanceWorkspaceView) {
+            WORKSPACE_CACHE.remove("appearance");
+            this.openAppearance();
+        } else if (this.workspaceView instanceof AdminWorkspaceView) {
+            this.requestSnapshot();
+            this.statusMessage = "Refreshed server data.";
+        } else if (this.workspaceView instanceof dev.frost.miniverse.client.gui.map.MapManagementWorkspaceView) {
+            this.requestSnapshot();
+            this.statusMessage = "Refreshed maps.";
+        } else {
+            this.openSelectorWorkspace();
+        }
+    }
+
     private void openManhunt() {
-        this.openWorkspaceView(new ManhuntWorkspaceView());
+        this.openCachedWorkspace("manhunt", ManhuntWorkspaceView::new);
     }
 
     private void openAppearance() {
-        this.openWorkspaceView(new AppearanceWorkspaceView());
+        this.openCachedWorkspace("appearance", AppearanceWorkspaceView::new);
     }
 
     private void openSessionsWorkspace() {
@@ -1931,67 +2021,67 @@ public class SessionScreen extends Screen {
     }
 
     private void openSpeedrun() {
-        this.openWorkspaceView(new SpeedrunWorkspaceView());
+        this.openCachedWorkspace("speedrun", SpeedrunWorkspaceView::new);
     }
 
     private void openBountyHunt() {
-        this.openWorkspaceView(new BountyHuntWorkspaceView());
+        this.openCachedWorkspace("bountyhunt", BountyHuntWorkspaceView::new);
     }
 
     private void openResourceSprint() {
-        this.openWorkspaceView(new ResourceSprintWorkspaceView());
+        this.openCachedWorkspace("resource_sprint", ResourceSprintWorkspaceView::new);
     }
 
     private void openDeathSwap() {
-        this.openWorkspaceView(new DeathSwapWorkspaceView());
+        this.openCachedWorkspace("deathswap", DeathSwapWorkspaceView::new);
     }
 
     private void openInfection() {
-        this.openWorkspaceView(new InfectionWorkspaceView());
+        this.openCachedWorkspace("infection", InfectionWorkspaceView::new);
     }
 
     private void openBridge() {
-        this.openWorkspaceView(new BridgeWorkspaceView());
+        this.openCachedWorkspace("bridge", BridgeWorkspaceView::new);
     }
 
     private void openBedwars() {
-        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.BedwarsWorkspaceView());
+        this.openCachedWorkspace("bedwars", dev.frost.miniverse.client.gui.workspace.BedwarsWorkspaceView::new);
     }
 
     private void openBlockShuffle() {
-        this.openWorkspaceView(new BlockShuffleWorkspaceView());
+        this.openCachedWorkspace("block_shuffle", BlockShuffleWorkspaceView::new);
     }
 
     private void openDeathShuffle() {
-        this.openWorkspaceView(new DeathShuffleWorkspaceView());
+        this.openCachedWorkspace("death_shuffle", DeathShuffleWorkspaceView::new);
     }
 
     private void openMurderMystery() {
-        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.MurderMysteryWorkspaceView());
+        this.openCachedWorkspace("murdermystery", dev.frost.miniverse.client.gui.workspace.MurderMysteryWorkspaceView::new);
     }
 
     private void openDuels() {
-        this.openWorkspaceView(new DuelsWorkspaceView());
+        this.openCachedWorkspace("duels", DuelsWorkspaceView::new);
     }
 
     private void openPillarsOfFortune() {
-        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.PillarsOfFortuneWorkspaceView());
+        this.openCachedWorkspace("pillarsoffortune", dev.frost.miniverse.client.gui.workspace.PillarsOfFortuneWorkspaceView::new);
     }
 
     private void openHordeSurvival() {
-        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.HordeSurvivalWorkspaceView());
+        this.openCachedWorkspace("horde_survival", dev.frost.miniverse.client.gui.workspace.HordeSurvivalWorkspaceView::new);
     }
 
     private void openZombies() {
-        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.ZombiesWorkspaceView());
+        this.openCachedWorkspace("zombies", dev.frost.miniverse.client.gui.workspace.ZombiesWorkspaceView::new);
     }
 
     private void openDropper() {
-        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.DropperWorkspaceView());
+        this.openCachedWorkspace("dropper", dev.frost.miniverse.client.gui.workspace.DropperWorkspaceView::new);
     }
 
     private void openMicroFrenzy() {
-        this.openWorkspaceView(new dev.frost.miniverse.client.gui.workspace.MicroFrenzyWorkspaceView());
+        this.openCachedWorkspace("microfrenzy", dev.frost.miniverse.client.gui.workspace.MicroFrenzyWorkspaceView::new);
     }
 
     public void openGenericSetup(MinigameEntry entry) {
@@ -2008,6 +2098,25 @@ public class SessionScreen extends Screen {
     @Override
     public boolean shouldCloseOnEsc() {
         return true;
+    }
+
+    @Override
+    public void close() {
+        this.saveCurrentWorkspaceState();
+        super.close();
+    }
+
+    @Override
+    public void removed() {
+        this.saveCurrentWorkspaceState();
+        super.removed();
+    }
+
+    private void saveCurrentWorkspaceState() {
+        if (this.workspaceView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+            agw.flushWidgetState();
+        }
+        lastActiveWorkspace = this.workspaceView;
     }
 
     private record Layout(UiLayout.Rect sidebar, UiLayout.Rect sidebarSearch, UiLayout.Rect toolbar, UiLayout.Rect search, UiLayout.Rect cards, UiLayout.Rect detail, UiLayout.Rect content) {

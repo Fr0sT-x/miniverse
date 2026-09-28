@@ -131,4 +131,32 @@ public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceV
     protected void buildSessionGroups(SessionPayloadBuilder builder) {
         builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
+
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("roundDurationTicks")) this.durationSeconds = settings.getInt("roundDurationTicks") / 20;
+        if (settings.contains("detectiveCount")) this.detectiveCount = settings.getInt("detectiveCount");
+        if (settings.contains("coinSpawnIntervalTicks")) this.coinInterval = settings.getInt("coinSpawnIntervalTicks") / 20;
+        if (settings.contains("detectiveBowPrice")) this.bowPrice = settings.getInt("detectiveBowPrice");
+
+        if (this.durationField != null) this.durationField.setText(String.valueOf(this.durationSeconds));
+        if (this.detectiveCountField != null) this.detectiveCountField.setText(String.valueOf(this.detectiveCount));
+        if (this.coinIntervalField != null) this.coinIntervalField.setText(String.valueOf(this.coinInterval));
+        if (this.bowPriceField != null) this.bowPriceField.setText(String.valueOf(this.bowPrice));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.durationSeconds = 240;
+        this.detectiveCount = 1;
+        this.coinInterval = 5;
+        this.bowPrice = 10;
+
+        if (this.durationField != null) this.durationField.setText(String.valueOf(this.durationSeconds));
+        if (this.detectiveCountField != null) this.detectiveCountField.setText(String.valueOf(this.detectiveCount));
+        if (this.coinIntervalField != null) this.coinIntervalField.setText(String.valueOf(this.coinInterval));
+        if (this.bowPriceField != null) this.bowPriceField.setText(String.valueOf(this.bowPrice));
+    }
 }

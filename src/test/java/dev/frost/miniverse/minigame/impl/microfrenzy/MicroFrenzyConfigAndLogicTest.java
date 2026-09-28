@@ -593,6 +593,7 @@ public class MicroFrenzyConfigAndLogicTest {
     public void testChatInterceptAwareRules() {
         MicroFrenzyMinigame minigame = new MicroFrenzyMinigame();
         Assert.assertTrue(minigame instanceof dev.frost.miniverse.chat.ChatInterceptAware);
+        Assert.assertFalse(minigame instanceof dev.frost.miniverse.chat.ChatRoutingAware);
 
         QuickMathRule mathRule = new QuickMathRule();
         Assert.assertNotNull(mathRule);

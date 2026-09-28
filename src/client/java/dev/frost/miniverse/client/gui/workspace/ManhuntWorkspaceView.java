@@ -47,6 +47,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     private int hunterLives = defaults.hunterLives();
     private boolean runnerRespawnAtTeammate = defaults.runnerRespawnAtTeammate();
     private boolean hunterRespawnAtTeammate = defaults.hunterRespawnAtTeammate();
+    private boolean teamChatEnabled = defaults.teamChatEnabled();
     private SeedMode seedMode = SeedMode.RANDOM;
     private String seedValue = "";
 
@@ -204,6 +205,11 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
                         this.midGameJoinTeleportEnabled = !this.midGameJoinTeleportEnabled;
                         this.midGameJoinTeleportButton.setMessage(Text.literal("Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled)));
                     });
+                },
+                "Team Chat", (s, x, y, w) -> {
+                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Chat messages are team-only by default (use ! for global chat).", "OFF: All chat messages are sent in global chat."),
+                        () -> this.teamChatEnabled = !this.teamChatEnabled);
                 }
             );
         }
@@ -224,6 +230,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
             Text.literal("Tracking: " + onOff(this.huntersCompassEnabled) + ", Nether " + onOff(this.netherTrackingEnabled) + ", cooldown " + this.compassCooldownSeconds + "s"),
             Text.literal("Runner lives: " + formatLives(this.runnerLives) + ", respawn " + this.runnerRespawnDelaySeconds + "s"),
             Text.literal("Hunter lives: " + formatLives(this.hunterLives) + ", respawn " + this.hunterRespawnDelaySeconds + "s"),
+            Text.literal("Team Chat: " + onOff(this.teamChatEnabled)),
             Text.literal("Seed: " + this.seedMode.displayName)
         );
     }
@@ -302,6 +309,7 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putBoolean("midGameJoinTeleportEnabled", this.midGameJoinTeleportEnabled);
         builder.settings().putBoolean("runnerRespawnAtTeammate", this.runnerRespawnAtTeammate);
         builder.settings().putBoolean("hunterRespawnAtTeammate", this.hunterRespawnAtTeammate);
+        builder.settings().putBoolean("teamChatEnabled", this.teamChatEnabled);
         builder.settings().putString("seedMode", this.seedMode.nbtValue);
         if (this.seedMode == SeedMode.FIXED) {
             long parsedSeed;
@@ -324,6 +332,61 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
         roles.put("speedrunner", this.teamGrid.getMembers("speedrunner"));
         roles.put("hunter", this.teamGrid.getMembers("hunter"));
         builder.addGroupWithRoles("manhunt", "Manhunt", roles);
+    }
+
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("huntersCompass")) this.huntersCompassEnabled = settings.getBoolean("huntersCompass");
+        if (settings.contains("hunterReleaseDelaySeconds")) this.gracePeriodSeconds = settings.getInt("hunterReleaseDelaySeconds");
+        if (settings.contains("speedrunnerRespawnDelaySeconds")) this.runnerRespawnDelaySeconds = settings.getInt("speedrunnerRespawnDelaySeconds");
+        if (settings.contains("hunterRespawnDelaySeconds")) this.hunterRespawnDelaySeconds = settings.getInt("hunterRespawnDelaySeconds");
+        if (settings.contains("compassCooldownSeconds")) this.compassCooldownSeconds = settings.getInt("compassCooldownSeconds");
+        if (settings.contains("runnerGlowPulseMinutes")) this.runnerGlowPulseMinutes = settings.getInt("runnerGlowPulseMinutes");
+        if (settings.contains("runnerLives")) this.runnerLives = settings.getInt("runnerLives");
+        if (settings.contains("hunterLives")) this.hunterLives = settings.getInt("hunterLives");
+        if (settings.contains("netherTracking")) this.netherTrackingEnabled = settings.getBoolean("netherTracking");
+        if (settings.contains("midGameJoinTeleportEnabled")) this.midGameJoinTeleportEnabled = settings.getBoolean("midGameJoinTeleportEnabled");
+        if (settings.contains("runnerRespawnAtTeammate")) this.runnerRespawnAtTeammate = settings.getBoolean("runnerRespawnAtTeammate");
+        if (settings.contains("hunterRespawnAtTeammate")) this.hunterRespawnAtTeammate = settings.getBoolean("hunterRespawnAtTeammate");
+        if (settings.contains("teamChatEnabled")) this.teamChatEnabled = settings.getBoolean("teamChatEnabled");
+        if (settings.contains("seedMode")) {
+            String modeStr = settings.getString("seedMode");
+            this.seedMode = "fixed".equalsIgnoreCase(modeStr) ? SeedMode.FIXED : SeedMode.RANDOM;
+        }
+        if (settings.contains("seed")) {
+            this.seedValue = String.valueOf(settings.getLong("seed"));
+        }
+        if (this.gracePeriodField != null) this.gracePeriodField.setText(String.valueOf(this.gracePeriodSeconds));
+        if (this.runnerRespawnDelayField != null) this.runnerRespawnDelayField.setText(String.valueOf(this.runnerRespawnDelaySeconds));
+        if (this.hunterRespawnDelayField != null) this.hunterRespawnDelayField.setText(String.valueOf(this.hunterRespawnDelaySeconds));
+        if (this.compassCooldownField != null) this.compassCooldownField.setText(String.valueOf(this.compassCooldownSeconds));
+        if (this.runnerGlowPulseField != null) this.runnerGlowPulseField.setText(String.valueOf(this.runnerGlowPulseMinutes));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.huntersCompassEnabled = defaults.huntersCompassEnabled();
+        this.netherTrackingEnabled = defaults.netherTrackingEnabled();
+        this.midGameJoinTeleportEnabled = defaults.midGameJoinTeleportEnabled();
+        this.gracePeriodSeconds = defaults.hunterReleaseDelaySeconds();
+        this.runnerRespawnDelaySeconds = defaults.runnerRespawnDelaySeconds();
+        this.hunterRespawnDelaySeconds = defaults.hunterRespawnDelaySeconds();
+        this.compassCooldownSeconds = defaults.compassCooldownSeconds();
+        this.runnerGlowPulseMinutes = defaults.runnerGlowPulseMinutes();
+        this.runnerLives = defaults.runnerLives();
+        this.hunterLives = defaults.hunterLives();
+        this.runnerRespawnAtTeammate = defaults.runnerRespawnAtTeammate();
+        this.hunterRespawnAtTeammate = defaults.hunterRespawnAtTeammate();
+        this.teamChatEnabled = defaults.teamChatEnabled();
+        this.seedMode = SeedMode.RANDOM;
+        this.seedValue = "";
+        if (this.gracePeriodField != null) this.gracePeriodField.setText(String.valueOf(this.gracePeriodSeconds));
+        if (this.runnerRespawnDelayField != null) this.runnerRespawnDelayField.setText(String.valueOf(this.runnerRespawnDelaySeconds));
+        if (this.hunterRespawnDelayField != null) this.hunterRespawnDelayField.setText(String.valueOf(this.hunterRespawnDelaySeconds));
+        if (this.compassCooldownField != null) this.compassCooldownField.setText(String.valueOf(this.compassCooldownSeconds));
+        if (this.runnerGlowPulseField != null) this.runnerGlowPulseField.setText(String.valueOf(this.runnerGlowPulseMinutes));
     }
 
     private static String onOff(boolean value) {

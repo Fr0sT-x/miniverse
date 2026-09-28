@@ -333,6 +333,20 @@ public class MiniverseClient implements ClientModInitializer {
 			})
 		);
 
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.CHAT_ROUTING_SYNC_ID, (payload, context) ->
+			context.client().execute(() -> {
+				dev.frost.miniverse.client.chat.ChatRoutingClient.setRoutingActive(payload.active(), payload.defaultChannel());
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.CHAT_CHANNEL_SYNC_ID, (payload, context) ->
+			context.client().execute(() -> {
+				try {
+					dev.frost.miniverse.client.chat.ChatRoutingClient.setCurrentChannel(dev.frost.miniverse.chat.ChatChannel.valueOf(payload.channel()));
+				} catch (Exception ignored) {}
+			})
+		);
+
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientFreezeState.setFrozen(false);
 			dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
@@ -342,8 +356,10 @@ public class MiniverseClient implements ClientModInitializer {
 			SessionLaunchStatus.clear();
 			InventoryLayoutClient.clear();
 			ProtectionOverlayClient.clearAll();
+			dev.frost.miniverse.client.chat.ChatRoutingClient.reset();
 			dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.clear();
 			dev.frost.miniverse.client.gui.SessionSnapshotData.updateEditor(false, java.util.List.of(), null);
+			SessionScreen.clearWorkspaceCache();
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
 			dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();

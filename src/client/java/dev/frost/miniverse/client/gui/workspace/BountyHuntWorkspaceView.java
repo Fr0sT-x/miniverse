@@ -205,6 +205,46 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
         builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
 
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("scoreToWin")) this.scoreToWin = settings.getInt("scoreToWin");
+        if (settings.contains("gracePeriodSeconds")) this.gracePeriodSeconds = settings.getInt("gracePeriodSeconds");
+        if (settings.contains("targetSwapIntervalSeconds")) this.targetSwapIntervalSeconds = settings.getInt("targetSwapIntervalSeconds");
+        if (settings.contains("respawnDelaySeconds")) this.respawnDelaySeconds = settings.getInt("respawnDelaySeconds");
+        if (settings.contains("compassCooldownSeconds")) this.compassCooldownSeconds = settings.getInt("compassCooldownSeconds");
+        if (settings.contains("trackerEnabled")) this.trackerEnabled = settings.getBoolean("trackerEnabled");
+        if (settings.contains("netherTracking")) this.netherTrackingEnabled = settings.getBoolean("netherTracking");
+        if (settings.contains("trackerItemId")) this.trackerItemId = settings.getString("trackerItemId");
+        if (settings.contains("highValueTargetEnabled")) this.highValueTargetEnabled = settings.getBoolean("highValueTargetEnabled");
+        if (settings.contains("revengeAssignmentEnabled")) this.revengeAssignmentEnabled = settings.getBoolean("revengeAssignmentEnabled");
+
+        if (this.pointsToWinField != null) this.pointsToWinField.setText(String.valueOf(this.scoreToWin));
+        if (this.gracePeriodField != null) this.gracePeriodField.setText(String.valueOf(this.gracePeriodSeconds));
+        if (this.targetSwapIntervalField != null) this.targetSwapIntervalField.setText(String.valueOf(this.targetSwapIntervalSeconds));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelaySeconds));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.scoreToWin = 1000;
+        this.gracePeriodSeconds = 120;
+        this.targetSwapIntervalSeconds = 600;
+        this.respawnDelaySeconds = 5;
+        this.compassCooldownSeconds = 2;
+        this.trackerEnabled = true;
+        this.netherTrackingEnabled = true;
+        this.highValueTargetEnabled = false;
+        this.revengeAssignmentEnabled = false;
+        this.trackerItemId = "minecraft:compass";
+
+        if (this.pointsToWinField != null) this.pointsToWinField.setText(String.valueOf(this.scoreToWin));
+        if (this.gracePeriodField != null) this.gracePeriodField.setText(String.valueOf(this.gracePeriodSeconds));
+        if (this.targetSwapIntervalField != null) this.targetSwapIntervalField.setText(String.valueOf(this.targetSwapIntervalSeconds));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelaySeconds));
+    }
+
     private static String toggleLabel(String label, boolean value) {
         return label + ": " + (value ? "ON" : "OFF");
     }

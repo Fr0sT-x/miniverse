@@ -137,6 +137,28 @@ public final class PillarsOfFortuneWorkspaceView extends AbstractGamemodeWorkspa
         builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
 
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("timeLimitSeconds")) this.timeLimitSeconds = settings.getInt("timeLimitSeconds");
+        if (settings.contains("lootDropIntervalSeconds")) this.lootDropIntervalSeconds = settings.getInt("lootDropIntervalSeconds");
+        if (settings.contains("activeModifier")) this.activeModifier = settings.getString("activeModifier");
+
+        if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitSeconds));
+        if (this.lootDropIntervalField != null) this.lootDropIntervalField.setText(String.valueOf(this.lootDropIntervalSeconds));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.timeLimitSeconds = 600;
+        this.lootDropIntervalSeconds = 15;
+        this.activeModifier = "none";
+
+        if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitSeconds));
+        if (this.lootDropIntervalField != null) this.lootDropIntervalField.setText(String.valueOf(this.lootDropIntervalSeconds));
+    }
+
     private int modifierIndex(String mod) {
         if (mod.equals("swapper")) return 1;
         if (mod.equals("shuffle")) return 2;

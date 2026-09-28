@@ -37,6 +37,7 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
     private boolean allowBlockBreaking = true;
     private boolean enableBow = true;
     private boolean enablePickaxe = true;
+    private boolean teamChatEnabled = false;
 
     public BridgeWorkspaceView() {
         super("bridge");
@@ -101,6 +102,14 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
                         () -> this.enablePickaxe = !this.enablePickaxe);
                 }
             );
+
+            this.rulesLayout.addRow(
+                "Team Chat", (s, x, y, w) -> {
+                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Chat is routed to team members only (use ! for global chat).", "OFF: Vanilla chat is used for all players."),
+                        () -> this.teamChatEnabled = !this.teamChatEnabled);
+                }
+            );
         }
     }
 
@@ -118,7 +127,8 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
             Text.literal("Allow Building: " + (this.allowBuilding ? "Yes" : "No")),
             Text.literal("Allow Block Breaking: " + (this.allowBlockBreaking ? "Yes" : "No")),
             Text.literal("Enable Bows: " + (this.enableBow ? "Yes" : "No")),
-            Text.literal("Enable Pickaxes: " + (this.enablePickaxe ? "Yes" : "No"))
+            Text.literal("Enable Pickaxes: " + (this.enablePickaxe ? "Yes" : "No")),
+            Text.literal("Team Chat: " + (this.teamChatEnabled ? "ON" : "OFF"))
         );
     }
 
@@ -172,6 +182,7 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putBoolean("allowBlockBreaking", this.allowBlockBreaking);
         builder.settings().putBoolean("enableBow", this.enableBow);
         builder.settings().putBoolean("enablePickaxe", this.enablePickaxe);
+        builder.settings().putBoolean("teamChatEnabled", this.teamChatEnabled);
     }
 
     @Override
@@ -194,7 +205,43 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.addGroup("red", "Red", redMembers);
         builder.addGroup("blue", "Blue", blueMembers);
     }
-    
+
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("targetScore")) this.targetScore = settings.getInt("targetScore");
+        if (settings.contains("respawnDelaySeconds")) this.respawnDelay = settings.getInt("respawnDelaySeconds");
+        if (settings.contains("roundResetDelaySeconds")) this.roundResetDelay = settings.getInt("roundResetDelaySeconds");
+        if (settings.contains("voidDeathOffset")) this.voidDeathOffset = settings.getInt("voidDeathOffset");
+        if (settings.contains("allowBuilding")) this.allowBuilding = settings.getBoolean("allowBuilding");
+        if (settings.contains("allowBlockBreaking")) this.allowBlockBreaking = settings.getBoolean("allowBlockBreaking");
+        if (settings.contains("enableBow")) this.enableBow = settings.getBoolean("enableBow");
+        if (settings.contains("enablePickaxe")) this.enablePickaxe = settings.getBoolean("enablePickaxe");
+        if (settings.contains("teamChatEnabled")) this.teamChatEnabled = settings.getBoolean("teamChatEnabled");
+        if (this.targetScoreField != null) this.targetScoreField.setText(String.valueOf(this.targetScore));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelay));
+        if (this.roundResetDelayField != null) this.roundResetDelayField.setText(String.valueOf(this.roundResetDelay));
+        if (this.voidDeathOffsetField != null) this.voidDeathOffsetField.setText(String.valueOf(this.voidDeathOffset));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.targetScore = 5;
+        this.respawnDelay = 3;
+        this.roundResetDelay = 5;
+        this.voidDeathOffset = 60;
+        this.allowBuilding = true;
+        this.allowBlockBreaking = true;
+        this.enableBow = true;
+        this.enablePickaxe = true;
+        this.teamChatEnabled = false;
+        if (this.targetScoreField != null) this.targetScoreField.setText(String.valueOf(this.targetScore));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelay));
+        if (this.roundResetDelayField != null) this.roundResetDelayField.setText(String.valueOf(this.roundResetDelay));
+        if (this.voidDeathOffsetField != null) this.voidDeathOffsetField.setText(String.valueOf(this.voidDeathOffset));
+    }
+
     private static String onOff(boolean value) {
         return value ? "ON" : "OFF";
     }

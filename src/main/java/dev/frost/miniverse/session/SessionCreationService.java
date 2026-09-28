@@ -61,6 +61,18 @@ public final class SessionCreationService {
             this.sessionManager.assignPlayer(session.getSessionId(), requester);
         }
 
+        if (server != null && session.getSettings() != null) {
+            dev.frost.miniverse.minigame.core.preset.GamemodePreset lastUsed = new dev.frost.miniverse.minigame.core.preset.GamemodePreset(
+                gameType.id(),
+                "Last Used",
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                session.getSettings()
+            );
+            dev.frost.miniverse.minigame.core.preset.GamemodePresetStore.savePreset(lastUsed, true);
+            dev.frost.miniverse.network.handlers.GamemodePresetNetworkHandler.syncPresetsToAll(server, gameType.id());
+        }
+
         return CreateResult.success(session, gameType, plan.autoLaunch());
     }
 

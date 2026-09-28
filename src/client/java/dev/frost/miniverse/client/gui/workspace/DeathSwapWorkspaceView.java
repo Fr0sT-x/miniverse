@@ -225,6 +225,47 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
         builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
 
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("swapIntervalSeconds")) this.swapIntervalSeconds = settings.getInt("swapIntervalSeconds");
+        if (settings.contains("initialGracePeriodSeconds")) this.gracePeriodSeconds = settings.getInt("initialGracePeriodSeconds");
+        if (settings.contains("borderSize")) this.borderSize = settings.getInt("borderSize");
+        if (settings.contains("respawnDelaySeconds")) this.respawnDelaySeconds = settings.getInt("respawnDelaySeconds");
+        if (settings.contains("preserveVelocity")) this.preserveVelocity = settings.getBoolean("preserveVelocity");
+        if (settings.contains("seedMode")) {
+            String modeStr = settings.getString("seedMode");
+            this.seedMode = "fixed".equalsIgnoreCase(modeStr) ? DeathSwapSettings.SeedMode.FIXED : DeathSwapSettings.SeedMode.RANDOM;
+        }
+        if (settings.contains("seed")) {
+            this.seedValue = String.valueOf(settings.getLong("seed"));
+        }
+
+        if (this.swapIntervalField != null) this.swapIntervalField.setText(String.valueOf(this.swapIntervalSeconds));
+        if (this.gracePeriodField != null) this.gracePeriodField.setText(String.valueOf(this.gracePeriodSeconds));
+        if (this.borderSizeField != null) this.borderSizeField.setText(String.valueOf(this.borderSize));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelaySeconds));
+        if (this.seedValueField != null) this.seedValueField.setText(this.seedValue);
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.swapIntervalSeconds = 300;
+        this.gracePeriodSeconds = 30;
+        this.borderSize = 3000;
+        this.respawnDelaySeconds = 5;
+        this.preserveVelocity = true;
+        this.seedMode = DeathSwapSettings.SeedMode.RANDOM;
+        this.seedValue = "";
+
+        if (this.swapIntervalField != null) this.swapIntervalField.setText(String.valueOf(this.swapIntervalSeconds));
+        if (this.gracePeriodField != null) this.gracePeriodField.setText(String.valueOf(this.gracePeriodSeconds));
+        if (this.borderSizeField != null) this.borderSizeField.setText(String.valueOf(this.borderSize));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelaySeconds));
+        if (this.seedValueField != null) this.seedValueField.setText("");
+    }
+
     private String seedModeLabel() {
         return this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? "Seed: Random" : "Seed: Fixed";
     }

@@ -14,8 +14,36 @@ public record BedwarsSettings(
     int ironGenCap,
     int goldGenCap,
     int diamondGenCap,
-    int emeraldGenCap
+    int emeraldGenCap,
+    boolean teamChatEnabled
 ) {
+    public BedwarsSettings(
+        String mapId,
+        int respawnDelaySeconds,
+        int ironGenIntervalTicks,
+        int goldGenIntervalTicks,
+        int diamondGenIntervalTicks,
+        int emeraldGenIntervalTicks,
+        int ironGenCap,
+        int goldGenCap,
+        int diamondGenCap,
+        int emeraldGenCap
+    ) {
+        this(
+            mapId,
+            respawnDelaySeconds,
+            ironGenIntervalTicks,
+            goldGenIntervalTicks,
+            diamondGenIntervalTicks,
+            emeraldGenIntervalTicks,
+            ironGenCap,
+            goldGenCap,
+            diamondGenCap,
+            emeraldGenCap,
+            false
+        );
+    }
+
     public static BedwarsSettings fromNbt(NbtCompound nbt) {
         if (nbt == null) {
             nbt = new NbtCompound();
@@ -30,7 +58,8 @@ public record BedwarsSettings(
             nbt.contains("ironGenCap") ? nbt.getInt("ironGenCap") : 64,
             nbt.contains("goldGenCap") ? nbt.getInt("goldGenCap") : 32,
             nbt.contains("diamondGenCap") ? nbt.getInt("diamondGenCap") : 8,
-            nbt.contains("emeraldGenCap") ? nbt.getInt("emeraldGenCap") : 4
+            nbt.contains("emeraldGenCap") ? nbt.getInt("emeraldGenCap") : 4,
+            nbt.contains("teamChatEnabled") && nbt.getBoolean("teamChatEnabled")
         );
     }
 
@@ -45,6 +74,7 @@ public record BedwarsSettings(
         properties.setProperty("bedwars.goldGenCap", String.valueOf(this.goldGenCap));
         properties.setProperty("bedwars.diamondGenCap", String.valueOf(this.diamondGenCap));
         properties.setProperty("bedwars.emeraldGenCap", String.valueOf(this.emeraldGenCap));
+        properties.setProperty("bedwars.teamChatEnabled", String.valueOf(this.teamChatEnabled));
     }
 
     public static BedwarsSettings fromProperties(Properties properties) {
@@ -58,7 +88,8 @@ public record BedwarsSettings(
             Integer.parseInt(properties.getProperty("bedwars.ironGenCap", "64")),
             Integer.parseInt(properties.getProperty("bedwars.goldGenCap", "32")),
             Integer.parseInt(properties.getProperty("bedwars.diamondGenCap", "8")),
-            Integer.parseInt(properties.getProperty("bedwars.emeraldGenCap", "4"))
+            Integer.parseInt(properties.getProperty("bedwars.emeraldGenCap", "4")),
+            Boolean.parseBoolean(properties.getProperty("bedwars.teamChatEnabled", "false"))
         );
     }
 }

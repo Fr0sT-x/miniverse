@@ -300,7 +300,10 @@ public final class MinigameEventRouter {
                 return false; // Suppressed from vanilla chat
             }
         }
-        return !ChatRouter.handleChatMessage(message, player, parameters);
+        if (active instanceof dev.frost.miniverse.chat.ChatRoutingAware routingAware && routingAware.isChatRoutingEnabled()) {
+            return !ChatRouter.handleChatMessage(message, player, parameters);
+        }
+        return true;
     }
 
     @Nullable

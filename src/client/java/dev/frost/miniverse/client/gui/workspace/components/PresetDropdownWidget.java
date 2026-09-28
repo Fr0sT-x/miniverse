@@ -28,6 +28,7 @@ public class PresetDropdownWidget {
         this.height = height;
         this.onSelect = onSelect;
         this.items.add("Default");
+        this.items.add("Last Used");
     }
 
     public void setBounds(int x, int y, int width, int height) {
@@ -40,9 +41,10 @@ public class PresetDropdownWidget {
     public void setItems(List<String> presets, String activePreset) {
         this.items.clear();
         this.items.add("Default");
+        this.items.add("Last Used");
         if (presets != null) {
             for (String p : presets) {
-                if (!p.equalsIgnoreCase("Default") && !this.items.contains(p)) {
+                if (!p.equalsIgnoreCase("Default") && !p.equalsIgnoreCase("Last Used") && !this.items.contains(p)) {
                     this.items.add(p);
                 }
             }
@@ -163,7 +165,14 @@ public class PresetDropdownWidget {
             }
 
             int textColor = isSelected ? UiTheme.ACCENT_BLUE : (isItemHovered ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
-            String prefix = item.equalsIgnoreCase("Default") ? "★ " : "• ";
+            String prefix;
+            if (item.equalsIgnoreCase("Default")) {
+                prefix = "★ ";
+            } else if (item.equalsIgnoreCase("Last Used")) {
+                prefix = "▶ ";
+            } else {
+                prefix = "• ";
+            }
             String label = textRenderer.trimToWidth(prefix + item, this.width - 16);
             context.drawText(textRenderer, Text.literal(label), this.x + 8, itemY + 6, textColor, false);
         }

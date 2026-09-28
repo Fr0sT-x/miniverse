@@ -196,4 +196,41 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
     protected void buildSessionGroups(SessionPayloadBuilder builder) {
         builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
+
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("roundDurationSeconds")) this.roundDurationSeconds = settings.getInt("roundDurationSeconds");
+        if (settings.contains("pointsToWin")) this.pointsToWin = settings.getInt("pointsToWin");
+        if (settings.contains("respawnDelaySeconds")) this.respawnDelaySeconds = settings.getInt("respawnDelaySeconds");
+        if (settings.contains("perPlayerBlocks")) this.perPlayerBlocks = settings.getBoolean("perPlayerBlocks");
+        if (settings.contains("blockPool", net.minecraft.nbt.NbtElement.LIST_TYPE)) {
+            NbtList list = settings.getList("blockPool", net.minecraft.nbt.NbtElement.STRING_TYPE);
+            Set<Identifier> restored = new java.util.HashSet<>();
+            for (int i = 0; i < list.size(); i++) {
+                try {
+                    restored.add(Identifier.of(list.getString(i)));
+                } catch (Exception ignored) {}
+            }
+            if (!restored.isEmpty()) {
+                this.blockPool = restored;
+            }
+        }
+        if (this.roundDurationField != null) this.roundDurationField.setText(String.valueOf(this.roundDurationSeconds));
+        if (this.pointsToWinField != null) this.pointsToWinField.setText(String.valueOf(this.pointsToWin));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelaySeconds));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.roundDurationSeconds = 300;
+        this.pointsToWin = 5;
+        this.respawnDelaySeconds = 5;
+        this.perPlayerBlocks = true;
+        this.blockPool = new java.util.HashSet<>(BlockShuffleWeights.STANDARD_POOL);
+        if (this.roundDurationField != null) this.roundDurationField.setText(String.valueOf(this.roundDurationSeconds));
+        if (this.pointsToWinField != null) this.pointsToWinField.setText(String.valueOf(this.pointsToWin));
+        if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelaySeconds));
+    }
 }

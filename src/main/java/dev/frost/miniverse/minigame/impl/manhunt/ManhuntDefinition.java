@@ -58,6 +58,7 @@ public final class ManhuntDefinition implements MinigameDefinition {
         properties.setProperty("manhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
         properties.setProperty("manhunt.runnerRespawnAtTeammate", Boolean.toString(settings.runnerRespawnAtTeammate()));
         properties.setProperty("manhunt.hunterRespawnAtTeammate", Boolean.toString(settings.hunterRespawnAtTeammate()));
+        properties.setProperty("manhunt.teamChatEnabled", Boolean.toString(settings.teamChatEnabled()));
 
         NbtList roles = settingsNbt.getList("roles", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < roles.size(); i++) {
@@ -85,6 +86,7 @@ public final class ManhuntDefinition implements MinigameDefinition {
         properties.put("miniverse.manhunt.disconnectGraceSeconds", Integer.toString(settings.disconnectGraceSeconds()));
         properties.put("miniverse.manhunt.runnerRespawnAtTeammate", Boolean.toString(settings.runnerRespawnAtTeammate()));
         properties.put("miniverse.manhunt.hunterRespawnAtTeammate", Boolean.toString(settings.hunterRespawnAtTeammate()));
+        properties.put("miniverse.manhunt.teamChatEnabled", Boolean.toString(settings.teamChatEnabled()));
     }
 
     @Override

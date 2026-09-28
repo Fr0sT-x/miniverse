@@ -83,6 +83,7 @@ public record ManhuntSessionData(
         object.addProperty("disconnectGraceSeconds", settings.disconnectGraceSeconds());
         object.addProperty("runnerRespawnAtTeammate", settings.runnerRespawnAtTeammate());
         object.addProperty("hunterRespawnAtTeammate", settings.hunterRespawnAtTeammate());
+        object.addProperty("teamChatEnabled", settings.teamChatEnabled());
         return object;
     }
 
@@ -110,7 +111,8 @@ public record ManhuntSessionData(
             booleanValue(object, "midGameJoinTeleportEnabled", defaults.midGameJoinTeleportEnabled()),
             intValue(object, "disconnectGraceSeconds", defaults.disconnectGraceSeconds()),
             booleanValue(object, "runnerRespawnAtTeammate", defaults.runnerRespawnAtTeammate()),
-            booleanValue(object, "hunterRespawnAtTeammate", defaults.hunterRespawnAtTeammate())
+            booleanValue(object, "hunterRespawnAtTeammate", defaults.hunterRespawnAtTeammate()),
+            booleanValue(object, "teamChatEnabled", defaults.teamChatEnabled())
         );
     }
 

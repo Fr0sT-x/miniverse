@@ -186,4 +186,46 @@ public final class HordeSurvivalWorkspaceView extends AbstractGamemodeWorkspaceV
     protected void buildSessionGroups(SessionPayloadBuilder builder) {
         builder.addGroup("players", "Survivors", this.playerGrid.getMembers("selected"));
     }
+
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("totalWaves")) this.totalWaves = settings.getInt("totalWaves");
+        if (settings.contains("uplinkDurationSeconds")) this.uplinkDurationSeconds = settings.getInt("uplinkDurationSeconds");
+        if (settings.contains("intermissionSeconds")) this.intermissionSeconds = settings.getInt("intermissionSeconds");
+        if (settings.contains("initialPodFuel")) this.initialPodFuel = settings.getInt("initialPodFuel");
+        if (settings.contains("harvestRadius")) this.harvestRadius = settings.getInt("harvestRadius");
+        if (settings.contains("fuelDrainPerSecond")) this.fuelDrainPerSecond = settings.getInt("fuelDrainPerSecond");
+        if (settings.contains("borderSize")) this.borderSize = settings.getInt("borderSize");
+        if (settings.contains("emergencyFlaresEnabled")) this.emergencyFlaresEnabled = settings.getBoolean("emergencyFlaresEnabled");
+
+        if (this.totalWavesField != null) this.totalWavesField.setText(String.valueOf(this.totalWaves));
+        if (this.uplinkDurationField != null) this.uplinkDurationField.setText(String.valueOf(this.uplinkDurationSeconds));
+        if (this.intermissionField != null) this.intermissionField.setText(String.valueOf(this.intermissionSeconds));
+        if (this.initialPodFuelField != null) this.initialPodFuelField.setText(String.valueOf(this.initialPodFuel));
+        if (this.harvestRadiusField != null) this.harvestRadiusField.setText(String.valueOf(this.harvestRadius));
+        if (this.fuelDrainField != null) this.fuelDrainField.setText(String.valueOf(this.fuelDrainPerSecond));
+        if (this.borderSizeField != null) this.borderSizeField.setText(String.valueOf(this.borderSize));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.totalWaves = HordeSurvivalSettings.DEFAULT_TOTAL_WAVES;
+        this.uplinkDurationSeconds = HordeSurvivalSettings.DEFAULT_UPLINK_DURATION_SECONDS;
+        this.intermissionSeconds = HordeSurvivalSettings.DEFAULT_INTERMISSION_SECONDS;
+        this.initialPodFuel = HordeSurvivalSettings.DEFAULT_INITIAL_POD_FUEL;
+        this.harvestRadius = HordeSurvivalSettings.DEFAULT_HARVEST_RADIUS;
+        this.fuelDrainPerSecond = HordeSurvivalSettings.DEFAULT_FUEL_DRAIN_PER_SECOND;
+        this.borderSize = HordeSurvivalSettings.DEFAULT_BORDER_SIZE;
+        this.emergencyFlaresEnabled = true;
+
+        if (this.totalWavesField != null) this.totalWavesField.setText(String.valueOf(this.totalWaves));
+        if (this.uplinkDurationField != null) this.uplinkDurationField.setText(String.valueOf(this.uplinkDurationSeconds));
+        if (this.intermissionField != null) this.intermissionField.setText(String.valueOf(this.intermissionSeconds));
+        if (this.initialPodFuelField != null) this.initialPodFuelField.setText(String.valueOf(this.initialPodFuel));
+        if (this.harvestRadiusField != null) this.harvestRadiusField.setText(String.valueOf(this.harvestRadius));
+        if (this.fuelDrainField != null) this.fuelDrainField.setText(String.valueOf(this.fuelDrainPerSecond));
+        if (this.borderSizeField != null) this.borderSizeField.setText(String.valueOf(this.borderSize));
+    }
 }

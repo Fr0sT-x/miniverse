@@ -50,6 +50,7 @@ public class Miniverse implements ModInitializer {
 				SessionCommands.register(dispatcher);
 				MatchLifecycleCommands.register(dispatcher);
 				MapEditorCommands.register(dispatcher);
+				dev.frost.miniverse.chat.ChatCommands.register(dispatcher);
 			}
 		);
 		dev.frost.miniverse.minigame.core.MinigameManager.getInstance().getMinigameEventRouter().register();
@@ -69,6 +70,7 @@ public class Miniverse implements ModInitializer {
 		MapEditorNetwork.register();
 		TransitionTransferCoordinator.register();
 		dev.frost.miniverse.minigame.core.layout.InventoryLayoutService.register();
+		dev.frost.miniverse.chat.ChatCommands.registerNetwork();
 
 		LOGGER.info("Miniverse initialized. {} minigame(s) registered.", MinigameRegistry.getDefinitions().size());
 	}

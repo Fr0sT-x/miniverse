@@ -10,7 +10,8 @@
 		"ProgressScreenTransitionOverlayMixin",
 		"ScreenTransitionOverlayMixin",
 		"InventoryScreenMixin",
-		"ChatHudMixin"
+		"ChatHudMixin",
+		"ChatScreenMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

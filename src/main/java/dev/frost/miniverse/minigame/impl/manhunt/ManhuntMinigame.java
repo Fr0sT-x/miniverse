@@ -68,7 +68,7 @@ import net.minecraft.world.World;
  * In this game, Speedrunners try to reach the End while Hunters try to stop them.
  * If a Speedrunner dies, the Hunters win. Hunters can respawn upon death.
  */
-public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractMinigame implements PersistentMinigame, TeamManagerProvider, PlayerDamageAware, PlayerRespawnAware, DeathAwareMinigame, dev.frost.miniverse.minigame.core.event.RosterAware {
+public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractMinigame implements PersistentMinigame, TeamManagerProvider, PlayerDamageAware, PlayerRespawnAware, DeathAwareMinigame, dev.frost.miniverse.minigame.core.event.RosterAware, dev.frost.miniverse.chat.ChatRoutingAware {
     private static final String NAME = "Manhunt";
 
     private GameState state;
@@ -971,6 +971,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
     public void applySettings(ManhuntSettings settings) {
         this.settings = settings == null ? ManhuntSettings.defaults() : settings;
+    }
+
+    @Override
+    public boolean isChatRoutingEnabled() {
+        return this.settings.teamChatEnabled();
     }
 
     @Override

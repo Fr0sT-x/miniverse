@@ -14,8 +14,36 @@ public record BridgeSettings(
     boolean allowBuilding,
     boolean allowBlockBreaking,
     boolean enableBow,
-    boolean enablePickaxe
+    boolean enablePickaxe,
+    boolean teamChatEnabled
 ) {
+    public BridgeSettings(
+        String mapId,
+        int targetScore,
+        int respawnDelaySeconds,
+        int roundResetDelaySeconds,
+        int voidDeathOffset,
+        int heightLimitOffset,
+        boolean allowBuilding,
+        boolean allowBlockBreaking,
+        boolean enableBow,
+        boolean enablePickaxe
+    ) {
+        this(
+            mapId,
+            targetScore,
+            respawnDelaySeconds,
+            roundResetDelaySeconds,
+            voidDeathOffset,
+            heightLimitOffset,
+            allowBuilding,
+            allowBlockBreaking,
+            enableBow,
+            enablePickaxe,
+            false
+        );
+    }
+
     public static BridgeSettings fromNbt(NbtCompound nbt) {
         if (nbt == null) {
             nbt = new NbtCompound();
@@ -30,7 +58,8 @@ public record BridgeSettings(
             !nbt.contains("allowBuilding") || nbt.getBoolean("allowBuilding"),
             !nbt.contains("allowBlockBreaking") || nbt.getBoolean("allowBlockBreaking"),
             !nbt.contains("enableBow") || nbt.getBoolean("enableBow"),
-            !nbt.contains("enablePickaxe") || nbt.getBoolean("enablePickaxe")
+            !nbt.contains("enablePickaxe") || nbt.getBoolean("enablePickaxe"),
+            nbt.contains("teamChatEnabled") && nbt.getBoolean("teamChatEnabled")
         );
     }
 
@@ -45,6 +74,7 @@ public record BridgeSettings(
         properties.setProperty("bridge.allowBlockBreaking", String.valueOf(this.allowBlockBreaking));
         properties.setProperty("bridge.enableBow", String.valueOf(this.enableBow));
         properties.setProperty("bridge.enablePickaxe", String.valueOf(this.enablePickaxe));
+        properties.setProperty("bridge.teamChatEnabled", String.valueOf(this.teamChatEnabled));
     }
 
     public static BridgeSettings fromProperties(Properties properties) {
@@ -58,7 +88,8 @@ public record BridgeSettings(
             Boolean.parseBoolean(properties.getProperty("bridge.allowBuilding", "true")),
             Boolean.parseBoolean(properties.getProperty("bridge.allowBlockBreaking", "true")),
             Boolean.parseBoolean(properties.getProperty("bridge.enableBow", "true")),
-            Boolean.parseBoolean(properties.getProperty("bridge.enablePickaxe", "true"))
+            Boolean.parseBoolean(properties.getProperty("bridge.enablePickaxe", "true")),
+            Boolean.parseBoolean(properties.getProperty("bridge.teamChatEnabled", "false"))
         );
     }
 }

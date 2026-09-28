@@ -526,6 +526,7 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
     @Override
     protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
         if (settings == null) return;
+        super.applyPresetSettings(settings);
         if (settings.contains("mapId", net.minecraft.nbt.NbtElement.STRING_TYPE)) {
             this.selectedMapId = settings.getString("mapId");
         }

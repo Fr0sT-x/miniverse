@@ -136,4 +136,30 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
         builder.addGroup("players", "Players", this.playerGrid.getMembers("selected"));
     }
 
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("matchDurationSeconds")) this.durationSeconds = settings.getInt("matchDurationSeconds");
+        if (settings.contains("startingInfectedCount")) this.startingInfected = settings.getInt("startingInfectedCount");
+        if (settings.contains("respawnDelaySeconds")) this.respawnDelay = settings.getInt("respawnDelaySeconds");
+        if (settings.contains("allowFriendlyFire")) this.allowFriendlyFire = settings.getBoolean("allowFriendlyFire");
+
+        if (this.durationField != null) this.durationField.setText(String.valueOf(this.durationSeconds));
+        if (this.infectedField != null) this.infectedField.setText(String.valueOf(this.startingInfected));
+        if (this.respawnField != null) this.respawnField.setText(String.valueOf(this.respawnDelay));
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.durationSeconds = 300;
+        this.startingInfected = 1;
+        this.respawnDelay = 3;
+        this.allowFriendlyFire = false;
+
+        if (this.durationField != null) this.durationField.setText(String.valueOf(this.durationSeconds));
+        if (this.infectedField != null) this.infectedField.setText(String.valueOf(this.startingInfected));
+        if (this.respawnField != null) this.respawnField.setText(String.valueOf(this.respawnDelay));
+    }
+
 }

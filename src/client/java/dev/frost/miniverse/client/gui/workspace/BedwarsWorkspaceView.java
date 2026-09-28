@@ -41,6 +41,7 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
     private int goldCap = 32;
     private int diamondCap = 8;
     private int emeraldCap = 4;
+    private boolean teamChatEnabled = false;
 
     public BedwarsWorkspaceView() {
         super("bedwars");
@@ -66,6 +67,11 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.rulesLayout.addRow(
                 "Respawn Delay (s)", (s, x, y, w) -> {
                     this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelay, w, "Respawn Delay", val -> "Seconds to respawn: " + val);
+                },
+                "Team Chat", (s, x, y, w) -> {
+                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
+                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Chat is routed to team members only (use ! for global chat).", "OFF: Vanilla chat is used for all players."),
+                        () -> this.teamChatEnabled = !this.teamChatEnabled);
                 }
             );
 
@@ -122,6 +128,7 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
             Text.literal("Gold Gen: " + this.goldGenTicks + "t"),
             Text.literal("Diamond Gen: " + this.diamondGenTicks + "t"),
             Text.literal("Emerald Gen: " + this.emeraldGenTicks + "t"),
+            Text.literal("Team Chat: " + (this.teamChatEnabled ? "ON" : "OFF")),
             Text.literal("Teams: " + this.teamGrid.getTeams().size())
         );
     }
@@ -188,11 +195,13 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         builder.settings().putInt("goldGenCap", this.goldCap);
         builder.settings().putInt("diamondGenCap", this.diamondCap);
         builder.settings().putInt("emeraldGenCap", this.emeraldCap);
+        builder.settings().putBoolean("teamChatEnabled", this.teamChatEnabled);
     }
 
     @Override
     protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
         if (settings == null) return;
+        super.applyPresetSettings(settings);
         if (settings.contains("respawnDelaySeconds", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
             this.respawnDelay = settings.getInt("respawnDelaySeconds");
         }
@@ -220,6 +229,9 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         if (settings.contains("emeraldGenCap", net.minecraft.nbt.NbtElement.NUMBER_TYPE)) {
             this.emeraldCap = settings.getInt("emeraldGenCap");
         }
+        if (settings.contains("teamChatEnabled")) {
+            this.teamChatEnabled = settings.getBoolean("teamChatEnabled");
+        }
 
         if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelay));
         if (this.ironGenField != null) this.ironGenField.setText(String.valueOf(this.ironGenTicks));
@@ -243,6 +255,7 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         this.goldCap = 32;
         this.diamondCap = 8;
         this.emeraldCap = 4;
+        this.teamChatEnabled = false;
 
         if (this.respawnDelayField != null) this.respawnDelayField.setText(String.valueOf(this.respawnDelay));
         if (this.ironGenField != null) this.ironGenField.setText(String.valueOf(this.ironGenTicks));

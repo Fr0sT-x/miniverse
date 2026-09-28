@@ -261,6 +261,33 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
         }
     }
 
+    @Override
+    protected void applyPresetSettings(net.minecraft.nbt.NbtCompound settings) {
+        if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("seedMode")) {
+            String modeStr = settings.getString("seedMode");
+            this.seedMode = "fixed".equalsIgnoreCase(modeStr) ? SeedMode.FIXED : SeedMode.RANDOM;
+        }
+        if (settings.contains("timeLimitMinutes")) {
+            this.timeLimitValue = String.valueOf(settings.getInt("timeLimitMinutes"));
+        }
+        if (settings.contains("seed")) {
+            this.seedValue = String.valueOf(settings.getLong("seed"));
+        }
+        if (this.timeLimitField != null) this.timeLimitField.setText(this.timeLimitValue);
+        if (this.seedValueField != null) this.seedValueField.setText(this.seedValue);
+    }
+
+    @Override
+    protected void resetToDefaultSettings() {
+        this.timeLimitValue = "0";
+        this.seedMode = SeedMode.RANDOM;
+        this.seedValue = "";
+        if (this.timeLimitField != null) this.timeLimitField.setText(this.timeLimitValue);
+        if (this.seedValueField != null) this.seedValueField.setText("");
+    }
+
     private enum SeedMode {
         RANDOM("Random", "random"),
         FIXED("Fixed", "fixed");

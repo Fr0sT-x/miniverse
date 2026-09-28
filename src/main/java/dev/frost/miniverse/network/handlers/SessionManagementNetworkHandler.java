@@ -102,6 +102,17 @@ public class SessionManagementNetworkHandler {
 
             LaunchProgressBroadcaster.broadcastLaunchProgress(server, session, "Transferring players", "Moving players to the session server", 100, true);
             new PlayerTransferService().transferAssignedPlayers(server, session);
+            if (session.getSettings() != null) {
+                dev.frost.miniverse.minigame.core.preset.GamemodePreset lastUsed = new dev.frost.miniverse.minigame.core.preset.GamemodePreset(
+                    session.getGameType().id(),
+                    "Last Used",
+                    System.currentTimeMillis(),
+                    System.currentTimeMillis(),
+                    session.getSettings()
+                );
+                dev.frost.miniverse.minigame.core.preset.GamemodePresetStore.savePreset(lastUsed, true);
+                GamemodePresetNetworkHandler.syncPresetsToAll(server, session.getGameType().id());
+            }
             player.sendMessage(Text.literal("Launched session " + session.getSessionId() + "."), false);
             SessionListSerializer.sendSessionList(server, player);
         }));
@@ -179,6 +190,17 @@ public class SessionManagementNetworkHandler {
                 }
                 LaunchProgressBroadcaster.broadcastLaunchProgress(server, session, "Transferring players", "Moving players to the session server", 100, true);
                 new PlayerTransferService().transferAssignedPlayers(server, session);
+                if (session.getSettings() != null) {
+                    dev.frost.miniverse.minigame.core.preset.GamemodePreset lastUsed = new dev.frost.miniverse.minigame.core.preset.GamemodePreset(
+                        session.getGameType().id(),
+                        "Last Used",
+                        System.currentTimeMillis(),
+                        System.currentTimeMillis(),
+                        session.getSettings()
+                    );
+                    dev.frost.miniverse.minigame.core.preset.GamemodePresetStore.savePreset(lastUsed, true);
+                    GamemodePresetNetworkHandler.syncPresetsToAll(server, session.getGameType().id());
+                }
                 player.sendMessage(Text.literal("Relaunched session " + sessionId + "."), false);
                 SessionListSerializer.sendSessionList(server, player);
             }));

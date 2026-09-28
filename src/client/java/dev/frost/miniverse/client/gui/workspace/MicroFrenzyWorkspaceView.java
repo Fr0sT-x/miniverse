@@ -420,6 +420,22 @@ public final class MicroFrenzyWorkspaceView extends AbstractGamemodeWorkspaceVie
     @Override
     protected void applyPresetSettings(NbtCompound settings) {
         if (settings == null) return;
+        super.applyPresetSettings(settings);
+        if (settings.contains("startingLives", NbtElement.INT_TYPE)) {
+            this.startingLives = settings.getInt("startingLives");
+            if (this.startingLivesField != null) this.startingLivesField.setText(String.valueOf(this.startingLives));
+        }
+        if (settings.contains("maxRounds", NbtElement.INT_TYPE)) {
+            this.maxRounds = settings.getInt("maxRounds");
+            if (this.maxRoundsField != null) this.maxRoundsField.setText(String.valueOf(this.maxRounds));
+        }
+        if (settings.contains("speedScaling")) {
+            this.speedScaling = settings.getBoolean("speedScaling");
+        }
+        if (settings.contains("intermissionSeconds", NbtElement.INT_TYPE)) {
+            this.intermissionSeconds = settings.getInt("intermissionSeconds");
+            if (this.intermissionSecondsField != null) this.intermissionSecondsField.setText(String.valueOf(this.intermissionSeconds));
+        }
         if (settings.contains("enabledRules", NbtElement.STRING_TYPE)) {
             String raw = settings.getString("enabledRules");
             this.enabledRuleIds.clear();
@@ -431,6 +447,7 @@ public final class MicroFrenzyWorkspaceView extends AbstractGamemodeWorkspaceVie
                     }
                 }
             }
+            this.rebuildPoolRowLayout();
         }
     }
 

@@ -24,6 +24,7 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.text.Text;
 
 public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, GamemodeWorkspaceView, GamemodeWorkspaceView.ModuleProvider, GamemodeWorkspaceView.RosterRefreshable {
@@ -37,6 +38,21 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     
     protected String sessionName;
     protected ValidationResult status = null;
+    protected boolean initializedFromPreset = false;
+
+    public void setStatus(ValidationResult status) {
+        this.status = status;
+    }
+
+    public static void clearCacheForGame(String gameId) {
+        LAST_ACTIVE_PRESET_NAMES.remove(gameId);
+        LAST_ACTIVE_SETTINGS_CACHE.remove(gameId);
+    }
+
+    public static void clearAllCaches() {
+        LAST_ACTIVE_PRESET_NAMES.clear();
+        LAST_ACTIVE_SETTINGS_CACHE.clear();
+    }
 
     public static boolean isRightSidebarOpen() {
         return !SessionScreen.rightDockCollapsed;
@@ -160,10 +176,23 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.mapGrid.setMaps(dev.frost.miniverse.client.gui.SessionSnapshotData.maps().stream().filter(map -> map.validFor(this.gameId())).toList());
         }
         this.initGamemode(screen);
+        if (this.selectedMapId != null && !this.selectedMapId.isBlank() && this.mapGrid != null) {
+            this.mapGrid.setSelectedMapId(this.selectedMapId);
+        }
 
-        NbtCompound cachedSettings = LAST_ACTIVE_SETTINGS_CACHE.get(this.gameId());
-        if (cachedSettings != null) {
-            this.applyPresetSettings(cachedSettings);
+        if (!this.initializedFromPreset) {
+            this.initializedFromPreset = true;
+            NbtCompound cachedSettings = LAST_ACTIVE_SETTINGS_CACHE.get(this.gameId());
+            if (cachedSettings != null) {
+                this.applyPresetSettings(cachedSettings);
+            } else if (rememberedPreset != null && !rememberedPreset.isBlank() && !rememberedPreset.equalsIgnoreCase("Default")) {
+                for (SessionSnapshotData.GamemodePresetEntry p : SessionSnapshotData.getPresets(this.gameId())) {
+                    if (p.name().equalsIgnoreCase(rememberedPreset)) {
+                        this.applyPresetSettings(p.settings());
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -427,10 +456,11 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.activeTooltips.add(new TooltipZone(this.resetPresetBtnRect.x(), this.resetPresetBtnRect.y(), this.resetPresetBtnRect.width(), this.resetPresetBtnRect.height(), () -> "Revert all settings to Default preset"));
         }
         if (this.deletePresetBtnRect != null) {
-            boolean canDelete = !this.activePresetName.equalsIgnoreCase("Default");
+            boolean isProtected = this.activePresetName.equalsIgnoreCase("Default") || this.activePresetName.equalsIgnoreCase("Last Used");
+            boolean canDelete = !isProtected;
             int delFill = canDelete ? UiTheme.ACCENT_RED : UiTheme.BORDER_SUBTLE;
             this.renderActionButton(context, textRenderer, this.deletePresetBtnRect, "Delete", delFill, canDelete && this.deletePresetBtnRect.contains(mouseX, mouseY));
-            this.activeTooltips.add(new TooltipZone(this.deletePresetBtnRect.x(), this.deletePresetBtnRect.y(), this.deletePresetBtnRect.width(), this.deletePresetBtnRect.height(), () -> canDelete ? "Delete preset '" + this.activePresetName + "' from server" : "Default preset cannot be deleted"));
+            this.activeTooltips.add(new TooltipZone(this.deletePresetBtnRect.x(), this.deletePresetBtnRect.y(), this.deletePresetBtnRect.width(), this.deletePresetBtnRect.height(), () -> canDelete ? "Delete preset '" + this.activePresetName + "' from server" : (this.activePresetName + " preset cannot be deleted")));
         }
         curY += 27;
 
@@ -695,6 +725,27 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.resetToDefaultSettings();
             LAST_ACTIVE_SETTINGS_CACHE.put(this.gameId(), this.exportPresetSettings());
             this.status = ValidationResult.info("Switched to Default preset.");
+        } else if (presetName.equalsIgnoreCase("Last Used")) {
+            boolean loaded = false;
+            for (SessionSnapshotData.GamemodePresetEntry p : SessionSnapshotData.getPresets(this.gameId())) {
+                if (p.name().equalsIgnoreCase("Last Used")) {
+                    this.applyPresetSettings(p.settings());
+                    LAST_ACTIVE_SETTINGS_CACHE.put(this.gameId(), p.settings().copy());
+                    this.status = ValidationResult.success("Loaded 'Last Used' match settings.");
+                    loaded = true;
+                    break;
+                }
+            }
+            if (!loaded) {
+                NbtCompound cached = LAST_ACTIVE_SETTINGS_CACHE.get(this.gameId());
+                if (cached != null) {
+                    this.applyPresetSettings(cached);
+                    this.status = ValidationResult.success("Loaded 'Last Used' match settings.");
+                } else {
+                    this.resetToDefaultSettings();
+                    this.status = ValidationResult.info("No previous match recorded yet. Using Default settings.");
+                }
+            }
         } else {
             for (SessionSnapshotData.GamemodePresetEntry p : SessionSnapshotData.getPresets(this.gameId())) {
                 if (p.name().equalsIgnoreCase(presetName)) {
@@ -711,7 +762,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     }
 
     private void handleSavePreset() {
-        if (this.activePresetName.equalsIgnoreCase("Default")) {
+        if (this.activePresetName.equalsIgnoreCase("Default") || this.activePresetName.equalsIgnoreCase("Last Used")) {
             this.handleSaveAsPreset();
             return;
         }
@@ -753,7 +804,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     }
 
     private void handleDeletePreset() {
-        if (this.activePresetName.equalsIgnoreCase("Default")) {
+        if (this.activePresetName.equalsIgnoreCase("Default") || this.activePresetName.equalsIgnoreCase("Last Used")) {
             return;
         }
         String toDelete = this.activePresetName;
@@ -788,18 +839,34 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     }
 
     protected NbtCompound exportPresetSettings() {
+        this.syncStateFromWidgets();
         SessionPayloadBuilder builder = new SessionPayloadBuilder(this.gameId(), this.sessionName);
+        if (this.mapGrid != null && this.selectedMapId != null && !this.selectedMapId.isBlank()) {
+            builder.settings().putString("mapId", this.selectedMapId);
+        }
         this.buildSessionSettings(builder);
         return builder.settings();
     }
 
     protected void applyPresetSettings(NbtCompound settings) {
+        if (settings == null) return;
+        if (this.mapGrid != null && settings.contains("mapId", NbtElement.STRING_TYPE)) {
+            String mapId = settings.getString("mapId");
+            if (!mapId.isBlank()) {
+                this.selectedMapId = mapId;
+                this.mapGrid.setSelectedMapId(mapId);
+            }
+        }
     }
 
     protected void resetToDefaultSettings() {
     }
 
     protected boolean gamemodeMouseClicked(double mouseX, double mouseY, int button) { return false; }
+
+    public void flushWidgetState() {
+        this.syncStateFromWidgets();
+    }
 
     protected void syncStateFromWidgets() {}
 
@@ -871,6 +938,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
     @Override
     public void setActiveModule(String moduleId) {
+        this.syncStateFromWidgets();
         this.moduleManager.setActiveModuleId(moduleId);
     }
 
@@ -1119,12 +1187,21 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             return;
         }
         
+        this.syncStateFromWidgets();
         SessionPayloadBuilder builder = new SessionPayloadBuilder(this.gameId(), this.sessionName);
-        if (this.mapGrid != null) {
+        if (this.mapGrid != null && !this.selectedMapId.isBlank()) {
             builder.settings().putString("mapId", this.selectedMapId);
         }
         this.buildSessionSettings(builder);
         this.buildSessionGroups(builder);
+
+        // Auto-save "Last Used" preset without confirmation
+        NbtCompound currentSettings = builder.settings().copy();
+        LAST_ACTIVE_SETTINGS_CACHE.put(this.gameId(), currentSettings.copy());
+        ClientPlayNetworking.send(
+            new NetworkConstants.SaveGamemodePresetPayload(this.gameId(), "Last Used", currentSettings, true)
+        );
+
         builder.dispatch();
         
         this.status = ValidationResult.success("Requested " + this.title() + " session creation.");

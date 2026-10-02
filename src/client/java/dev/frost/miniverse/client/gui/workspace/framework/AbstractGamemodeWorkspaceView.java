@@ -838,6 +838,20 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         }
     }
 
+    public void resetAfterMatchStart() {
+        this.activePresetName = "Default";
+        LAST_ACTIVE_PRESET_NAMES.put(this.gameId(), "Default");
+        if (this.presetDropdown != null) {
+            this.presetDropdown.setSelected("Default");
+        }
+        this.resetToDefaultSettings();
+        LAST_ACTIVE_SETTINGS_CACHE.put(this.gameId(), this.exportPresetSettings());
+        this.status = ValidationResult.info("Settings reset for new match.");
+        if (this.currentScreen != null) {
+            this.currentScreen.rebuildWorkspaceChildren();
+        }
+    }
+
     protected NbtCompound exportPresetSettings() {
         this.syncStateFromWidgets();
         SessionPayloadBuilder builder = new SessionPayloadBuilder(this.gameId(), this.sessionName);
@@ -1203,6 +1217,8 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         );
 
         builder.dispatch();
+        
+        SessionScreen.onGamemodeStarted(this.gameId());
         
         this.status = ValidationResult.success("Requested " + this.title() + " session creation.");
     }

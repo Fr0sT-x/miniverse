@@ -83,7 +83,9 @@ public class SessionScreen extends Screen {
         Map.entry("zombies", SessionScreen::openZombies),
         Map.entry("dropper", SessionScreen::openDropper),
         Map.entry("microfrenzy", SessionScreen::openMicroFrenzy),
-        Map.entry("microfrezy", SessionScreen::openMicroFrenzy)
+        Map.entry("microfrezy", SessionScreen::openMicroFrenzy),
+        Map.entry("skywars", SessionScreen::openSkywars),
+        Map.entry("ctf", SessionScreen::openCtf)
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -105,6 +107,48 @@ public class SessionScreen extends Screen {
         lastActiveWorkspace = null;
         WORKSPACE_CACHE.clear();
         dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView.clearAllCaches();
+    }
+
+    public static void onGamemodeStarted(String launchedGameId) {
+        lastActiveWorkspace = null;
+        if (launchedGameId == null || launchedGameId.isBlank()) {
+            WORKSPACE_CACHE.clear();
+            return;
+        }
+        WorkspaceView launchedView = WORKSPACE_CACHE.get(launchedGameId);
+        WORKSPACE_CACHE.clear();
+        if (launchedView != null) {
+            WORKSPACE_CACHE.put(launchedGameId, launchedView);
+            if (launchedView instanceof dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView agw) {
+                agw.resetAfterMatchStart();
+            }
+        }
+    }
+
+    public static boolean isLocalPlayerInActiveSession() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return false;
+        String name = client.player.getName().getString();
+        String uuid = client.player.getUuidAsString();
+        for (SessionSnapshotData.SessionSummary s : SessionSnapshotData.sessions()) {
+            if (!"STOPPED".equalsIgnoreCase(s.state()) && !"FAILED".equalsIgnoreCase(s.state())) {
+                if (s.playerNames() != null) {
+                    for (String p : s.playerNames()) {
+                        if (p.equalsIgnoreCase(name) || p.equalsIgnoreCase(uuid)) {
+                            return true;
+                        }
+                    }
+                }
+                if (s.groups() != null) {
+                    for (SessionSnapshotData.GroupSummary g : s.groups()) {
+                        if (g.displayName().equalsIgnoreCase(name) || g.label().equalsIgnoreCase(name)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     public WorkspaceView getWorkspaceView() {
@@ -153,6 +197,11 @@ public class SessionScreen extends Screen {
     private double sidebarMaxScroll;
     private boolean draggingSidebarScrollbar;
     private double sidebarDragClickOffsetY;
+
+    private double cardsScroll;
+    private double cardsMaxScroll;
+    private boolean draggingCardsScrollbar;
+    private double cardsDragClickOffsetY;
     private final List<WorkspaceView> history = new ArrayList<>();
     private int historyIndex = -1;
 
@@ -522,7 +571,11 @@ public class SessionScreen extends Screen {
         super.init();
         this.openedAt = System.currentTimeMillis();
         this.rebuildEntries();
-        if (lastActiveWorkspace != null) {
+        if (SessionSnapshotData.mapEditor() || this.mapEditorState.editorActive) {
+            this.openMapEditorWorkspace();
+        } else if (isLocalPlayerInActiveSession()) {
+            this.openSessionsWorkspace();
+        } else if (lastActiveWorkspace != null && !(lastActiveWorkspace instanceof MapEditorWorkspaceView)) {
             this.openWorkspaceView(lastActiveWorkspace);
         } else {
             this.applyDefaultWorkspace();
@@ -553,6 +606,7 @@ public class SessionScreen extends Screen {
         
         this.workspaceView = null;
         lastActiveWorkspace = null;
+        this.cardsScroll = 0.0;
         this.statusMessage = "";
         this.syncExpandedSectionsForWorkspace();
         this.rebuildWorkspaceChildren();
@@ -610,7 +664,7 @@ public class SessionScreen extends Screen {
     }
 
     private void applyDefaultWorkspace() {
-        if (SessionSnapshotData.mapEditor()) {
+        if (SessionSnapshotData.mapEditor() || this.mapEditorState.editorActive) {
             if (!this.defaultWorkspaceApplied && this.workspaceView == null) {
                 this.openMapEditorWorkspace();
                 this.defaultWorkspaceApplied = true;
@@ -676,6 +730,7 @@ public class SessionScreen extends Screen {
         if (this.workspaceView == null) {
             this.searchField = new TextFieldWidget(this.textRenderer, layout.search().x(), layout.search().y(), layout.search().width(), layout.search().height(), Text.literal("Search gamemodes"));
             this.searchField.setMaxLength(64);
+            this.searchField.setChangedListener(text -> this.cardsScroll = 0.0);
             this.addDrawableChild(this.searchField);
         } else {
             this.searchField = null;
@@ -775,7 +830,7 @@ public class SessionScreen extends Screen {
         if (this.workspaceView == null && !this.statusMessage.isEmpty()) {
             context.drawText(this.textRenderer, Text.literal(this.statusMessage), layout.cards().x(), layout.cards().y() + layout.cards().height() + 10, UiTheme.SUCCESS, false);
         }
-        if (this.workspaceView != null && this.resetButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
+        if (this.shouldShowResetButton() && this.resetButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
             context.drawTooltip(this.textRenderer, Text.literal("Reset current workspace to default settings"), mouseX, mouseY);
         }
     }
@@ -1177,7 +1232,7 @@ public class SessionScreen extends Screen {
         if (button == 0 && this.handleWorkspaceNavigationClick(layout.sidebar(), layout.sidebarSearch(), mouseX, mouseY)) {
             return true;
         }
-        if (button == 0 && this.workspaceView != null && this.resetButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
+        if (button == 0 && this.shouldShowResetButton() && this.resetButtonBounds(layout.toolbar()).contains(mouseX, mouseY)) {
             this.resetCurrentWorkspace();
             return true;
         }
@@ -1193,9 +1248,40 @@ public class SessionScreen extends Screen {
         }
         List<MinigameEntry> entries = this.filteredEntries();
         int columns = this.cardColumns(layout.cards().width());
+        if (button == 0 && this.cardsMaxScroll > 0.0) {
+            UiLayout.Rect cards = layout.cards();
+            int barW = 4;
+            int barX = cards.x() + cards.width() - barW - 2;
+            int trackTop = cards.y();
+            int trackHeight = cards.height();
+            int thumbH = Math.max(24, (int) Math.round((double) trackHeight * trackHeight / (trackHeight + this.cardsMaxScroll)));
+            int scrollable = trackHeight - thumbH;
+            double fraction = this.cardsMaxScroll > 0 ? this.cardsScroll / this.cardsMaxScroll : 0.0;
+            int thumbY = trackTop + (int) Math.round(fraction * scrollable);
+
+            if (mouseX >= barX - 3 && mouseX <= barX + barW + 3 && mouseY >= trackTop && mouseY <= trackTop + trackHeight) {
+                if (mouseY >= thumbY && mouseY <= thumbY + thumbH) {
+                    this.draggingCardsScrollbar = true;
+                    this.cardsDragClickOffsetY = mouseY - thumbY;
+                } else if (scrollable > 0) {
+                    double targetThumbY = mouseY - thumbH / 2.0;
+                    double newFraction = (targetThumbY - trackTop) / (double) scrollable;
+                    this.cardsScroll = Math.max(0.0, Math.min(newFraction * this.cardsMaxScroll, this.cardsMaxScroll));
+                    this.draggingCardsScrollbar = true;
+                    this.cardsDragClickOffsetY = thumbH / 2.0;
+                }
+                return true;
+            }
+        }
+
         for (int i = 0; i < entries.size(); i++) {
             UiLayout.Rect card = UiLayout.grid(layout.cards(), i, columns, CARD_HEIGHT, CARD_GAP);
-            if (button == 0 && card.contains(mouseX, mouseY)) {
+            int cardY = card.y() - (int) this.cardsScroll;
+            if (cardY + card.height() < layout.cards().y() || cardY > layout.cards().y() + layout.cards().height()) {
+                continue;
+            }
+            UiLayout.Rect visibleCard = new UiLayout.Rect(card.x(), cardY, card.width(), card.height());
+            if (button == 0 && visibleCard.contains(mouseX, mouseY) && layout.cards().contains(mouseX, mouseY)) {
                 MinigameEntry entry = entries.get(i);
                 if (entry.enabled()) {
                     entry.activate(this);
@@ -1274,6 +1360,15 @@ public class SessionScreen extends Screen {
             this.sidebarScroll = Math.max(0.0, Math.min(this.sidebarScroll - verticalAmount * 18.0, this.sidebarMaxScroll));
             return true;
         }
+        if (this.workspaceView == null) {
+            UiLayout.Rect cards = layout.cards();
+            if (mouseX >= cards.x() && mouseX <= cards.x() + cards.width()
+                && mouseY >= cards.y() && mouseY <= cards.y() + cards.height()
+                && this.cardsMaxScroll > 0.0) {
+                this.cardsScroll = Math.max(0.0, Math.min(this.cardsScroll - verticalAmount * 24.0, this.cardsMaxScroll));
+                return true;
+            }
+        }
         if (this.workspaceView != null && this.workspaceView.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) {
             return true;
         }
@@ -1294,6 +1389,20 @@ public class SessionScreen extends Screen {
             rightDockTargetWidth = Math.max(dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout.MIN_DOCK_WIDTH, Math.min(dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout.MAX_DOCK_WIDTH, newW));
             rightDockAnimation.set(1.0F);
             rightDockCollapsed = false;
+            return true;
+        }
+        if (button == 0 && this.workspaceView == null && this.draggingCardsScrollbar && this.cardsMaxScroll > 0.0) {
+            Layout layout = this.createLayout();
+            UiLayout.Rect cards = layout.cards();
+            int trackTop = cards.y();
+            int trackHeight = cards.height();
+            int thumbH = Math.max(24, (int) Math.round((double) trackHeight * trackHeight / (trackHeight + this.cardsMaxScroll)));
+            int scrollable = trackHeight - thumbH;
+            if (scrollable > 0) {
+                double targetThumbY = mouseY - this.cardsDragClickOffsetY;
+                double fraction = (targetThumbY - trackTop) / (double) scrollable;
+                this.cardsScroll = Math.max(0.0, Math.min(fraction * this.cardsMaxScroll, this.cardsMaxScroll));
+            }
             return true;
         }
         if (button == 0 && this.draggingSidebarScrollbar && this.sidebarMaxScroll > 0.0) {
@@ -1331,6 +1440,10 @@ public class SessionScreen extends Screen {
         }
         if (button == 0 && this.draggingSidebarScrollbar) {
             this.draggingSidebarScrollbar = false;
+            return true;
+        }
+        if (button == 0 && this.draggingCardsScrollbar) {
+            this.draggingCardsScrollbar = false;
             return true;
         }
         if (this.workspaceView != null && this.workspaceView.mouseReleased(mouseX, mouseY, button)) {
@@ -1540,7 +1653,7 @@ public class SessionScreen extends Screen {
     }
 
     private void renderToolbarClose(DrawContext context, UiLayout.Rect toolbar, int mouseX, int mouseY) {
-        if (this.workspaceView != null) {
+        if (this.shouldShowResetButton()) {
             UiLayout.Rect resetBounds = this.resetButtonBounds(toolbar);
             boolean resetHovered = resetBounds.contains(mouseX, mouseY);
             int resetFill = resetHovered ? 0x33EF4444 : UiTheme.PANEL;
@@ -1676,10 +1789,21 @@ public class SessionScreen extends Screen {
     private void drawGamemodeCards(DrawContext context, UiLayout.Rect cards, int mouseX, int mouseY) {
         List<MinigameEntry> entries = this.filteredEntries();
         int columns = this.cardColumns(cards.width());
+        int rowCount = columns > 0 ? (entries.size() + columns - 1) / columns : 0;
+        int totalContentHeight = rowCount > 0 ? (rowCount * CARD_HEIGHT + (rowCount - 1) * CARD_GAP) : 0;
+        this.cardsMaxScroll = Math.max(0.0, totalContentHeight - cards.height());
+        this.cardsScroll = Math.max(0.0, Math.min(this.cardsScroll, this.cardsMaxScroll));
+
+        context.enableScissor(cards.x(), cards.y(), cards.x() + cards.width(), cards.y() + cards.height());
         for (int i = 0; i < entries.size(); i++) {
             MinigameEntry entry = entries.get(i);
-            UiLayout.Rect card = UiLayout.grid(cards, i, columns, CARD_HEIGHT, CARD_GAP);
-            boolean hovered = card.contains(mouseX, mouseY);
+            UiLayout.Rect rawCard = UiLayout.grid(cards, i, columns, CARD_HEIGHT, CARD_GAP);
+            int cardY = rawCard.y() - (int) this.cardsScroll;
+            if (cardY + rawCard.height() < cards.y() || cardY > cards.y() + cards.height()) {
+                continue;
+            }
+            UiLayout.Rect card = new UiLayout.Rect(rawCard.x(), cardY, rawCard.width(), rawCard.height());
+            boolean hovered = card.contains(mouseX, mouseY) && cards.contains(mouseX, mouseY);
             UiAnimation.Value hover = this.cardHover.computeIfAbsent(entry.id(), ignored -> new UiAnimation.Value(hovered ? 1.0F : 0.0F));
             hover.animateTo(hovered ? 1.0F : 0.0F, UiTheme.HOVER_MS, UiAnimation::easeOutCubic);
             int accent = entry.enabled() ? this.accentFor(entry.id(), i) : UiTheme.BORDER;
@@ -1710,6 +1834,42 @@ public class SessionScreen extends Screen {
                 context.drawText(this.textRenderer, Text.literal("Unavailable"), card.x() + card.width() - 78, card.y() + 10, UiTheme.TEXT_DIM, false);
             }
         }
+
+        if (this.cardsMaxScroll > 0.0) {
+            int barW = 4;
+            int barX = cards.x() + cards.width() - barW - 2;
+            int trackTop = cards.y();
+            int trackHeight = cards.height();
+            int thumbH = Math.max(24, (int) Math.round((double) trackHeight * trackHeight / (trackHeight + this.cardsMaxScroll)));
+            int scrollable = trackHeight - thumbH;
+            double fraction = this.cardsMaxScroll > 0 ? this.cardsScroll / this.cardsMaxScroll : 0.0;
+            int thumbY = trackTop + (int) Math.round(fraction * scrollable);
+
+            boolean isThumbHovered = mouseX >= barX - 2 && mouseX <= barX + barW + 2 && mouseY >= thumbY && mouseY <= thumbY + thumbH;
+            boolean isHovered = mouseX >= barX - 2 && mouseX <= barX + barW + 2 && mouseY >= trackTop && mouseY <= trackTop + trackHeight;
+
+            context.fill(barX, trackTop, barX + barW, trackTop + trackHeight, 0x22FFFFFF);
+
+            int thumbColor;
+            int drawX = barX;
+            int drawW = barW;
+            if (this.draggingCardsScrollbar) {
+                thumbColor = UiTheme.ACCENT;
+                drawX = barX - 1;
+                drawW = barW + 2;
+            } else if (isThumbHovered) {
+                thumbColor = 0xDDFFC857;
+                drawX = barX - 1;
+                drawW = barW + 2;
+            } else if (isHovered) {
+                thumbColor = 0xBBFFC857;
+            } else {
+                thumbColor = 0x758DA4B7;
+            }
+            context.fill(drawX, thumbY, drawX + drawW, thumbY + thumbH, thumbColor);
+        }
+
+        context.disableScissor();
     }
 
     private RailSpan activeModuleRail(SidebarSection section, List<SidebarRow> rows, int startY) {
@@ -2006,14 +2166,27 @@ public class SessionScreen extends Screen {
     private void openMapEditorWorkspace() {
         // Restore the last-viewed screen if user had one selected
         if (this.mapEditorState.selectedGameId != null && !this.mapEditorState.selectedGameId.isBlank()) {
-            if (this.mapEditorState.selectedDefinitionKey != null && !this.mapEditorState.selectedDefinitionKey.isBlank()) {
-                this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId, this.mapEditorState.selectedDefinitionKey));
-            } else {
-                this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId));
+            boolean validGame = SessionSnapshotData.editorExtensions().stream()
+                .anyMatch(ext -> ext.gameId().equalsIgnoreCase(this.mapEditorState.selectedGameId));
+            if (validGame) {
+                if (this.mapEditorState.selectedDefinitionKey != null && !this.mapEditorState.selectedDefinitionKey.isBlank()) {
+                    this.openWorkspaceView(MapEditorWorkspaceView.forMarker(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId, this.mapEditorState.selectedDefinitionKey));
+                } else {
+                    this.openWorkspaceView(MapEditorWorkspaceView.forGamemode(this.mapEditorState, this::requestSnapshot, this.mapEditorState.selectedGameId));
+                }
+                return;
             }
-        } else {
-            this.openWorkspaceView(new MapEditorWorkspaceView(this.mapEditorState, this::requestSnapshot));
         }
+        this.openWorkspaceView(MapEditorWorkspaceView.forGeneral(this.mapEditorState, this::requestSnapshot));
+    }
+
+    private boolean shouldShowResetButton() {
+        return this.workspaceView != null
+            && !(this.workspaceView instanceof MapEditorWorkspaceView)
+            && !(this.workspaceView instanceof dev.frost.miniverse.client.gui.map.MapDetailsWorkspaceView)
+            && !(this.workspaceView instanceof dev.frost.miniverse.client.gui.map.MapManagementWorkspaceView)
+            && !SessionSnapshotData.mapEditor()
+            && !this.mapEditorState.editorActive;
     }
 
     private boolean isAdminMode(AdminWorkspaceView.Mode mode) {
@@ -2082,6 +2255,14 @@ public class SessionScreen extends Screen {
 
     private void openMicroFrenzy() {
         this.openCachedWorkspace("microfrenzy", dev.frost.miniverse.client.gui.workspace.MicroFrenzyWorkspaceView::new);
+    }
+
+    private void openSkywars() {
+        this.openCachedWorkspace("skywars", dev.frost.miniverse.client.gui.workspace.SkywarsWorkspaceView::new);
+    }
+
+    private void openCtf() {
+        this.openCachedWorkspace("ctf", dev.frost.miniverse.client.gui.workspace.CaptureTheFlagWorkspaceView::new);
     }
 
     public void openGenericSetup(MinigameEntry entry) {

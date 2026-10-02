@@ -60,6 +60,22 @@ public final class MapEditorNetwork {
             addSpatialBulkMarker(server, player, mapId, extension.get(), action);
             return;
         }
+        if (type.equals("scan_chests")) {
+            MapEditorUndoManager.push(mapId, extension.get().gameId());
+            double midRadius = action.contains("midRadius", NbtElement.DOUBLE_TYPE)
+                ? action.getDouble("midRadius")
+                : dev.frost.miniverse.map.chest.MapChestScanner.DEFAULT_MID_RADIUS;
+            int searchRadius = action.contains("searchRadius", NbtElement.INT_TYPE)
+                ? action.getInt("searchRadius")
+                : dev.frost.miniverse.map.chest.MapChestScanner.DEFAULT_SEARCH_RADIUS;
+            scanChestsDirect(server, player, mapId, extension.get(), midRadius, searchRadius);
+            return;
+        }
+        if (type.equals("reclassify_marker")) {
+            MapEditorUndoManager.push(mapId, extension.get().gameId());
+            reclassifyMarker(server, player, mapId, extension.get(), action);
+            return;
+        }
         
         Optional<MarkerDefinition> definition = extension.get().marker(definitionKey);
         if (definition.isEmpty()) {
@@ -359,6 +375,120 @@ public final class MapEditorNetwork {
             }
         }
         player.sendMessage(Text.literal("Marker not found.").formatted(Formatting.RED), false);
+    }
+
+    private static void reclassifyMarker(MinecraftServer server, ServerPlayerEntity player, String mapId, MapEditorExtension extension, NbtCompound action) {
+        String markerId = string(action, "markerId", "");
+        String sourceDefKey = string(action, "definitionKey", "");
+        String targetDefKey = string(action, "targetDefinitionKey", "");
+
+        Optional<MarkerDefinition> srcDef = extension.marker(sourceDefKey);
+        Optional<MarkerDefinition> tgtDef = extension.marker(targetDefKey);
+
+        if (srcDef.isEmpty() || tgtDef.isEmpty() || markerId.isBlank()) {
+            player.sendMessage(Text.literal("Invalid marker reclassification request.").formatted(Formatting.RED), false);
+            return;
+        }
+
+        List<MapMarker> srcMarkers = new ArrayList<>(MapEditorMarkerStore.load(mapId, extension, srcDef.get()));
+        MapMarker found = null;
+        for (int i = 0; i < srcMarkers.size(); i++) {
+            if (srcMarkers.get(i).id().equals(markerId)) {
+                found = srcMarkers.remove(i);
+                break;
+            }
+        }
+
+        if (found == null) {
+            player.sendMessage(Text.literal("Marker not found in " + srcDef.get().displayName()).formatted(Formatting.RED), false);
+            return;
+        }
+
+        List<MapMarker> tgtMarkers = new ArrayList<>(MapEditorMarkerStore.load(mapId, extension, tgtDef.get()));
+        String newName = tgtDef.get().displayName() + " #" + (tgtMarkers.size() + 1);
+        MapMarker moved = new MapMarker(
+            found.id(),
+            tgtDef.get().key(),
+            newName,
+            tgtDef.get().type(),
+            found.points(),
+            found.regions(),
+            found.properties()
+        );
+        tgtMarkers.add(moved);
+
+        try {
+            MapEditorMarkerStore.save(mapId, extension, java.util.Map.of(srcDef.get(), srcMarkers, tgtDef.get(), tgtMarkers));
+            dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
+            player.sendMessage(Text.literal("Switched " + found.name() + " -> " + tgtDef.get().displayName()).formatted(Formatting.GREEN), false);
+            player.playSoundToPlayer(net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_CHIME.value(), net.minecraft.sound.SoundCategory.PLAYERS, 1.0F, 1.6F);
+        } catch (IOException e) {
+            player.sendMessage(Text.literal("Failed to reclassify marker: " + e.getMessage()).formatted(Formatting.RED), false);
+        }
+    }
+
+    private static void scanChestsDirect(MinecraftServer server, ServerPlayerEntity player, String mapId, MapEditorExtension extension, double midRadius, int searchRadius) {
+        Optional<MarkerDefinition> islandDef = extension.marker("island_chests");
+        Optional<MarkerDefinition> midDef = extension.marker("mid_chests");
+        Optional<MarkerDefinition> genericDef = extension.marker("chests");
+
+        if (islandDef.isEmpty() && midDef.isEmpty() && genericDef.isEmpty()) {
+            player.sendMessage(Text.literal("Gamemode '" + extension.gameId() + "' does not define chest markers.").formatted(Formatting.RED), false);
+            return;
+        }
+
+        List<MapPosition> spawnPositions = new ArrayList<>();
+        Optional<MarkerDefinition> spawnDef = extension.marker("spawns");
+        if (spawnDef.isPresent()) {
+            List<MapMarker> spawns = MapEditorMarkerStore.load(mapId, extension, spawnDef.get());
+            for (MapMarker spawn : spawns) {
+                if (!spawn.points().isEmpty()) {
+                    spawnPositions.add(spawn.points().getFirst());
+                }
+            }
+        }
+
+        player.sendMessage(Text.literal("Scanning chunks for containers around " + player.getBlockPos().toShortString() + "...").formatted(Formatting.YELLOW), false);
+
+        dev.frost.miniverse.map.chest.MapChestScanner.ScanResult result = dev.frost.miniverse.map.chest.MapChestScanner.scan(
+            player.getServerWorld(),
+            player.getBlockPos(),
+            searchRadius,
+            midRadius,
+            dev.frost.miniverse.map.chest.MapChestScanner.DEFAULT_ISLAND_RADIUS,
+            spawnPositions
+        );
+
+        if (result.totalFound() == 0) {
+            player.sendMessage(Text.literal("No chests, trapped chests, or barrels found within " + searchRadius + " blocks.").formatted(Formatting.GOLD), false);
+            return;
+        }
+
+        try {
+            if (islandDef.isPresent() && midDef.isPresent()) {
+                List<MapMarker> islandMarkers = dev.frost.miniverse.map.chest.MapChestScanner.toMarkers(islandDef.get(), result.islandChests());
+                List<MapMarker> midMarkers = dev.frost.miniverse.map.chest.MapChestScanner.toMarkers(midDef.get(), result.midChests());
+
+                MapEditorMarkerStore.save(mapId, extension, java.util.Map.of(islandDef.get(), islandMarkers, midDef.get(), midMarkers));
+
+                dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
+                player.sendMessage(Text.literal("Chest scan complete! Marked " + result.totalFound() + " containers: " 
+                    + islandMarkers.size() + " Island Chests, " + midMarkers.size() + " Mid Chests.").formatted(Formatting.GREEN), false);
+                player.playSoundToPlayer(net.minecraft.sound.SoundEvents.ENTITY_PLAYER_LEVELUP, net.minecraft.sound.SoundCategory.PLAYERS, 0.8F, 1.2F);
+            } else if (genericDef.isPresent()) {
+                List<net.minecraft.util.math.BlockPos> allPositions = new ArrayList<>(result.islandChests());
+                allPositions.addAll(result.midChests());
+                List<MapMarker> allMarkers = dev.frost.miniverse.map.chest.MapChestScanner.toMarkers(genericDef.get(), allPositions);
+
+                MapEditorMarkerStore.save(mapId, extension, genericDef.get(), allMarkers);
+
+                dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
+                player.sendMessage(Text.literal("Chest scan complete! Marked " + allMarkers.size() + " chests.").formatted(Formatting.GREEN), false);
+                player.playSoundToPlayer(net.minecraft.sound.SoundEvents.ENTITY_PLAYER_LEVELUP, net.minecraft.sound.SoundCategory.PLAYERS, 0.8F, 1.2F);
+            }
+        } catch (IOException e) {
+            player.sendMessage(Text.literal("Failed to save scanned chest markers: " + e.getMessage()).formatted(Formatting.RED), false);
+        }
     }
 
     public static String currentMapId() {

@@ -45,6 +45,9 @@ public final class BedwarsShopManager {
         for (MapPosition loc : locations) {
             VillagerEntity npc = new VillagerEntity(EntityType.VILLAGER, world);
             npc.setPosition(loc.x(), loc.y(), loc.z());
+            npc.setYaw(loc.yaw());
+            npc.setHeadYaw(loc.yaw());
+            npc.setBodyYaw(loc.yaw());
             npc.setCustomName(Text.literal("Item Shop"));
             npc.setCustomNameVisible(true);
             npc.setAiDisabled(true);

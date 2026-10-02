@@ -64,6 +64,21 @@ public class LeftToolPalette extends SidebarWidget {
 
         this.addWidget(ButtonWidget.builder(Text.literal("Paste Preview"), b -> selectTool("PASTE"))
                 .dimensions(this.getX() + padding, this.getY() + currentY, btnWidth, btnHeight).build());
+        currentY += btnHeight + 5;
+
+        this.addWidget(ButtonWidget.builder(Text.literal("⚡ Scan Map Chests"), b -> scanChests())
+                .dimensions(this.getX() + padding, this.getY() + currentY, btnWidth, btnHeight).build());
+    }
+
+    private void scanChests() {
+        String gameId = MapEditorState.INSTANCE.selectedGameId;
+        if (gameId == null || gameId.isBlank()) {
+            gameId = "skywars";
+        }
+        net.minecraft.nbt.NbtCompound action = new net.minecraft.nbt.NbtCompound();
+        action.putString("action", "scan_chests");
+        action.putString("gameId", gameId);
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new dev.frost.miniverse.common.NetworkConstants.MapEditorActionPayload(action));
     }
 
     private void selectTool(String tool) {

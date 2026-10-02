@@ -341,7 +341,10 @@ public final class MapEditorPlacementController {
             }
 
             // POINT PLACEMENT
-            MapPosition position = new MapPosition(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, player.getYaw(), 0.0F);
+            boolean isNpc = (this.definition.key() != null && this.definition.key().toLowerCase().contains("npc"))
+                || (this.definition.displayName() != null && this.definition.displayName().toLowerCase().contains("npc"));
+            float markerYaw = isNpc ? net.minecraft.util.math.MathHelper.wrapDegrees(player.getYaw() + 180.0F) : player.getYaw();
+            MapPosition position = new MapPosition(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, markerYaw, 0.0F);
 
             if (this.definition.type() == MarkerType.MULTI_POINT) {
                 this.pushPointHistory();

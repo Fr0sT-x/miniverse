@@ -24,6 +24,7 @@ public class MapEditorState {
     public record ClipboardMarkerData(SelectedMarkerData data, double relX, double relY, double relZ, int copyYawSteps) {}
     
     public final java.util.List<SelectedMarkerData> selectedMarkers = new java.util.ArrayList<>();
+    public SelectedMarkerData hoveredMarker = null;
     public final java.util.List<ClipboardMarkerData> clipboard = new java.util.ArrayList<>();
     public final java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint> placementPoints = new java.util.ArrayList<>();
 

@@ -528,6 +528,8 @@ public final class MapEditorOverlayClient {
 
             if (!hovered.isEmpty()) {
                 hovered.sort(java.util.Comparator.comparingDouble(h -> h.worldDist));
+                HoveredMarker top = hovered.get(0);
+                MapEditorState.INSTANCE.hoveredMarker = new MapEditorState.SelectedMarkerData(top.marker, top.ext.gameId(), top.def.key());
 
                 int boxX = cx + 15;
                 int boxY = cy + 15;
@@ -559,8 +561,14 @@ public final class MapEditorOverlayClient {
                     renderedLines.add(coordLine); lineColors.add(0xFF777777);
                     renderedLines.add(""); lineColors.add(0);
                 }
+
+                if (top.def.key().equals("island_chests")) {
+                    renderedLines.add("⚡ [R] Switch to Mid Chest"); lineColors.add(0xFFFFAA00);
+                } else if (top.def.key().equals("mid_chests")) {
+                    renderedLines.add("⚡ [R] Switch to Island Chest"); lineColors.add(0xFF55FF55);
+                }
                 
-                if (!renderedLines.isEmpty()) {
+                if (!renderedLines.isEmpty() && renderedLines.get(renderedLines.size() - 1).isEmpty()) {
                     renderedLines.remove(renderedLines.size() - 1);
                     lineColors.remove(lineColors.size() - 1);
                 }
@@ -589,6 +597,8 @@ public final class MapEditorOverlayClient {
                     }
                     textY += lineHeight;
                 }
+            } else {
+                MapEditorState.INSTANCE.hoveredMarker = null;
             }
         });
     }

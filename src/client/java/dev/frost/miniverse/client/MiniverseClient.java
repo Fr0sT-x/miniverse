@@ -139,6 +139,26 @@ public class MiniverseClient implements ClientModInitializer {
 				}
 			}
 			while (RELOAD_WEAPON_KEY.wasPressed()) {
+				if (dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.editorActive 
+					&& dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.hoveredMarker != null) {
+					dev.frost.miniverse.client.gui.map.MapEditorState.SelectedMarkerData h = dev.frost.miniverse.client.gui.map.MapEditorState.INSTANCE.hoveredMarker;
+					String targetKey = null;
+					if ("island_chests".equals(h.definitionKey())) {
+						targetKey = "mid_chests";
+					} else if ("mid_chests".equals(h.definitionKey())) {
+						targetKey = "island_chests";
+					}
+					if (targetKey != null) {
+						net.minecraft.nbt.NbtCompound action = new net.minecraft.nbt.NbtCompound();
+						action.putString("action", "reclassify_marker");
+						action.putString("gameId", h.gameId());
+						action.putString("definitionKey", h.definitionKey());
+						action.putString("targetDefinitionKey", targetKey);
+						action.putString("markerId", h.marker().id());
+						net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(action));
+						continue;
+					}
+				}
 				if (client.player != null && client.getNetworkHandler() != null) {
 					net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new NetworkConstants.ZombiesReloadPayload());
 				}

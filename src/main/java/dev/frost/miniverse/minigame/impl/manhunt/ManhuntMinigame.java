@@ -56,6 +56,7 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
@@ -307,14 +308,11 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
 
         ServerPlayerEntity target = this.cycleHunterTrackingTarget(player);
         if (target == null) {
-            player.sendMessage(Text.literal("No speedrunners are alive to track."), true);
+            player.sendMessage(Text.literal("No speedrunners are alive to track.").formatted(Formatting.GRAY), true);
             return ActionResult.SUCCESS;
         }
 
-        player.sendMessage(
-            Text.literal("Tracking now: " + target.getName().getString() + " (right-click again to switch)"),
-            true
-        );
+        this.sendHunterTrackingFeedback(player, target);
         return ActionResult.SUCCESS;
     }
 
@@ -391,40 +389,63 @@ public class ManhuntMinigame extends dev.frost.miniverse.minigame.core.AbstractM
     @Nullable
     public ServerPlayerEntity cycleHunterTrackingTarget(ServerPlayerEntity hunter) {
         if (!this.settings.huntersCompassEnabled()) {
-            hunter.sendMessage(Text.literal("Hunter compasses are disabled for this match."), true);
+            hunter.sendMessage(Text.literal("Hunter compasses are disabled for this match.").formatted(Formatting.GRAY), true);
             return null;
-        }
-
-        long cooldownUntil = this.compassCooldownUntilTicks.getOrDefault(hunter.getUuid(), 0L);
-        if (cooldownUntil > this.gameTicks) {
-            long seconds = Math.max(1L, (cooldownUntil - this.gameTicks + 19L) / 20L);
-            hunter.sendMessage(Text.literal("Compass cooldown: " + seconds + "s").formatted(Formatting.YELLOW), true);
-            return this.getTrackedSpeedrunner(hunter);
         }
 
         if (this.aliveSpeedrunners.isEmpty()) {
             return null;
         }
 
-        if (this.settings.compassCooldownSeconds() > 0) {
-            this.compassCooldownUntilTicks.put(hunter.getUuid(), this.gameTicks + (long) this.settings.compassCooldownSeconds() * 20L);
-        }
-        int initialIndex = this.hunterTrackingIndexes.getOrDefault(hunter.getUuid(), -1);
-        int nextIndex = initialIndex;
-        ServerPlayerEntity target = null;
-        for (int i = 0; i < this.aliveSpeedrunners.size(); i++) {
-            nextIndex = Math.floorMod(nextIndex + 1, this.aliveSpeedrunners.size());
-            target = this.getPlayerByUuid(this.aliveSpeedrunners.get(nextIndex));
+        if (this.aliveSpeedrunners.size() > 1) {
+            long cooldownUntil = this.compassCooldownUntilTicks.getOrDefault(hunter.getUuid(), 0L);
+            if (cooldownUntil > this.gameTicks) {
+                return this.getTrackedSpeedrunner(hunter);
+            }
+
+            if (this.settings.compassCooldownSeconds() > 0) {
+                this.compassCooldownUntilTicks.put(hunter.getUuid(), this.gameTicks + (long) this.settings.compassCooldownSeconds() * 20L);
+            }
+            int initialIndex = this.hunterTrackingIndexes.getOrDefault(hunter.getUuid(), -1);
+            int nextIndex = initialIndex;
+            ServerPlayerEntity target = null;
+            for (int i = 0; i < this.aliveSpeedrunners.size(); i++) {
+                nextIndex = Math.floorMod(nextIndex + 1, this.aliveSpeedrunners.size());
+                target = this.getPlayerByUuid(this.aliveSpeedrunners.get(nextIndex));
+                if (target != null && !target.isDisconnected()) {
+                    break;
+                }
+            }
             if (target != null && !target.isDisconnected()) {
-                break;
+                this.hunterTrackingIndexes.put(hunter.getUuid(), nextIndex);
+                this.syncHunterTracking(hunter, false);
+                return target;
             }
         }
-        if (target == null || target.isDisconnected()) {
-            return null;
+
+        ServerPlayerEntity target = this.getTrackedSpeedrunner(hunter);
+        if (target != null) {
+            this.syncHunterTracking(hunter, false);
         }
-        this.hunterTrackingIndexes.put(hunter.getUuid(), nextIndex);
-        this.syncHunterTracking(hunter, true);
         return target;
+    }
+
+    private void sendHunterTrackingFeedback(ServerPlayerEntity hunter, ServerPlayerEntity target) {
+        net.minecraft.text.MutableText feedback = Text.literal("✦ Tracking: ").formatted(Formatting.GOLD)
+            .append(Text.literal(target.getName().getString()).formatted(Formatting.YELLOW));
+
+        if (this.aliveSpeedrunners.size() > 1) {
+            long cooldownUntil = this.compassCooldownUntilTicks.getOrDefault(hunter.getUuid(), 0L);
+            if (cooldownUntil > this.gameTicks) {
+                long seconds = Math.max(1L, (cooldownUntil - this.gameTicks + 19L) / 20L);
+                feedback.append(Text.literal(" [Switch: " + seconds + "s]").formatted(Formatting.GRAY));
+            } else {
+                feedback.append(Text.literal(" [Right-click to switch]").formatted(Formatting.GRAY));
+            }
+        }
+
+        hunter.sendMessage(feedback, true);
+        hunter.playSound(SoundEvents.UI_BUTTON_CLICK.value(), 0.6F, 1.4F);
     }
 
     @Nullable

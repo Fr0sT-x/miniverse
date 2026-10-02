@@ -644,9 +644,24 @@ public final class SessionRegistry {
             if (!assignmentElement.isJsonObject()) {
                 continue;
             }
-            String displayName = SessionConfigJson.string(assignmentElement.getAsJsonObject(), "displayName", "");
-            if (!displayName.isBlank()) {
-                players.add(displayName);
+            JsonObject team = assignmentElement.getAsJsonObject();
+            boolean addedMember = false;
+            if (team.has("members") && team.get("members").isJsonArray()) {
+                for (var memberElem : team.getAsJsonArray("members")) {
+                    if (memberElem.isJsonObject()) {
+                        String name = SessionConfigJson.string(memberElem.getAsJsonObject(), "name", "");
+                        if (!name.isBlank()) {
+                            players.add(name);
+                            addedMember = true;
+                        }
+                    }
+                }
+            }
+            if (!addedMember) {
+                String displayName = SessionConfigJson.string(team, "displayName", "");
+                if (!displayName.isBlank()) {
+                    players.add(displayName);
+                }
             }
         }
 

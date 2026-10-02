@@ -50,7 +50,7 @@
 > - **Where Leaf Decay is OFF**:
 >   1. **Map Editor sessions** (`SessionMode.MAP_EDITOR`).
 >   2. **Inspection sessions** (`SessionMode.INSPECTION_SESSION`).
->   3. **All 9 Map-based Gamemodes**: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper, Micro-Frenzy (identified via `MapWorldRules.isLeafDecayDisabled(world)`).
+>   3. **All Map-based Gamemodes**: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper, Micro-Frenzy, Skywars, Capture the Flag (identified via `MapWorldRules.isLeafDecayDisabled(world)`).
 > - **How it works**:
 >   - `LeavesBlockMixin` intercepts `LeavesBlock.randomTick` at `HEAD` and cancels decay whenever `MapWorldRules.isLeafDecayDisabled(world)` is true.
 >   - Leaves placed during map construction (oak, birch, spruce, jungle, acacia, dark oak, mangrove, cherry, azalea) will **never** decay, despawn, or drop saplings/apples.
@@ -552,6 +552,41 @@ any code. Add the gamemode column to the matrix above.
 - **Speed-Up Escalation**: Every 5 rounds, tempo accelerates (+pitch, faster countdowns, Speed I/II effects).
 - **Survival & Points Modes**: Configurable lives (default 3) elimination or fixed round point rush.
 - **Dynamic Fallback**: Operates on any map with simple bounds and spawns, activating color/high-ground rules dynamically if markers exist.
+
+**Known issues / debt:**
+- None.
+
+**Migration target:** None currently.
+
+---
+
+### Capture the Flag (CTF)
+
+**Main class:** `CaptureTheFlagMinigame`
+**Status:** Production-ready · **Compliance:** 82%
+**Last reviewed:** 2026-10-02
+
+**Gamerules:** `keepInventory=false`, `doImmediateRespawn=false` (timed respawn delay)
+
+**Frameworks actively used:**
+- F01 Session, F02 Match Lifecycle, F03 Freeze, F04 Spectator
+- F05 Death Lifecycle ✅ (`CtfDeathLifecycleConfig`, `CtfRespawnStrategy`, `CtfConditionalSpectatorPolicy`)
+- F06 Persistence (`PersistentMinigame`)
+- F08 Team (`TeamManager` + `VanillaTeamAdapter`, dynamic 2–8 teams supported)
+- F09 Map Protection (`ArenaTracker`, leaf decay disabled, protected base structures)
+- F11 Map Editor (`MapEditorExtension` with teamConfigs, teamSpawns, teamFlags, teamDropoffs, shopNpcs, powerupLocations, voidLevel)
+- F12 Scoreboard (`ScoreboardTemplate` dynamic live flag HUD, status, coins/gems)
+- F20 Player Snapshot (full session roster)
+- F23 Inventory Layout (`InventoryLayoutAware`)
+- F24 Shop Framework (`CtfShopManager` with multi-category `ShopGui`, permanent armor/weapon/enchantment upgrades, consumable blocks/combat/utility)
+
+**Key Mechanics & Modules:**
+- **Dynamic 2–8 Teams**: Flexible team scaling configured per-map through the Map Editor.
+- **Dual Mode System**: Toggleable between **Elimination Mode** (capturing a team's flag permanently destroys their respawns; eliminate remaining players) and **Standard Mode** (race to target captures).
+- **Banner Flag Carrier**: Real team banner worn on carrier's helmet slot (`EquipmentSlot.HEAD`), glowing aura effect, dropped banner with ticking hologram return timer (`[15s]`), instant friendly recovery, and base return tension ("friendly flag must be at base to capture").
+- **CTF Economy & Shop**: Double currency (Coins & Gems) earned from kills (+bounties +33% wallet theft), flag grabs (+20c/+8g), and captures (+80c/+30g). Interactive NPC shop providing tiered armor/weapons, utility, bridge eggs, and consumable buffs.
+- **Powerup Stations**: Periodic spawning of Speed, Strength, Absorption, Instant Heal, Jump Boost, Coins, Gems, and Bridge Eggs at designated map markers.
+- **Client Workspace**: Integrated `CaptureTheFlagWorkspaceView` featuring `DynamicTeamSelectionGrid`, map selector, and customizable game rule toggles.
 
 **Known issues / debt:**
 - None.

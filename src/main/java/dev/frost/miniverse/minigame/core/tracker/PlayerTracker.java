@@ -12,6 +12,7 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -111,7 +112,10 @@ public class PlayerTracker {
                 continue;
             }
             if (tracker != null) {
-                stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
+                LodestoneTrackerComponent existing = stack.get(DataComponentTypes.LODESTONE_TRACKER);
+                if (!Objects.equals(existing, tracker)) {
+                    stack.set(DataComponentTypes.LODESTONE_TRACKER, tracker);
+                }
             }
         }
         

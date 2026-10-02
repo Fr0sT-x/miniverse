@@ -147,6 +147,8 @@ public class MapDetailsWorkspaceView implements WorkspaceView {
                 y += 12;
                 context.drawText(textRenderer, Text.literal("To add a world: use the \"Import World\" button on the Maps tab."), textX + 10, y, UiTheme.TEXT_DIM, false);
             }
+        } else {
+            context.drawText(textRenderer, Text.literal("Map not found: " + (this.mapId == null ? "None" : this.mapId)), panel.x() + 16, panel.y() + 48, UiTheme.TEXT_MUTED, false);
         }
     }
 

@@ -8,6 +8,8 @@ import dev.frost.miniverse.minigame.core.MinigameDefinition;
 import dev.frost.miniverse.minigame.core.MinigameRegistry;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsDefinition;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsMapConfig;
+import dev.frost.miniverse.minigame.impl.ctf.CaptureTheFlagDefinition;
+import dev.frost.miniverse.minigame.impl.ctf.CaptureTheFlagMapConfig;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.nbt.NbtCompound;
@@ -189,17 +191,42 @@ public final class SessionCreationService {
             return new TeamIdentity(team.gameTeamId(), displayName);
         }
 
-        if (!BedwarsDefinition.ID.equalsIgnoreCase(gameType.getCommandName())) {
+        if (BedwarsDefinition.ID.equalsIgnoreCase(gameType.getCommandName())) {
+            List<BedwarsMapConfig.BedwarsTeamConfig> mapTeams = bedwarsMapTeams(plan);
+            int index = plan.teams().indexOf(team);
+            if (index >= 0 && index < mapTeams.size()) {
+                BedwarsMapConfig.BedwarsTeamConfig mapTeam = mapTeams.get(index);
+                return new TeamIdentity(mapTeam.teamId, mapTeam.name);
+            }
             return new TeamIdentity("", displayName);
         }
 
-        List<BedwarsMapConfig.BedwarsTeamConfig> mapTeams = bedwarsMapTeams(plan);
-        int index = plan.teams().indexOf(team);
-        if (index >= 0 && index < mapTeams.size()) {
-            BedwarsMapConfig.BedwarsTeamConfig mapTeam = mapTeams.get(index);
-            return new TeamIdentity(mapTeam.teamId, mapTeam.name);
+        if (CaptureTheFlagDefinition.ID.equalsIgnoreCase(gameType.getCommandName())) {
+            List<CaptureTheFlagMapConfig.CtfTeamConfig> mapTeams = ctfMapTeams(plan);
+            int index = plan.teams().indexOf(team);
+            if (index >= 0 && index < mapTeams.size()) {
+                CaptureTheFlagMapConfig.CtfTeamConfig mapTeam = mapTeams.get(index);
+                return new TeamIdentity(mapTeam.teamId, mapTeam.name);
+            }
+            return new TeamIdentity("", displayName);
         }
+
         return new TeamIdentity("", displayName);
+    }
+
+    private static List<CaptureTheFlagMapConfig.CtfTeamConfig> ctfMapTeams(SessionPlan plan) {
+        NbtCompound settings = plan.settings();
+        if (!settings.contains("mapId", NbtElement.STRING_TYPE)) {
+            return List.of();
+        }
+        String mapId = settings.getString("mapId").trim();
+        if (mapId.isBlank()) {
+            return List.of();
+        }
+        return MapStore.readGamemodeConfig(mapId, CaptureTheFlagDefinition.ID)
+            .map(CaptureTheFlagMapConfig::fromJson)
+            .<List<CaptureTheFlagMapConfig.CtfTeamConfig>>map(config -> new ArrayList<>(config.teams().values()))
+            .orElseGet(List::of);
     }
 
     private static List<BedwarsMapConfig.BedwarsTeamConfig> bedwarsMapTeams(SessionPlan plan) {

@@ -28,6 +28,8 @@ public class CompulsoryMarkerDescriptionTest {
         MapEditorExtensionRegistry.register(MurderMysteryDefinition.EXTENSION);
         MapEditorExtensionRegistry.register(PillarsOfFortuneMapEditorExtension.EXTENSION);
         MapEditorExtensionRegistry.register(ZombiesDefinition.EXTENSION);
+        MapEditorExtensionRegistry.register(dev.frost.miniverse.minigame.impl.skywars.SkywarsDefinition.EXTENSION);
+        MapEditorExtensionRegistry.register(dev.frost.miniverse.minigame.impl.ctf.CaptureTheFlagDefinition.EXTENSION);
     }
 
     @Test

@@ -55,7 +55,11 @@ public class SessionListSerializer {
                 entry.putBoolean("retained", false);
 
                 NbtList players = new NbtList();
-                session.getAssignments().forEach(assignment -> players.add(NbtString.of(assignment.getDisplayName())));
+                session.getAssignments().forEach(assignment -> {
+                    for (String memberName : assignment.getPlayerNames()) {
+                        players.add(NbtString.of(memberName));
+                    }
+                });
                 entry.put("players", players);
                 entry.putInt("playerCount", session.getAssignments().stream().mapToInt(SessionGroup::getPlayerCount).sum());
                 addGroups(entry, session.getAssignments());

@@ -1,7 +1,10 @@
 package dev.frost.miniverse.client.gui.map;
 
+import dev.frost.miniverse.common.NetworkConstants;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
@@ -89,6 +92,10 @@ public class MapEditorWorkspaceScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE && contextMenuOpen) {
+            contextMenuOpen = false;
+            return true;
+        }
         if (Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_C) {
             copySelectedMarkersToClipboard();
             return true;
@@ -112,16 +119,190 @@ public class MapEditorWorkspaceScreen extends Screen {
 
     public MapEditorState.SelectedMarkerData selectedMarker = null;
 
+    public record ContextMenuItem(String label, int color, Runnable action) {}
+    private boolean contextMenuOpen = false;
+    private double contextMenuX = 0;
+    private double contextMenuY = 0;
+    private MapEditorState.SelectedMarkerData contextMarker = null;
+    private final java.util.List<ContextMenuItem> contextMenuItems = new java.util.ArrayList<>();
+
     private double selectionStartX = -1;
     private double selectionStartY = -1;
     private double selectionCurrentX = -1;
     private double selectionCurrentY = -1;
     private boolean isSelecting = false;
 
+    public void openContextMenu(MapEditorState.SelectedMarkerData data, double mouseX, double mouseY) {
+        this.contextMarker = data;
+        this.contextMenuItems.clear();
+
+        if ("island_chests".equals(data.definitionKey())) {
+            this.contextMenuItems.add(new ContextMenuItem("⚡ Switch to Mid Chest", 0xFFFFD700, () -> reclassifyMarker(data, "mid_chests")));
+        } else if ("mid_chests".equals(data.definitionKey())) {
+            this.contextMenuItems.add(new ContextMenuItem("⚡ Switch to Island Chest", 0xFF00E5FF, () -> reclassifyMarker(data, "island_chests")));
+        }
+
+        this.contextMenuItems.add(new ContextMenuItem("📍 Teleport to Marker", 0xFFFFFFFF, () -> teleportToMarker(data)));
+        this.contextMenuItems.add(new ContextMenuItem("🗑️ Delete Marker", 0xFFFF5555, () -> deleteMarker(data)));
+
+        this.contextMenuX = mouseX;
+        this.contextMenuY = mouseY;
+        this.contextMenuOpen = true;
+    }
+
+    private int getContextMenuWidth() {
+        int width = 160;
+        if (this.contextMarker != null && this.textRenderer != null) {
+            width = Math.max(width, this.textRenderer.getWidth(this.contextMarker.marker().name()) + 24);
+        }
+        if (this.textRenderer != null) {
+            for (ContextMenuItem item : this.contextMenuItems) {
+                width = Math.max(width, this.textRenderer.getWidth(item.label()) + 24);
+            }
+        }
+        return width;
+    }
+
+    private int getContextMenuHeight() {
+        return 26 + this.contextMenuItems.size() * 20 + 4;
+    }
+
+    private int getContextMenuRenderX() {
+        int w = getContextMenuWidth();
+        return (int) Math.max(10, Math.min(this.contextMenuX, this.width - w - 10));
+    }
+
+    private int getContextMenuRenderY() {
+        int h = getContextMenuHeight();
+        return (int) Math.max(10, Math.min(this.contextMenuY, this.height - h - 10));
+    }
+
+    private boolean handleContextMenuClick(double mouseX, double mouseY) {
+        int x = getContextMenuRenderX();
+        int y = getContextMenuRenderY();
+        int w = getContextMenuWidth();
+        int h = getContextMenuHeight();
+
+        if (mouseX < x || mouseX > x + w || mouseY < y || mouseY > y + h) {
+            return false;
+        }
+
+        int itemY = y + 26;
+        for (ContextMenuItem item : this.contextMenuItems) {
+            if (mouseX >= x && mouseX <= x + w && mouseY >= itemY && mouseY < itemY + 20) {
+                item.action().run();
+                this.contextMenuOpen = false;
+                return true;
+            }
+            itemY += 20;
+        }
+        return true;
+    }
+
+    private void reclassifyMarker(MapEditorState.SelectedMarkerData data, String targetDefKey) {
+        NbtCompound nbt = new NbtCompound();
+        nbt.putString("action", "reclassify_marker");
+        nbt.putString("gameId", data.gameId());
+        nbt.putString("definitionKey", data.definitionKey());
+        nbt.putString("targetDefinitionKey", targetDefKey);
+        nbt.putString("markerId", data.marker().id());
+        ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
+        if (client != null) {
+            client.inGameHud.getChatHud().addMessage(Text.literal("Switching " + data.marker().name() + " -> " + targetDefKey));
+        }
+    }
+
+    private void teleportToMarker(MapEditorState.SelectedMarkerData data) {
+        NbtCompound nbt = new NbtCompound();
+        nbt.putString("action", "teleport");
+        nbt.putString("gameId", data.gameId());
+        nbt.putString("definitionKey", data.definitionKey());
+        nbt.putString("markerId", data.marker().id());
+        ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
+    }
+
+    private void deleteMarker(MapEditorState.SelectedMarkerData data) {
+        NbtCompound nbt = new NbtCompound();
+        nbt.putString("action", "delete");
+        nbt.putString("gameId", data.gameId());
+        nbt.putString("definitionKey", data.definitionKey());
+        nbt.putString("markerId", data.marker().id());
+        ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
+        if (client != null) {
+            client.inGameHud.getChatHud().addMessage(Text.literal("Deleted " + data.marker().name()));
+        }
+    }
+
+    public MapEditorState.SelectedMarkerData findMarkerUnderMouse(double mouseX, double mouseY) {
+        if (client == null || client.player == null) return null;
+        org.joml.Vector3d rayDirJoml = GizmoMath.unprojectMouseToRay(client, mouseX, mouseY);
+        if (rayDirJoml == null) return null;
+
+        net.minecraft.util.math.Vec3d rayOrigin = client.player.getCameraPosVec(1.0f);
+        net.minecraft.util.math.Vec3d rayEnd = rayOrigin.add(rayDirJoml.x * 1000, rayDirJoml.y * 1000, rayDirJoml.z * 1000);
+
+        MapEditorState.SelectedMarkerData closestMarker = null;
+        double closestDist = Double.MAX_VALUE;
+
+        for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorExtension ext : dev.frost.miniverse.client.gui.SessionSnapshotData.editorExtensions()) {
+            for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarkerDefinition def : ext.markers()) {
+                java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker> markers = dev.frost.miniverse.client.gui.SessionSnapshotData.editorState().markers(ext.gameId(), def.key());
+                if (markers == null) continue;
+
+                for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker marker : markers) {
+                    if (!MapEditorState.INSTANCE.isMarkerVisible(ext.gameId(), def.key(), marker.id())) continue;
+
+                    if ("REGION".equalsIgnoreCase(marker.type())) {
+                        for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart region : marker.regions()) {
+                            net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(region.min().x(), region.min().y(), region.min().z(), region.max().x(), region.max().y(), region.max().z());
+                            java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
+                            if (hit.isPresent()) {
+                                double dist = hit.get().squaredDistanceTo(rayOrigin);
+                                if (dist < closestDist) {
+                                    closestDist = dist;
+                                    closestMarker = new MapEditorState.SelectedMarkerData(marker, ext.gameId(), def.key());
+                                }
+                            }
+                        }
+                    } else if ("POINT".equalsIgnoreCase(marker.type()) && !marker.points().isEmpty()) {
+                        for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint pt : marker.points()) {
+                            net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(pt.x() - 0.5, pt.y() - 0.5, pt.z() - 0.5, pt.x() + 0.5, pt.y() + 0.5, pt.z() + 0.5);
+                            java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
+                            if (hit.isPresent()) {
+                                double dist = hit.get().squaredDistanceTo(rayOrigin);
+                                if (dist < closestDist) {
+                                    closestDist = dist;
+                                    closestMarker = new MapEditorState.SelectedMarkerData(marker, ext.gameId(), def.key());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return closestMarker;
+    }
+
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (contextMenuOpen) {
+            if (handleContextMenuClick(mouseX, mouseY)) {
+                return true;
+            }
+            contextMenuOpen = false;
+            return true;
+        }
+
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true; // Clicked on UI
+        }
+
+        if (button == 1 && client != null && client.player != null) { // Right click on marker
+            MapEditorState.SelectedMarkerData hitMarker = findMarkerUnderMouse(mouseX, mouseY);
+            if (hitMarker != null) {
+                openContextMenu(hitMarker, mouseX, mouseY);
+                return true;
+            }
         }
         
         MapEditorState state = MapEditorState.INSTANCE;
@@ -183,56 +364,10 @@ public class MapEditorWorkspaceScreen extends Screen {
                 selectionCurrentY = mouseY;
                 return true;
             } else {
-                // Raycast fallback for single click logic if needed
-                org.joml.Vector3d rayDirJoml = GizmoMath.unprojectMouseToRay(client, mouseX, mouseY);
-                if (rayDirJoml != null) {
-                    net.minecraft.util.math.Vec3d rayOrigin = client.player.getCameraPosVec(1.0f);
-                    net.minecraft.util.math.Vec3d rayEnd = rayOrigin.add(rayDirJoml.x * 1000, rayDirJoml.y * 1000, rayDirJoml.z * 1000);
-    
-                    MapEditorState.SelectedMarkerData closestMarker = null;
-                    double closestDist = Double.MAX_VALUE;
-    
-                    for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorExtension ext : dev.frost.miniverse.client.gui.SessionSnapshotData.editorExtensions()) {
-                        for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarkerDefinition def : ext.markers()) {
-                            java.util.List<dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker> markers = dev.frost.miniverse.client.gui.SessionSnapshotData.editorState().markers(ext.gameId(), def.key());
-                            if (markers == null) continue;
-    
-                            for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorMarker marker : markers) {
-                                if (!MapEditorState.INSTANCE.isMarkerVisible(ext.gameId(), def.key(), marker.id())) continue;
-    
-                                if ("REGION".equalsIgnoreCase(marker.type())) {
-                                    for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorRegionPart region : marker.regions()) {
-                                        net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(region.min().x(), region.min().y(), region.min().z(), region.max().x(), region.max().y(), region.max().z());
-                                        java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
-                                        if (hit.isPresent()) {
-                                            double dist = hit.get().squaredDistanceTo(rayOrigin);
-                                            if (dist < closestDist) {
-                                                closestDist = dist;
-                                                closestMarker = new MapEditorState.SelectedMarkerData(marker, ext.gameId(), def.key());
-                                            }
-                                        }
-                                    }
-                                } else if ("POINT".equalsIgnoreCase(marker.type()) && !marker.points().isEmpty()) {
-                                    for (dev.frost.miniverse.client.gui.SessionSnapshotData.EditorPoint pt : marker.points()) {
-                                        net.minecraft.util.math.Box box = new net.minecraft.util.math.Box(pt.x() - 0.5, pt.y() - 0.5, pt.z() - 0.5, pt.x() + 0.5, pt.y() + 0.5, pt.z() + 0.5);
-                                        java.util.Optional<net.minecraft.util.math.Vec3d> hit = box.raycast(rayOrigin, rayEnd);
-                                        if (hit.isPresent()) {
-                                            double dist = hit.get().squaredDistanceTo(rayOrigin);
-                                            if (dist < closestDist) {
-                                                closestDist = dist;
-                                                closestMarker = new MapEditorState.SelectedMarkerData(marker, ext.gameId(), def.key());
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-    
-                    this.selectedMarker = closestMarker;
-                    if (closestMarker != null) {
-                        client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Selected marker: " + closestMarker.marker().id()));
-                    }
+                MapEditorState.SelectedMarkerData closestMarker = findMarkerUnderMouse(mouseX, mouseY);
+                this.selectedMarker = closestMarker;
+                if (closestMarker != null) {
+                    client.inGameHud.getChatHud().addMessage(net.minecraft.text.Text.literal("Selected marker: " + closestMarker.marker().id()));
                 }
                 return true;
             }
@@ -812,6 +947,36 @@ public class MapEditorWorkspaceScreen extends Screen {
             context.fill(minX, maxY - 1, maxX, maxY, 0xFF00AAFF);
             context.fill(minX, minY, minX + 1, maxY, 0xFF00AAFF);
             context.fill(maxX - 1, minY, maxX, maxY, 0xFF00AAFF);
+        }
+
+        if (contextMenuOpen && contextMarker != null) {
+            int x = getContextMenuRenderX();
+            int y = getContextMenuRenderY();
+            int w = getContextMenuWidth();
+            int h = getContextMenuHeight();
+
+            // Background & border
+            context.fill(x, y, x + w, y + h, 0xF0141922);
+            context.fill(x, y, x + w, y + 1, 0xFF38BDF8);
+            context.fill(x, y + h - 1, x + w, y + h, 0xFF38BDF8);
+            context.fill(x, y, x + 1, y + h, 0xFF38BDF8);
+            context.fill(x + w - 1, y, x + w, y + h, 0xFF38BDF8);
+
+            // Header
+            context.fill(x + 1, y + 1, x + w - 1, y + 24, 0x3038BDF8);
+            context.drawText(this.textRenderer, Text.literal(contextMarker.marker().name()), x + 8, y + 4, 0xFFFFFFFF, false);
+            context.drawText(this.textRenderer, Text.literal(contextMarker.definitionKey()), x + 8, y + 14, 0xFF888888, false);
+
+            // Items
+            int itemY = y + 26;
+            for (ContextMenuItem item : contextMenuItems) {
+                boolean hovered = mouseX >= x && mouseX <= x + w && mouseY >= itemY && mouseY < itemY + 20;
+                if (hovered) {
+                    context.fill(x + 2, itemY, x + w - 2, itemY + 20, 0x4038BDF8);
+                }
+                context.drawText(this.textRenderer, Text.literal(item.label()), x + 8, itemY + 6, hovered ? 0xFFFFFFFF : item.color(), false);
+                itemY += 20;
+            }
         }
     }
 

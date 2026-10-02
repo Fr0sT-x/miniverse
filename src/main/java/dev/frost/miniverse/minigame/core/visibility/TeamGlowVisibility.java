@@ -20,6 +20,9 @@ public final class TeamGlowVisibility {
 
     public static boolean canViewerSeeGlowing(ServerPlayerEntity viewer, ServerPlayerEntity target) {
         Minigame active = MinigameManager.getInstance().getActiveMinigame();
+        if (active instanceof GlowVisibilityAware glowAware) {
+            return glowAware.canViewerSeeGlowing(viewer, target);
+        }
         if (!(active instanceof TeamManagerProvider provider)) {
             return true;
         }
@@ -30,6 +33,15 @@ public final class TeamGlowVisibility {
             return false;
         }
         return viewerTeam.equals(targetTeam);
+    }
+
+    public static void resyncAll(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            resyncFor(player);
+        }
     }
 
     public static void resyncFor(ServerPlayerEntity viewer) {

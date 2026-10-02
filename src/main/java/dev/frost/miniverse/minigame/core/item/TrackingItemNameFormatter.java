@@ -29,7 +29,10 @@ public final class TrackingItemNameFormatter {
             if (!isTrackingItem.test(stack)) {
                 continue;
             }
-            stack.set(DataComponentTypes.CUSTOM_NAME, displayName);
+            Text existing = stack.get(DataComponentTypes.CUSTOM_NAME);
+            if (!java.util.Objects.equals(existing, displayName)) {
+                stack.set(DataComponentTypes.CUSTOM_NAME, displayName);
+            }
         }
     }
 }

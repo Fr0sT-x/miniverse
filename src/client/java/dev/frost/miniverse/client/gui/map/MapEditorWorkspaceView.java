@@ -125,9 +125,6 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             }, Text.literal("Save Map?"), Text.literal("This will overwrite the current map data with your changes.")));
         });
         addTopRightBtn.accept(saveWorld, 92);
-        
-        UiButton refresh = new UiButton("Refresh", this.refreshAction);
-        addTopRightBtn.accept(refresh, 80);
 
         UiButton thumbnailBtn = new UiButton("Take Thumbnail", () -> {
             this.sendCommand("miniverse_map_thumbnail");
@@ -210,6 +207,19 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             UiButton addBtn = new UiButton(addLabel, () -> this.startAdd(selected.extension, selected.definition));
             addBtn.setBounds(new UiLayout.Rect(panel.x() + 12, topY, 130, 20));
             this.components.add(addBtn);
+
+            if (selected.definition.key().contains("chest")) {
+                UiButton scanChestsBtn = new UiButton("⚡ Scan All Chests", () -> {
+                    NbtCompound action = new NbtCompound();
+                    action.putString("action", "scan_chests");
+                    action.putString("gameId", selected.extension.gameId());
+                    ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(action));
+                    this.status = "Scanning map chests...";
+                    this.pendingRefreshTicks = 10;
+                }).accent(UiTheme.ACCENT_GREEN);
+                scanChestsBtn.setBounds(new UiLayout.Rect(panel.x() + 148, topY, 120, 20));
+                this.components.add(scanChestsBtn);
+            }
 
             boolean overlayOn = this.state.isOverlayEnabled(selected.extension.gameId(), selected.definition.key());
             String overlayLabel = overlayOn ? "\u25C9 Overlay ON" : "\u25CB Overlay OFF";
@@ -555,6 +565,21 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 if (infoBtn.contains(mouseX, adjustedMouseY)) {
                     return true;
                 }
+
+                if (marker.key().toLowerCase().contains("chest")) {
+                    int scanBtnX = infoBtn.x() + infoBtn.width() + 6;
+                    int scanBtnW = net.minecraft.client.MinecraftClient.getInstance().textRenderer.getWidth("⚡ Scan Chests") + 12;
+                    UiLayout.Rect scanBtn = new UiLayout.Rect(scanBtnX, headerRow.y() + 8, scanBtnW, 20);
+                    if (scanBtn.contains(mouseX, adjustedMouseY)) {
+                        NbtCompound action = new NbtCompound();
+                        action.putString("action", "scan_chests");
+                        action.putString("gameId", selected.extension.gameId());
+                        ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(action));
+                        this.status = "Scanning map chests...";
+                        this.pendingRefreshTicks = 10;
+                        return true;
+                    }
+                }
                 
                 if (headerRow.contains(mouseX, adjustedMouseY)) {
                     if (expanded) {
@@ -600,6 +625,23 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                                 if (configureBtn.contains(mouseX, adjustedMouseY)) {
                                     this.drillDownParentId = placed.id();
                                     this.drillDownParentKey = marker.key();
+                                    return true;
+                                }
+                            }
+
+                            boolean isChest = "island_chests".equals(marker.key()) || "mid_chests".equals(marker.key());
+                            if (isChest) {
+                                UiLayout.Rect reclassBtn = new UiLayout.Rect(row.x() + row.width() - 378, row.y() + 10, 72, 20);
+                                if (reclassBtn.contains(mouseX, adjustedMouseY)) {
+                                    String targetDef = "island_chests".equals(marker.key()) ? "mid_chests" : "island_chests";
+                                    NbtCompound nbt = new NbtCompound();
+                                    nbt.putString("action", "reclassify_marker");
+                                    nbt.putString("gameId", selected.extension.gameId());
+                                    nbt.putString("definitionKey", marker.key());
+                                    nbt.putString("targetDefinitionKey", targetDef);
+                                    nbt.putString("markerId", placed.id());
+                                    ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
+                                    this.pendingRefreshTicks = 2;
                                     return true;
                                 }
                             }
@@ -689,6 +731,23 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             UiLayout.Rect rename = new UiLayout.Rect(row.x() + row.width() - 226, row.y() + 10, 68, 20);
             UiLayout.Rect teleport = new UiLayout.Rect(row.x() + row.width() - 150, row.y() + 10, 68, 20);
             UiLayout.Rect delete = new UiLayout.Rect(row.x() + row.width() - 74, row.y() + 10, 60, 20);
+
+            boolean isChest = "island_chests".equals(selected.definition.key()) || "mid_chests".equals(selected.definition.key());
+            if (isChest) {
+                UiLayout.Rect reclassBtn = new UiLayout.Rect(row.x() + row.width() - 378, row.y() + 10, 72, 20);
+                if (reclassBtn.contains(mouseX, adjustedMouseY)) {
+                    String targetDef = "island_chests".equals(selected.definition.key()) ? "mid_chests" : "island_chests";
+                    NbtCompound nbt = new NbtCompound();
+                    nbt.putString("action", "reclassify_marker");
+                    nbt.putString("gameId", selected.extension.gameId());
+                    nbt.putString("definitionKey", selected.definition.key());
+                    nbt.putString("targetDefinitionKey", targetDef);
+                    nbt.putString("markerId", marker.id());
+                    ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(nbt));
+                    this.pendingRefreshTicks = 2;
+                    return true;
+                }
+            }
             
             if (toggle.contains(mouseX, adjustedMouseY)) {
                 this.state.toggleMarkerVisibility(selected.extension.gameId(), selected.definition.key(), marker.id());
@@ -874,6 +933,32 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                     this.hoveredTooltip = new MarkerTooltip(marker.displayName(), marker.description());
                 }
             }
+
+            if (marker.key().toLowerCase().contains("chest")) {
+                int scanBtnX = iconX + iconSize + 6;
+                int scanBtnY = row.y() + 8;
+                int scanBtnW = textRenderer.getWidth("⚡ Scan Chests") + 12;
+                int scanBtnH = 20;
+
+                boolean scanBtnVisible = scanBtnY + scanBtnH >= this.listArea.y() && scanBtnY <= this.listArea.y() + this.listArea.height();
+                if (scanBtnVisible) {
+                    boolean scanHovered = this.listArea.contains(mouseX, mouseY)
+                        && mouseX >= scanBtnX && mouseX <= scanBtnX + scanBtnW
+                        && mouseY >= scanBtnY && mouseY <= scanBtnY + scanBtnH;
+
+                    int btnFill = scanHovered ? 0x5010B981 : 0x2510B981;
+                    int btnBorder = scanHovered ? 0xFF10B981 : 0x6010B981;
+                    UiRenderer.panel(context, scanBtnX, scanBtnY, scanBtnW, scanBtnH, btnFill, btnBorder);
+
+                    int textX = scanBtnX + (scanBtnW - textRenderer.getWidth("⚡ Scan Chests")) / 2;
+                    int textY = scanBtnY + 6;
+                    context.drawText(textRenderer, Text.literal("⚡ Scan Chests"), textX, textY, scanHovered ? 0xFFFFFFFF : 0xFF6EE7B7, false);
+
+                    if (scanHovered) {
+                        this.hoveredTooltip = new MarkerTooltip("Scan Chests", "Automatically scan surrounding chunks to detect and register chests for " + marker.displayName() + ".");
+                    }
+                }
+            }
             
             SessionSnapshotData.EditorMarker drillDownParentMarker = this.drillDownParentId != null ? SessionSnapshotData.editorState().markers(selected.extension.gameId(), this.drillDownParentKey).stream().filter(m -> m.id().equals(this.drillDownParentId)).findFirst().orElse(null) : null;
             
@@ -953,6 +1038,12 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
             if (isParent && this.drillDownParentId == null) {
                 renderSmallButton(context, textRenderer, row.x() + row.width() - 392, row.y() + 10, 84, "Configure...");
             }
+
+            boolean isChest = "island_chests".equals(definition.key()) || "mid_chests".equals(definition.key());
+            if (isChest) {
+                String reclassLabel = "island_chests".equals(definition.key()) ? "⇄ Mid" : "⇄ Island";
+                renderSmallButton(context, textRenderer, row.x() + row.width() - 378, row.y() + 10, 72, reclassLabel);
+            }
             
             renderSmallButton(context, textRenderer, row.x() + row.width() - 302, row.y() + 10, 68, toggleLabel);
             renderSmallButton(context, textRenderer, row.x() + row.width() - 226, row.y() + 10, 68, isEditingThis ? "Save" : "Rename");
@@ -963,7 +1054,7 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                 this.activeSaveButtonRect = new UiLayout.Rect(row.x() + row.width() - 226, row.y() + 10, 68, 20);
                 int fieldX = row.x() + 10 + prefixW;
                 int fieldY = row.y() + 4;
-                int rightLimit = row.x() + row.width() - (isParent && this.drillDownParentId == null ? 398 : 308);
+                int rightLimit = row.x() + row.width() - (isParent && this.drillDownParentId == null ? 398 : (isChest ? 384 : 308));
                 int fieldW = Math.max(120, Math.min(240, rightLimit - fieldX - 8));
                 if (fieldY >= this.listArea.y() - 10 && fieldY + 18 <= this.listArea.y() + this.listArea.height() + 10) {
                     this.renameField.setX(fieldX);

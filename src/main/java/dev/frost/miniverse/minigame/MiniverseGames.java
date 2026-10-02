@@ -16,6 +16,7 @@ import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
 import dev.frost.miniverse.minigame.impl.pillarsoffortune.PillarsOfFortuneDefinition;
 import dev.frost.miniverse.minigame.impl.horde.HordeSurvivalDefinition;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDefinition;
+import dev.frost.miniverse.minigame.impl.ctf.CaptureTheFlagDefinition;
 import dev.frost.miniverse.minigame.impl.dropper.DropperDefinition;
 import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyDefinition;
 
@@ -47,6 +48,8 @@ public final class MiniverseGames {
         MinigameRegistry.register(new ZombiesDefinition());
         MinigameRegistry.register(new DropperDefinition());
         MinigameRegistry.register(new MicroFrenzyDefinition());
+        MinigameRegistry.register(new dev.frost.miniverse.minigame.impl.skywars.SkywarsDefinition());
+        MinigameRegistry.register(new CaptureTheFlagDefinition());
         registered = true;
     }
 }

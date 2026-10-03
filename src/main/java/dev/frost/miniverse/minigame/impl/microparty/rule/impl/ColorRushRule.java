@@ -1,11 +1,11 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.editor.RegionPart;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMapConfig;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMapConfig;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.particle.DustParticleEffect;
@@ -25,8 +25,8 @@ import java.util.Random;
 
 public class ColorRushRule implements MicroRule {
     private final Random random = new Random();
-    private MicroFrenzyMapConfig.ColorZone targetZone;
-    private final List<MicroFrenzyMapConfig.ColorZone> activeZones = new ArrayList<>();
+    private MicroPartyMapConfig.ColorZone targetZone;
+    private final List<MicroPartyMapConfig.ColorZone> activeZones = new ArrayList<>();
 
     private static final String[] COLOR_NAMES = {"RED", "BLUE", "GREEN", "YELLOW"};
 
@@ -73,23 +73,23 @@ public class ColorRushRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(80, standardTicks); // Clamped to at least 4.0 seconds (80 ticks)
     }
 
     @Override
-    public boolean isApplicable(MicroFrenzyMapConfig mapConfig) {
+    public boolean isApplicable(MicroPartyMapConfig mapConfig) {
         return true;
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
         this.activeZones.clear();
         this.targetZone = null;
 
-        List<MicroFrenzyMapConfig.ColorZone> staticZones = game.getMapConfig().colorZones();
+        List<MicroPartyMapConfig.ColorZone> staticZones = game.getMapConfig().colorZones();
         if (!staticZones.isEmpty()) {
             this.activeZones.addAll(staticZones);
             this.targetZone = this.activeZones.get(random.nextInt(this.activeZones.size()));
@@ -102,9 +102,9 @@ public class ColorRushRule implements MicroRule {
             return;
         }
 
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
         int surfaceY = floorY - 1;
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
 
         int cx = bounds.centerX();
         int cz = bounds.centerZ();
@@ -122,7 +122,14 @@ public class ColorRushRule implements MicroRule {
         }
     }
 
-    private void generateDistinctColorPads(MicroFrenzyMinigame game, ServerWorld world, MicroFrenzyArenaHelper.ArenaBounds2D bounds, int surfaceY, int floorY, int cx, int cz) {
+    @Override
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
+        if (this.targetZone == null) {
+            onPrepare(game, server);
+        }
+    }
+
+    private void generateDistinctColorPads(MicroPartyMinigame game, ServerWorld world, MicroPartyArenaHelper.ArenaBounds2D bounds, int surfaceY, int floorY, int cx, int cz) {
         int halfW = Math.max(4, bounds.width() / 4);
         int halfD = Math.max(4, bounds.depth() / 4);
 
@@ -167,12 +174,12 @@ public class ColorRushRule implements MicroRule {
                     new MapPosition(pMinX, surfaceY, pMinZ, 0, 0),
                     new MapPosition(pMaxX, floorY + 2, pMaxZ, 0, 0)
                 );
-                this.activeZones.add(new MicroFrenzyMapConfig.ColorZone("auto_" + color.toLowerCase(), color, List.of(region)));
+                this.activeZones.add(new MicroPartyMapConfig.ColorZone("auto_" + color.toLowerCase(), color, List.of(region)));
             }
         }
     }
 
-    private void generateQuadrantDanceFloor(MicroFrenzyMinigame game, ServerWorld world, MicroFrenzyArenaHelper.ArenaBounds2D bounds, int surfaceY, int floorY, int cx, int cz) {
+    private void generateQuadrantDanceFloor(MicroPartyMinigame game, ServerWorld world, MicroPartyArenaHelper.ArenaBounds2D bounds, int surfaceY, int floorY, int cx, int cz) {
         for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
             for (int z = bounds.minZ(); z <= bounds.maxZ(); z++) {
                 BlockPos surfacePos = new BlockPos(x, surfaceY, z);
@@ -198,26 +205,26 @@ public class ColorRushRule implements MicroRule {
         }
 
         // Add 4 quadrant regions
-        this.activeZones.add(new MicroFrenzyMapConfig.ColorZone("quad_red", "RED", List.of(new RegionPart(
+        this.activeZones.add(new MicroPartyMapConfig.ColorZone("quad_red", "RED", List.of(new RegionPart(
             new MapPosition(bounds.minX(), surfaceY, bounds.minZ(), 0, 0),
             new MapPosition(cx - 1, floorY + 2, cz - 1, 0, 0)
         ))));
-        this.activeZones.add(new MicroFrenzyMapConfig.ColorZone("quad_blue", "BLUE", List.of(new RegionPart(
+        this.activeZones.add(new MicroPartyMapConfig.ColorZone("quad_blue", "BLUE", List.of(new RegionPart(
             new MapPosition(cx, surfaceY, bounds.minZ(), 0, 0),
             new MapPosition(bounds.maxX(), floorY + 2, cz - 1, 0, 0)
         ))));
-        this.activeZones.add(new MicroFrenzyMapConfig.ColorZone("quad_green", "GREEN", List.of(new RegionPart(
+        this.activeZones.add(new MicroPartyMapConfig.ColorZone("quad_green", "GREEN", List.of(new RegionPart(
             new MapPosition(bounds.minX(), surfaceY, cz, 0, 0),
             new MapPosition(cx - 1, floorY + 2, bounds.maxZ(), 0, 0)
         ))));
-        this.activeZones.add(new MicroFrenzyMapConfig.ColorZone("quad_yellow", "YELLOW", List.of(new RegionPart(
+        this.activeZones.add(new MicroPartyMapConfig.ColorZone("quad_yellow", "YELLOW", List.of(new RegionPart(
             new MapPosition(cx, surfaceY, cz, 0, 0),
             new MapPosition(bounds.maxX(), floorY + 2, bounds.maxZ(), 0, 0)
         ))));
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         if (this.targetZone == null || remainingTicks % 5 != 0) {
             return;
         }
@@ -245,7 +252,7 @@ public class ColorRushRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         if (targetZone == null) {
             return true;
         }
@@ -274,7 +281,7 @@ public class ColorRushRule implements MicroRule {
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         targetZone = null;
         activeZones.clear();
         if (game.getWorld() != null) {

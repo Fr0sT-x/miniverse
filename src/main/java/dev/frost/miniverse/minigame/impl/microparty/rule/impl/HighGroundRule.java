@@ -1,11 +1,11 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.editor.RegionPart;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMapConfig;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMapConfig;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.particle.ParticleTypes;
@@ -68,21 +68,21 @@ public class HighGroundRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(80, standardTicks); // Clamped to at least 4.0 seconds (80 ticks)
     }
 
     @Override
-    public boolean isApplicable(MicroFrenzyMapConfig mapConfig) {
+    public boolean isApplicable(MicroPartyMapConfig mapConfig) {
         return true;
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.activeHighGroundRegions.clear();
-        this.floorBaselineY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+        this.floorBaselineY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
 
         List<RegionPart> staticHigh = game.getMapConfig().highGround();
         if (!staticHigh.isEmpty()) {
@@ -96,7 +96,7 @@ public class HighGroundRule implements MicroRule {
 
         int floorY = (int) Math.floor(this.floorBaselineY);
         int surfaceY = floorY - 1;
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
 
         int platformCount = 4 + random.nextInt(4); // 4 to 7 platforms
 
@@ -141,11 +141,11 @@ public class HighGroundRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
         double y = this.floorBaselineY + 0.1;
 
         // Lava particles across the arena floor
@@ -163,7 +163,7 @@ public class HighGroundRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         // 1. Check custom or procedurally generated high ground regions
         if (!this.activeHighGroundRegions.isEmpty()) {
             Vec3d pos = player.getPos();
@@ -178,7 +178,7 @@ public class HighGroundRule implements MicroRule {
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         this.activeHighGroundRegions.clear();
         if (game.getWorld() != null) {
             game.getBlockManager().restoreAll(game.getWorld());

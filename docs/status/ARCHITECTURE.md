@@ -424,7 +424,7 @@ global leaf decay prevention across all map-based environments.
 - Leaf decay is **totally disabled** on all maps (`MapWorldRules.isLeafDecayDisabled(world) == true`), including:
   - Any session running in `MAP_EDITOR` or `INSPECTION_SESSION` mode.
   - Any session where a map is loaded (`map.id` / `mapId`).
-  - All map-based gamemodes: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper, Micro-Frenzy, Skywars, Capture the Flag.
+  - All map-based gamemodes: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper, Micro Party, Skywars, Capture the Flag.
 - All leaf varieties (oak, birch, spruce, jungle, acacia, dark oak, mangrove, cherry, azalea) will **never** decay, despawn, or drop items on maps.
 - Normal vanilla survival gamemodes (Speedrun, Manhunt, Block Shuffle, Death Swap, Bounty Hunt, Death Shuffle, Resource Sprint, Horde) keep leaf decay **enabled** (`isLeafDecayDisabled == false`).
 - *Developer note:* If you ever need to allow leaf decay on a specific map or gamemode in the future, adjust the check in `MapWorldRules.isLeafDecayDisabled`.

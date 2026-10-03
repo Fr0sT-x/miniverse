@@ -1,4 +1,4 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy;
+package dev.frost.miniverse.minigame.impl.microparty;
 
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.editor.RegionPart;
@@ -12,10 +12,10 @@ import java.util.List;
  * Utility helper to determine arena floor coordinates, bounds,
  * and walkable platform positions for procedural microgames.
  */
-public final class MicroFrenzyArenaHelper {
-    private MicroFrenzyArenaHelper() {}
+public final class MicroPartyArenaHelper {
+    private MicroPartyArenaHelper() {}
 
-    public static int getFloorY(MicroFrenzyMapConfig config) {
+    public static int getFloorY(MicroPartyMapConfig config) {
         if (config == null) {
             return 100;
         }
@@ -38,7 +38,7 @@ public final class MicroFrenzyArenaHelper {
         public int centerZ() { return (minZ + maxZ) / 2; }
     }
 
-    public static ArenaBounds2D getBounds2D(MicroFrenzyMapConfig config) {
+    public static ArenaBounds2D getBounds2D(MicroPartyMapConfig config) {
         if (config != null && !config.arenaBounds().isEmpty()) {
             RegionPart first = config.arenaBounds().get(0);
             int minX = (int) Math.floor(Math.min(first.min().x(), first.max().x()));
@@ -64,7 +64,7 @@ public final class MicroFrenzyArenaHelper {
         return new ArenaBounds2D(-12, 12, -12, 12);
     }
 
-    public static List<BlockPos> getWalkableFloorSurface(ServerWorld world, MicroFrenzyMapConfig config) {
+    public static List<BlockPos> getWalkableFloorSurface(ServerWorld world, MicroPartyMapConfig config) {
         List<BlockPos> surface = new ArrayList<>();
         if (world == null || config == null) {
             return surface;

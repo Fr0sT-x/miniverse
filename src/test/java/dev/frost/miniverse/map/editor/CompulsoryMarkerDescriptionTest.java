@@ -5,7 +5,7 @@ import dev.frost.miniverse.minigame.impl.bridge.BridgeDefinition;
 import dev.frost.miniverse.minigame.impl.dropper.DropperDefinition;
 import dev.frost.miniverse.minigame.impl.duels.DuelsDefinition;
 import dev.frost.miniverse.minigame.impl.infection.InfectionDefinition;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyDefinition;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyDefinition;
 import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
 import dev.frost.miniverse.minigame.impl.pillarsoffortune.PillarsOfFortuneMapEditorExtension;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDefinition;
@@ -24,7 +24,7 @@ public class CompulsoryMarkerDescriptionTest {
         MapEditorExtensionRegistry.register(DropperDefinition.EXTENSION);
         MapEditorExtensionRegistry.register(DuelsDefinition.EXTENSION);
         MapEditorExtensionRegistry.register(InfectionDefinition.EXTENSION);
-        MapEditorExtensionRegistry.register(MicroFrenzyDefinition.EXTENSION);
+        MapEditorExtensionRegistry.register(MicroPartyDefinition.EXTENSION);
         MapEditorExtensionRegistry.register(MurderMysteryDefinition.EXTENSION);
         MapEditorExtensionRegistry.register(PillarsOfFortuneMapEditorExtension.EXTENSION);
         MapEditorExtensionRegistry.register(ZombiesDefinition.EXTENSION);

@@ -1,13 +1,13 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy;
+package dev.frost.miniverse.minigame.impl.microparty;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.MapValidationResult;
 import dev.frost.miniverse.map.editor.RegionPart;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRuleRegistry;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl.*;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRuleRegistry;
+import dev.frost.miniverse.minigame.impl.microparty.rule.impl.*;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -15,15 +15,15 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 
-public class MicroFrenzyConfigAndLogicTest {
+public class MicroPartyConfigAndLogicTest {
 
     @Test
     public void testSettingsSerialization() {
-        MicroFrenzySettings original = new MicroFrenzySettings("disco_arena", 5, 30, "SURVIVAL", true, 3);
+        MicroPartySettings original = new MicroPartySettings("disco_arena", 5, 30, "SURVIVAL", true, 3);
         Properties props = new Properties();
         original.writeTo(props);
 
-        MicroFrenzySettings restored = MicroFrenzySettings.fromProperties(props);
+        MicroPartySettings restored = MicroPartySettings.fromProperties(props);
         Assert.assertEquals("disco_arena", restored.mapId());
         Assert.assertEquals(5, restored.startingLives());
         Assert.assertEquals(30, restored.maxRounds());
@@ -34,7 +34,7 @@ public class MicroFrenzyConfigAndLogicTest {
 
     @Test
     public void testSettingsDefaults() {
-        MicroFrenzySettings defaults = MicroFrenzySettings.defaults();
+        MicroPartySettings defaults = MicroPartySettings.defaults();
         Assert.assertEquals("", defaults.mapId());
         Assert.assertEquals(3, defaults.startingLives());
         Assert.assertEquals(25, defaults.maxRounds());
@@ -85,13 +85,13 @@ public class MicroFrenzyConfigAndLogicTest {
         colorArr.add(redZone);
         root.add("colorZones", colorArr);
 
-        MicroFrenzyMapConfig config = MicroFrenzyMapConfig.fromJson(root);
+        MicroPartyMapConfig config = MicroPartyMapConfig.fromJson(root);
         Assert.assertFalse(config.arenaBounds().isEmpty());
         Assert.assertEquals(2, config.playerSpawns().size());
         Assert.assertEquals(1, config.colorZones().size());
         Assert.assertEquals("RED", config.colorZones().get(0).color());
 
-        MapValidationResult validation = MicroFrenzyMapConfig.validate(null, root);
+        MapValidationResult validation = MicroPartyMapConfig.validate(null, root);
         Assert.assertTrue("Config should be valid: " + validation.errors(), validation.valid());
     }
 
@@ -126,33 +126,33 @@ public class MicroFrenzyConfigAndLogicTest {
         spawnsArr.add(MapPosition.of(5, 98, 0).toJson());
         root.add("playerSpawns", spawnsArr);
 
-        MicroFrenzyMapConfig config = MicroFrenzyMapConfig.fromJson(root);
+        MicroPartyMapConfig config = MicroPartyMapConfig.fromJson(root);
         Assert.assertFalse("arenaBounds should not be empty", config.arenaBounds().isEmpty());
         Assert.assertEquals(1, config.arenaBounds().size());
         Assert.assertEquals(0.0, config.arenaCenter().x(), 0.001);
         Assert.assertEquals(98.0, config.arenaCenter().y(), 0.001);
         Assert.assertEquals(2, config.playerSpawns().size());
 
-        MapValidationResult validation = MicroFrenzyMapConfig.validate(null, root);
+        MapValidationResult validation = MicroPartyMapConfig.validate(null, root);
         Assert.assertTrue("Validation should pass: " + validation.errors(), validation.valid());
     }
 
     @Test
     public void testMapConfigValidationErrors() {
         JsonObject empty = new JsonObject();
-        MapValidationResult validation = MicroFrenzyMapConfig.validate(null, empty);
+        MapValidationResult validation = MicroPartyMapConfig.validate(null, empty);
         Assert.assertFalse(validation.valid());
         Assert.assertTrue(validation.errors().stream().anyMatch(e -> e.contains("Arena Bounds")));
     }
 
     @Test
     public void testMicroRuleRegistry() {
-        MicroFrenzyMapConfig fullConfig = new MicroFrenzyMapConfig(
+        MicroPartyMapConfig fullConfig = new MicroPartyMapConfig(
             List.of(new RegionPart(MapPosition.of(0, 0, 0), MapPosition.of(10, 10, 10))),
             MapPosition.of(5, 5, 5),
             List.of(MapPosition.of(1, 1, 1), MapPosition.of(2, 2, 2)),
             List.of(),
-            List.of(new MicroFrenzyMapConfig.ColorZone("z1", "BLUE", List.of())),
+            List.of(new MicroPartyMapConfig.ColorZone("z1", "BLUE", List.of())),
             List.of(new RegionPart(MapPosition.of(0, 10, 0), MapPosition.of(5, 12, 5))),
             List.of()
         );
@@ -200,17 +200,17 @@ public class MicroFrenzyConfigAndLogicTest {
 
     @Test
     public void testMarkerDefinitionsAndDescriptions() {
-        var markers = MicroFrenzyDefinition.EXTENSION.markers();
+        var markers = MicroPartyDefinition.EXTENSION.markers();
         Assert.assertEquals(7, markers.size());
 
         List<String> expectedKeys = List.of(
-            MicroFrenzyDefinition.ARENA_BOUNDS,
-            MicroFrenzyDefinition.ARENA_CENTER,
-            MicroFrenzyDefinition.PLAYER_SPAWN,
-            MicroFrenzyDefinition.LOBBY_SPAWN,
-            MicroFrenzyDefinition.COLOR_ZONE,
-            MicroFrenzyDefinition.HIGH_GROUND,
-            MicroFrenzyDefinition.TARGET_POINT
+            MicroPartyDefinition.ARENA_BOUNDS,
+            MicroPartyDefinition.ARENA_CENTER,
+            MicroPartyDefinition.PLAYER_SPAWN,
+            MicroPartyDefinition.LOBBY_SPAWN,
+            MicroPartyDefinition.COLOR_ZONE,
+            MicroPartyDefinition.HIGH_GROUND,
+            MicroPartyDefinition.TARGET_POINT
         );
 
         for (String expectedKey : expectedKeys) {
@@ -231,16 +231,16 @@ public class MicroFrenzyConfigAndLogicTest {
 
     @Test
     public void testMarkerDescriptionNbtSerialization() {
-        dev.frost.miniverse.map.editor.MapEditorExtensionRegistry.register(MicroFrenzyDefinition.EXTENSION);
+        dev.frost.miniverse.map.editor.MapEditorExtensionRegistry.register(MicroPartyDefinition.EXTENSION);
 
         // Ensure that MapEditorNbt preserves the marker description across network sync
         net.minecraft.nbt.NbtList nbtExtensions = dev.frost.miniverse.map.editor.MapEditorNbt.extensionsToNbt();
-        boolean foundMicroFrenzy = false;
+        boolean foundMicroParty = false;
 
         for (int i = 0; i < nbtExtensions.size(); i++) {
             net.minecraft.nbt.NbtCompound comp = nbtExtensions.getCompound(i);
-            if (MicroFrenzyDefinition.ID.equals(comp.getString("gameId"))) {
-                foundMicroFrenzy = true;
+            if (MicroPartyDefinition.ID.equals(comp.getString("gameId"))) {
+                foundMicroParty = true;
                 net.minecraft.nbt.NbtList markerList = comp.getList("markers", net.minecraft.nbt.NbtElement.COMPOUND_TYPE);
                 Assert.assertEquals(7, markerList.size());
 
@@ -252,13 +252,13 @@ public class MicroFrenzyConfigAndLogicTest {
                 }
             }
         }
-        Assert.assertTrue("MicroFrenzy extension must be registered in MapEditorExtensionRegistry", foundMicroFrenzy);
+        Assert.assertTrue("MicroParty extension must be registered in MapEditorExtensionRegistry", foundMicroParty);
     }
 
     @Test
     public void testFlatMapProceduralApplicability() {
         // Minimal flat map config with only arena bounds and 2 player spawns
-        MicroFrenzyMapConfig flatConfig = new MicroFrenzyMapConfig(
+        MicroPartyMapConfig flatConfig = new MicroPartyMapConfig(
             List.of(new RegionPart(MapPosition.of(-15, 99, -15), MapPosition.of(15, 115, 15))),
             null, // No arenaCenter set!
             List.of(MapPosition.of(-5, 100, -5), MapPosition.of(5, 100, 5)),
@@ -310,7 +310,7 @@ public class MicroFrenzyConfigAndLogicTest {
         spawns.add(s2);
         json.add("playerSpawns", spawns);
 
-        MicroFrenzyMapConfig parsed = MicroFrenzyMapConfig.fromJson(json);
+        MicroPartyMapConfig parsed = MicroPartyMapConfig.fromJson(json);
         Assert.assertNotNull(parsed.arenaCenter());
         Assert.assertEquals(0.0, parsed.arenaCenter().x(), 0.01);
         Assert.assertEquals(10.0, parsed.arenaCenter().z(), 0.01);
@@ -327,8 +327,8 @@ public class MicroFrenzyConfigAndLogicTest {
     }
 
     @Test
-    public void testMicroFrenzyArenaHelper2D() {
-        MicroFrenzyMapConfig config = new MicroFrenzyMapConfig(
+    public void testMicroPartyArenaHelper2D() {
+        MicroPartyMapConfig config = new MicroPartyMapConfig(
             List.of(new RegionPart(MapPosition.of(-10, 100, -20), MapPosition.of(10, 110, 20))),
             MapPosition.of(0, 100, 0),
             List.of(MapPosition.of(-5, 100, -5), MapPosition.of(5, 100, 5)),
@@ -338,7 +338,7 @@ public class MicroFrenzyConfigAndLogicTest {
             List.of()
         );
 
-        MicroFrenzyArenaHelper.ArenaBounds2D b2d = MicroFrenzyArenaHelper.getBounds2D(config);
+        MicroPartyArenaHelper.ArenaBounds2D b2d = MicroPartyArenaHelper.getBounds2D(config);
         Assert.assertEquals(-10, b2d.minX());
         Assert.assertEquals(10, b2d.maxX());
         Assert.assertEquals(-20, b2d.minZ());
@@ -347,16 +347,16 @@ public class MicroFrenzyConfigAndLogicTest {
         Assert.assertEquals(41, b2d.depth());
         Assert.assertEquals(0, b2d.centerX());
         Assert.assertEquals(0, b2d.centerZ());
-        Assert.assertEquals(100, MicroFrenzyArenaHelper.getFloorY(config));
+        Assert.assertEquals(100, MicroPartyArenaHelper.getFloorY(config));
     }
 
     @Test
     public void testSpeedUpPhaseEnum() {
-        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("SPEED_UP"));
-        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("INTERMISSION"));
-        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("ANNOUNCEMENT"));
-        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("ACTIVE"));
-        Assert.assertNotNull(MicroFrenzyMinigame.Phase.valueOf("RESOLVING"));
+        Assert.assertNotNull(MicroPartyMinigame.Phase.valueOf("SPEED_UP"));
+        Assert.assertNotNull(MicroPartyMinigame.Phase.valueOf("INTERMISSION"));
+        Assert.assertNotNull(MicroPartyMinigame.Phase.valueOf("ANNOUNCEMENT"));
+        Assert.assertNotNull(MicroPartyMinigame.Phase.valueOf("ACTIVE"));
+        Assert.assertNotNull(MicroPartyMinigame.Phase.valueOf("RESOLVING"));
     }
 
     @Test
@@ -431,7 +431,7 @@ public class MicroFrenzyConfigAndLogicTest {
 
     @Test
     public void testEnabledRulesSettingsSerialization() {
-        MicroFrenzySettings settings = new MicroFrenzySettings(
+        MicroPartySettings settings = new MicroPartySettings(
             "test_map", 3, 20, "SURVIVAL", true, 2, java.util.Set.of("statue", "jump_count")
         );
         Assert.assertTrue(settings.isRuleEnabled("statue"));
@@ -441,10 +441,10 @@ public class MicroFrenzyConfigAndLogicTest {
         // Properties serialization
         Properties props = new Properties();
         settings.writeTo(props);
-        Assert.assertTrue(props.getProperty("microfrenzy.enabledRules").contains("statue"));
-        Assert.assertTrue(props.getProperty("microfrenzy.enabledRules").contains("jump_count"));
+        Assert.assertTrue(props.getProperty("microparty.enabledRules").contains("statue"));
+        Assert.assertTrue(props.getProperty("microparty.enabledRules").contains("jump_count"));
 
-        MicroFrenzySettings restored = MicroFrenzySettings.fromProperties(props);
+        MicroPartySettings restored = MicroPartySettings.fromProperties(props);
         Assert.assertTrue(restored.isRuleEnabled("statue"));
         Assert.assertTrue(restored.isRuleEnabled("jump_count"));
         Assert.assertFalse(restored.isRuleEnabled("hot_potato"));
@@ -453,13 +453,13 @@ public class MicroFrenzyConfigAndLogicTest {
         net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
         nbt.putString("mapId", "test_map");
         nbt.putString("enabledRules", "statue,hot_potato");
-        MicroFrenzySettings fromNbt = MicroFrenzySettings.fromNbt(nbt);
+        MicroPartySettings fromNbt = MicroPartySettings.fromNbt(nbt);
         Assert.assertTrue(fromNbt.isRuleEnabled("statue"));
         Assert.assertTrue(fromNbt.isRuleEnabled("hot_potato"));
         Assert.assertFalse(fromNbt.isRuleEnabled("jump_count"));
 
         // Empty rules -> all enabled
-        MicroFrenzySettings emptySettings = MicroFrenzySettings.defaults();
+        MicroPartySettings emptySettings = MicroPartySettings.defaults();
         Assert.assertTrue(emptySettings.isRuleEnabled("statue"));
         Assert.assertTrue(emptySettings.isRuleEnabled("anything"));
     }
@@ -591,7 +591,7 @@ public class MicroFrenzyConfigAndLogicTest {
 
     @Test
     public void testChatInterceptAwareRules() {
-        MicroFrenzyMinigame minigame = new MicroFrenzyMinigame();
+        MicroPartyMinigame minigame = new MicroPartyMinigame();
         Assert.assertTrue(minigame instanceof dev.frost.miniverse.chat.ChatInterceptAware);
         Assert.assertFalse(minigame instanceof dev.frost.miniverse.chat.ChatRoutingAware);
 
@@ -606,5 +606,54 @@ public class MicroFrenzyConfigAndLogicTest {
 
         CountMobsRule countRule = new CountMobsRule();
         Assert.assertNotNull(countRule);
+    }
+
+    @Test
+    public void testEchoRuleOnPrepareAndInstructionSync() {
+        EchoRule rule = new EchoRule();
+        rule.onPrepare(null, null);
+
+        String instruction = rule.instruction().getString();
+        Assert.assertTrue("Instruction must start with Type:", instruction.startsWith("Type:"));
+        Assert.assertTrue("Instruction must contain a quoted phrase", instruction.contains("\""));
+
+        // Extract phrase between quotes
+        int start = instruction.indexOf("\"");
+        int end = instruction.lastIndexOf("\"");
+        Assert.assertTrue("Quote indices valid", start >= 0 && end > start);
+        String phrase = instruction.substring(start + 1, end);
+        Assert.assertFalse("Target phrase should not be empty", phrase.isBlank());
+    }
+
+    @Test
+    public void testWordScrambleRuleOnPrepare() {
+        WordScrambleRule rule = new WordScrambleRule();
+        rule.onPrepare(null, null);
+
+        String title = rule.title().getString();
+        Assert.assertTrue("Title must contain UNSCRAMBLE:", title.contains("UNSCRAMBLE:"));
+        String scrambled = title.replace("UNSCRAMBLE:", "").trim();
+        Assert.assertFalse("Scrambled word should not be empty", scrambled.isBlank());
+    }
+
+    @Test
+    public void testQuickMathRuleOnPrepare() {
+        QuickMathRule rule = new QuickMathRule();
+        rule.onPrepare(null, null);
+
+        String instruction = rule.instruction().getString();
+        Assert.assertTrue("Instruction must contain What is", instruction.contains("What is"));
+        Assert.assertNotNull("Expected question should exist", rule.getCurrentQuestion());
+        Assert.assertTrue("Instruction must reflect the generated question", instruction.contains(rule.getCurrentQuestion()));
+    }
+
+    @Test
+    public void testMlgBucketRuleProperties() {
+        MlgBucketRule rule = new MlgBucketRule();
+        Assert.assertEquals("mlg_bucket", rule.id());
+        Assert.assertEquals("MLG Water Drop", rule.name());
+        Assert.assertEquals(7, rule.baseDurationSeconds());
+        Assert.assertTrue(rule.title().getString().contains("MLG WATER DROP"));
+        Assert.assertTrue(rule.instruction().getString().contains("Water drop"));
     }
 }

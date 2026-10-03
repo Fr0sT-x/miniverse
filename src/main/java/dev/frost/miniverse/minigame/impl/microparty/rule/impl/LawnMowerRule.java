@@ -1,8 +1,8 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.ItemStack;
@@ -50,7 +50,7 @@ public class LawnMowerRule implements MicroRule {
     }
 
     @Override
-    public Text instruction(MicroFrenzyMinigame game) {
+    public Text instruction(MicroPartyMinigame game) {
         int req = getRequiredCuts(game);
         return Text.literal("Mow " + req + " flowers or grass!").formatted(Formatting.YELLOW);
     }
@@ -60,7 +60,7 @@ public class LawnMowerRule implements MicroRule {
         return 8;
     }
 
-    public static int getRequiredCuts(MicroFrenzyMinigame game) {
+    public static int getRequiredCuts(MicroPartyMinigame game) {
         if (game == null) return 3;
         float factor = game.getSpeedFactor();
         if (factor >= 0.9f) return 3;
@@ -69,15 +69,15 @@ public class LawnMowerRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.mowedCount.clear();
         this.plantPositions.clear();
 
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
 
         BlockState[] plantTypes = new BlockState[] {
             Blocks.POPPY.getDefaultState(),
@@ -112,7 +112,7 @@ public class LawnMowerRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world == null || this.plantPositions.isEmpty()) return;
 
@@ -146,12 +146,12 @@ public class LawnMowerRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return this.mowedCount.getOrDefault(player.getUuid(), 0) >= getRequiredCuts(game);
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             p.getInventory().clear();
         }

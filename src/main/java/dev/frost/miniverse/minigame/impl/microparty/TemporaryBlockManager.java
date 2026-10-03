@@ -1,4 +1,4 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy;
+package dev.frost.miniverse.minigame.impl.microparty;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;

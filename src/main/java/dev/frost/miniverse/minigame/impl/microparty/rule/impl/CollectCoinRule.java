@@ -1,9 +1,9 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMapConfig;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMapConfig;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -51,7 +51,7 @@ public class CollectCoinRule implements MicroRule {
     }
 
     @Override
-    public Text instruction(MicroFrenzyMinigame game) {
+    public Text instruction(MicroPartyMinigame game) {
         int req = getRequiredCoins(game);
         if (req > 1) {
             return Text.literal("Collect " + req + " floating gold coins!").formatted(Formatting.YELLOW);
@@ -66,38 +66,38 @@ public class CollectCoinRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds (70 ticks)
     }
 
-    public static int getRequiredCoins(MicroFrenzyMinigame game) {
+    public static int getRequiredCoins(MicroPartyMinigame game) {
         if (game == null) return 2;
         return game.getSpeedFactor() >= 0.9f ? 2 : 1;
     }
 
     @Override
-    public boolean isApplicable(MicroFrenzyMapConfig mapConfig) {
+    public boolean isApplicable(MicroPartyMapConfig mapConfig) {
         return true;
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.spawnedCoins.clear();
         this.collectedCoins.clear();
 
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
 
         int req = getRequiredCoins(game);
         int livingCount = Math.max(1, game.getLivingPlayers().size());
         int toSpawn = Math.max(6, (livingCount * req) + 4);
 
-        List<BlockPos> walkableSurface = MicroFrenzyArenaHelper.getWalkableFloorSurface(world, game.getMapConfig());
+        List<BlockPos> walkableSurface = MicroPartyArenaHelper.getWalkableFloorSurface(world, game.getMapConfig());
 
         if (!walkableSurface.isEmpty()) {
             List<BlockPos> shuffled = new ArrayList<>(walkableSurface);
@@ -129,7 +129,7 @@ public class CollectCoinRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world == null || this.spawnedCoins.isEmpty()) return;
 
@@ -172,12 +172,12 @@ public class CollectCoinRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return this.collectedCoins.getOrDefault(player.getUuid(), 0) >= getRequiredCoins(game);
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         for (ItemEntity coin : this.spawnedCoins) {
             if (coin != null && coin.isAlive()) {
                 coin.discard();

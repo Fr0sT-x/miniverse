@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -39,15 +39,15 @@ public class LookDownRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return player.getPitch() >= 70.0f;
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
     }
 }

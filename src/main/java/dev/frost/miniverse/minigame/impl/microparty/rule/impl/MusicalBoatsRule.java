@@ -1,8 +1,8 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.vehicle.BoatEntity;
@@ -53,14 +53,14 @@ public class MusicalBoatsRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(7 * 20 * factor);
         return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.spawnedBoats.clear();
         this.spawnedDummies.clear();
         this.acknowledgedSeated.clear();
@@ -69,8 +69,8 @@ public class MusicalBoatsRule implements MicroRule {
         if (world == null) return;
 
         int livingCount = game.getLivingPlayers().size();
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
         int margin = Math.max(1, bounds.width() / 6);
 
         // Calculate boats and seats so exactly (livingCount - 1) seats are available for players
@@ -106,7 +106,7 @@ public class MusicalBoatsRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             if (p.getVehicle() instanceof BoatEntity boat && this.spawnedBoats.contains(boat)) {
                 if (this.acknowledgedSeated.add(p.getUuid())) {
@@ -118,12 +118,12 @@ public class MusicalBoatsRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return player.getVehicle() instanceof BoatEntity boat && this.spawnedBoats.contains(boat);
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             p.stopRiding();
         }

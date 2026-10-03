@@ -1,8 +1,8 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
 import dev.frost.miniverse.common.NetworkConstants;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket;
 import net.minecraft.server.MinecraftServer;
@@ -55,7 +55,7 @@ public class StopClockRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(5 * 20 * factor);
         return Math.max(60, standardTicks); // Minimum 3.0 seconds (60 ticks)
@@ -80,7 +80,7 @@ public class StopClockRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         activeInstance = this;
         ensureServerReceiverRegistered();
 
@@ -123,7 +123,7 @@ public class StopClockRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         float remainingSecs = (remainingTicks * 50) / 1000.0f;
 
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
@@ -144,12 +144,12 @@ public class StopClockRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return this.passedPlayers.contains(player.getUuid()) && !this.failedPlayers.contains(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         if (activeInstance == this) {
             activeInstance = null;
         }

@@ -1,8 +1,8 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
 import net.minecraft.particle.DustParticleEffect;
 import net.minecraft.particle.ParticleTypes;
@@ -57,15 +57,15 @@ public class MortarStrikeRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(80, standardTicks); // Clamped to at least 4.0 seconds
     }
 
-    private void spawnReticleWave(MicroFrenzyMinigame game, int detonateInTicks) {
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+    private void spawnReticleWave(MicroPartyMinigame game, int detonateInTicks) {
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
         int margin = Math.max(2, bounds.width() / 6);
 
         int count = 3 + random.nextInt(4); // 3 to 6 mortar strikes
@@ -77,7 +77,7 @@ public class MortarStrikeRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.hitPlayers.clear();
         this.activeReticles.clear();
         this.wave2Spawned = false;
@@ -88,7 +88,7 @@ public class MortarStrikeRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
@@ -133,6 +133,7 @@ public class MortarStrikeRule implements MicroRule {
                         this.hitPlayers.add(p.getUuid());
                         p.sendMessage(Text.literal("§c§l💥 HIT BY MORTAR!"), true);
                         p.setVelocity(new Vec3d(0, 0.5, 0));
+                        p.velocityModified = true;
                         p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
                     }
                 }
@@ -142,12 +143,12 @@ public class MortarStrikeRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return !this.hitPlayers.contains(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         this.activeReticles.clear();
         this.hitPlayers.clear();
     }

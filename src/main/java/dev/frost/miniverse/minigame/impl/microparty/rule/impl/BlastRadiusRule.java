@@ -1,9 +1,9 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
 import dev.frost.miniverse.map.MapPosition;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.entity.TntEntity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
@@ -52,13 +52,13 @@ public class BlastRadiusRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
         this.centerX = bounds.centerX() + 0.5;
-        this.centerY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+        this.centerY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
         this.centerZ = bounds.centerZ() + 0.5;
 
         MapPosition explicitCenter = game.getMapConfig().arenaCenter();
@@ -76,7 +76,7 @@ public class BlastRadiusRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world != null && remainingTicks % 4 == 0) {
             world.spawnParticles(ParticleTypes.SMOKE, this.centerX, this.centerY + 1.0, this.centerZ, 3, 0.2, 0.2, 0.2, 0.02);
@@ -94,12 +94,12 @@ public class BlastRadiusRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return player.squaredDistanceTo(this.centerX, this.centerY, this.centerZ) >= (REQUIRED_SAFE_DISTANCE * REQUIRED_SAFE_DISTANCE);
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         if (this.primedTnt != null && this.primedTnt.isAlive()) {
             this.primedTnt.discard();
         }

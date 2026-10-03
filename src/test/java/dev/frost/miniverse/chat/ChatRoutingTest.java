@@ -9,7 +9,7 @@ import dev.frost.miniverse.minigame.impl.bridge.BridgeMinigame;
 import dev.frost.miniverse.minigame.impl.bridge.BridgeSettings;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntMinigame;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntSettings;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
 
 public class ChatRoutingTest {
 
@@ -20,9 +20,9 @@ public class ChatRoutingTest {
     }
 
     @Test
-    public void testMicroFrenzyDoesNotImplementChatRoutingAware() {
-        MicroFrenzyMinigame microFrenzy = new MicroFrenzyMinigame();
-        Assert.assertFalse("MicroFrenzy must not implement ChatRoutingAware", microFrenzy instanceof ChatRoutingAware);
+    public void testMicroPartyDoesNotImplementChatRoutingAware() {
+        MicroPartyMinigame microParty = new MicroPartyMinigame();
+        Assert.assertFalse("MicroParty must not implement ChatRoutingAware", microParty instanceof ChatRoutingAware);
     }
 
     @Test

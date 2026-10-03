@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -49,20 +49,20 @@ public class StareDownRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(6 * 20 * factor);
         return Math.max(60, standardTicks); // Clamped to at least 3.0 seconds
     }
 
-    public static int getRequiredStareTicks(MicroFrenzyMinigame game) {
+    public static int getRequiredStareTicks(MicroPartyMinigame game) {
         if (game == null) return 20;
         float factor = game.getSpeedFactor();
         return Math.max(12, Math.round(20 * factor)); // ~1.0s scaled down to 0.6s
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.stareTicks.clear();
         this.passedPlayers.clear();
 
@@ -76,7 +76,7 @@ public class StareDownRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         int required = getRequiredStareTicks(game);
         ServerWorld world = game.getWorld();
 
@@ -121,7 +121,7 @@ public class StareDownRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         if (game != null && game.getLivingPlayers().size() <= 1) {
             return true;
         }
@@ -129,7 +129,7 @@ public class StareDownRule implements MicroRule {
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         this.stareTicks.clear();
         this.passedPlayers.clear();
     }

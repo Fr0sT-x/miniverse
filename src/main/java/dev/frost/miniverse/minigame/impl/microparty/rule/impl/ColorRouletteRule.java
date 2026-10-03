@@ -1,8 +1,8 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
@@ -60,7 +60,7 @@ public class ColorRouletteRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(80, standardTicks); // Clamped to at least 4.0 seconds
@@ -76,7 +76,7 @@ public class ColorRouletteRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.cornerColors.clear();
         this.doomedPlayers.clear();
         this.struck = false;
@@ -85,9 +85,9 @@ public class ColorRouletteRule implements MicroRule {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
         int surfaceY = floorY - 1;
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
 
         int cx = (bounds.minX() + bounds.maxX()) / 2;
         int cz = (bounds.minZ() + bounds.maxZ()) / 2;
@@ -120,7 +120,7 @@ public class ColorRouletteRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
@@ -136,7 +136,7 @@ public class ColorRouletteRule implements MicroRule {
         if (remainingTicks == 1 && !this.struck) {
             this.struck = true;
 
-            int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+            int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
 
             // Detonate / strike the doomed corner blocks
             for (Map.Entry<BlockPos, String> entry : this.cornerColors.entrySet()) {
@@ -171,7 +171,7 @@ public class ColorRouletteRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         if (this.doomedPlayers.contains(player.getUuid())) {
             return false;
         }
@@ -186,7 +186,7 @@ public class ColorRouletteRule implements MicroRule {
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         this.cornerColors.clear();
         this.doomedPlayers.clear();
         this.struck = false;

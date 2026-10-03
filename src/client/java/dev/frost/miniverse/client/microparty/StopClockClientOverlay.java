@@ -1,4 +1,4 @@
-package dev.frost.miniverse.client.microfrenzy;
+package dev.frost.miniverse.client.microparty;
 
 import dev.frost.miniverse.common.NetworkConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;

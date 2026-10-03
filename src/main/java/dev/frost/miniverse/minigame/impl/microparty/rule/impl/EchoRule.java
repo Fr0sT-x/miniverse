@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
@@ -60,20 +60,34 @@ public class EchoRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
         this.passedPlayers.clear();
         this.targetPhrase = PHRASE_LIST[random.nextInt(PHRASE_LIST.length)];
     }
 
     @Override
-    public boolean onChatMessage(ServerPlayerEntity player, String message, MicroFrenzyMinigame game) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
+        if (this.targetPhrase == null || this.targetPhrase.isBlank()) {
+            this.targetPhrase = PHRASE_LIST[random.nextInt(PHRASE_LIST.length)];
+        }
+        if (game != null) {
+            for (ServerPlayerEntity p : game.getLivingPlayers()) {
+                p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket(
+                    Text.literal("§eType in chat: §b\"" + this.targetPhrase + "\"").formatted(Formatting.YELLOW)
+                ));
+            }
+        }
+    }
+
+    @Override
+    public boolean onChatMessage(ServerPlayerEntity player, String message, MicroPartyMinigame game) {
         if (player == null || message == null || game.isEliminated(player.getUuid()) || !game.getTracker().isAlive(player.getUuid())) {
             return false;
         }
@@ -86,8 +100,26 @@ public class EchoRule implements MicroRule {
         if (attempt.startsWith("!")) {
             attempt = attempt.substring(1).trim();
         }
+        // Strip outer quotes if player typed with quotes (since instruction shows "...")
+        if (attempt.startsWith("\"") && attempt.endsWith("\"") && attempt.length() >= 2) {
+            attempt = attempt.substring(1, attempt.length() - 1).trim();
+        } else if (attempt.startsWith("'") && attempt.endsWith("'") && attempt.length() >= 2) {
+            attempt = attempt.substring(1, attempt.length() - 1).trim();
+        }
 
-        if (attempt.equalsIgnoreCase(this.targetPhrase)) {
+        // Normalize internal whitespace
+        String normalizedAttempt = attempt.replaceAll("\\s+", " ");
+        String normalizedTarget = this.targetPhrase.replaceAll("\\s+", " ");
+
+        boolean matches = normalizedAttempt.equalsIgnoreCase(normalizedTarget);
+        if (!matches && normalizedAttempt.endsWith(".") && !normalizedTarget.endsWith(".")) {
+            matches = normalizedAttempt.substring(0, normalizedAttempt.length() - 1).trim().equalsIgnoreCase(normalizedTarget);
+        }
+        if (!matches && normalizedAttempt.endsWith("!") && !normalizedTarget.endsWith("!")) {
+            matches = normalizedAttempt.substring(0, normalizedAttempt.length() - 1).trim().equalsIgnoreCase(normalizedTarget);
+        }
+
+        if (matches) {
             this.passedPlayers.add(player.getUuid());
             player.sendMessage(Text.literal("§a§l✔ Echoed!"), true);
             player.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
@@ -100,12 +132,12 @@ public class EchoRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return this.passedPlayers.contains(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         this.passedPlayers.clear();
     }
 }

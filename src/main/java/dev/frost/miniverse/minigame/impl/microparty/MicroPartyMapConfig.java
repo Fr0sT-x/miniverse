@@ -1,4 +1,4 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy;
+package dev.frost.miniverse.minigame.impl.microparty;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public record MicroFrenzyMapConfig(
+public record MicroPartyMapConfig(
     List<RegionPart> arenaBounds,
     MapPosition arenaCenter,
     List<MapPosition> playerSpawns,
@@ -23,7 +23,7 @@ public record MicroFrenzyMapConfig(
     List<RegionPart> highGround,
     List<MapPosition> targets
 ) {
-    public MicroFrenzyMapConfig {
+    public MicroPartyMapConfig {
         arenaBounds = arenaBounds == null ? List.of() : List.copyOf(arenaBounds);
         playerSpawns = playerSpawns == null ? List.of() : List.copyOf(playerSpawns);
         lobbySpawns = lobbySpawns == null ? List.of() : List.copyOf(lobbySpawns);
@@ -42,9 +42,9 @@ public record MicroFrenzyMapConfig(
         }
     }
 
-    public static MicroFrenzyMapConfig fromJson(JsonObject json) {
+    public static MicroPartyMapConfig fromJson(JsonObject json) {
         if (json == null) {
-            return new MicroFrenzyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+            return new MicroPartyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
         }
 
         // 1. arenaBounds
@@ -182,17 +182,17 @@ public record MicroFrenzyMapConfig(
             arenaCenter = MapPosition.of(0, 100, 0);
         }
 
-        return new MicroFrenzyMapConfig(
+        return new MicroPartyMapConfig(
             arenaBounds, arenaCenter, playerSpawns, lobbySpawns, colorZones, highGround, targets
         );
     }
 
-    public static MicroFrenzyMapConfig fromJsonString(String value) {
+    public static MicroPartyMapConfig fromJsonString(String value) {
         try {
             JsonElement element = JsonParser.parseString(value == null ? "{}" : value);
-            return element.isJsonObject() ? fromJson(element.getAsJsonObject()) : new MicroFrenzyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+            return element.isJsonObject() ? fromJson(element.getAsJsonObject()) : new MicroPartyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
         } catch (Exception ignored) {
-            return new MicroFrenzyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+            return new MicroPartyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
         }
     }
 
@@ -203,10 +203,10 @@ public record MicroFrenzyMapConfig(
     public static MapValidationResult validateEditor(MapDescriptor map, JsonObject config, MapEditorExtension extension) {
         MapValidationResult.Builder builder = MapValidationResult.builder();
         if (config == null) {
-            return builder.error("Micro-Frenzy configuration is missing.").build();
+            return builder.error("Micro Party configuration is missing.").build();
         }
 
-        MicroFrenzyMapConfig parsed = fromJson(config);
+        MicroPartyMapConfig parsed = fromJson(config);
         if (parsed.arenaBounds().isEmpty()) {
             builder.error("At least one Arena Bounds region must be defined.");
         }

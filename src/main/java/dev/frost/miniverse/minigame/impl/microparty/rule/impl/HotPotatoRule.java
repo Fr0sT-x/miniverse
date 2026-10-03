@@ -1,9 +1,9 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
 import dev.frost.miniverse.minigame.core.GameMessenger;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMapConfig;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMapConfig;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
@@ -60,19 +60,19 @@ public class HotPotatoRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(100, standardTicks); // Clamped to at least 5.0 seconds (100 ticks)
     }
 
     @Override
-    public boolean isApplicable(MicroFrenzyMapConfig mapConfig) {
+    public boolean isApplicable(MicroPartyMapConfig mapConfig) {
         return true;
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.currentHolderUuid = null;
 
         List<ServerPlayerEntity> living = game.getLivingPlayers();
@@ -94,7 +94,7 @@ public class HotPotatoRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         if (this.currentHolderUuid == null) return;
 
         ServerPlayerEntity holder = server.getPlayerManager().getPlayer(this.currentHolderUuid);
@@ -110,7 +110,7 @@ public class HotPotatoRule implements MicroRule {
     }
 
     @Override
-    public void onPlayerAttack(ServerPlayerEntity attacker, Entity target, MicroFrenzyMinigame game) {
+    public void onPlayerAttack(ServerPlayerEntity attacker, Entity target, MicroPartyMinigame game) {
         if (this.currentHolderUuid == null) return;
 
         if (attacker.getUuid().equals(this.currentHolderUuid) && target instanceof ServerPlayerEntity victim && game.getLivingPlayers().contains(victim)) {
@@ -132,7 +132,7 @@ public class HotPotatoRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         if (this.currentHolderUuid == null) {
             return true;
         }
@@ -140,7 +140,7 @@ public class HotPotatoRule implements MicroRule {
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         if (this.currentHolderUuid != null) {
             ServerPlayerEntity holder = server.getPlayerManager().getPlayer(this.currentHolderUuid);
             if (holder != null && holder.isAlive()) {

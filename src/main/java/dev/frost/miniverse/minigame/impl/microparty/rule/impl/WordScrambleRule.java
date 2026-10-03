@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
@@ -54,7 +54,7 @@ public class WordScrambleRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
@@ -79,14 +79,28 @@ public class WordScrambleRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
         this.passedPlayers.clear();
         this.originalWord = WORD_LIST[random.nextInt(WORD_LIST.length)];
         this.scrambledWord = scramble(this.originalWord);
     }
 
     @Override
-    public boolean onChatMessage(ServerPlayerEntity player, String message, MicroFrenzyMinigame game) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
+        if (this.scrambledWord == null || this.scrambledWord.isBlank()) {
+            onPrepare(game, server);
+        }
+        if (game != null) {
+            for (ServerPlayerEntity p : game.getLivingPlayers()) {
+                p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket(
+                    Text.literal("§eUnscramble: §b" + this.scrambledWord).formatted(Formatting.AQUA)
+                ));
+            }
+        }
+    }
+
+    @Override
+    public boolean onChatMessage(ServerPlayerEntity player, String message, MicroPartyMinigame game) {
         if (player == null || message == null || game.isEliminated(player.getUuid()) || !game.getTracker().isAlive(player.getUuid())) {
             return false;
         }
@@ -98,6 +112,11 @@ public class WordScrambleRule implements MicroRule {
         String attempt = message.trim();
         if (attempt.startsWith("!")) {
             attempt = attempt.substring(1).trim();
+        }
+        if (attempt.startsWith("\"") && attempt.endsWith("\"") && attempt.length() >= 2) {
+            attempt = attempt.substring(1, attempt.length() - 1).trim();
+        } else if (attempt.startsWith("'") && attempt.endsWith("'") && attempt.length() >= 2) {
+            attempt = attempt.substring(1, attempt.length() - 1).trim();
         }
 
         if (attempt.equalsIgnoreCase(this.originalWord)) {
@@ -113,12 +132,12 @@ public class WordScrambleRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return this.passedPlayers.contains(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         this.passedPlayers.clear();
     }
 }

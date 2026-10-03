@@ -13,7 +13,7 @@
 
 **Legend:** ✅ Fully Used · ⚠️ Partially Used · ❌ Not Used · 🔄 Migration In Progress
 
-| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune | HordeSurvival | Dropper | Zombies | MicroFrenzy |
+| Framework | Manhunt | Speedrun | BountyHunt | DeathSwap | ResourceSprint | BlockShuffle | DeathShuffle | Duels | MurderMystery | Bridge | Infection | PillarsOfFortune | HordeSurvival | Dropper | Zombies | MicroParty |
 |-----------|:-------:|:--------:|:----------:|:---------:|:--------------:|:------------:|:------------:|:-----:|:-------------:|:------:|:---------:|:----------------:|:-------------:|:-------:|:-------:|:-----------:|
 | F01 Session | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | F02 Match Lifecycle | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -50,7 +50,7 @@
 > - **Where Leaf Decay is OFF**:
 >   1. **Map Editor sessions** (`SessionMode.MAP_EDITOR`).
 >   2. **Inspection sessions** (`SessionMode.INSPECTION_SESSION`).
->   3. **All Map-based Gamemodes**: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper, Micro-Frenzy, Skywars, Capture the Flag (identified via `MapWorldRules.isLeafDecayDisabled(world)`).
+>   3. **All Map-based Gamemodes**: Murder Mystery, Bedwars, Duels, Infection, The Bridge, Pillars of Fortune, Zombies, Dropper, Micro Party, Skywars, Capture the Flag (identified via `MapWorldRules.isLeafDecayDisabled(world)`).
 > - **How it works**:
 >   - `LeavesBlockMixin` intercepts `LeavesBlock.randomTick` at `HEAD` and cancels decay whenever `MapWorldRules.isLeafDecayDisabled(world)` is true.
 >   - Leaves placed during map construction (oak, birch, spruce, jungle, acacia, dark oak, mangrove, cherry, azalea) will **never** decay, despawn, or drop saplings/apples.
@@ -528,9 +528,9 @@ any code. Add the gamemode column to the matrix above.
 
 ---
 
-### Micro-Frenzy (Micro-frezy)
+### Micro Party (Micro-Party)
 
-**Main class:** `MicroFrenzyMinigame`
+**Main class:** `MicroPartyMinigame`
 **Status:** Production-ready · **Compliance:** 77%
 **Last reviewed:** 2026-09-26
 

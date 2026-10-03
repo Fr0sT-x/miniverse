@@ -51,7 +51,7 @@ public class MiniverseClient implements ClientModInitializer {
 		ProtectionOverlayClient.register();
 		SessionLaunchStatus.register();
 		InventoryLayoutClient.register();
-		dev.frost.miniverse.client.microfrenzy.StopClockClientOverlay.register();
+		dev.frost.miniverse.client.microparty.StopClockClientOverlay.register();
 		dev.frost.miniverse.client.gui.map.MapEditorOverlayClient.register();
 		dev.frost.miniverse.client.gui.map.MapEditorRenderIntegration.register();
 		dev.frost.miniverse.client.gui.map.DuelsEditorClient.register();

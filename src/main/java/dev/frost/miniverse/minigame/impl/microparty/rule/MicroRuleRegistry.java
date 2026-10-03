@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule;
+package dev.frost.miniverse.minigame.impl.microparty.rule;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMapConfig;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl.*;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMapConfig;
+import dev.frost.miniverse.minigame.impl.microparty.rule.impl.*;
 
 import java.util.*;
 
@@ -61,7 +61,7 @@ public final class MicroRuleRegistry {
         return List.copyOf(ALL_RULES);
     }
 
-    public static List<MicroRule> getApplicableRules(MicroFrenzyMapConfig mapConfig) {
+    public static List<MicroRule> getApplicableRules(MicroPartyMapConfig mapConfig) {
         List<MicroRule> applicable = new ArrayList<>();
         for (MicroRule rule : ALL_RULES) {
             if (rule.isApplicable(mapConfig)) {

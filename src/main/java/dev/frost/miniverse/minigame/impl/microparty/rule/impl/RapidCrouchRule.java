@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -44,7 +44,7 @@ public class RapidCrouchRule implements MicroRule {
     }
 
     @Override
-    public Text instruction(MicroFrenzyMinigame game) {
+    public Text instruction(MicroPartyMinigame game) {
         return Text.literal("Crouch " + getRequiredCrouches(game) + " times!").formatted(Formatting.YELLOW);
     }
 
@@ -53,7 +53,7 @@ public class RapidCrouchRule implements MicroRule {
         return 8;
     }
 
-    public static int getRequiredCrouches(MicroFrenzyMinigame game) {
+    public static int getRequiredCrouches(MicroPartyMinigame game) {
         if (game == null) {
             return 5;
         }
@@ -68,7 +68,7 @@ public class RapidCrouchRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         lastSneakState.clear();
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             lastSneakState.put(p.getUuid(), p.isSneaking());
@@ -76,7 +76,7 @@ public class RapidCrouchRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         int required = getRequiredCrouches(game);
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             boolean wasSneaking = lastSneakState.getOrDefault(p.getUuid(), false);
@@ -99,12 +99,12 @@ public class RapidCrouchRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return game.getTracker().getSneakCount(player.getUuid()) >= getRequiredCrouches(game);
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         lastSneakState.clear();
     }
 }

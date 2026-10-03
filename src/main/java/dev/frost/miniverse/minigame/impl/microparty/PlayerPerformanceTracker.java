@@ -1,4 +1,4 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy;
+package dev.frost.miniverse.minigame.impl.microparty;
 
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Vec3d;

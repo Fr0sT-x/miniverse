@@ -1,9 +1,9 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMapConfig;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMapConfig;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.enums.BlockFace;
@@ -66,19 +66,19 @@ public class DarknessButtonRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(80, standardTicks); // Clamped to at least 4.0s
     }
 
     @Override
-    public boolean isApplicable(MicroFrenzyMapConfig mapConfig) {
+    public boolean isApplicable(MicroPartyMapConfig mapConfig) {
         return true;
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         this.buttonPositions.clear();
         this.pedestalPositions.clear();
         this.darknessApplied = false;
@@ -91,8 +91,8 @@ public class DarknessButtonRule implements MicroRule {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
         int cx = bounds.centerX();
         int cz = bounds.centerZ();
 
@@ -131,7 +131,7 @@ public class DarknessButtonRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         this.elapsedTicks++;
         ServerWorld world = game.getWorld();
         if (world == null) return;
@@ -180,7 +180,7 @@ public class DarknessButtonRule implements MicroRule {
     }
 
     @Override
-    public ActionResult onUseBlock(ServerPlayerEntity player, World world, Hand hand, BlockHitResult hitResult, MicroFrenzyMinigame game) {
+    public ActionResult onUseBlock(ServerPlayerEntity player, World world, Hand hand, BlockHitResult hitResult, MicroPartyMinigame game) {
         if (hand != Hand.MAIN_HAND || game.isEliminated(player.getUuid()) || !game.getTracker().isAlive(player.getUuid())) {
             return ActionResult.PASS;
         }
@@ -193,7 +193,7 @@ public class DarknessButtonRule implements MicroRule {
         return ActionResult.PASS;
     }
 
-    private void markPassed(ServerPlayerEntity player, BlockPos pos, World world, MicroFrenzyMinigame game) {
+    private void markPassed(ServerPlayerEntity player, BlockPos pos, World world, MicroPartyMinigame game) {
         if (game.getTracker().hasPassedCurrentRound(player.getUuid())) {
             return;
         }
@@ -211,12 +211,12 @@ public class DarknessButtonRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return game.getTracker().hasPassedCurrentRound(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             p.removeStatusEffect(StatusEffects.DARKNESS);
             p.removeStatusEffect(StatusEffects.BLINDNESS);

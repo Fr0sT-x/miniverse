@@ -1,4 +1,4 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy;
+package dev.frost.miniverse.minigame.impl.microparty;
 
 import com.google.gson.JsonObject;
 import dev.frost.miniverse.map.MapPosition;
@@ -37,8 +37,8 @@ import dev.frost.miniverse.minigame.core.MinigameManager;
 import dev.frost.miniverse.minigame.core.MinigameRuntime;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchEndResult;
 import dev.frost.miniverse.minigame.core.lifecycle.MatchLifecycleOptions;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRuleRegistry;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRuleRegistry;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -63,7 +63,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MicroFrenzyMinigame extends AbstractMinigame implements
+public class MicroPartyMinigame extends AbstractMinigame implements
     SpawnPointAware,
     PlayerLeaveAware,
     PlayerDamageAware,
@@ -83,8 +83,8 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
     }
 
     private GameState state = GameState.WAITING_FOR_PLAYERS;
-    private MicroFrenzySettings settings = MicroFrenzySettings.defaults();
-    private MicroFrenzyMapConfig mapConfig = new MicroFrenzyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+    private MicroPartySettings settings = MicroPartySettings.defaults();
+    private MicroPartyMapConfig mapConfig = new MicroPartyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
 
     private PlayerPerformanceTracker tracker = new PlayerPerformanceTracker(3);
     private final List<UUID> eliminatedPlayers = new ArrayList<>();
@@ -119,26 +119,26 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
     private final Map<UUID, Integer> assignedSpawnSlots = new ConcurrentHashMap<>();
     private final Set<Integer> occupiedSpawnSlots = ConcurrentHashMap.newKeySet();
 
-    public MicroFrenzyMinigame() {
+    public MicroPartyMinigame() {
     }
 
     public TemporaryBlockManager getBlockManager() {
         return this.blockManager;
     }
 
-    public void applySettings(MicroFrenzySettings settings, MicroFrenzyMapConfig mapConfig) {
-        this.settings = settings != null ? settings : MicroFrenzySettings.defaults();
-        this.mapConfig = mapConfig != null ? mapConfig : new MicroFrenzyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
+    public void applySettings(MicroPartySettings settings, MicroPartyMapConfig mapConfig) {
+        this.settings = settings != null ? settings : MicroPartySettings.defaults();
+        this.mapConfig = mapConfig != null ? mapConfig : new MicroPartyMapConfig(List.of(), null, List.of(), List.of(), List.of(), List.of(), List.of());
         this.tracker = new PlayerPerformanceTracker(this.settings.startingLives());
     }
 
     @Override
     public String getName() {
-        return MicroFrenzyDefinition.DISPLAY_NAME;
+        return MicroPartyDefinition.DISPLAY_NAME;
     }
 
     public String getGameId() {
-        return MicroFrenzyDefinition.ID;
+        return MicroPartyDefinition.ID;
     }
 
     @Override
@@ -163,7 +163,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
         return this.tracker;
     }
 
-    public MicroFrenzyMapConfig getMapConfig() {
+    public MicroPartyMapConfig getMapConfig() {
         return this.mapConfig;
     }
 
@@ -285,7 +285,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
         this.setState(GameState.RUNNING);
         this.updateScoreboard();
 
-        GameMessenger.broadcast(this.players(), Text.literal("§6§l[Micro-Frenzy] §aGame started! Prepare for micro-challenges!"));
+        GameMessenger.broadcast(this.players(), Text.literal("§6§l[Micro Party] §aGame started! Prepare for micro-challenges!"));
 
         // Begin the first intermission
         startIntermission();
@@ -383,7 +383,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
 
             @Override
             public @Nullable String resolveMatchIdentifier() {
-                return MicroFrenzyDefinition.ID;
+                return MicroPartyDefinition.ID;
             }
         }, SpectatorService.getInstance());
     }
@@ -530,6 +530,9 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
         // Reset tracker round transient state
         this.tracker.resetAllRoundStates();
 
+        // Prepare rule state (randomizing questions, phrases, targets, etc.) before title/instruction query
+        this.activeRule.onPrepare(this, server);
+
         // Always announce the actual rule's title and instruction
         for (ServerPlayerEntity p : this.players()) {
             p.networkHandler.sendPacket(new TitleS2CPacket(this.activeRule.title(this)));
@@ -660,7 +663,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
 
         if (winner != null) {
             GameMessenger.broadcast(this.players(), Text.literal(
-                "§6§l[Micro-Frenzy] §e👑 " + winner.getName().getString() + " §awins the Micro-Frenzy! §e(" + tracker.getPasses(winner.getUuid()) + " passes)"
+                "§6§l[Micro Party] §e👑 " + winner.getName().getString() + " §awins the Micro Party! §e(" + tracker.getPasses(winner.getUuid()) + " passes)"
             ));
             for (ServerPlayerEntity p : this.players()) {
                 p.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("§e§lVICTORY!")));
@@ -668,7 +671,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
                 p.playSoundToPlayer(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.PLAYERS, 1.0f, 1.0f);
             }
         } else {
-            GameMessenger.broadcast(this.players(), Text.literal("§6§l[Micro-Frenzy] §eGame Over! Thanks for playing!"));
+            GameMessenger.broadcast(this.players(), Text.literal("§6§l[Micro Party] §eGame Over! Thanks for playing!"));
         }
 
         updateScoreboard();
@@ -706,7 +709,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
         if (this.currentRound <= 5) return 1.0f;
         if (this.currentRound <= 10) return 0.75f;
         if (this.currentRound <= 15) return 0.56f;
-        return 0.38f; // Frenzy speed! (3.0s for base 8s rules)
+        return 0.38f; // Party speed! (3.0s for base 8s rules)
     }
 
     public float getPitchForSpeed() {
@@ -759,9 +762,11 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
 
     @Override
     public void onPlayerExitRegion(ServerPlayerEntity player, MapMarker region) {
-        if (region != null && MicroFrenzyDefinition.ARENA_BOUNDS.equals(region.definitionKey())) {
+        if (region != null && MicroPartyDefinition.ARENA_BOUNDS.equals(region.definitionKey())) {
             if (this.getState() == GameState.RUNNING && !this.eliminatedPlayers.contains(player.getUuid())) {
-                handlePlayerOutOfBounds(player);
+                if (!isInsideArenaBounds(player.getPos())) {
+                    handlePlayerOutOfBounds(player);
+                }
             }
         }
     }
@@ -777,7 +782,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
 
     @Override
     public dev.frost.miniverse.chat.ChatInterceptResult onChatMessage(ServerPlayerEntity sender, String message) {
-        if (this.getState() == GameState.RUNNING && this.currentPhase == Phase.ACTIVE && this.activeRule != null) {
+        if (this.getState() == GameState.RUNNING && (this.currentPhase == Phase.ACTIVE || this.currentPhase == Phase.ANNOUNCEMENT) && this.activeRule != null) {
             boolean consumed = this.activeRule.onChatMessage(sender, message, this);
             if (consumed) {
                 return dev.frost.miniverse.chat.ChatInterceptResult.CONSUME_SILENT;
@@ -800,12 +805,12 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
             return true;
         }
         for (RegionPart r : bounds) {
-            double minX = Math.min(r.min().x(), r.max().x());
-            double maxX = Math.max(r.min().x(), r.max().x()) + 1.0;
-            double minY = Math.min(r.min().y(), r.max().y()) - 1.0;
-            double maxY = Math.max(r.min().y(), r.max().y()) + 4.0;
-            double minZ = Math.min(r.min().z(), r.max().z());
-            double maxZ = Math.max(r.min().z(), r.max().z()) + 1.0;
+            double minX = Math.min(r.min().x(), r.max().x()) - 1.5;
+            double maxX = Math.max(r.min().x(), r.max().x()) + 2.5;
+            double minY = Math.min(r.min().y(), r.max().y()) - 4.0;
+            double maxY = 320.0; // Open sky ceiling — jumping, MLG launches, mortar strikes do not trigger out of bounds
+            double minZ = Math.min(r.min().z(), r.max().z()) - 1.5;
+            double maxZ = Math.max(r.min().z(), r.max().z()) + 2.5;
             if (pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY && pos.z >= minZ && pos.z <= maxZ) {
                 return true;
             }
@@ -884,7 +889,7 @@ public class MicroFrenzyMinigame extends AbstractMinigame implements
     @Override
     protected void initScoreboard() {
         if (this.scoreboard == null) {
-            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate("microfrenzy", Text.literal("MICRO-FRENZY").formatted(Formatting.GOLD, Formatting.BOLD)));
+            this.scoreboard = this.getOrRegisterModule(ScoreboardTemplate.class, () -> new ScoreboardTemplate("microparty", Text.literal("MICRO PARTY").formatted(Formatting.GOLD, Formatting.BOLD)));
         }
         this.scoreboard.clearLines();
         this.scoreboard.addBlankLine();

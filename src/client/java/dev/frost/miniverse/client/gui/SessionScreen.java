@@ -46,7 +46,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public class SessionScreen extends Screen {
-    private static final int CARD_HEIGHT = 84;
+    private static final int CARD_HEIGHT = 92;
     private static final int CARD_GAP = 12;
     private static final int TOOLBAR_BUTTON_WIDTH = 84;
     private static final int RESET_BUTTON_WIDTH = 80;
@@ -82,8 +82,8 @@ public class SessionScreen extends Screen {
         Map.entry("horde_survival", SessionScreen::openHordeSurvival),
         Map.entry("zombies", SessionScreen::openZombies),
         Map.entry("dropper", SessionScreen::openDropper),
-        Map.entry("microfrenzy", SessionScreen::openMicroFrenzy),
-        Map.entry("microfrezy", SessionScreen::openMicroFrenzy),
+        Map.entry("microparty", SessionScreen::openMicroParty),
+        Map.entry("micro_party", SessionScreen::openMicroParty),
         Map.entry("skywars", SessionScreen::openSkywars),
         Map.entry("ctf", SessionScreen::openCtf)
     );
@@ -1795,6 +1795,7 @@ public class SessionScreen extends Screen {
         this.cardsScroll = Math.max(0.0, Math.min(this.cardsScroll, this.cardsMaxScroll));
 
         context.enableScissor(cards.x(), cards.y(), cards.x() + cards.width(), cards.y() + cards.height());
+        String hoveredCardTooltip = null;
         for (int i = 0; i < entries.size(); i++) {
             MinigameEntry entry = entries.get(i);
             UiLayout.Rect rawCard = UiLayout.grid(cards, i, columns, CARD_HEIGHT, CARD_GAP);
@@ -1823,11 +1824,17 @@ public class SessionScreen extends Screen {
             String topology = displayTopology(entry.id());
             context.drawText(this.textRenderer, Text.literal(topology), textX, card.y() + 22, UiTheme.TEXT_DIM, false);
 
-            List<String> descriptionLines = this.wrapText(entry.description(), card.width() - textX + card.x() - 18, 2);
+            int textAvailableWidth = card.width() - (textX - card.x()) - 18;
+            int maxLines = Math.max(3, (card.height() - 36 - 8) / (this.textRenderer.fontHeight + 2));
+            List<String> descriptionLines = this.wrapText(entry.description(), textAvailableWidth, maxLines);
             int descY = card.y() + 36;
             for (String line : descriptionLines) {
                 context.drawText(this.textRenderer, Text.literal(line), textX, descY, UiTheme.TEXT_MUTED, false);
                 descY += this.textRenderer.fontHeight + 2;
+            }
+
+            if (hovered && isTextTruncated(descriptionLines, entry.description())) {
+                hoveredCardTooltip = entry.description();
             }
 
             if (!entry.enabled()) {
@@ -1870,6 +1877,13 @@ public class SessionScreen extends Screen {
         }
 
         context.disableScissor();
+
+        if (hoveredCardTooltip != null) {
+            List<Text> tooltipLines = this.wrapText(hoveredCardTooltip, 220, 10).stream()
+                .<Text>map(Text::literal)
+                .toList();
+            context.drawTooltip(this.textRenderer, tooltipLines, mouseX, mouseY);
+        }
     }
 
     private RailSpan activeModuleRail(SidebarSection section, List<SidebarRow> rows, int startY) {
@@ -2059,28 +2073,52 @@ public class SessionScreen extends Screen {
 
         String[] words = text.trim().split("\\s+");
         StringBuilder line = new StringBuilder();
-        for (String word : words) {
+        int wordIndex = 0;
+        while (wordIndex < words.length) {
+            String word = words[wordIndex];
             String candidate = line.isEmpty() ? word : line + " " + word;
             if (this.textRenderer.getWidth(candidate) <= maxWidth) {
                 line = new StringBuilder(candidate);
+                wordIndex++;
                 continue;
             }
 
+            // Candidate does not fit.
+            // If we are currently filling the LAST allowable line, truncate with ellipsis.
+            if (lines.size() == maxLines - 1) {
+                String ellipsis = "...";
+                int ellipsisWidth = this.textRenderer.getWidth(ellipsis);
+                String current = line.toString();
+                if (!current.isEmpty()) {
+                    String trimmed = this.textRenderer.trimToWidth(current, maxWidth - ellipsisWidth).trim();
+                    lines.add(trimmed + ellipsis);
+                } else {
+                    String trimmed = this.textRenderer.trimToWidth(word, maxWidth - ellipsisWidth).trim();
+                    lines.add(trimmed + ellipsis);
+                }
+                return lines;
+            }
+
+            // Move current line to lines list
             if (!line.isEmpty()) {
                 lines.add(line.toString());
-                if (lines.size() >= maxLines) {
-                    return lines;
-                }
                 line = new StringBuilder();
             }
 
-            if (this.textRenderer.getWidth(word) <= maxWidth) {
-                line.append(word);
-            } else {
-                lines.add(this.textRenderer.trimToWidth(word, maxWidth));
-                if (lines.size() >= maxLines) {
+            if (this.textRenderer.getWidth(word) > maxWidth) {
+                if (lines.size() == maxLines - 1) {
+                    String ellipsis = "...";
+                    int ellipsisWidth = this.textRenderer.getWidth(ellipsis);
+                    String trimmed = this.textRenderer.trimToWidth(word, maxWidth - ellipsisWidth).trim();
+                    lines.add(trimmed + ellipsis);
                     return lines;
+                } else {
+                    lines.add(this.textRenderer.trimToWidth(word, maxWidth));
+                    wordIndex++;
                 }
+            } else {
+                line.append(word);
+                wordIndex++;
             }
         }
 
@@ -2088,6 +2126,14 @@ public class SessionScreen extends Screen {
             lines.add(line.toString());
         }
         return lines;
+    }
+
+    private static boolean isTextTruncated(List<String> lines, String fullText) {
+        if (lines == null || lines.isEmpty() || fullText == null) {
+            return false;
+        }
+        String lastLine = lines.get(lines.size() - 1);
+        return lastLine.endsWith("...") && !fullText.endsWith("...");
     }
 
     private static String displayTopology(String id) {
@@ -2253,8 +2299,8 @@ public class SessionScreen extends Screen {
         this.openCachedWorkspace("dropper", dev.frost.miniverse.client.gui.workspace.DropperWorkspaceView::new);
     }
 
-    private void openMicroFrenzy() {
-        this.openCachedWorkspace("microfrenzy", dev.frost.miniverse.client.gui.workspace.MicroFrenzyWorkspaceView::new);
+    private void openMicroParty() {
+        this.openCachedWorkspace("microparty", dev.frost.miniverse.client.gui.workspace.MicroPartyWorkspaceView::new);
     }
 
     private void openSkywars() {

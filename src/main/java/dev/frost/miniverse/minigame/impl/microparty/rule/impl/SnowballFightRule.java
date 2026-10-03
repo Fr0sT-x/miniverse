@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.projectile.thrown.SnowballEntity;
 import net.minecraft.item.ItemStack;
@@ -46,14 +46,14 @@ public class SnowballFightRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroFrenzyMinigame game) {
+    public int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
         int standardTicks = Math.round(8 * 20 * factor);
         return Math.max(80, standardTicks); // Clamped to at least 4.0 seconds
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             p.getInventory().clear();
             // Exactly 3 snowballs as requested
@@ -66,7 +66,7 @@ public class SnowballFightRule implements MicroRule {
     }
 
     @Override
-    public boolean onPlayerDamage(ServerPlayerEntity victim, DamageSource source, float amount, MicroFrenzyMinigame game) {
+    public boolean onPlayerDamage(ServerPlayerEntity victim, DamageSource source, float amount, MicroPartyMinigame game) {
         if (source.getSource() instanceof SnowballEntity snowball) {
             if (snowball.getOwner() instanceof ServerPlayerEntity attacker && !attacker.getUuid().equals(victim.getUuid())) {
                 if (!game.getTracker().hasPassedCurrentRound(attacker.getUuid())) {
@@ -83,12 +83,15 @@ public class SnowballFightRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
+        if (game != null && game.getLivingPlayers().size() <= 1) {
+            return true;
+        }
         return game.getTracker().hasPassedCurrentRound(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             p.getInventory().clear();
         }

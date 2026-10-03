@@ -10,9 +10,9 @@ import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceModuleManager;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyDefinition;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRuleRegistry;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyDefinition;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRuleRegistry;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.nbt.NbtCompound;
@@ -24,7 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-public final class MicroFrenzyWorkspaceView extends AbstractGamemodeWorkspaceView {
+public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
     private IntFieldWidget startingLivesField;
@@ -50,12 +50,12 @@ public final class MicroFrenzyWorkspaceView extends AbstractGamemodeWorkspaceVie
 
     private record RuleRowButton(UiLayout.Rect rect, String ruleId, String ruleName, String description, String numberText) {}
 
-    public MicroFrenzyWorkspaceView() {
-        super(MicroFrenzyDefinition.ID);
+    public MicroPartyWorkspaceView() {
+        super(MicroPartyDefinition.ID);
         this.playerGrid.addColumn("available", "Available", 0x7C8088, true);
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
-        this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a map with Micro-Frenzy arena markers.", UiTheme.ACCENT_BLUE, "Valid Micro-Frenzy Maps");
+        this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a map with Micro Party arena markers.", UiTheme.ACCENT_BLUE, "Valid Micro Party Maps");
         this.moduleManager.register("pool", "G", "Micro Game Pool", "Setup", "Enable or disable micro-games for this match.", 0xFFFFAA00);
         this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure lives, rounds, and speed scaling.", UiTheme.ACCENT_GREEN);
 
@@ -378,7 +378,7 @@ public final class MicroFrenzyWorkspaceView extends AbstractGamemodeWorkspaceVie
 
     @Override
     public String title() {
-        return "Micro-Frenzy Setup";
+        return "Micro Party Setup";
     }
 
     @Override
@@ -388,7 +388,7 @@ public final class MicroFrenzyWorkspaceView extends AbstractGamemodeWorkspaceVie
 
     @Override
     public String gameId() {
-        return MicroFrenzyDefinition.ID;
+        return MicroPartyDefinition.ID;
     }
 
     @Override

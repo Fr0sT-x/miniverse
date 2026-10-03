@@ -1,4 +1,4 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy;
+package dev.frost.miniverse.minigame.impl.microparty;
 
 import com.mojang.brigadier.CommandDispatcher;
 import dev.frost.miniverse.map.MapGamemodeRegistry;
@@ -24,9 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-public final class MicroFrenzyDefinition implements MinigameDefinition {
-    public static final String ID = "microfrenzy";
-    public static final String DISPLAY_NAME = "Micro-Frenzy";
+public final class MicroPartyDefinition implements MinigameDefinition {
+    public static final String ID = "microparty";
+    public static final String DISPLAY_NAME = "Micro Party";
 
     public static final String ARENA_BOUNDS = "arena_bounds";
     public static final String ARENA_CENTER = "arena_center";
@@ -99,7 +99,7 @@ public final class MicroFrenzyDefinition implements MinigameDefinition {
                 "• Placement: (Optional) Place against perimeter walls, on floating pedestals, or across the arena with clear line-of-sight for archers."
             )
         ),
-        List.of(MicroFrenzyMapConfig::validateEditor)
+        List.of(MicroPartyMapConfig::validateEditor)
     );
 
     @Override
@@ -130,36 +130,36 @@ public final class MicroFrenzyDefinition implements MinigameDefinition {
 
     @Override
     public void writeSessionProperties(NbtCompound settings, Properties properties) {
-        MicroFrenzySettings parsed = MicroFrenzySettings.fromNbt(settings);
+        MicroPartySettings parsed = MicroPartySettings.fromNbt(settings);
         parsed.writeTo(properties);
         if (!parsed.mapId().isBlank()) {
             MapStore.readGamemodeConfig(parsed.mapId(), ID)
-                .ifPresent(config -> properties.setProperty("microfrenzy.mapConfig", config.toString()));
+                .ifPresent(config -> properties.setProperty("microparty.mapConfig", config.toString()));
         }
     }
 
     @Override
     public void writeLaunchProperties(NbtCompound settings, Map<String, String> properties) {
-        MicroFrenzySettings parsed = MicroFrenzySettings.fromNbt(settings);
+        MicroPartySettings parsed = MicroPartySettings.fromNbt(settings);
         if (!parsed.mapId().isBlank()) {
-            properties.put("miniverse.microfrenzy.mapId", parsed.mapId());
+            properties.put("miniverse.microparty.mapId", parsed.mapId());
         }
     }
 
     @Override
     public void registerCommands(CommandDispatcher<ServerCommandSource> dispatcher) {
-        // Register primary /microfrenzy and user-specified alias /microfrezy
-        for (String alias : List.of("microfrenzy", "microfrezy")) {
+        // Register primary /microparty and alias /micro_party
+        for (String alias : List.of("microparty", "micro_party")) {
             dispatcher.register(
                 CommandManager.literal(alias)
                     .then(CommandManager.literal("status")
                         .executes(context -> {
                             ServerPlayerEntity player = context.getSource().getPlayer();
-                            if (MinigameManager.getInstance().getActiveMinigame() instanceof MicroFrenzyMinigame mg) {
-                                context.getSource().sendFeedback(() -> Text.literal("§6[Micro-Frenzy] §aActive round: " + mg.getCurrentRound() + "/" + mg.getMaxRounds()), false);
+                            if (MinigameManager.getInstance().getActiveMinigame() instanceof MicroPartyMinigame mg) {
+                                context.getSource().sendFeedback(() -> Text.literal("§6[Micro Party] §aActive round: " + mg.getCurrentRound() + "/" + mg.getMaxRounds()), false);
                                 return 1;
                             }
-                            context.getSource().sendFeedback(() -> Text.literal("Micro-Frenzy is not currently active.").formatted(Formatting.RED), false);
+                            context.getSource().sendFeedback(() -> Text.literal("Micro Party is not currently active.").formatted(Formatting.RED), false);
                             return 0;
                         })
                     )
@@ -169,8 +169,8 @@ public final class MicroFrenzyDefinition implements MinigameDefinition {
 
     @Override
     public void registerEvents() {
-        MapGamemodeRegistry.register(new MapGamemodeType(ID, DISPLAY_NAME, MicroFrenzyMapConfig::validate));
+        MapGamemodeRegistry.register(new MapGamemodeType(ID, DISPLAY_NAME, MicroPartyMapConfig::validate));
         MapEditorExtensionRegistry.register(EXTENSION);
-        MicroFrenzySessionBootstrap.register();
+        MicroPartySessionBootstrap.register();
     }
 }

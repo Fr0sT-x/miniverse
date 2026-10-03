@@ -1,10 +1,10 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.editor.RegionPart;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMapConfig;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMapConfig;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -44,20 +44,20 @@ public class CenterStageRule implements MicroRule {
         return 8;
     }
 
-    public static double getMaxDistance(MicroFrenzyMinigame game) {
+    public static double getMaxDistance(MicroPartyMinigame game) {
         if (game == null) return 3.5;
         float factor = game.getSpeedFactor();
         if (factor >= 0.7f) return 3.5;
         if (factor >= 0.5f) return 4.5;
-        return 5.5; // Wider capture radius at frenzy speed
+        return 5.5; // Wider capture radius at party speed
     }
 
     @Override
-    public boolean isApplicable(MicroFrenzyMapConfig mapConfig) {
+    public boolean isApplicable(MicroPartyMapConfig mapConfig) {
         return mapConfig != null && (mapConfig.arenaCenter() != null || !mapConfig.arenaBounds().isEmpty() || !mapConfig.playerSpawns().isEmpty());
     }
 
-    private MapPosition getEffectiveCenter(MicroFrenzyMapConfig config) {
+    private MapPosition getEffectiveCenter(MicroPartyMapConfig config) {
         if (config == null) return MapPosition.of(0, 100, 0);
         if (config.arenaCenter() != null) return config.arenaCenter();
         if (!config.arenaBounds().isEmpty()) {
@@ -72,7 +72,7 @@ public class CenterStageRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         MapPosition center = getEffectiveCenter(game.getMapConfig());
         if (game.getWorld() != null) {
             ServerWorld world = game.getWorld();
@@ -81,7 +81,7 @@ public class CenterStageRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         MapPosition center = getEffectiveCenter(game.getMapConfig());
         if (game.getWorld() != null) {
             ServerWorld world = game.getWorld();
@@ -90,7 +90,7 @@ public class CenterStageRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         MapPosition center = getEffectiveCenter(game.getMapConfig());
         Vec3d target = new Vec3d(center.x() + 0.5, center.y(), center.z() + 0.5);
         double maxDist = getMaxDistance(game);
@@ -98,6 +98,6 @@ public class CenterStageRule implements MicroRule {
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
     }
 }

@@ -1,8 +1,8 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyArenaHelper;
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.FallingBlockEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -58,7 +58,7 @@ public class AnvilDodgeRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         spawnedAnvils.clear();
         landedAnvilBlocks.clear();
         secondWaveSpawned = false;
@@ -76,9 +76,9 @@ public class AnvilDodgeRule implements MicroRule {
         spawnAnvilWave(game, world, 0);
     }
 
-    private void spawnAnvilWave(MicroFrenzyMinigame game, ServerWorld world, int waveIndex) {
-        MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
-        int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+    private void spawnAnvilWave(MicroPartyMinigame game, ServerWorld world, int waveIndex) {
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
         int spawnY = floorY + 12;
 
         // With step 3, in each 3x3 pocket we pick at most 1 anvil drop location.
@@ -114,7 +114,7 @@ public class AnvilDodgeRule implements MicroRule {
     }
 
     @Override
-    public void onTick(MicroFrenzyMinigame game, MinecraftServer server, int remainingTicks) {
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
@@ -137,7 +137,7 @@ public class AnvilDodgeRule implements MicroRule {
     }
 
     @Override
-    public boolean onPlayerDamage(ServerPlayerEntity player, DamageSource source, float amount, MicroFrenzyMinigame game) {
+    public boolean onPlayerDamage(ServerPlayerEntity player, DamageSource source, float amount, MicroPartyMinigame game) {
         if (source.isOf(DamageTypes.FALLING_ANVIL) || source.isOf(DamageTypes.FALLING_BLOCK)) {
             game.getTracker().setPassedCurrentRound(player.getUuid(), false);
             player.sendMessage(Text.literal("§c💥 Clang! An anvil crushed you!"), true);
@@ -148,12 +148,12 @@ public class AnvilDodgeRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return game.getTracker().hasPassedCurrentRound(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         ServerWorld world = game.getWorld();
         for (FallingBlockEntity anvil : spawnedAnvils) {
             if (anvil != null && anvil.isAlive()) {
@@ -164,8 +164,8 @@ public class AnvilDodgeRule implements MicroRule {
 
         // Complete arena sweep for any landed anvil blocks
         if (world != null && game.getMapConfig() != null) {
-            MicroFrenzyArenaHelper.ArenaBounds2D bounds = MicroFrenzyArenaHelper.getBounds2D(game.getMapConfig());
-            int floorY = MicroFrenzyArenaHelper.getFloorY(game.getMapConfig());
+            MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
+            int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
 
             BlockPos.iterate(
                 new BlockPos(bounds.minX() - 2, floorY - 1, bounds.minZ() - 2),

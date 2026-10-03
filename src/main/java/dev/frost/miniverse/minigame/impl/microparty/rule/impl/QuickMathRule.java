@@ -1,7 +1,7 @@
-package dev.frost.miniverse.minigame.impl.microfrenzy.rule.impl;
+package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microfrenzy.MicroFrenzyMinigame;
-import dev.frost.miniverse.minigame.impl.microfrenzy.rule.MicroRule;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
+import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -43,7 +43,7 @@ public class QuickMathRule implements MicroRule {
     }
 
     @Override
-    public Text instruction(MicroFrenzyMinigame game) {
+    public Text instruction(MicroPartyMinigame game) {
         return Text.literal("What is " + currentQuestion + "? Type in chat!").formatted(Formatting.YELLOW);
     }
 
@@ -81,20 +81,42 @@ public class QuickMathRule implements MicroRule {
     }
 
     @Override
-    public void onStart(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
         generateNewQuestion();
-        for (ServerPlayerEntity p : game.getLivingPlayers()) {
-            game.getTracker().setPassedCurrentRound(p.getUuid(), false);
+        if (game != null) {
+            for (ServerPlayerEntity p : game.getLivingPlayers()) {
+                game.getTracker().setPassedCurrentRound(p.getUuid(), false);
+            }
         }
     }
 
     @Override
-    public boolean onChatMessage(ServerPlayerEntity player, String message, MicroFrenzyMinigame game) {
+    public void onStart(MicroPartyMinigame game, MinecraftServer server) {
+        if (this.currentQuestion == null || this.currentQuestion.isBlank()) {
+            generateNewQuestion();
+        }
+        if (game != null) {
+            for (ServerPlayerEntity p : game.getLivingPlayers()) {
+                p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket(
+                    Text.literal("§eMath: §b" + this.currentQuestion + " = ?").formatted(Formatting.GOLD)
+                ));
+            }
+        }
+    }
+
+    @Override
+    public boolean onChatMessage(ServerPlayerEntity player, String message, MicroPartyMinigame game) {
         if (message == null || game.isEliminated(player.getUuid()) || !game.getTracker().isAlive(player.getUuid())) {
             return false;
         }
 
         String trimmed = message.trim();
+        if (trimmed.startsWith("!")) {
+            trimmed = trimmed.substring(1).trim();
+        }
+        if (trimmed.startsWith("=") || trimmed.startsWith("?")) {
+            trimmed = trimmed.substring(1).trim();
+        }
         if (trimmed.equals(String.valueOf(this.expectedAnswer))) {
             if (!game.getTracker().hasPassedCurrentRound(player.getUuid())) {
                 game.getTracker().setPassedCurrentRound(player.getUuid(), true);
@@ -112,11 +134,11 @@ public class QuickMathRule implements MicroRule {
     }
 
     @Override
-    public boolean hasPassed(ServerPlayerEntity player, MicroFrenzyMinigame game) {
+    public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
         return game.getTracker().hasPassedCurrentRound(player.getUuid());
     }
 
     @Override
-    public void onEnd(MicroFrenzyMinigame game, MinecraftServer server) {
+    public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
     }
 }

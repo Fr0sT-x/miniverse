@@ -382,8 +382,8 @@ public final class MapStore {
             return List.of();
         }
         List<String> ids = new ArrayList<>();
-        try (var stream = Files.list(gamemodesFolder)) {
-            for (Path path : stream.toList()) {
+        try (var stream = Files.newDirectoryStream(gamemodesFolder)) {
+            for (Path path : stream) {
                 String fileName = path.getFileName().toString();
                 if (Files.isRegularFile(path) && fileName.endsWith(".json")) {
                     ids.add(fileName.substring(0, fileName.length() - ".json".length()).toLowerCase(java.util.Locale.ROOT));
@@ -428,8 +428,8 @@ public final class MapStore {
         if (!attrs.isDirectory()) {
             return latest;
         }
-        try (var stream = Files.list(root)) {
-            for (Path path : stream.toList()) {
+        try (var stream = Files.newDirectoryStream(root)) {
+            for (Path path : stream) {
                 latest = Math.max(latest, latestModifiedMillis(path));
             }
         }
@@ -439,7 +439,7 @@ public final class MapStore {
     private static void copyDirectory(Path source, Path target) throws IOException {
         Files.createDirectories(target);
         try (var stream = Files.walk(source)) {
-            for (Path sourcePath : stream.toList()) {
+            for (Path sourcePath : (Iterable<Path>) stream::iterator) {
                 Path relative = source.relativize(sourcePath);
                 Path targetPath = target.resolve(relative);
                 if (sourcePath.getFileName().toString().equals("session.lock")) {

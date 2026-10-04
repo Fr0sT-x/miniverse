@@ -5,9 +5,9 @@ import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
-import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.horde.HordeSurvivalDefinition;
 import dev.frost.miniverse.minigame.impl.horde.HordeSurvivalSettings;
 import net.minecraft.client.font.TextRenderer;
@@ -51,52 +51,62 @@ public final class HordeSurvivalWorkspaceView extends AbstractGamemodeWorkspaceV
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip wavesTooltip = WorkspaceTooltip.dynamic(() -> "Survive " + (this.totalWavesField != null ? this.totalWavesField.getIntValue(this.totalWaves) : this.totalWaves) + " waves before the final Extraction Run.");
             this.rulesLayout.addRow(
-                "Total Waves", (s, x, y, w) -> {
-                    this.totalWavesField = this.addIntField(s, x, y, this.totalWaves, w, "Total Waves", val -> "Survive " + val + " waves before the final Extraction Run.");
+                "Total Waves", wavesTooltip, (s, x, y, w) -> {
+                    this.totalWavesField = this.addIntField(s, "Total Waves", x, y, this.totalWaves, 1, 100, w, wavesTooltip);
                 }
             );
 
+            WorkspaceTooltip uplinkTooltip = WorkspaceTooltip.dynamic(() -> "Data transmission requires " + (this.uplinkDurationField != null ? this.uplinkDurationField.getIntValue(this.uplinkDurationSeconds) : this.uplinkDurationSeconds) + " seconds of active fueled signal.");
             this.rulesLayout.addRow(
-                "Uplink Duration (s)", (s, x, y, w) -> {
-                    this.uplinkDurationField = this.addIntField(s, x, y, this.uplinkDurationSeconds, w, "Uplink Duration (s)", val -> "Data transmission requires " + val + " seconds of active fueled signal.");
+                "Uplink Duration (s)", uplinkTooltip, (s, x, y, w) -> {
+                    this.uplinkDurationField = this.addIntField(s, "Uplink Duration", x, y, this.uplinkDurationSeconds, 15, 600, w, uplinkTooltip);
                 }
             );
 
+            WorkspaceTooltip intermissionTooltip = WorkspaceTooltip.dynamic(() -> "Survivors have " + (this.intermissionField != null ? this.intermissionField.getIntValue(this.intermissionSeconds) : this.intermissionSeconds) + " seconds of peace between waves to shop and travel.");
             this.rulesLayout.addRow(
-                "Intermission (s)", (s, x, y, w) -> {
-                    this.intermissionField = this.addIntField(s, x, y, this.intermissionSeconds, w, "Intermission seconds", val -> "Survivors have " + val + " seconds of peace between waves to shop and travel.");
+                "Intermission (s)", intermissionTooltip, (s, x, y, w) -> {
+                    this.intermissionField = this.addIntField(s, "Intermission seconds", x, y, this.intermissionSeconds, 5, 600, w, intermissionTooltip);
                 }
             );
 
+            WorkspaceTooltip fuelTooltip = WorkspaceTooltip.dynamic(() -> "Transmitter starts with " + (this.initialPodFuelField != null ? this.initialPodFuelField.getIntValue(this.initialPodFuel) : this.initialPodFuel) + "% battery charge.");
             this.rulesLayout.addRow(
-                "Initial Fuel (%)", (s, x, y, w) -> {
-                    this.initialPodFuelField = this.addIntField(s, x, y, this.initialPodFuel, w, "Initial Pod Fuel", val -> "Transmitter starts with " + val + "% battery charge.");
+                "Initial Fuel (%)", fuelTooltip, (s, x, y, w) -> {
+                    this.initialPodFuelField = this.addIntField(s, "Initial Pod Fuel", x, y, this.initialPodFuel, 10, 100, w, fuelTooltip);
                 }
             );
 
+            WorkspaceTooltip radiusTooltip = WorkspaceTooltip.dynamic(() -> "Mobs killed within " + (this.harvestRadiusField != null ? this.harvestRadiusField.getIntValue(this.harvestRadius) : this.harvestRadius) + "m of the Pod grant +2% fuel.");
             this.rulesLayout.addRow(
-                "Ring Radius (m)", (s, x, y, w) -> {
-                    this.harvestRadiusField = this.addIntField(s, x, y, this.harvestRadius, w, "Fuel Harvest Radius", val -> "Mobs killed within " + val + "m of the Pod grant +2% fuel.");
+                "Ring Radius (m)", radiusTooltip, (s, x, y, w) -> {
+                    this.harvestRadiusField = this.addIntField(s, "Fuel Harvest Radius", x, y, this.harvestRadius, 5, 25, w, radiusTooltip);
                 }
             );
 
+            WorkspaceTooltip drainTooltip = WorkspaceTooltip.dynamic(() -> "Transmitter drains " + (this.fuelDrainField != null ? this.fuelDrainField.getIntValue(this.fuelDrainPerSecond) : this.fuelDrainPerSecond) + "% fuel per second while transmitting.");
             this.rulesLayout.addRow(
-                "Fuel Drain (%/s)", (s, x, y, w) -> {
-                    this.fuelDrainField = this.addIntField(s, x, y, this.fuelDrainPerSecond, w, "Fuel Drain Rate", val -> "Transmitter drains " + val + "% fuel per second while transmitting.");
+                "Fuel Drain (%/s)", drainTooltip, (s, x, y, w) -> {
+                    this.fuelDrainField = this.addIntField(s, "Fuel Drain Rate", x, y, this.fuelDrainPerSecond, 1, 10, w, drainTooltip);
                 }
             );
 
+            WorkspaceTooltip borderTooltip = WorkspaceTooltip.dynamic(() -> "Play area boundary diameter in blocks (" + (this.borderSizeField != null ? this.borderSizeField.getIntValue(this.borderSize) : this.borderSize) + ").");
             this.rulesLayout.addRow(
-                "Border Size", (s, x, y, w) -> {
-                    this.borderSizeField = this.addIntField(s, x, y, this.borderSize, w, "Border size", val -> "Play area boundary diameter in blocks.");
+                "Border Size", borderTooltip, (s, x, y, w) -> {
+                    this.borderSizeField = this.addIntField(s, "Border size", x, y, this.borderSize, 50, 10000, w, borderTooltip);
                 }
             );
 
+            WorkspaceTooltip flaresTooltip = WorkspaceTooltip.toggle(() -> this.emergencyFlaresEnabled,
+                "Survivors can buy and use single-transaction pocket flares.",
+                "Emergency flares are disabled.");
             this.rulesLayout.addRow(
-                "Emergency Flares", (s, x, y, w) -> {
+                "Emergency Flares", flaresTooltip, (s, x, y, w) -> {
                     this.emergencyFlaresButton = this.addToggleButton(s, "Emergency Flares", () -> this.emergencyFlaresEnabled, x, y, w,
-                        new BinaryTooltip("Survivors can buy and use single-transaction pocket flares.", "Emergency flares are disabled."),
+                        flaresTooltip,
                         () -> this.emergencyFlaresEnabled = !this.emergencyFlaresEnabled);
                 }
             );

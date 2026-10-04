@@ -14,6 +14,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.deathshuffle.DeathShuffleDefinition;
 import dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjective;
 import dev.frost.miniverse.minigame.impl.deathshuffle.objective.DeathObjectiveManager;
@@ -62,29 +63,34 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip pointsTooltip = WorkspaceTooltip.dynamic(() -> "Score needed to win the match (" + (this.pointsToWinField != null ? this.pointsToWinField.getIntValue(this.pointsToWin) : this.pointsToWin) + " pts).");
             this.rulesLayout.addRow(
-                "Points to Win", (s, x, y, w) -> {
-                    this.pointsToWinField = this.addIntField(s, x, y, this.pointsToWin, w, "Points to Win", val -> "Score needed to win the match.");
+                "Points to Win", pointsTooltip, (s, x, y, w) -> {
+                    this.pointsToWinField = this.addIntField(s, "Points to Win", x, y, this.pointsToWin, 1, 100, w, pointsTooltip);
                 }
             );
 
+            WorkspaceTooltip roundDurationTooltip = WorkspaceTooltip.dynamic(() -> "Players have " + (this.roundDurationField != null ? this.roundDurationField.getIntValue(this.roundDurationSeconds) : this.roundDurationSeconds) + " seconds to complete their death objective.");
             this.rulesLayout.addRow(
-                "Round Duration", (s, x, y, w) -> {
-                    this.roundDurationField = this.addIntField(s, x, y, this.roundDurationSeconds, w, "Round Duration (s)", val -> "Players have " + val + " seconds to complete their death objective.");
+                "Round Duration", roundDurationTooltip, (s, x, y, w) -> {
+                    this.roundDurationField = this.addIntField(s, "Round Duration (s)", x, y, this.roundDurationSeconds, 10, 3600, w, roundDurationTooltip);
                 }
             );
 
+            WorkspaceTooltip perPlayerTooltip = WorkspaceTooltip.toggle(() -> this.perPlayerObjectives,
+                "Each player gets a different objective.",
+                "All players get the same objective.");
             this.rulesLayout.addRow(
-                "Player Assignment", (s, x, y, w) -> {
-                    this.perPlayerButton = this.addToggleButton(s, "Per-Player DeathObjectives", () -> this.perPlayerObjectives, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Each player gets a different objective.", "All players get the same objective."),
+                "Player Assignment", perPlayerTooltip, (s, x, y, w) -> {
+                    this.perPlayerButton = this.addToggleButton(s, "Per-Player DeathObjectives", () -> this.perPlayerObjectives, x, y, w, perPlayerTooltip,
                         () -> this.perPlayerObjectives = !this.perPlayerObjectives);
                 }
             );
 
+            WorkspaceTooltip poolTooltip = WorkspaceTooltip.of("Configure the pool of possible death objectives.");
             this.rulesLayout.addRow(
-                "DeathObjective Pool", (s, x, y, w) -> {
-                    this.blockPoolButton = this.addActionButton(s, "Configure DeathObjective Pool (" + this.blockPool.size() + " objectives)", x, y, w, "Click to configure the pool of possible death objectives.", () -> {
+                "DeathObjective Pool", poolTooltip, (s, x, y, w) -> {
+                    this.blockPoolButton = this.addActionButton(s, "Configure DeathObjective Pool (" + this.blockPool.size() + " objectives)", x, y, w, poolTooltip, () -> {
                         Registry<DeathObjective> registry = client.world.getRegistryManager().get(DeathObjective.REGISTRY_KEY);
                         Set<DeathObjective> initialSelection = this.blockPool.stream()
                             .map(id -> DeathObjectiveManager.get(client.getServer(), id))
@@ -113,9 +119,10 @@ public final class DeathShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
                 }
             );
 
+            WorkspaceTooltip respawnTooltip = WorkspaceTooltip.dynamic(() -> "Delay before players respawn (" + (this.respawnDelayField != null ? this.respawnDelayField.getIntValue(this.respawnDelaySeconds) : this.respawnDelaySeconds) + "s).");
             this.rulesLayout.addRow(
-                "Respawn Delay", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn Delay (s)", val -> "Delay before players respawn.");
+                "Respawn Delay", respawnTooltip, (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, "Respawn Delay (s)", x, y, this.respawnDelaySeconds, 0, 60, w, respawnTooltip);
                 }
             );
         }

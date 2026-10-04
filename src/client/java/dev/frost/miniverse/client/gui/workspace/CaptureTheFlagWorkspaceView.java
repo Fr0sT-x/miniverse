@@ -7,9 +7,9 @@ import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.DynamicTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
-import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.ctf.CaptureTheFlagDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -60,67 +60,91 @@ public final class CaptureTheFlagWorkspaceView extends AbstractGamemodeWorkspace
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip elimTooltip = WorkspaceTooltip.toggle(() -> this.eliminationMode,
+                "Captured flags disable enemy respawns until squad wipe.",
+                "Standard score race to target captures.");
+            WorkspaceTooltip capturesTooltip = WorkspaceTooltip.dynamic(() -> "Captures needed to win/eliminate: " + (this.targetCapturesField != null ? this.targetCapturesField.getIntValue(this.targetCaptures) : this.targetCaptures));
+
             this.rulesLayout.addRow(
-                "Game Mode", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Elimination Mode", () -> this.eliminationMode, x, y, w,
-                        new BinaryTooltip("ON: Captured flags disable enemy respawns until squad wipe.", "OFF: Standard score race to target captures."),
+                "Game Mode", elimTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Elimination Mode", () -> this.eliminationMode, x, y, w, elimTooltip,
                         () -> this.eliminationMode = !this.eliminationMode);
                 },
-                "Target Captures", (s, x, y, w) -> {
-                    this.targetCapturesField = this.addIntField(s, x, y, this.targetCaptures, w, "Target Captures", val -> "Captures needed to win/eliminate: " + val);
+                "Target Captures", capturesTooltip, (s, x, y, w) -> {
+                    this.targetCapturesField = this.addIntField(s, "Target Captures", x, y, this.targetCaptures, 1, 10, w, capturesTooltip);
                 }
             );
 
+            WorkspaceTooltip durationTooltip = WorkspaceTooltip.dynamic(() -> "Match length in minutes: " + (this.matchDurationField != null ? this.matchDurationField.getIntValue(this.matchDurationMinutes) : this.matchDurationMinutes));
+            WorkspaceTooltip respawnTooltip = WorkspaceTooltip.dynamic(() -> "Seconds before respawning: " + (this.respawnDelayField != null ? this.respawnDelayField.getIntValue(this.respawnDelaySeconds) : this.respawnDelaySeconds));
+
             this.rulesLayout.addRow(
-                "Match Duration (m)", (s, x, y, w) -> {
-                    this.matchDurationField = this.addIntField(s, x, y, this.matchDurationMinutes, w, "Match Duration", val -> "Match length in minutes: " + val);
+                "Match Duration (m)", durationTooltip, (s, x, y, w) -> {
+                    this.matchDurationField = this.addIntField(s, "Match Duration", x, y, this.matchDurationMinutes, 5, 60, w, durationTooltip);
                 },
-                "Respawn Delay (s)", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn Delay", val -> "Seconds before respawning: " + val);
+                "Respawn Delay (s)", respawnTooltip, (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, "Respawn Delay", x, y, this.respawnDelaySeconds, 1, 30, w, respawnTooltip);
                 }
             );
 
+            WorkspaceTooltip returnDelayTooltip = WorkspaceTooltip.dynamic(() -> "Seconds before dropped flag auto-returns: " + (this.flagReturnDelayField != null ? this.flagReturnDelayField.getIntValue(this.flagReturnDelaySeconds) : this.flagReturnDelaySeconds));
+            WorkspaceTooltip ownFlagTooltip = WorkspaceTooltip.toggle(() -> this.requireOwnFlagAtBase,
+                "Your flag must be safe at base to capture enemy flags.",
+                "Enemy flags can be captured anytime.");
+
             this.rulesLayout.addRow(
-                "Flag Return Delay (s)", (s, x, y, w) -> {
-                    this.flagReturnDelayField = this.addIntField(s, x, y, this.flagReturnDelaySeconds, w, "Flag Return Delay", val -> "Seconds before dropped flag auto-returns: " + val);
+                "Flag Return Delay (s)", returnDelayTooltip, (s, x, y, w) -> {
+                    this.flagReturnDelayField = this.addIntField(s, "Flag Return Delay", x, y, this.flagReturnDelaySeconds, 5, 60, w, returnDelayTooltip);
                 },
-                "Own Flag at Base", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Own Flag Required", () -> this.requireOwnFlagAtBase, x, y, w,
-                        new BinaryTooltip("ON: Your flag must be safe at base to capture enemy flags.", "OFF: Enemy flags can be captured anytime."),
+                "Own Flag at Base", ownFlagTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Own Flag Required", () -> this.requireOwnFlagAtBase, x, y, w, ownFlagTooltip,
                         () -> this.requireOwnFlagAtBase = !this.requireOwnFlagAtBase);
                 }
             );
 
+            WorkspaceTooltip carrierTooltip = WorkspaceTooltip.toggle(() -> this.carrierGlowing,
+                "Flag carriers are highlighted with glowing aura.",
+                "Carriers are not highlighted.");
+            WorkspaceTooltip chatTooltip = WorkspaceTooltip.toggle(() -> this.teamChatEnabled,
+                "Chat is routed to team members only (use ! for global chat).",
+                "Vanilla chat is used for all players.");
+
             this.rulesLayout.addRow(
-                "Carrier Glowing", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Carrier Glowing", () -> this.carrierGlowing, x, y, w,
-                        new BinaryTooltip("ON: Flag carriers are highlighted with glowing aura.", "OFF: Carriers are not highlighted."),
+                "Carrier Glowing", carrierTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Carrier Glowing", () -> this.carrierGlowing, x, y, w, carrierTooltip,
                         () -> this.carrierGlowing = !this.carrierGlowing);
                 },
-                "Team Chat", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
-                        new BinaryTooltip("ON: Chat is routed to team members only (use ! for global chat).", "OFF: Vanilla chat is used for all players."),
+                "Team Chat", chatTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w, chatTooltip,
                         () -> this.teamChatEnabled = !this.teamChatEnabled);
                 }
             );
 
+            WorkspaceTooltip invisTooltip = WorkspaceTooltip.toggle(() -> this.allowInvisibilityPotion,
+                "Invisibility potions can be purchased in the shop.",
+                "Invisibility potions are removed from the shop.");
+            WorkspaceTooltip regenTooltip = WorkspaceTooltip.toggle(() -> this.naturalRegeneration,
+                "Players regenerate health naturally when hunger is full.",
+                "Players only regenerate health from items/powerups.");
+
             this.rulesLayout.addRow(
-                "Invis Potion", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Invisibility Potion", () -> this.allowInvisibilityPotion, x, y, w,
-                        new BinaryTooltip("ON: Invisibility potions can be purchased in the shop.", "OFF: Invisibility potions are removed from the shop."),
+                "Invis Potion", invisTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Invisibility Potion", () -> this.allowInvisibilityPotion, x, y, w, invisTooltip,
                         () -> this.allowInvisibilityPotion = !this.allowInvisibilityPotion);
                 },
-                "Natural Regen", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Natural Regeneration", () -> this.naturalRegeneration, x, y, w,
-                        new BinaryTooltip("ON: Players regenerate health naturally when hunger is full.", "OFF: Players only regenerate health from items/powerups."),
+                "Natural Regen", regenTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Natural Regeneration", () -> this.naturalRegeneration, x, y, w, regenTooltip,
                         () -> this.naturalRegeneration = !this.naturalRegeneration);
                 }
             );
 
+            WorkspaceTooltip suddenDeathTooltip = WorkspaceTooltip.toggle(() -> this.suddenDeath,
+                "Enters overtime if scores are tied or a flag is carried when time expires.",
+                "Game ends immediately when match time expires.");
+
             this.rulesLayout.addRow(
-                "Sudden Death", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Sudden Death", () -> this.suddenDeath, x, y, w,
-                        new BinaryTooltip("ON: Enters overtime if scores are tied or a flag is carried when time expires.", "OFF: Game ends immediately when match time expires."),
+                "Sudden Death", suddenDeathTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Sudden Death", () -> this.suddenDeath, x, y, w, suddenDeathTooltip,
                         () -> this.suddenDeath = !this.suddenDeath);
                 }
             );

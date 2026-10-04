@@ -6,7 +6,7 @@ import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
-import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceModuleManager;
@@ -126,19 +126,31 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
             this.rulesLayout.addRow(
-                "Starting Lives", (s, x, y, w) -> {
-                    this.startingLivesField = this.addIntField(s, x, y, this.startingLives, w, "Starting lives", val -> "Players start with " + val + " lives.");
+                "Starting Lives",
+                WorkspaceTooltip.of("Starting hearts/lives each player receives. Players are eliminated when reaching 0 lives."),
+                (s, x, y, w) -> {
+                    this.startingLivesField = this.addIntField(s, "Starting Lives", x, y, this.startingLives, 1, 10, w,
+                        WorkspaceTooltip.dynamic(() -> "Players start with " + this.startingLivesField.getIntValue(this.startingLives) + " lives (1-10)."),
+                        val -> this.startingLives = val
+                    );
                 }
             );
 
             this.rulesLayout.addRow(
-                "Max Rounds", (s, x, y, w) -> {
-                    this.maxRoundsField = this.addIntField(s, x, y, this.maxRounds, w, "Max rounds", val -> "Match runs up to " + val + " micro-challenges.");
+                "Max Rounds",
+                WorkspaceTooltip.of("Maximum micro-challenges played before determining match winners."),
+                (s, x, y, w) -> {
+                    this.maxRoundsField = this.addIntField(s, "Max Rounds", x, y, this.maxRounds, 5, 100, w,
+                        WorkspaceTooltip.dynamic(() -> "Match runs up to " + this.maxRoundsField.getIntValue(this.maxRounds) + " micro-challenges (5-100)."),
+                        val -> this.maxRounds = val
+                    );
                 }
             );
 
             this.rulesLayout.addRow(
-                "Game Mode", (s, x, y, w) -> {
+                "Game Mode",
+                WorkspaceTooltip.of("Determines win conditions: Survival eliminates players, Points tallies score."),
+                (s, x, y, w) -> {
                     this.addCycleButton(s, () -> "Mode: " + this.gameMode, () -> this.gameMode.equals("SURVIVAL") ? 0 : 1, x, y, w, new String[]{
                         "Survival: Players lose lives on fail; last survivor wins.",
                         "Points: Fixed rounds; players compete for highest points."
@@ -149,19 +161,25 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
             );
 
             this.rulesLayout.addRow(
-                "Speed Scaling", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Speed Scaling", () -> this.speedScaling, x, y, w, new BinaryTooltip(
+                "Speed Scaling",
+                WorkspaceTooltip.of("Controls whether game speed escalates as rounds progress."),
+                (s, x, y, w) -> {
+                    this.addToggleButton(s, "Speed Scaling", () -> this.speedScaling, x, y, w,
                         "Tempo speeds up every 5 rounds with faster timers.",
-                        "Tempo remains constant throughout the match."
-                    ), () -> {
-                        this.speedScaling = !this.speedScaling;
-                    });
+                        "Tempo remains constant throughout the match.",
+                        () -> this.speedScaling = !this.speedScaling
+                    );
                 }
             );
 
             this.rulesLayout.addRow(
-                "Intermission", (s, x, y, w) -> {
-                    this.intermissionSecondsField = this.addIntField(s, x, y, this.intermissionSeconds, w, "Intermission seconds", val -> "Breather of " + val + " seconds between challenges.");
+                "Intermission",
+                WorkspaceTooltip.of("Pause duration in seconds between rounds to show scores and instructions."),
+                (s, x, y, w) -> {
+                    this.intermissionSecondsField = this.addIntField(s, "Intermission", x, y, this.intermissionSeconds, 1, 10, w,
+                        WorkspaceTooltip.dynamic(() -> "Breather of " + this.intermissionSecondsField.getIntValue(this.intermissionSeconds) + " seconds between challenges (1-10s)."),
+                        val -> this.intermissionSeconds = val
+                    );
                 }
             );
         }

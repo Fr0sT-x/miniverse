@@ -202,14 +202,17 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
                 deleteBtn.setMessage(Text.literal("Delete").formatted(net.minecraft.util.Formatting.RED));
             }
         } else if (this.moduleManager.isActive("match_rules")) {
-            this.addActionButton(screen, "-", mainPanel.x() + 14, mainPanel.y() + 64, 20, "Decrease rounds", () -> {
-                if (this.selectedRounds > 1) {
-                    this.selectedRounds -= 2;
+            this.rulesLayout = new SettingsLayoutBuilder(screen);
+            this.rulesLayout.addRow(
+                "Match Rounds",
+                dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip.of("Number of rounds played to determine the match winner (1 to 9)."),
+                (s, x, y, w) -> {
+                    this.addIntField(s, "Match Rounds", x, y, this.selectedRounds, 1, 9, w,
+                        dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip.dynamic(() -> "Best of " + this.selectedRounds + " rounds (1-9)."),
+                        val -> this.selectedRounds = val
+                    );
                 }
-            });
-            this.addActionButton(screen, "+", mainPanel.x() + 64, mainPanel.y() + 64, 20, "Increase rounds", () -> {
-                this.selectedRounds += 2;
-            });
+            );
         }
 
         // Dialogs
@@ -223,21 +226,26 @@ public final class DuelsWorkspaceView extends AbstractGamemodeWorkspaceView {
             if (this.isEditingType && this.selectedType != null) {
                 this.newTypeNameField.setText(this.selectedType.name());
             }
-            this.btnKnockbackOnly = this.addToggleButton(screen, "Knockback Only", () -> this.configKnockbackOnly, dialogX + 14, dialogY + 76, dialogW - 28, new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players only take knockback, no damage.", "Players take normal damage."), () -> {
-                this.configKnockbackOnly = !this.configKnockbackOnly;
-            });
-            this.btnAllowBuilding = this.addToggleButton(screen, "Allow Building", () -> this.configAllowBuilding, dialogX + 14, dialogY + 101, dialogW - 28, new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can place blocks.", "Block placement is disabled."), () -> {
-                this.configAllowBuilding = !this.configAllowBuilding;
-            });
-            this.btnAllowBreaking = this.addToggleButton(screen, "Allow Breaking", () -> this.configAllowBreaking, dialogX + 14, dialogY + 126, dialogW - 28, new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can break placed blocks.", "Block breaking is disabled."), () -> {
-                this.configAllowBreaking = !this.configAllowBreaking;
-            });
-            this.btnAllowHunger = this.addToggleButton(screen, "Allow Hunger", () -> this.configAllowHunger, dialogX + 14, dialogY + 151, dialogW - 28, new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players lose hunger over time.", "Hunger is frozen."), () -> {
-                this.configAllowHunger = !this.configAllowHunger;
-            });
-            this.btnNaturalRegen = this.addToggleButton(screen, "Natural Regen", () -> this.configNaturalRegen, dialogX + 14, dialogY + 176, dialogW - 28, new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players regenerate health naturally.", "Natural health regeneration is disabled."), () -> {
-                this.configNaturalRegen = !this.configNaturalRegen;
-            });
+            this.btnKnockbackOnly = this.addToggleButton(screen, "Knockback Only", () -> this.configKnockbackOnly, dialogX + 14, dialogY + 76, dialogW - 28,
+                "Players only take knockback, no damage.", "Players take normal damage.",
+                () -> this.configKnockbackOnly = !this.configKnockbackOnly
+            );
+            this.btnAllowBuilding = this.addToggleButton(screen, "Allow Building", () -> this.configAllowBuilding, dialogX + 14, dialogY + 101, dialogW - 28,
+                "Players can place blocks.", "Block placement is disabled.",
+                () -> this.configAllowBuilding = !this.configAllowBuilding
+            );
+            this.btnAllowBreaking = this.addToggleButton(screen, "Allow Breaking", () -> this.configAllowBreaking, dialogX + 14, dialogY + 126, dialogW - 28,
+                "Players can break placed blocks.", "Block breaking is disabled.",
+                () -> this.configAllowBreaking = !this.configAllowBreaking
+            );
+            this.btnAllowHunger = this.addToggleButton(screen, "Allow Hunger", () -> this.configAllowHunger, dialogX + 14, dialogY + 151, dialogW - 28,
+                "Players lose hunger over time.", "Hunger is frozen.",
+                () -> this.configAllowHunger = !this.configAllowHunger
+            );
+            this.btnNaturalRegen = this.addToggleButton(screen, "Natural Regen", () -> this.configNaturalRegen, dialogX + 14, dialogY + 176, dialogW - 28,
+                "Players regenerate health naturally.", "Natural health regeneration is disabled.",
+                () -> this.configNaturalRegen = !this.configNaturalRegen
+            );
 
             this.addActionButton(screen, this.isEditingType ? "Save Changes" : "Save Type", dialogX + 14, dialogY + 202, 145, "Save this duel type.", () -> {
                 if (!this.newTypeNameField.getText().isBlank()) {

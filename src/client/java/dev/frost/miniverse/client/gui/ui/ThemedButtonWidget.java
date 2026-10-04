@@ -1,5 +1,6 @@
 package dev.frost.miniverse.client.gui.ui;
 
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -12,7 +13,7 @@ public class ThemedButtonWidget extends ButtonWidget {
     private int accent = UiTheme.ACCENT_BLUE;
     private int relativeX = 0;
     private int relativeY = 0;
-    private Supplier<String> tooltipSupplier;
+    private WorkspaceTooltip workspaceTooltip;
 
     public ThemedButtonWidget(int x, int y, int width, int height, Text message, PressAction onPress) {
         super(x, y, width, height, message, onPress, DEFAULT_NARRATION_SUPPLIER);
@@ -21,6 +22,12 @@ public class ThemedButtonWidget extends ButtonWidget {
     public ThemedButtonWidget(int x, int y, int width, int height, Text message, int accent, Runnable action) {
         super(x, y, width, height, message, b -> action.run(), DEFAULT_NARRATION_SUPPLIER);
         this.accent = accent;
+    }
+
+    public ThemedButtonWidget(int x, int y, int width, int height, Text message, int accent, WorkspaceTooltip tooltip, Runnable action) {
+        super(x, y, width, height, message, b -> action.run(), DEFAULT_NARRATION_SUPPLIER);
+        this.accent = accent;
+        this.workspaceTooltip = tooltip;
     }
 
     public ThemedButtonWidget setAccent(int accent) {
@@ -51,13 +58,26 @@ public class ThemedButtonWidget extends ButtonWidget {
         this.setY(baseY + this.relativeY);
     }
 
+    public ThemedButtonWidget setWorkspaceTooltip(WorkspaceTooltip tooltip) {
+        this.workspaceTooltip = tooltip;
+        return this;
+    }
+
+    public WorkspaceTooltip getWorkspaceTooltip() {
+        return this.workspaceTooltip;
+    }
+
     public ThemedButtonWidget setTooltipSupplier(Supplier<String> tooltipSupplier) {
-        this.tooltipSupplier = tooltipSupplier;
+        if (tooltipSupplier != null) {
+            this.workspaceTooltip = tooltipSupplier::get;
+        } else {
+            this.workspaceTooltip = null;
+        }
         return this;
     }
 
     public Supplier<String> getTooltipSupplier() {
-        return this.tooltipSupplier;
+        return this.workspaceTooltip != null ? this.workspaceTooltip::resolve : null;
     }
 
     @Override

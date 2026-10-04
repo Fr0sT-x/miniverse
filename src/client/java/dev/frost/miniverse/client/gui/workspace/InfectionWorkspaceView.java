@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.infection.InfectionDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -40,30 +41,37 @@ public final class InfectionWorkspaceView extends AbstractGamemodeWorkspaceView 
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip durationTooltip = WorkspaceTooltip.dynamic(() -> "Total match duration will be " + (this.durationField != null ? this.durationField.getIntValue(this.durationSeconds) : this.durationSeconds) + " seconds.");
             this.rulesLayout.addRow(
-                "Match Duration", (s, x, y, w) -> {
-                    this.durationField = this.addIntField(s, x, y, this.durationSeconds, w, "Match duration", val -> "Total match duration will be " + val + " seconds.");
+                "Match Duration", durationTooltip, (s, x, y, w) -> {
+                    this.durationField = this.addIntField(s, "Match duration", x, y, this.durationSeconds, 10, 3600, w, durationTooltip);
                 }
             );
 
+            WorkspaceTooltip infectedTooltip = WorkspaceTooltip.dynamic(() -> "The match will start with " + (this.infectedField != null ? this.infectedField.getIntValue(this.startingInfected) : this.startingInfected) + " alpha infected.");
             this.rulesLayout.addRow(
-                "Starting Infected", (s, x, y, w) -> {
-                    this.infectedField = this.addIntField(s, x, y, this.startingInfected, w, "Starting infected", val -> "The match will start with " + val + " alpha infected.");
+                "Starting Infected", infectedTooltip, (s, x, y, w) -> {
+                    this.infectedField = this.addIntField(s, "Starting infected", x, y, this.startingInfected, 1, 100, w, infectedTooltip);
                 }
             );
 
+            WorkspaceTooltip respawnTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.respawnField != null ? this.respawnField.getIntValue(this.respawnDelay) : this.respawnDelay;
+                return val <= 0 ? "Infected will respawn instantly." : "Infected will be forced to spectate for " + val + " seconds before respawning.";
+            });
             this.rulesLayout.addRow(
-                "Respawn Delay", (s, x, y, w) -> {
-                    this.respawnField = this.addIntField(s, x, y, this.respawnDelay, w, "Respawn delay",
-                        "Infected will respawn instantly.",
-                        val -> "Infected will be forced to spectate for " + val + " seconds before respawning.");
+                "Respawn Delay", respawnTooltip, (s, x, y, w) -> {
+                    this.respawnField = this.addIntField(s, "Respawn delay", x, y, this.respawnDelay, 0, 60, w, respawnTooltip);
                 }
             );
 
+            WorkspaceTooltip ffTooltip = WorkspaceTooltip.toggle(() -> this.allowFriendlyFire,
+                "Survivors can damage other survivors.",
+                "Survivors cannot damage each other.");
             this.rulesLayout.addRow(
-                "Friendly Fire", (s, x, y, w) -> {
+                "Friendly Fire", ffTooltip, (s, x, y, w) -> {
                     this.friendlyFireButton = this.addToggleButton(s, "Friendly Fire", () -> this.allowFriendlyFire, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Survivors can damage other survivors.", "Survivors cannot damage each other."),
+                        ffTooltip,
                         () -> this.allowFriendlyFire = !this.allowFriendlyFire);
                 }
             );

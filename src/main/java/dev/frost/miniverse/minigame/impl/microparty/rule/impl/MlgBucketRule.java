@@ -2,6 +2,7 @@ package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
 import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
 import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
@@ -15,9 +16,14 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.GameMode;
+import net.minecraft.world.World;
 
 import java.util.*;
 
@@ -74,6 +80,7 @@ public class MlgBucketRule implements MicroRule {
         if (world == null) return;
 
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
+            p.changeGameMode(GameMode.SURVIVAL);
             p.getInventory().clear();
             p.getInventory().setStack(0, new ItemStack(Items.WATER_BUCKET));
             p.getInventory().selectedSlot = 0;
@@ -150,9 +157,52 @@ public class MlgBucketRule implements MicroRule {
     }
 
     @Override
+    public ActionResult onUseBlock(ServerPlayerEntity player, World world, Hand hand, BlockHitResult hitResult, MicroPartyMinigame game) {
+        if (game.isEliminated(player.getUuid()) || !game.getTracker().isAlive(player.getUuid())) {
+            return ActionResult.PASS;
+        }
+
+        ItemStack held = player.getStackInHand(hand);
+        if (held.isOf(Items.WATER_BUCKET) && world instanceof ServerWorld serverWorld) {
+            BlockPos hitPos = hitResult.getBlockPos();
+            BlockState hitState = world.getBlockState(hitPos);
+            BlockPos targetPos;
+            if (hitState.isReplaceable() || hitState.isAir() || hitState.isLiquid()) {
+                targetPos = hitPos;
+            } else {
+                targetPos = hitPos.offset(hitResult.getSide());
+            }
+
+            BlockState targetState = world.getBlockState(targetPos);
+            if (targetState.isReplaceable() || targetState.isAir() || targetState.isLiquid()) {
+                game.getBlockManager().setTemporaryBlock(serverWorld, targetPos, Blocks.WATER.getDefaultState());
+                this.placedWaterBlocks.add(targetPos.toImmutable());
+
+                if (!player.isCreative()) {
+                    player.setStackInHand(hand, new ItemStack(Items.BUCKET));
+                }
+                serverWorld.playSound(null, targetPos, SoundEvents.ITEM_BUCKET_EMPTY, SoundCategory.BLOCKS, 1.0f, 1.0f);
+                return ActionResult.SUCCESS;
+            }
+        } else if (held.isOf(Items.BUCKET) && world instanceof ServerWorld serverWorld) {
+            BlockPos hitPos = hitResult.getBlockPos();
+            if (world.getBlockState(hitPos).isOf(Blocks.WATER)) {
+                world.setBlockState(hitPos, Blocks.AIR.getDefaultState());
+                if (!player.isCreative()) {
+                    player.setStackInHand(hand, new ItemStack(Items.WATER_BUCKET));
+                }
+                serverWorld.playSound(null, hitPos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0f, 1.0f);
+                return ActionResult.SUCCESS;
+            }
+        }
+        return ActionResult.PASS;
+    }
+
+    @Override
     public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             p.getInventory().clear();
+            p.changeGameMode(GameMode.ADVENTURE);
         }
 
         // Clean up any water blocks placed or spread during the round

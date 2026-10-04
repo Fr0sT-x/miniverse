@@ -9,6 +9,7 @@ import dev.frost.miniverse.client.gui.workspace.components.DynamicTeamSelectionG
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.skywars.SkywarsDefinition;
 import dev.frost.miniverse.minigame.impl.skywars.SkywarsSettings;
 import net.minecraft.client.font.TextRenderer;
@@ -56,17 +57,22 @@ public final class SkywarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip modeTooltip = WorkspaceTooltip.cycle(() -> this.mode.equalsIgnoreCase(SkywarsSettings.MODE_INSANE) ? 1 : 0, new String[]{
+                "Normal Mode: Balanced starter gear, iron armor, and standard mid loot.",
+                "Insane Mode: Diamond gear, enchantments, ender pearls, and powerful loot."
+            });
+            WorkspaceTooltip chatTooltip = WorkspaceTooltip.toggle(() -> this.teamChatEnabled,
+                "Chat is routed to team members only (use ! for global chat).",
+                "Vanilla chat is used for all players.");
+
             this.rulesLayout.addRow(
-                "Game Mode", (s, x, y, w) -> {
+                "Game Mode", modeTooltip, (s, x, y, w) -> {
                     this.modeButton = this.addCycleButton(
                         s,
                         () -> "Mode: " + this.mode.toUpperCase(),
                         () -> this.mode.equalsIgnoreCase(SkywarsSettings.MODE_INSANE) ? 1 : 0,
                         x, y, w,
-                        new String[]{
-                            "Normal Mode: Balanced starter gear, iron armor, and standard mid loot.",
-                            "Insane Mode: Diamond gear, enchantments, ender pearls, and powerful loot."
-                        },
+                        modeTooltip,
                         2,
                         () -> {
                             this.mode = this.mode.equalsIgnoreCase(SkywarsSettings.MODE_INSANE)
@@ -76,45 +82,48 @@ public final class SkywarsWorkspaceView extends AbstractGamemodeWorkspaceView {
                         }
                     );
                 },
-                "Team Chat", (s, x, y, w) -> {
+                "Team Chat", chatTooltip, (s, x, y, w) -> {
                     this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Chat is routed to team members only (use ! for global chat).", "OFF: Vanilla chat is used for all players."),
+                        chatTooltip,
                         () -> this.teamChatEnabled = !this.teamChatEnabled);
                 }
             );
 
+            WorkspaceTooltip refillTooltip = WorkspaceTooltip.dynamic(() -> "All chests will be repopulated with fresh loot every " + (this.refillIntervalField != null ? this.refillIntervalField.getIntValue(this.refillIntervalSeconds) : this.refillIntervalSeconds) + " seconds.");
+            WorkspaceTooltip cageTooltip = WorkspaceTooltip.dynamic(() -> "Players are encased in cages for " + (this.cageTimerField != null ? this.cageTimerField.getIntValue(this.cageTimerSeconds) : this.cageTimerSeconds) + " seconds before release.");
+
             this.rulesLayout.addRow(
-                "Chest Refill (s)", (s, x, y, w) -> {
+                "Chest Refill (s)", refillTooltip, (s, x, y, w) -> {
                     this.refillIntervalField = this.addIntField(
-                        s, x, y, this.refillIntervalSeconds, w, "Chest refill interval",
-                        val -> "All chests will be repopulated with fresh loot every " + val + " seconds."
+                        s, "Chest refill interval", x, y, this.refillIntervalSeconds, 30, 1800, w, refillTooltip
                     );
                 },
-                "Cage Timer (s)", (s, x, y, w) -> {
+                "Cage Timer (s)", cageTooltip, (s, x, y, w) -> {
                     this.cageTimerField = this.addIntField(
-                        s, x, y, this.cageTimerSeconds, w, "Pre-match cage timer",
-                        val -> "Players are encased in cages for " + val + " seconds before release."
+                        s, "Pre-match cage timer", x, y, this.cageTimerSeconds, 3, 60, w, cageTooltip
                     );
                 }
             );
 
+            WorkspaceTooltip timeLimitTooltip = WorkspaceTooltip.dynamic(() -> "Match ends in a draw after " + (this.timeLimitField != null ? this.timeLimitField.getIntValue(this.timeLimitSeconds) : this.timeLimitSeconds) + " seconds.");
+            WorkspaceTooltip voidTooltip = WorkspaceTooltip.cycle(() -> this.instantVoidDeath ? 0 : 1, new String[]{
+                "Players are immediately eliminated when falling into the void.",
+                "Vanilla void damage applies tick-by-tick."
+            });
+
             this.rulesLayout.addRow(
-                "Time Limit (s)", (s, x, y, w) -> {
+                "Time Limit (s)", timeLimitTooltip, (s, x, y, w) -> {
                     this.timeLimitField = this.addIntField(
-                        s, x, y, this.timeLimitSeconds, w, "Time limit seconds",
-                        val -> "Match ends in a draw after " + val + " seconds."
+                        s, "Time limit seconds", x, y, this.timeLimitSeconds, 60, 3600, w, timeLimitTooltip
                     );
                 },
-                "Void Death", (s, x, y, w) -> {
+                "Void Death", voidTooltip, (s, x, y, w) -> {
                     this.instantVoidButton = this.addCycleButton(
                         s,
                         () -> "Void Death: " + (this.instantVoidDeath ? "INSTANT" : "VANILLA"),
                         () -> this.instantVoidDeath ? 0 : 1,
                         x, y, w,
-                        new String[]{
-                            "Players are immediately eliminated when falling into the void.",
-                            "Vanilla void damage applies tick-by-tick."
-                        },
+                        voidTooltip,
                         2,
                         () -> {
                             this.instantVoidDeath = !this.instantVoidDeath;

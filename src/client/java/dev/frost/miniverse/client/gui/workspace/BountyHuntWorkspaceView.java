@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.bountyhunt.BountyHuntDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -17,7 +18,7 @@ import net.minecraft.text.Text;
 public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
     
-    private TextFieldWidget pointsToWinField;
+    private IntFieldWidget pointsToWinField;
     private IntFieldWidget gracePeriodField;
     private IntFieldWidget targetSwapIntervalField;
     private IntFieldWidget respawnDelayField;
@@ -53,71 +54,92 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
             this.rulesLayout.addHeading("Match Settings");
+            WorkspaceTooltip pointsTooltip = WorkspaceTooltip.dynamic(() -> "Points needed to win the match (" + (this.pointsToWinField != null ? this.pointsToWinField.getIntValue(this.scoreToWin) : this.scoreToWin) + " pts).");
             this.rulesLayout.addRow(
-                "Points To Win", (s, x, y, w) -> {
-                    this.pointsToWinField = this.addField(s, x, y, String.valueOf(this.scoreToWin), w, "Points to win", () -> "Points needed to win.");
+                "Points To Win", pointsTooltip, (s, x, y, w) -> {
+                    this.pointsToWinField = this.addIntField(s, "Points to Win", x, y, this.scoreToWin, 10, 100000, w, pointsTooltip);
                 }
             );
 
+            WorkspaceTooltip graceTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.gracePeriodField != null ? this.gracePeriodField.getIntValue(this.gracePeriodSeconds) : this.gracePeriodSeconds;
+                return val <= 0 ? "No grace period." : "Players have " + val + " seconds of peace.";
+            });
+            WorkspaceTooltip swapTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.targetSwapIntervalField != null ? this.targetSwapIntervalField.getIntValue(this.targetSwapIntervalSeconds) : this.targetSwapIntervalSeconds;
+                return val <= 0 ? "Targets will not rotate." : "Targets rotate every " + val + " seconds.";
+            });
+
             this.rulesLayout.addRow(
-                "Grace Period", (s, x, y, w) -> {
-                    this.gracePeriodField = this.addIntField(s, x, y, this.gracePeriodSeconds, w, "Grace seconds",
-                        "No grace period.",
-                        val -> "Players have " + val + " seconds of peace.");
+                "Grace Period", graceTooltip, (s, x, y, w) -> {
+                    this.gracePeriodField = this.addIntField(s, "Grace seconds", x, y, this.gracePeriodSeconds, 0, 3600, w, graceTooltip);
                     this.addStepper(s, this.gracePeriodField, x + w + 4, y, 0, 600, 10);
                 },
-                "Target Shuffle", (s, x, y, w) -> {
-                    this.targetSwapIntervalField = this.addIntField(s, x, y, this.targetSwapIntervalSeconds, w, "Swap seconds",
-                        "Targets will not rotate.",
-                        val -> "Targets rotate every " + val + " seconds.");
+                "Target Shuffle", swapTooltip, (s, x, y, w) -> {
+                    this.targetSwapIntervalField = this.addIntField(s, "Swap seconds", x, y, this.targetSwapIntervalSeconds, 10, 3600, w, swapTooltip);
                     this.addStepper(s, this.targetSwapIntervalField, x + w + 4, y, 10, 3600, 30);
                 }
             );
 
+            WorkspaceTooltip respawnTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.respawnDelayField != null ? this.respawnDelayField.getIntValue(this.respawnDelaySeconds) : this.respawnDelaySeconds;
+                return val <= 0 ? "Instant respawn." : "Dead players spectate for " + val + " seconds.";
+            });
             this.rulesLayout.addRow(
-                "Respawn Delay", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn delay",
-                        "Instant respawn.",
-                        val -> "Dead players spectate for " + val + " seconds.");
+                "Respawn Delay", respawnTooltip, (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, "Respawn delay", x, y, this.respawnDelaySeconds, 0, 300, w, respawnTooltip);
                     this.addStepper(s, this.respawnDelayField, x + w + 4, y, 0, 300, 1);
                 }
             );
 
             this.rulesLayout.addHeading("Tracking Options");
+            WorkspaceTooltip trackerTooltip = WorkspaceTooltip.toggle(() -> this.trackerEnabled,
+                "Players receive a tracker pointing to their target.",
+                "Tracking is disabled.");
+            WorkspaceTooltip netherTooltip = WorkspaceTooltip.toggle(() -> this.netherTrackingEnabled,
+                "Trackers work when the target is in a different dimension.",
+                "Trackers spin randomly if the target is in a different dimension.");
+
             this.rulesLayout.addRow(
-                "Tracker Toggle", (s, x, y, w) -> {
-                    this.trackerToggle = this.addToggleButton(s, "Tracker", () -> this.trackerEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players receive a tracker pointing to their target.", "Tracking is disabled."),
+                "Tracker Toggle", trackerTooltip, (s, x, y, w) -> {
+                    this.trackerToggle = this.addToggleButton(s, "Tracker", () -> this.trackerEnabled, x, y, w, trackerTooltip,
                         () -> this.trackerEnabled = !this.trackerEnabled);
                 },
-                "Nether Toggle", (s, x, y, w) -> {
-                    this.netherToggle = this.addToggleButton(s, "Nether Tracking", () -> this.netherTrackingEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Trackers work when the target is in a different dimension.", "OFF: Trackers spin randomly if the target is in a different dimension."),
+                "Nether Toggle", netherTooltip, (s, x, y, w) -> {
+                    this.netherToggle = this.addToggleButton(s, "Nether Tracking", () -> this.netherTrackingEnabled, x, y, w, netherTooltip,
                         () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
                 }
             );
 
+            WorkspaceTooltip cooldownTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.compassCooldownField != null ? this.compassCooldownField.getIntValue(this.compassCooldownSeconds) : this.compassCooldownSeconds;
+                return val <= 0 ? "No tracker cooldown." : "Players must wait " + val + " seconds between tracker uses.";
+            });
+            WorkspaceTooltip itemTooltip = WorkspaceTooltip.of("The item id used for tracking targets.");
             this.rulesLayout.addRow(
-                "Cooldown", (s, x, y, w) -> {
-                    this.compassCooldownField = this.addIntField(s, x, y, this.compassCooldownSeconds, w, "Cooldown seconds",
-                        "No tracker cooldown.",
-                        val -> "Players must wait " + val + " seconds between tracker uses.");
+                "Cooldown", cooldownTooltip, (s, x, y, w) -> {
+                    this.compassCooldownField = this.addIntField(s, "Cooldown seconds", x, y, this.compassCooldownSeconds, 0, 300, w, cooldownTooltip);
                 },
-                "Tracker Item", (s, x, y, w) -> {
+                "Tracker Item", itemTooltip, (s, x, y, w) -> {
                     this.trackerItemField = this.addField(s, x, y, this.trackerItemId, w, "Tracker item", () -> "The item id used for tracking targets.");
                 }
             );
 
             this.rulesLayout.addHeading("Bonus Features");
+            WorkspaceTooltip hvtTooltip = WorkspaceTooltip.toggle(() -> this.highValueTargetEnabled,
+                "The High Value Target system is active.",
+                "The High Value Target system is disabled.");
+            WorkspaceTooltip revengeTooltip = WorkspaceTooltip.toggle(() -> this.revengeAssignmentEnabled,
+                "Players can be assigned their killer as a target.",
+                "Players will not be assigned their killer as a target.");
+
             this.rulesLayout.addRow(
-                "High Value Target", (s, x, y, w) -> {
-                    this.hvtToggle = this.addToggleButton(s, "HVT", () -> this.highValueTargetEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: The High Value Target system is active.", "OFF: The High Value Target system is disabled."),
+                "High Value Target", hvtTooltip, (s, x, y, w) -> {
+                    this.hvtToggle = this.addToggleButton(s, "HVT", () -> this.highValueTargetEnabled, x, y, w, hvtTooltip,
                         () -> this.highValueTargetEnabled = !this.highValueTargetEnabled);
                 },
-                "Revenge Contracts", (s, x, y, w) -> {
-                    this.revengeToggle = this.addToggleButton(s, "Revenge", () -> this.revengeAssignmentEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Players can be assigned their killer as a target.", "OFF: Players will not be assigned their killer as a target."),
+                "Revenge Contracts", revengeTooltip, (s, x, y, w) -> {
+                    this.revengeToggle = this.addToggleButton(s, "Revenge", () -> this.revengeAssignmentEnabled, x, y, w, revengeTooltip,
                         () -> this.revengeAssignmentEnabled = !this.revengeAssignmentEnabled);
                 }
             );
@@ -151,7 +173,7 @@ public final class BountyHuntWorkspaceView extends AbstractGamemodeWorkspaceView
 
     protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
-            try { this.scoreToWin = Integer.parseInt(this.pointsToWinField.getText()); } catch (Exception ignored) {}
+            this.scoreToWin = readClamped(this.pointsToWinField, this.scoreToWin, 10, 100000);
             this.gracePeriodSeconds = readClamped(this.gracePeriodField, this.gracePeriodSeconds, 0, 3600);
             this.targetSwapIntervalSeconds = readClamped(this.targetSwapIntervalField, this.targetSwapIntervalSeconds, 10, 3600);
             this.respawnDelaySeconds = readClamped(this.respawnDelayField, this.respawnDelaySeconds, 0, 300);

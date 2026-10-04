@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.murdermystery.MurderMysteryDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -39,27 +40,31 @@ public final class MurderMysteryWorkspaceView extends AbstractGamemodeWorkspaceV
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip durationTooltip = WorkspaceTooltip.dynamic(() -> "The murderer must eliminate everyone within " + (this.durationField != null ? this.durationField.getIntValue(this.durationSeconds) : this.durationSeconds) + " seconds.");
             this.rulesLayout.addRow(
-                "Match Duration (s)", (s, x, y, w) -> {
-                    this.durationField = this.addIntField(s, x, y, this.durationSeconds, w, "Round duration (seconds)", val -> "The murderer must eliminate everyone within " + val + " seconds.");
+                "Match Duration (s)", durationTooltip, (s, x, y, w) -> {
+                    this.durationField = this.addIntField(s, "Round duration (seconds)", x, y, this.durationSeconds, 10, 3600, w, durationTooltip);
                 }
             );
 
+            WorkspaceTooltip detectiveTooltip = WorkspaceTooltip.dynamic(() -> "The match will have " + (this.detectiveCountField != null ? this.detectiveCountField.getIntValue(this.detectiveCount) : this.detectiveCount) + " detective(s).");
             this.rulesLayout.addRow(
-                "Detective Count", (s, x, y, w) -> {
-                    this.detectiveCountField = this.addIntField(s, x, y, this.detectiveCount, w, "Detective count", val -> "The match will have " + val + " detective(s).");
+                "Detective Count", detectiveTooltip, (s, x, y, w) -> {
+                    this.detectiveCountField = this.addIntField(s, "Detective count", x, y, this.detectiveCount, 1, 100, w, detectiveTooltip);
                 }
             );
 
+            WorkspaceTooltip coinTooltip = WorkspaceTooltip.dynamic(() -> "Coins will spawn on the map every " + (this.coinIntervalField != null ? this.coinIntervalField.getIntValue(this.coinInterval) : this.coinInterval) + " seconds.");
             this.rulesLayout.addRow(
-                "Coin Interval (s)", (s, x, y, w) -> {
-                    this.coinIntervalField = this.addIntField(s, x, y, this.coinInterval, w, "Coin spawn interval (seconds)", val -> "Coins will spawn on the map every " + val + " seconds.");
+                "Coin Interval (s)", coinTooltip, (s, x, y, w) -> {
+                    this.coinIntervalField = this.addIntField(s, "Coin spawn interval (seconds)", x, y, this.coinInterval, 1, 600, w, coinTooltip);
                 }
             );
 
+            WorkspaceTooltip bowTooltip = WorkspaceTooltip.dynamic(() -> "Innocents must collect " + (this.bowPriceField != null ? this.bowPriceField.getIntValue(this.bowPrice) : this.bowPrice) + " coins to receive a bow.");
             this.rulesLayout.addRow(
-                "Detective Bow Price", (s, x, y, w) -> {
-                    this.bowPriceField = this.addIntField(s, x, y, this.bowPrice, w, "Detective bow price (coins)", val -> "Innocents must collect " + val + " coins to receive a bow.");
+                "Detective Bow Price", bowTooltip, (s, x, y, w) -> {
+                    this.bowPriceField = this.addIntField(s, "Detective bow price (coins)", x, y, this.bowPrice, 1, 64, w, bowTooltip);
                 }
             );
         }

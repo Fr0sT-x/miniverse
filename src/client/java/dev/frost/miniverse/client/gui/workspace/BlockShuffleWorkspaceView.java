@@ -14,6 +14,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.blockshuffle.BlockShuffleDefinition;
 import dev.frost.miniverse.minigame.impl.blockshuffle.BlockShuffleWeights;
 import net.minecraft.block.Block;
@@ -62,29 +63,34 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip pointsTooltip = WorkspaceTooltip.dynamic(() -> "Score needed to win the match (" + (this.pointsToWinField != null ? this.pointsToWinField.getIntValue(this.pointsToWin) : this.pointsToWin) + " pts).");
             this.rulesLayout.addRow(
-                "Points to Win", (s, x, y, w) -> {
-                    this.pointsToWinField = this.addIntField(s, x, y, this.pointsToWin, w, "Points to Win", val -> "Score needed to win the match.");
+                "Points to Win", pointsTooltip, (s, x, y, w) -> {
+                    this.pointsToWinField = this.addIntField(s, "Points to Win", x, y, this.pointsToWin, 1, 100, w, pointsTooltip);
                 }
             );
 
+            WorkspaceTooltip roundDurationTooltip = WorkspaceTooltip.dynamic(() -> "Players have " + (this.roundDurationField != null ? this.roundDurationField.getIntValue(this.roundDurationSeconds) : this.roundDurationSeconds) + " seconds to find their block.");
             this.rulesLayout.addRow(
-                "Round Duration", (s, x, y, w) -> {
-                    this.roundDurationField = this.addIntField(s, x, y, this.roundDurationSeconds, w, "Round Duration (s)", val -> "Players have " + val + " seconds to find their block.");
+                "Round Duration", roundDurationTooltip, (s, x, y, w) -> {
+                    this.roundDurationField = this.addIntField(s, "Round Duration (s)", x, y, this.roundDurationSeconds, 10, 3600, w, roundDurationTooltip);
                 }
             );
 
+            WorkspaceTooltip perPlayerTooltip = WorkspaceTooltip.toggle(() -> this.perPlayerBlocks,
+                "Each player gets a different block.",
+                "All players hunt the same block.");
             this.rulesLayout.addRow(
-                "Player Assignment", (s, x, y, w) -> {
-                    this.perPlayerButton = this.addToggleButton(s, "Per-Player Blocks", () -> this.perPlayerBlocks, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Each player gets a different block.", "All players hunt the same block."),
+                "Player Assignment", perPlayerTooltip, (s, x, y, w) -> {
+                    this.perPlayerButton = this.addToggleButton(s, "Per-Player Blocks", () -> this.perPlayerBlocks, x, y, w, perPlayerTooltip,
                         () -> this.perPlayerBlocks = !this.perPlayerBlocks);
                 }
             );
 
+            WorkspaceTooltip blockPoolTooltip = WorkspaceTooltip.of("Configure which blocks can be randomly chosen during the match.");
             this.rulesLayout.addRow(
-                "Block Pool", (s, x, y, w) -> {
-                    this.blockPoolButton = this.addActionButton(s, "Configure Block Pool (" + this.blockPool.size() + " blocks)", x, y, w, "Click to select which blocks can be chosen during the match.", () -> {
+                "Block Pool", blockPoolTooltip, (s, x, y, w) -> {
+                    this.blockPoolButton = this.addActionButton(s, "Configure Block Pool (" + this.blockPool.size() + " blocks)", x, y, w, blockPoolTooltip, () -> {
                         Set<Block> initialSelection = this.blockPool.stream()
                             .map(Registries.BLOCK::get)
                             .collect(Collectors.toSet());
@@ -109,9 +115,10 @@ public final class BlockShuffleWorkspaceView extends AbstractGamemodeWorkspaceVi
                 }
             );
 
+            WorkspaceTooltip respawnDelayTooltip = WorkspaceTooltip.dynamic(() -> "Delay before players respawn (" + (this.respawnDelayField != null ? this.respawnDelayField.getIntValue(this.respawnDelaySeconds) : this.respawnDelaySeconds) + "s).");
             this.rulesLayout.addRow(
-                "Respawn Delay", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn Delay (s)", val -> "Delay before players respawn.");
+                "Respawn Delay", respawnDelayTooltip, (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, "Respawn Delay (s)", x, y, this.respawnDelaySeconds, 1, 60, w, respawnDelayTooltip);
                 }
             );
         }

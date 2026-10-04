@@ -14,6 +14,7 @@ import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorksp
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintDefinition;
 import dev.frost.miniverse.minigame.impl.resourcesprint.ResourceSprintSettings;
 import net.minecraft.client.MinecraftClient;
@@ -71,51 +72,59 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip modeTooltip = WorkspaceTooltip.of("Mode determining win condition: first to complete all objectives, or most items found before time runs out.");
+            String[] modeTooltips = new String[]{
+                "Win condition: First to find all items.",
+                "Win condition: Most items found before time runs out."
+            };
             this.rulesLayout.addRow(
-                "Mode", (s, x, y, w) -> {
-                    this.modeButton = this.addCycleButton(s, () -> "Mode: " + titleCase(this.mode.nbtValue()), () -> this.mode.ordinal(), x, y, w, new String[]{
-                        "Win condition: First to find all items.",
-                        "Win condition: Most items found before time runs out."
-                    }, 2, () -> {
+                "Mode", modeTooltip, (s, x, y, w) -> {
+                    this.modeButton = this.addCycleButton(s, () -> "Mode: " + titleCase(this.mode.nbtValue()), () -> this.mode.ordinal(), x, y, w, modeTooltips, 2, () -> {
                         this.mode = this.mode == ResourceSprintSettings.Mode.FIRST_TO_COMPLETE ? ResourceSprintSettings.Mode.TIME_LIMITED : ResourceSprintSettings.Mode.FIRST_TO_COMPLETE;
                         this.modeButton.setMessage(Text.literal("Mode: " + titleCase(this.mode.nbtValue())));
                     });
                 }
             );
 
+            WorkspaceTooltip timeLimitTooltip = WorkspaceTooltip.dynamic(() -> "Match will end after " + (this.timeLimitField != null ? this.timeLimitField.getIntValue(this.timeLimitSeconds) : this.timeLimitSeconds) + " seconds (60-7200).");
             this.rulesLayout.addRow(
-                "Time Limit", (s, x, y, w) -> {
-                    this.timeLimitField = this.addIntField(s, x, y, this.timeLimitSeconds, w, "Time limit seconds", val -> "Match will end after " + val + " seconds.");
+                "Time Limit (s)", timeLimitTooltip, (s, x, y, w) -> {
+                    this.timeLimitField = this.addIntField(s, "Time limit seconds", x, y, this.timeLimitSeconds, 60, 7200, w, timeLimitTooltip);
                 }
             );
 
+            WorkspaceTooltip tieBreakTooltip = WorkspaceTooltip.of("The rule used to break ties at the end of the match when scores are tied.");
+            String[] tieBreakTooltips = new String[]{
+                "Sudden Death: First team to collect an additional objective wins.",
+                "Fastest Total Time: Team that found their objectives fastest wins."
+            };
             this.rulesLayout.addRow(
-                "Tie Break", (s, x, y, w) -> {
-                    this.tieBreakButton = this.addCycleButton(s, () -> "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), () -> this.tieBreakRule.ordinal(), x, y, w, new String[]{
-                        "The rule used to break ties at the end of the match.",
-                        "The rule used to break ties at the end of the match."
-                    }, 2, () -> {
+                "Tie Break", tieBreakTooltip, (s, x, y, w) -> {
+                    this.tieBreakButton = this.addCycleButton(s, () -> "Tie-Break: " + titleCase(this.tieBreakRule.nbtValue()), () -> this.tieBreakRule.ordinal(), x, y, w, tieBreakTooltips, 2, () -> {
                         this.tieBreakRule = this.tieBreakRule == ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH ? ResourceSprintSettings.TieBreakRule.FASTEST_TOTAL_TIME : ResourceSprintSettings.TieBreakRule.SUDDEN_DEATH;
                         this.tieBreakButton.setMessage(Text.literal("Tie-Break: " + titleCase(this.tieBreakRule.nbtValue())));
                     });
                 }
             );
 
+            WorkspaceTooltip distributionTooltip = WorkspaceTooltip.of("How collected resources and objectives are shared among team members.");
+            String[] distributionTooltips = new String[]{
+                "Shared: All team members share the same pool of objectives.",
+                "Probabilistic: Different team members receive separate objective distributions."
+            };
             this.rulesLayout.addRow(
-                "Distribution", (s, x, y, w) -> {
-                    this.distributionButton = this.addCycleButton(s, () -> "Distribution: " + shortDistribution(this.distributionMode), () -> this.distributionMode.ordinal(), x, y, w, new String[]{
-                        "How collected resources are shared among team members.",
-                        "How collected resources are shared among team members."
-                    }, 2, () -> {
+                "Distribution", distributionTooltip, (s, x, y, w) -> {
+                    this.distributionButton = this.addCycleButton(s, () -> "Distribution: " + shortDistribution(this.distributionMode), () -> this.distributionMode.ordinal(), x, y, w, distributionTooltips, 2, () -> {
                         this.distributionMode = this.distributionMode.next();
                         this.distributionButton.setMessage(Text.literal("Distribution: " + shortDistribution(this.distributionMode)));
                     });
                 }
             );
 
+            WorkspaceTooltip objectivesTooltip = WorkspaceTooltip.of("Select which resources and items teams must collect during the sprint.");
             this.rulesLayout.addRow(
-                "Objectives", (s, x, y, w) -> {
-                    this.addActionButton(s, "Configure Objectives", x, y, w, "Select which resources teams must collect.", () -> {
+                "Objectives", objectivesTooltip, (s, x, y, w) -> {
+                    this.addActionButton(s, "Configure Objectives", x, y, w, objectivesTooltip, () -> {
                         this.syncStateFromWidgets();
                         RegistrySelectorContext<net.minecraft.item.Item> selectorContext = new RegistrySelectorContext<>(
                             "minecraft:item",
@@ -212,6 +221,12 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
         return false;
     }
 
+    @Override
+    public void setActiveModule(String moduleId) {
+        this.syncStateFromWidgets();
+        super.setActiveModule(moduleId);
+    }
+
     protected void syncStateFromWidgets() {
         if (this.timeLimitField != null) {
             this.timeLimitSeconds = this.readClamped(this.timeLimitField, this.timeLimitSeconds, 60, 7200);
@@ -229,6 +244,7 @@ public final class ResourceSprintWorkspaceView extends AbstractGamemodeWorkspace
 
     @Override
     protected ValidationResult validateGamemodeStart() {
+        this.syncStateFromWidgets();
         int exportedTeams = 0;
         for (TeamDraft team : this.teamGrid.getTeams()) {
             if (!team.isEmpty()) exportedTeams++;

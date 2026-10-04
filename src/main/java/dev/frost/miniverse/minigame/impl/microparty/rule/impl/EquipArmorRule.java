@@ -31,7 +31,7 @@ public class EquipArmorRule implements MicroRule {
 
     @Override
     public String description() {
-        return "Find the helmet in your hotbar and equip it onto your head.";
+        return "Find the helmet in your inventory and equip it onto your head.";
     }
 
     @Override
@@ -41,7 +41,7 @@ public class EquipArmorRule implements MicroRule {
 
     @Override
     public Text instruction() {
-        return Text.literal("Put on your helmet immediately!").formatted(Formatting.YELLOW);
+        return Text.literal("Put on your helmet from your inventory!").formatted(Formatting.YELLOW);
     }
 
     @Override
@@ -55,11 +55,10 @@ public class EquipArmorRule implements MicroRule {
             p.getInventory().clear();
             p.equipStack(EquipmentSlot.HEAD, ItemStack.EMPTY);
 
-            // Place helmet in any randomized hotbar slot 1-9 (index 0-8)
-            int targetSlot = random.nextInt(9);
+            // Place helmet in any randomized main inventory slot (indices 9-35), strictly outside the hotbar (0-8)
+            int targetSlot = 9 + random.nextInt(27);
             p.getInventory().setStack(targetSlot, new ItemStack(Items.IRON_HELMET));
 
-            p.getInventory().selectedSlot = (targetSlot + 4) % 9;
             p.currentScreenHandler.sendContentUpdates();
 
             game.getTracker().setPassedCurrentRound(p.getUuid(), false);

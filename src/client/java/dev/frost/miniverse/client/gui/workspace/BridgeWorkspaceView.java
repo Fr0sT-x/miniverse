@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.bridge.BridgeDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -55,58 +56,75 @@ public final class BridgeWorkspaceView extends AbstractGamemodeWorkspaceView {
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip scoreTooltip = WorkspaceTooltip.dynamic(() -> "Goals needed to win the match (" + (this.targetScoreField != null ? this.targetScoreField.getIntValue(this.targetScore) : this.targetScore) + ").");
+            WorkspaceTooltip respawnTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.respawnDelayField != null ? this.respawnDelayField.getIntValue(this.respawnDelay) : this.respawnDelay;
+                return val <= 0 ? "Players will respawn instantly." : "Players will be forced to spectate for " + val + " seconds before respawning.";
+            });
+
             this.rulesLayout.addRow(
-                "Target Score", (s, x, y, w) -> {
-                    this.targetScoreField = this.addIntField(s, x, y, this.targetScore, w, "Target Score", val -> "Goals needed to win the match.");
+                "Target Score", scoreTooltip, (s, x, y, w) -> {
+                    this.targetScoreField = this.addIntField(s, "Target Score", x, y, this.targetScore, 1, 100, w, scoreTooltip);
                 },
-                "Respawn Delay", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelay, w, "Respawn delay",
-                        "Players will respawn instantly.",
-                        val -> "Players will be forced to spectate for " + val + " seconds before respawning.");
+                "Respawn Delay", respawnTooltip, (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, "Respawn Delay", x, y, this.respawnDelay, 0, 60, w, respawnTooltip);
                 }
             );
 
+            WorkspaceTooltip resetTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.roundResetDelayField != null ? this.roundResetDelayField.getIntValue(this.roundResetDelay) : this.roundResetDelay;
+                return val <= 0 ? "Next round starts instantly." : "Time in seconds before the next round starts: " + val;
+            });
+            WorkspaceTooltip voidTooltip = WorkspaceTooltip.dynamic(() -> "Y-level offset from the void point selected in map editor, to trigger a void death (" + (this.voidDeathOffsetField != null ? this.voidDeathOffsetField.getIntValue(this.voidDeathOffset) : this.voidDeathOffset) + ").");
+
             this.rulesLayout.addRow(
-                "Round Reset Delay", (s, x, y, w) -> {
-                    this.roundResetDelayField = this.addIntField(s, x, y, this.roundResetDelay, w, "Round reset delay",
-                        "Next round starts instantly.",
-                        val -> "Time in seconds before the next round starts: " + val);
+                "Round Reset Delay", resetTooltip, (s, x, y, w) -> {
+                    this.roundResetDelayField = this.addIntField(s, "Round Reset Delay", x, y, this.roundResetDelay, 0, 60, w, resetTooltip);
                 },
-                "Void Death Offset", (s, x, y, w) -> {
-                    this.voidDeathOffsetField = this.addIntField(s, x, y, this.voidDeathOffset, w, "Void Death Offset", val -> "Y-level offset from the void point selected in map editor, to trigger a void death.");
+                "Void Death Offset", voidTooltip, (s, x, y, w) -> {
+                    this.voidDeathOffsetField = this.addIntField(s, "Void Death Offset", x, y, this.voidDeathOffset, -100, 300, w, voidTooltip);
                 }
             );
 
+            WorkspaceTooltip buildTooltip = WorkspaceTooltip.toggle(() -> this.allowBuilding,
+                "Players can place blocks.", "Block placement is disabled.");
+            WorkspaceTooltip breakTooltip = WorkspaceTooltip.toggle(() -> this.allowBlockBreaking,
+                "Players can break placed blocks.", "Block breaking is disabled.");
+
             this.rulesLayout.addRow(
-                "Allow Building", (s, x, y, w) -> {
-                    this.allowBuildingBtn = this.addToggleButton(s, "Allow Building", () -> this.allowBuilding, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can place blocks.", "Block placement is disabled."),
+                "Allow Building", buildTooltip, (s, x, y, w) -> {
+                    this.allowBuildingBtn = this.addToggleButton(s, "Allow Building", () -> this.allowBuilding, x, y, w, buildTooltip,
                         () -> this.allowBuilding = !this.allowBuilding);
                 },
-                "Allow Block Breaking", (s, x, y, w) -> {
-                    this.allowBlockBreakingBtn = this.addToggleButton(s, "Allow Block Breaking", () -> this.allowBlockBreaking, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players can break placed blocks.", "Block breaking is disabled."),
+                "Allow Block Breaking", breakTooltip, (s, x, y, w) -> {
+                    this.allowBlockBreakingBtn = this.addToggleButton(s, "Allow Block Breaking", () -> this.allowBlockBreaking, x, y, w, breakTooltip,
                         () -> this.allowBlockBreaking = !this.allowBlockBreaking);
                 }
             );
 
+            WorkspaceTooltip bowTooltip = WorkspaceTooltip.toggle(() -> this.enableBow,
+                "Players spawn with a bow.", "Bows are disabled.");
+            WorkspaceTooltip pickaxeTooltip = WorkspaceTooltip.toggle(() -> this.enablePickaxe,
+                "Players spawn with a pickaxe.", "Pickaxes are disabled.");
+
             this.rulesLayout.addRow(
-                "Enable Bows", (s, x, y, w) -> {
-                    this.enableBowBtn = this.addToggleButton(s, "Enable Bows", () -> this.enableBow, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a bow.", "Bows are disabled."),
+                "Enable Bows", bowTooltip, (s, x, y, w) -> {
+                    this.enableBowBtn = this.addToggleButton(s, "Enable Bows", () -> this.enableBow, x, y, w, bowTooltip,
                         () -> this.enableBow = !this.enableBow);
                 },
-                "Enable Pickaxes", (s, x, y, w) -> {
-                    this.enablePickaxeBtn = this.addToggleButton(s, "Enable Pickaxes", () -> this.enablePickaxe, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players spawn with a pickaxe.", "Pickaxes are disabled."),
+                "Enable Pickaxes", pickaxeTooltip, (s, x, y, w) -> {
+                    this.enablePickaxeBtn = this.addToggleButton(s, "Enable Pickaxes", () -> this.enablePickaxe, x, y, w, pickaxeTooltip,
                         () -> this.enablePickaxe = !this.enablePickaxe);
                 }
             );
 
+            WorkspaceTooltip chatTooltip = WorkspaceTooltip.toggle(() -> this.teamChatEnabled,
+                "Chat is routed to team members only (use ! for global chat).",
+                "Vanilla chat is used for all players.");
+
             this.rulesLayout.addRow(
-                "Team Chat", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Chat is routed to team members only (use ! for global chat).", "OFF: Vanilla chat is used for all players."),
+                "Team Chat", chatTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w, chatTooltip,
                         () -> this.teamChatEnabled = !this.teamChatEnabled);
                 }
             );

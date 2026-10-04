@@ -8,6 +8,7 @@ import dev.frost.miniverse.client.gui.workspace.components.DynamicTeamSelectionG
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.bedwars.BedwarsDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -64,50 +65,65 @@ public final class BedwarsWorkspaceView extends AbstractGamemodeWorkspaceView {
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip respawnDelayTooltip = WorkspaceTooltip.dynamic(() -> "Seconds to respawn: " + (this.respawnDelayField != null ? this.respawnDelayField.getIntValue(this.respawnDelay) : this.respawnDelay));
+            WorkspaceTooltip teamChatTooltip = WorkspaceTooltip.toggle(() -> this.teamChatEnabled,
+                "Chat is routed to team members only (use ! for global chat).",
+                "Vanilla chat is used for all players.");
+
             this.rulesLayout.addRow(
-                "Respawn Delay (s)", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelay, w, "Respawn Delay", val -> "Seconds to respawn: " + val);
+                "Respawn Delay (s)", respawnDelayTooltip, (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, "Respawn Delay", x, y, this.respawnDelay, 1, 60, w, respawnDelayTooltip);
                 },
-                "Team Chat", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Chat is routed to team members only (use ! for global chat).", "OFF: Vanilla chat is used for all players."),
-                        () -> this.teamChatEnabled = !this.teamChatEnabled);
+                "Team Chat", teamChatTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w, teamChatTooltip, () -> this.teamChatEnabled = !this.teamChatEnabled);
                 }
             );
 
+            WorkspaceTooltip ironGenTooltip = WorkspaceTooltip.dynamic(() -> "Iron generates every " + (this.ironGenField != null ? this.ironGenField.getIntValue(this.ironGenTicks) : this.ironGenTicks) + " ticks.");
+            WorkspaceTooltip goldGenTooltip = WorkspaceTooltip.dynamic(() -> "Gold generates every " + (this.goldGenField != null ? this.goldGenField.getIntValue(this.goldGenTicks) : this.goldGenTicks) + " ticks.");
+
             this.rulesLayout.addRow(
-                "Iron Gen (ticks)", (s, x, y, w) -> {
-                    this.ironGenField = this.addIntField(s, x, y, this.ironGenTicks, w, "Iron Gen Interval", val -> "Iron generates every " + val + " ticks.");
+                "Iron Gen (ticks)", ironGenTooltip, (s, x, y, w) -> {
+                    this.ironGenField = this.addIntField(s, "Iron Gen Interval", x, y, this.ironGenTicks, 1, 1000, w, ironGenTooltip);
                 },
-                "Gold Gen (ticks)", (s, x, y, w) -> {
-                    this.goldGenField = this.addIntField(s, x, y, this.goldGenTicks, w, "Gold Gen Interval", val -> "Gold generates every " + val + " ticks.");
+                "Gold Gen (ticks)", goldGenTooltip, (s, x, y, w) -> {
+                    this.goldGenField = this.addIntField(s, "Gold Gen Interval", x, y, this.goldGenTicks, 1, 1000, w, goldGenTooltip);
                 }
             );
 
+            WorkspaceTooltip diamondGenTooltip = WorkspaceTooltip.dynamic(() -> "Diamond generates every " + (this.diamondGenField != null ? this.diamondGenField.getIntValue(this.diamondGenTicks) : this.diamondGenTicks) + " ticks.");
+            WorkspaceTooltip emeraldGenTooltip = WorkspaceTooltip.dynamic(() -> "Emerald generates every " + (this.emeraldGenField != null ? this.emeraldGenField.getIntValue(this.emeraldGenTicks) : this.emeraldGenTicks) + " ticks.");
+
             this.rulesLayout.addRow(
-                "Diamond Gen (ticks)", (s, x, y, w) -> {
-                    this.diamondGenField = this.addIntField(s, x, y, this.diamondGenTicks, w, "Diamond Gen Interval", val -> "Diamond generates every " + val + " ticks.");
+                "Diamond Gen (ticks)", diamondGenTooltip, (s, x, y, w) -> {
+                    this.diamondGenField = this.addIntField(s, "Diamond Gen Interval", x, y, this.diamondGenTicks, 1, 2000, w, diamondGenTooltip);
                 },
-                "Emerald Gen (ticks)", (s, x, y, w) -> {
-                    this.emeraldGenField = this.addIntField(s, x, y, this.emeraldGenTicks, w, "Emerald Gen Interval", val -> "Emerald generates every " + val + " ticks.");
+                "Emerald Gen (ticks)", emeraldGenTooltip, (s, x, y, w) -> {
+                    this.emeraldGenField = this.addIntField(s, "Emerald Gen Interval", x, y, this.emeraldGenTicks, 1, 2000, w, emeraldGenTooltip);
                 }
             );
 
+            WorkspaceTooltip ironCapTooltip = WorkspaceTooltip.dynamic(() -> "Max Iron: " + (this.ironCapField != null ? this.ironCapField.getIntValue(this.ironCap) : this.ironCap));
+            WorkspaceTooltip goldCapTooltip = WorkspaceTooltip.dynamic(() -> "Max Gold: " + (this.goldCapField != null ? this.goldCapField.getIntValue(this.goldCap) : this.goldCap));
+
             this.rulesLayout.addRow(
-                "Iron Cap", (s, x, y, w) -> {
-                    this.ironCapField = this.addIntField(s, x, y, this.ironCap, w, "Iron Cap", val -> "Max Iron: " + val);
+                "Iron Cap", ironCapTooltip, (s, x, y, w) -> {
+                    this.ironCapField = this.addIntField(s, "Iron Cap", x, y, this.ironCap, 1, 256, w, ironCapTooltip);
                 },
-                "Gold Cap", (s, x, y, w) -> {
-                    this.goldCapField = this.addIntField(s, x, y, this.goldCap, w, "Gold Cap", val -> "Max Gold: " + val);
+                "Gold Cap", goldCapTooltip, (s, x, y, w) -> {
+                    this.goldCapField = this.addIntField(s, "Gold Cap", x, y, this.goldCap, 1, 256, w, goldCapTooltip);
                 }
             );
 
+            WorkspaceTooltip diamondCapTooltip = WorkspaceTooltip.dynamic(() -> "Max Diamond: " + (this.diamondCapField != null ? this.diamondCapField.getIntValue(this.diamondCap) : this.diamondCap));
+            WorkspaceTooltip emeraldCapTooltip = WorkspaceTooltip.dynamic(() -> "Max Emerald: " + (this.emeraldCapField != null ? this.emeraldCapField.getIntValue(this.emeraldCap) : this.emeraldCap));
+
             this.rulesLayout.addRow(
-                "Diamond Cap", (s, x, y, w) -> {
-                    this.diamondCapField = this.addIntField(s, x, y, this.diamondCap, w, "Diamond Cap", val -> "Max Diamond: " + val);
+                "Diamond Cap", diamondCapTooltip, (s, x, y, w) -> {
+                    this.diamondCapField = this.addIntField(s, "Diamond Cap", x, y, this.diamondCap, 1, 64, w, diamondCapTooltip);
                 },
-                "Emerald Cap", (s, x, y, w) -> {
-                    this.emeraldCapField = this.addIntField(s, x, y, this.emeraldCap, w, "Emerald Cap", val -> "Max Emerald: " + val);
+                "Emerald Cap", emeraldCapTooltip, (s, x, y, w) -> {
+                    this.emeraldCapField = this.addIntField(s, "Emerald Cap", x, y, this.emeraldCap, 1, 64, w, emeraldCapTooltip);
                 }
             );
         }

@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.pillarsoffortune.PillarsOfFortuneDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -40,26 +41,29 @@ public final class PillarsOfFortuneWorkspaceView extends AbstractGamemodeWorkspa
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip timeTooltip = WorkspaceTooltip.dynamic(() -> "Match ends in a draw after " + (this.timeLimitField != null ? this.timeLimitField.getIntValue(this.timeLimitSeconds) : this.timeLimitSeconds) + " seconds.");
             this.rulesLayout.addRow(
-                "Time Limit", (s, x, y, w) -> {
-                    this.timeLimitField = this.addIntField(s, x, y, this.timeLimitSeconds, w, "Time limit seconds", val -> "Match ends in a draw after " + val + " seconds.");
+                "Time Limit", timeTooltip, (s, x, y, w) -> {
+                    this.timeLimitField = this.addIntField(s, "Time limit seconds", x, y, this.timeLimitSeconds, 60, 3600, w, timeTooltip);
                 }
             );
 
+            WorkspaceTooltip lootTooltip = WorkspaceTooltip.dynamic(() -> "Random loot drops every " + (this.lootDropIntervalField != null ? this.lootDropIntervalField.getIntValue(this.lootDropIntervalSeconds) : this.lootDropIntervalSeconds) + " seconds.");
             this.rulesLayout.addRow(
-                "Loot Interval", (s, x, y, w) -> {
-                    this.lootDropIntervalField = this.addIntField(s, x, y, this.lootDropIntervalSeconds, w, "Loot drop interval", val -> "Random loot drops every " + val + " seconds.");
+                "Loot Interval", lootTooltip, (s, x, y, w) -> {
+                    this.lootDropIntervalField = this.addIntField(s, "Loot drop interval", x, y, this.lootDropIntervalSeconds, 5, 300, w, lootTooltip);
                 }
             );
 
+            WorkspaceTooltip modTooltip = WorkspaceTooltip.cycle(() -> modifierIndex(this.activeModifier), new String[]{
+                "No game modifiers.",
+                "Players swap positions randomly.",
+                "Inventories are shuffled randomly."
+            });
             this.rulesLayout.addRow(
-                "Active Modifier", (s, x, y, w) -> {
+                "Active Modifier", modTooltip, (s, x, y, w) -> {
                     this.activeModifierButton = this.addCycleButton(s, () -> "Modifier: " + this.activeModifier.toUpperCase(), 
-                        () -> modifierIndex(this.activeModifier), x, y, w, new String[]{
-                        "No game modifiers.",
-                        "Players swap positions randomly.",
-                        "Inventories are shuffled randomly."
-                    }, 3, () -> {
+                        () -> modifierIndex(this.activeModifier), x, y, w, modTooltip, 3, () -> {
                         this.activeModifier = nextModifier(this.activeModifier);
                         this.activeModifierButton.setMessage(Text.literal("Modifier: " + this.activeModifier.toUpperCase()));
                     });

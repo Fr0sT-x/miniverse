@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.manhunt.ManhuntDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -102,113 +103,149 @@ public final class ManhuntWorkspaceView extends AbstractGamemodeWorkspaceView {
                 }
             );
 
+            WorkspaceTooltip releaseTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.gracePeriodField != null ? this.gracePeriodField.getIntValue(this.gracePeriodSeconds) : this.gracePeriodSeconds;
+                return val <= 0 ? "No hunter release delay." : "Hunters cannot move for the first " + val + " seconds.";
+            });
             this.rulesLayout.addRow(
-                "Release Delay", (s, x, y, w) -> {
-                    this.gracePeriodField = this.addIntField(s, x, y, this.gracePeriodSeconds, w, "Hunter release seconds",
-                        "No hunter release delay.",
-                        val -> "Hunters cannot move for the first " + val + " seconds.");
+                "Release Delay", releaseTooltip, (s, x, y, w) -> {
+                    this.gracePeriodField = this.addIntField(s, "Hunter release seconds", x, y, this.gracePeriodSeconds, 0, 3600, w, releaseTooltip);
                     this.addStepper(s, this.gracePeriodField, x + w + 4, y, 0, 3600, 5);
                 }
             );
 
             this.rulesLayout.addHeading("Tracking & Difficulty");
+            WorkspaceTooltip compassTooltip = WorkspaceTooltip.toggle(() -> this.huntersCompassEnabled,
+                "Hunters receive a compass pointing to the nearest speedrunner.",
+                "Hunters will not receive any compass to track speedrunners.");
+            WorkspaceTooltip cooldownTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.compassCooldownField != null ? this.compassCooldownField.getIntValue(this.compassCooldownSeconds) : this.compassCooldownSeconds;
+                return val <= 0 ? "No compass cooldown." : "Hunters must wait " + val + " seconds between compass uses.";
+            });
+
             this.rulesLayout.addRow(
-                "Hunters Compass", (s, x, y, w) -> {
+                "Hunters Compass", compassTooltip, (s, x, y, w) -> {
                     this.huntersCompassButton = this.addToggleButton(s, "Hunters Compass", () -> this.huntersCompassEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Hunters receive a compass pointing to the nearest speedrunner.", "OFF: Hunters will not receive any compass to track speedrunners."),
+                        compassTooltip,
                         () -> this.huntersCompassEnabled = !this.huntersCompassEnabled);
                 },
-                "Compass Cooldown", (s, x, y, w) -> {
-                    this.compassCooldownField = this.addIntField(s, x, y, this.compassCooldownSeconds, w, "Compass cooldown seconds",
-                        "No compass cooldown.",
-                        val -> "Hunters must wait " + val + " seconds between compass uses.");
+                "Compass Cooldown", cooldownTooltip, (s, x, y, w) -> {
+                    this.compassCooldownField = this.addIntField(s, "Compass cooldown seconds", x, y, this.compassCooldownSeconds, 0, 300, w, cooldownTooltip);
                     this.addStepper(s, this.compassCooldownField, x + w + 4, y, 0, 300, 1);
                 }
             );
 
+            WorkspaceTooltip netherTooltip = WorkspaceTooltip.toggle(() -> this.netherTrackingEnabled,
+                "Compasses work when target is in a different dimension.",
+                "Compasses spin randomly if target is in a different dimension.");
+            WorkspaceTooltip glowTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.runnerGlowPulseField != null ? this.runnerGlowPulseField.getIntValue(this.runnerGlowPulseMinutes) : this.runnerGlowPulseMinutes;
+                return val <= 0 ? "Speedrunners will not glow." : "Speedrunners will glow every " + val + " minutes to reveal their location.";
+            });
+
             this.rulesLayout.addRow(
-                "Nether Tracking", (s, x, y, w) -> {
+                "Nether Tracking", netherTooltip, (s, x, y, w) -> {
                     this.netherTrackingButton = this.addToggleButton(s, "Nether Tracking", () -> this.netherTrackingEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Compasses work when target is in a different dimension.", "OFF: Compasses spin randomly if target is in a different dimension."),
+                        netherTooltip,
                         () -> this.netherTrackingEnabled = !this.netherTrackingEnabled);
                 },
-                "Runner Glow Pulse", (s, x, y, w) -> {
-                    this.runnerGlowPulseField = this.addIntField(s, x, y, this.runnerGlowPulseMinutes, w, "Runner glow pulse minutes",
-                        "Speedrunners will not glow.",
-                        val -> "Speedrunners will glow every " + val + " minutes to reveal their location.");
+                "Runner Glow Pulse", glowTooltip, (s, x, y, w) -> {
+                    this.runnerGlowPulseField = this.addIntField(s, "Runner glow pulse minutes", x, y, this.runnerGlowPulseMinutes, 0, 120, w, glowTooltip);
                     this.addStepper(s, this.runnerGlowPulseField, x + w + 4, y, 0, 120, 5);
                 }
             );
 
             this.rulesLayout.addHeading("Lives & Respawns");
+            WorkspaceTooltip runnerLivesTooltip = WorkspaceTooltip.cycle(() -> livesToIndex(this.runnerLives), new String[]{
+                "Unlimited lives for speedrunners.",
+                "Speedrunners have 1 life.",
+                "Speedrunners have 2 lives.",
+                "Speedrunners have 3 lives.",
+                "Speedrunners have 5 lives."
+            });
+            WorkspaceTooltip runnerRespawnTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.runnerRespawnDelayField != null ? this.runnerRespawnDelayField.getIntValue(this.runnerRespawnDelaySeconds) : this.runnerRespawnDelaySeconds;
+                return val <= 0 ? "Speedrunners will respawn instantly." : "Speedrunners will be forced to spectate for " + val + " seconds before respawning.";
+            });
+
             this.rulesLayout.addRow(
-                "Runner Lives", (s, x, y, w) -> {
-                    this.runnerLivesButton = this.addCycleButton(s, () -> "Runner Lives: " + formatLives(this.runnerLives), () -> livesToIndex(this.runnerLives), x, y, w, new String[]{
-                        "Unlimited lives for speedrunners.",
-                        "Speedrunners have 1 life.",
-                        "Speedrunners have 2 lives.",
-                        "Speedrunners have 3 lives.",
-                        "Speedrunners have 5 lives."
-                    }, 5, () -> {
+                "Runner Lives", runnerLivesTooltip, (s, x, y, w) -> {
+                    this.runnerLivesButton = this.addCycleButton(s, () -> "Runner Lives: " + formatLives(this.runnerLives), () -> livesToIndex(this.runnerLives), x, y, w, runnerLivesTooltip, 5, () -> {
                         this.runnerLives = nextLivesValue(this.runnerLives);
                         this.runnerLivesButton.setMessage(Text.literal("Runner Lives: " + formatLives(this.runnerLives)));
                     });
                 },
-                "Runner Respawn", (s, x, y, w) -> {
-                    this.runnerRespawnDelayField = this.addIntField(s, x, y, this.runnerRespawnDelaySeconds, w, "Runner respawn seconds",
-                        "Speedrunners will respawn instantly.",
-                        val -> "Speedrunners will be forced to spectate for " + val + " seconds before respawning.");
+                "Runner Respawn", runnerRespawnTooltip, (s, x, y, w) -> {
+                    this.runnerRespawnDelayField = this.addIntField(s, "Runner respawn seconds", x, y, this.runnerRespawnDelaySeconds, 0, 3600, w, runnerRespawnTooltip);
                     this.addStepper(s, this.runnerRespawnDelayField, x + w + 4, y, 0, 3600, 30);
                 }
             );
 
+            WorkspaceTooltip hunterLivesTooltip = WorkspaceTooltip.cycle(() -> livesToIndex(this.hunterLives), new String[]{
+                "Unlimited lives for hunters.",
+                "Hunters have 1 life.",
+                "Hunters have 2 lives.",
+                "Hunters have 3 lives.",
+                "Hunters have 5 lives."
+            });
+            WorkspaceTooltip hunterRespawnTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.hunterRespawnDelayField != null ? this.hunterRespawnDelayField.getIntValue(this.hunterRespawnDelaySeconds) : this.hunterRespawnDelaySeconds;
+                return val <= 0 ? "Hunters will respawn instantly." : "Hunters will be forced to spectate for " + val + " seconds before respawning.";
+            });
+
             this.rulesLayout.addRow(
-                "Hunter Lives", (s, x, y, w) -> {
-                    this.hunterLivesButton = this.addCycleButton(s, () -> "Hunter Lives: " + formatLives(this.hunterLives), () -> livesToIndex(this.hunterLives), x, y, w, new String[]{
-                        "Unlimited lives for hunters.",
-                        "Hunters have 1 life.",
-                        "Hunters have 2 lives.",
-                        "Hunters have 3 lives.",
-                        "Hunters have 5 lives."
-                    }, 5, () -> {
+                "Hunter Lives", hunterLivesTooltip, (s, x, y, w) -> {
+                    this.hunterLivesButton = this.addCycleButton(s, () -> "Hunter Lives: " + formatLives(this.hunterLives), () -> livesToIndex(this.hunterLives), x, y, w, hunterLivesTooltip, 5, () -> {
                         this.hunterLives = nextLivesValue(this.hunterLives);
                         this.hunterLivesButton.setMessage(Text.literal("Hunter Lives: " + formatLives(this.hunterLives)));
                     });
                 },
-                "Hunter Respawn", (s, x, y, w) -> {
-                    this.hunterRespawnDelayField = this.addIntField(s, x, y, this.hunterRespawnDelaySeconds, w, "Hunter respawn seconds",
-                        "Hunters will respawn instantly.",
-                        val -> "Hunters will be forced to spectate for " + val + " seconds before respawning.");
+                "Hunter Respawn", hunterRespawnTooltip, (s, x, y, w) -> {
+                    this.hunterRespawnDelayField = this.addIntField(s, "Hunter respawn seconds", x, y, this.hunterRespawnDelaySeconds, 0, 3600, w, hunterRespawnTooltip);
                     this.addStepper(s, this.hunterRespawnDelayField, x + w + 4, y, 0, 3600, 5);
                 }
             );
 
+            WorkspaceTooltip runnerTpTooltip = WorkspaceTooltip.toggle(() -> this.runnerRespawnAtTeammate,
+                "Speedrunners will spawn at spectating teammate's location.",
+                "Speedrunners will spawn at normal spawn location.");
+            WorkspaceTooltip hunterTpTooltip = WorkspaceTooltip.toggle(() -> this.hunterRespawnAtTeammate,
+                "Hunters will spawn at spectating teammate's location.",
+                "Hunters will spawn at normal spawn location.");
+
             this.rulesLayout.addRow(
-                "Runner Respawn TP", (s, x, y, w) -> {
+                "Runner Respawn TP", runnerTpTooltip, (s, x, y, w) -> {
                     this.runnerRespawnAtTeammateButton = this.addToggleButton(s, "Runner Respawn TP", () -> this.runnerRespawnAtTeammate, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Speedrunners will spawn at spectating teammate's location.", "OFF: Speedrunners will spawn at normal spawn location."),
+                        runnerTpTooltip,
                         () -> this.runnerRespawnAtTeammate = !this.runnerRespawnAtTeammate);
                 },
-                "Hunter Respawn TP", (s, x, y, w) -> {
+                "Hunter Respawn TP", hunterTpTooltip, (s, x, y, w) -> {
                     this.hunterRespawnAtTeammateButton = this.addToggleButton(s, "Hunter Respawn TP", () -> this.hunterRespawnAtTeammate, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Hunters will spawn at spectating teammate's location.", "OFF: Hunters will spawn at normal spawn location."),
+                        hunterTpTooltip,
                         () -> this.hunterRespawnAtTeammate = !this.hunterRespawnAtTeammate);
                 }
             );
 
             this.rulesLayout.addHeading("Advanced Options");
+            WorkspaceTooltip midGameTpTooltip = WorkspaceTooltip.toggle(() -> this.midGameJoinTeleportEnabled,
+                "Late joiners will be placed in spectator and prompted to teleport to an active teammate.",
+                "Late joiners will spawn at world spawn.");
+            WorkspaceTooltip chatTooltip = WorkspaceTooltip.toggle(() -> this.teamChatEnabled,
+                "Chat messages are team-only by default (use ! for global chat).",
+                "All chat messages are sent in global chat.");
+
             this.rulesLayout.addRow(
-                "Mid-Game Join TP Layout", (s, x, y, w) -> {
+                "Mid-Game Join TP Layout", midGameTpTooltip, (s, x, y, w) -> {
                     this.midGameJoinTeleportButton = this.addToggleButton(s, "Mid-Game Join TP", () -> this.midGameJoinTeleportEnabled, x, y, w, 
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Late joiners will be placed in spectator and prompted to teleport to an active teammate.", "OFF: Late joiners will spawn at world spawn."), 
+                        midGameTpTooltip, 
                         () -> {
                         this.midGameJoinTeleportEnabled = !this.midGameJoinTeleportEnabled;
                         this.midGameJoinTeleportButton.setMessage(Text.literal("Mid-Game Join TP: " + onOff(this.midGameJoinTeleportEnabled)));
                     });
                 },
-                "Team Chat", (s, x, y, w) -> {
+                "Team Chat", chatTooltip, (s, x, y, w) -> {
                     this.addToggleButton(s, "Team Chat", () -> this.teamChatEnabled, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("ON: Chat messages are team-only by default (use ! for global chat).", "OFF: All chat messages are sent in global chat."),
+                        chatTooltip,
                         () -> this.teamChatEnabled = !this.teamChatEnabled);
                 }
             );

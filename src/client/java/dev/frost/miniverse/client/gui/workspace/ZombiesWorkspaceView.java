@@ -6,9 +6,9 @@ import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
-import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDefinition;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficulty;
 import dev.frost.miniverse.minigame.impl.zombies.ZombiesDifficultyConfig;
@@ -98,59 +98,70 @@ public final class ZombiesWorkspaceView extends AbstractGamemodeWorkspaceView {
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip diffTooltip = WorkspaceTooltip.cycle(() -> this.difficulty.ordinal(), new String[] {
+                "Easy: Baseline zombie health and damage. Standard wave pacing.",
+                "Normal: +35% zombie health, +50% melee damage, +5% speed, denser waves.",
+                "Hard: +80% zombie health, +100% melee damage, +10% speed, relentless waves."
+            });
             this.rulesLayout.addRow(
-                "Difficulty", (s, x, y, w) -> {
+                "Difficulty", diffTooltip, (s, x, y, w) -> {
                     this.difficultyButton = this.addCycleButton(s,
                         () -> "Difficulty: " + this.difficulty.getDisplayName(),
                         () -> this.difficulty.ordinal(),
                         x, y, w,
-                        new String[] {
-                            "Easy: Baseline zombie health and damage. Standard wave pacing.",
-                            "Normal: +35% zombie health, +50% melee damage, +5% speed, denser waves.",
-                            "Hard: +80% zombie health, +100% melee damage, +10% speed, relentless waves."
-                        },
+                        diffTooltip,
                         ZombiesDifficulty.values().length,
                         () -> this.difficulty = this.difficulty.next()
                     );
                 }
             );
 
+            WorkspaceTooltip goldTooltip = WorkspaceTooltip.dynamic(() -> "Each survivor starts with " + (this.startGoldField != null ? this.startGoldField.getIntValue(this.startGold) : this.startGold) + " gold to purchase weapons/doors.");
             this.rulesLayout.addRow(
-                "Starting Gold", (s, x, y, w) -> {
-                    this.startGoldField = this.addIntField(s, x, y, this.startGold, w, "Starting Gold", val -> "Each survivor starts with " + val + " gold to purchase weapons/doors.");
+                "Starting Gold", goldTooltip, (s, x, y, w) -> {
+                    this.startGoldField = this.addIntField(s, "Starting Gold", x, y, this.startGold, 0, 100000, w, goldTooltip);
                 }
             );
 
+            WorkspaceTooltip maxRoundsTooltip = WorkspaceTooltip.dynamic(() -> "Survive up to round " + (this.maxRoundsField != null ? this.maxRoundsField.getIntValue(this.maxRounds) : this.maxRounds) + ". Bosses spawn on R10, R20, R30.");
             this.rulesLayout.addRow(
-                "Max Rounds", (s, x, y, w) -> {
-                    this.maxRoundsField = this.addIntField(s, x, y, this.maxRounds, w, "Max Rounds", val -> "Survive up to round " + val + ". Bosses spawn on R10, R20, R30.");
+                "Max Rounds", maxRoundsTooltip, (s, x, y, w) -> {
+                    this.maxRoundsField = this.addIntField(s, "Max Rounds", x, y, this.maxRounds, 1, 100, w, maxRoundsTooltip);
                 }
             );
 
+            WorkspaceTooltip intermissionTooltip = WorkspaceTooltip.dynamic(() -> "Seconds of peace between rounds to buy ammo, perks, and repair barricades (" + (this.intermissionField != null ? this.intermissionField.getIntValue(this.intermissionSeconds) : this.intermissionSeconds) + "s).");
             this.rulesLayout.addRow(
-                "Intermission (s)", (s, x, y, w) -> {
-                    this.intermissionField = this.addIntField(s, x, y, this.intermissionSeconds, w, "Intermission (s)", val -> "Seconds of peace between rounds to buy ammo, perks, and repair barricades.");
+                "Intermission (s)", intermissionTooltip, (s, x, y, w) -> {
+                    this.intermissionField = this.addIntField(s, "Intermission (s)", x, y, this.intermissionSeconds, 0, 120, w, intermissionTooltip);
                 }
             );
 
+            WorkspaceTooltip bleedoutTooltip = WorkspaceTooltip.dynamic(() -> "Time in seconds before a downed survivor bleeds out and becomes a spectator (" + (this.bleedoutField != null ? this.bleedoutField.getIntValue(this.bleedoutSeconds) : this.bleedoutSeconds) + "s).");
             this.rulesLayout.addRow(
-                "Bleedout (s)", (s, x, y, w) -> {
-                    this.bleedoutField = this.addIntField(s, x, y, this.bleedoutSeconds, w, "Bleedout (s)", val -> "Time in seconds before a downed survivor bleeds out and becomes a spectator.");
+                "Bleedout (s)", bleedoutTooltip, (s, x, y, w) -> {
+                    this.bleedoutField = this.addIntField(s, "Bleedout (s)", x, y, this.bleedoutSeconds, 5, 120, w, bleedoutTooltip);
                 }
             );
 
+            WorkspaceTooltip ffTooltip = WorkspaceTooltip.toggle(() -> this.friendlyFire,
+                "Guns and explosives can damage teammates.",
+                "Bullets and rockets pass harmlessly through teammates.");
             this.rulesLayout.addRow(
-                "Friendly Fire", (s, x, y, w) -> {
+                "Friendly Fire", ffTooltip, (s, x, y, w) -> {
                     this.friendlyFireButton = this.addToggleButton(s, "Friendly Fire", () -> this.friendlyFire, x, y, w,
-                        new BinaryTooltip("Guns and explosives can damage teammates.", "Bullets and rockets pass harmlessly through teammates."),
+                        ffTooltip,
                         () -> this.friendlyFire = !this.friendlyFire);
                 }
             );
 
+            WorkspaceTooltip endlessTooltip = WorkspaceTooltip.toggle(() -> this.endlessMode,
+                "Game continues infinitely past round 30 with escalating waves until defeat.",
+                "Game ends in victory after round 30.");
             this.rulesLayout.addRow(
-                "Endless Mode", (s, x, y, w) -> {
+                "Endless Mode", endlessTooltip, (s, x, y, w) -> {
                     this.endlessModeButton = this.addToggleButton(s, "Endless Mode", () -> this.endlessMode, x, y, w,
-                        new BinaryTooltip("Game continues infinitely past round 30 with escalating waves until defeat.", "Game ends in victory after round 30."),
+                        endlessTooltip,
                         () -> this.endlessMode = !this.endlessMode);
                 }
             );

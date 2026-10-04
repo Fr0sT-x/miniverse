@@ -7,11 +7,11 @@ import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
-import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceModuleManager;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.dropper.DropperDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -197,26 +197,26 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip levelsTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.levelsToPlayField != null ? this.levelsToPlayField.getIntValue(this.levelsToPlay) : this.levelsToPlay;
+                return val <= 0 ? "0 = Play all available levels in pool." : "Play " + val + " level(s) in this match.";
+            });
+            WorkspaceTooltip modeTooltip = WorkspaceTooltip.cycle(() -> modeIndex(this.selectionMode), new String[] {
+                "Play the enabled levels in order.",
+                "Choose N random levels from the enabled pool.",
+                "Shuffle all enabled levels into a random order."
+            });
+
             this.rulesLayout.addRow(
-                "Levels to Play", (s, x, y, w) -> {
-                    this.levelsToPlayField = this.addIntField(s, x, y, this.levelsToPlay, w, "Levels",
-                        "Play all available levels (default).",
-                        val -> "Play " + val + " level(s) in this match."
-                    );
-                    this.levelsToPlayField.setText(this.levelsToPlay == 0 ? "All" : String.valueOf(this.levelsToPlay));
-                    // Also accept 'All' as text input (reads back as 0 = all levels)
-                    this.levelsToPlayField.setTextPredicate(s2 -> s2.isEmpty() || s2.equalsIgnoreCase("All") || s2.matches("\\d+"));
+                "Levels to Play", levelsTooltip, (s, x, y, w) -> {
+                    this.levelsToPlayField = this.addIntField(s, "Levels to Play", x, y, this.levelsToPlay, 0, 100, w, levelsTooltip);
                 },
-                "Selection Mode", (s, x, y, w) -> {
+                "Selection Mode", modeTooltip, (s, x, y, w) -> {
                     this.addCycleButton(s,
                         () -> "Mode: " + formatMode(this.selectionMode),
                         () -> modeIndex(this.selectionMode),
                         x, y, w,
-                        new String[] {
-                            "Play the enabled levels in order.",
-                            "Choose N random levels from the enabled pool.",
-                            "Shuffle all enabled levels into a random order."
-                        },
+                        modeTooltip,
                         3,
                         () -> {
                             this.selectionMode = nextMode(this.selectionMode);
@@ -225,24 +225,34 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
                 }
             );
 
+            WorkspaceTooltip countdownTooltip = WorkspaceTooltip.dynamic(() -> (this.finalCountdownField != null ? this.finalCountdownField.getIntValue(this.finalCountdownSeconds) : this.finalCountdownSeconds) + " seconds left once 1st place finishes.");
+            WorkspaceTooltip timeLimitTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.timeLimitField != null ? this.timeLimitField.getIntValue(this.timeLimitSeconds) : this.timeLimitSeconds;
+                return val <= 0 ? "No time limit." : "Match ends after " + val + " seconds.";
+            });
+
             this.rulesLayout.addRow(
-                "Final Countdown (s)", (s, x, y, w) -> {
-                    this.finalCountdownField = this.addIntField(s, x, y, this.finalCountdownSeconds, w, "Final Countdown", val -> val + " seconds left once 1st place finishes.");
+                "Final Countdown (s)", countdownTooltip, (s, x, y, w) -> {
+                    this.finalCountdownField = this.addIntField(s, "Final Countdown", x, y, this.finalCountdownSeconds, 5, 300, w, countdownTooltip);
                 },
-                "Max Match Time (s)", (s, x, y, w) -> {
-                    this.timeLimitField = this.addIntField(s, x, y, this.timeLimitSeconds, w, "Time Limit", val -> val <= 0 ? "No time limit." : "Match ends after " + val + " seconds.");
+                "Max Match Time (s)", timeLimitTooltip, (s, x, y, w) -> {
+                    this.timeLimitField = this.addIntField(s, "Time Limit", x, y, this.timeLimitSeconds, 0, 3600, w, timeLimitTooltip);
                 }
             );
 
+            WorkspaceTooltip skipTooltip = WorkspaceTooltip.toggle(() -> this.allowSkip,
+                "Players stuck on a level can type /dropper skip.",
+                "Level skipping is completely disabled.");
+            WorkspaceTooltip thresholdTooltip = WorkspaceTooltip.dynamic(() -> "Enables /dropper skip after " + (this.skipThresholdField != null ? this.skipThresholdField.getIntValue(this.skipFailsThreshold) : this.skipFailsThreshold) + " fails.");
+
             this.rulesLayout.addRow(
-                "Allow Skip on Fails", (s, x, y, w) -> {
-                    this.addToggleButton(s, "Skip Mechanic", () -> this.allowSkip, x, y, w,
-                        new BinaryTooltip("Players stuck on a level can type /dropper skip.", "Level skipping is completely disabled."),
+                "Allow Skip on Fails", skipTooltip, (s, x, y, w) -> {
+                    this.addToggleButton(s, "Skip Mechanic", () -> this.allowSkip, x, y, w, skipTooltip,
                         () -> this.allowSkip = !this.allowSkip
                     );
                 },
-                "Skip Fails Threshold", (s, x, y, w) -> {
-                    this.skipThresholdField = this.addIntField(s, x, y, this.skipFailsThreshold, w, "Skip Fails", val -> "Enables /dropper skip after " + val + " fails.");
+                "Skip Fails Threshold", thresholdTooltip, (s, x, y, w) -> {
+                    this.skipThresholdField = this.addIntField(s, "Skip Fails", x, y, this.skipFailsThreshold, 1, 100, w, thresholdTooltip);
                 }
             );
         }
@@ -476,6 +486,13 @@ public final class DropperWorkspaceView extends AbstractGamemodeWorkspaceView {
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
     }
+
+    @Override
+    public void setActiveModule(String moduleId) {
+        this.syncStateFromWidgets();
+        super.setActiveModule(moduleId);
+    }
+
 
     @Override
     public String title() {

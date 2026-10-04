@@ -1,5 +1,7 @@
 package dev.frost.miniverse.minigame.impl.microparty;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.MapValidationResult;
@@ -95,6 +97,7 @@ public class MicroPartyMinigame extends AbstractMinigame implements
     private int phaseTicksRemaining = 0;
     private MicroRule activeRule = null;
     private String lastRuleId = "";
+    private final List<String> recentRuleHistory = new ArrayList<>();
     private final Random random = new Random();
 
     private long matchStartTime = 0;
@@ -272,6 +275,7 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         this.placements.clear();
         this.activeRule = null;
         this.lastRuleId = "";
+        this.recentRuleHistory.clear();
 
         this.tracker = new PlayerPerformanceTracker(this.settings.startingLives());
         for (ServerPlayerEntity p : this.players()) {
@@ -303,6 +307,9 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         this.blockManager.restoreAll(this.getWorld());
         SpectatorService.getInstance().clearAll(true);
         for (ServerPlayerEntity p : this.players()) {
+            if (!this.eliminatedPlayers.contains(p.getUuid())) {
+                p.changeGameMode(GameMode.ADVENTURE);
+            }
             FreezeService.getInstance().unfreeze(p, FreezeReason.ROUND_RESET);
             p.getInventory().clear();
             p.clearStatusEffects();
@@ -520,12 +527,7 @@ public class MicroPartyMinigame extends AbstractMinigame implements
             return;
         }
 
-        List<MicroRule> candidates = new ArrayList<>(pool);
-        if (candidates.size() > 1 && !this.lastRuleId.isBlank()) {
-            candidates.removeIf(r -> r.id().equals(this.lastRuleId));
-        }
-        this.activeRule = candidates.get(random.nextInt(candidates.size()));
-        this.lastRuleId = this.activeRule.id();
+        this.activeRule = selectNextRule(pool);
 
         // Reset tracker round transient state
         this.tracker.resetAllRoundStates();
@@ -564,6 +566,9 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         this.phaseTicksRemaining = 25; // 1.25 seconds resolution view
 
         for (ServerPlayerEntity p : getLivingPlayers()) {
+            if (p.interactionManager.getGameMode() == GameMode.SURVIVAL) {
+                p.changeGameMode(GameMode.ADVENTURE);
+            }
             boolean passed = this.activeRule != null && this.activeRule.hasPassed(p, this);
             if (passed) {
                 this.tracker.recordPass(p.getUuid(), 100);
@@ -964,6 +969,88 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         return sb.toString();
     }
 
+    // --- Rule Recency & Selection ---
+
+    public MicroRule selectNextRule(List<MicroRule> pool) {
+        if (pool == null || pool.isEmpty()) {
+            return null;
+        }
+
+        // 1. Strictly exclude rules that appeared in the last 3 rounds.
+        // If pool is very small (e.g. pool <= 3), adaptively clamp exclusion count so candidate list is not empty.
+        int strictExcludeCount = Math.min(3, Math.max(0, pool.size() - 1));
+
+        Set<String> strictlyExcludedIds = new HashSet<>();
+        int historySize = this.recentRuleHistory.size();
+        for (int i = 0; i < strictExcludeCount && i < historySize; i++) {
+            strictlyExcludedIds.add(this.recentRuleHistory.get(historySize - 1 - i));
+        }
+
+        List<MicroRule> candidates = new ArrayList<>(pool);
+        candidates.removeIf(r -> strictlyExcludedIds.contains(r.id()));
+        if (candidates.isEmpty()) {
+            candidates = new ArrayList<>(pool);
+        }
+
+        // 2. Weighted selection: any rule after the 3rd round (e.g. 4-6 rounds ago)
+        // has a lower priority / lower chance compared to rules not played recently.
+        int totalWeight = 0;
+        int[] weights = new int[candidates.size()];
+        for (int i = 0; i < candidates.size(); i++) {
+            MicroRule rule = candidates.get(i);
+            int weight = getRuleSelectionWeight(rule.id());
+            weights[i] = weight;
+            totalWeight += weight;
+        }
+
+        MicroRule chosen = candidates.get(candidates.size() - 1);
+        if (totalWeight > 0) {
+            int roll = this.random.nextInt(totalWeight);
+            int cumulative = 0;
+            for (int i = 0; i < candidates.size(); i++) {
+                cumulative += weights[i];
+                if (roll < cumulative) {
+                    chosen = candidates.get(i);
+                    break;
+                }
+            }
+        }
+
+        this.recentRuleHistory.add(chosen.id());
+        if (this.recentRuleHistory.size() > 20) {
+            this.recentRuleHistory.remove(0);
+        }
+        this.lastRuleId = chosen.id();
+        return chosen;
+    }
+
+    public int getRuleSelectionWeight(String ruleId) {
+        int historySize = this.recentRuleHistory.size();
+        int roundsAgo = -1;
+        for (int i = historySize - 1; i >= 0; i--) {
+            if (this.recentRuleHistory.get(i).equals(ruleId)) {
+                roundsAgo = historySize - i;
+                break;
+            }
+        }
+
+        if (roundsAgo == -1 || roundsAgo >= 7) {
+            return 10; // Fresh rule or played long ago: full chance
+        } else if (roundsAgo == 4) {
+            return 2;  // Just became eligible after 3 rounds: lower priority / lower chance
+        } else if (roundsAgo == 5) {
+            return 4;
+        } else if (roundsAgo == 6) {
+            return 7;
+        } else {
+            return 1;  // Fallback if small pool permitted roundsAgo <= 3
+        }
+    }
+
+    public List<String> getRecentRuleHistory() {
+        return new ArrayList<>(this.recentRuleHistory);
+    }
+
     // --- Persistence (F06 / F20) ---
 
     @Override
@@ -971,6 +1058,11 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         JsonObject state = new JsonObject();
         state.addProperty("currentRound", this.currentRound);
         state.addProperty("lastRuleId", this.lastRuleId);
+        JsonArray historyArr = new JsonArray();
+        for (String id : this.recentRuleHistory) {
+            historyArr.add(id);
+        }
+        state.add("recentRuleHistory", historyArr);
         state.addProperty("matchFinished", this.matchFinished);
         return state;
     }
@@ -983,6 +1075,15 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         }
         if (state.has("lastRuleId")) {
             this.lastRuleId = state.get("lastRuleId").getAsString();
+        }
+        if (state.has("recentRuleHistory")) {
+            this.recentRuleHistory.clear();
+            for (JsonElement el : state.getAsJsonArray("recentRuleHistory")) {
+                this.recentRuleHistory.add(el.getAsString());
+            }
+        } else if (!this.lastRuleId.isBlank()) {
+            this.recentRuleHistory.clear();
+            this.recentRuleHistory.add(this.lastRuleId);
         }
         if (state.has("matchFinished")) {
             this.matchFinished = state.get("matchFinished").getAsBoolean();

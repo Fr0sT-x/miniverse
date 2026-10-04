@@ -656,4 +656,97 @@ public class MicroPartyConfigAndLogicTest {
         Assert.assertTrue(rule.title().getString().contains("MLG WATER DROP"));
         Assert.assertTrue(rule.instruction().getString().contains("Water drop"));
     }
+
+    @Test
+    public void testRuleRecencyStrictExclusionAndLowerPriority() {
+        MicroPartyMinigame game = new MicroPartyMinigame();
+        List<MicroRule> pool = MicroRuleRegistry.getAllRules().subList(0, 10);
+
+        // Run 50 simulated selections
+        for (int round = 1; round <= 50; round++) {
+            List<String> historyBefore = game.getRecentRuleHistory();
+            int hSize = historyBefore.size();
+
+            MicroRule picked = game.selectNextRule(pool);
+            Assert.assertNotNull("Selected rule should not be null", picked);
+
+            // Verify the selected rule was NOT in the last 3 rounds
+            if (hSize >= 1) {
+                Assert.assertNotEquals("Must not appear 1 round ago", historyBefore.get(hSize - 1), picked.id());
+            }
+            if (hSize >= 2) {
+                Assert.assertNotEquals("Must not appear 2 rounds ago", historyBefore.get(hSize - 2), picked.id());
+            }
+            if (hSize >= 3) {
+                Assert.assertNotEquals("Must not appear 3 rounds ago", historyBefore.get(hSize - 3), picked.id());
+            }
+        }
+
+        // Verify priority / weight curve with distinct rule IDs
+        MicroPartyMinigame weightGame = new MicroPartyMinigame();
+        JsonObject state = new JsonObject();
+        JsonArray arr = new JsonArray();
+        arr.add("rule_6_ago"); // 6 rounds ago
+        arr.add("rule_5_ago"); // 5 rounds ago
+        arr.add("rule_4_ago"); // 4 rounds ago
+        arr.add("rule_3_ago"); // 3 rounds ago
+        arr.add("rule_2_ago"); // 2 rounds ago
+        arr.add("rule_1_ago"); // 1 round ago
+        state.add("recentRuleHistory", arr);
+        weightGame.loadRuntimeState(state);
+
+        Assert.assertEquals("Rule 4 rounds ago should have weight 2", 2, weightGame.getRuleSelectionWeight("rule_4_ago"));
+        Assert.assertEquals("Rule 5 rounds ago should have weight 4", 4, weightGame.getRuleSelectionWeight("rule_5_ago"));
+        Assert.assertEquals("Rule 6 rounds ago should have weight 7", 7, weightGame.getRuleSelectionWeight("rule_6_ago"));
+        Assert.assertEquals("Unplayed rule should have full weight 10", 10, weightGame.getRuleSelectionWeight("unplayed_rule_xyz"));
+    }
+
+    @Test
+    public void testSmallRulePoolFallback() {
+        MicroPartyMinigame game = new MicroPartyMinigame();
+        List<MicroRule> pool2 = MicroRuleRegistry.getAllRules().subList(0, 2);
+
+        // Even with only 2 rules, selection shouldn't fail or get stuck
+        for (int i = 0; i < 10; i++) {
+            MicroRule picked = game.selectNextRule(pool2);
+            Assert.assertNotNull(picked);
+        }
+
+        // With only 1 rule, selection returns the only rule
+        List<MicroRule> pool1 = MicroRuleRegistry.getAllRules().subList(0, 1);
+        MicroPartyMinigame game1 = new MicroPartyMinigame();
+        for (int i = 0; i < 5; i++) {
+            MicroRule picked = game1.selectNextRule(pool1);
+            Assert.assertEquals(pool1.get(0).id(), picked.id());
+        }
+    }
+
+    @Test
+    public void testEquipArmorRuleInventoryDescription() {
+        EquipArmorRule rule = new EquipArmorRule();
+        Assert.assertEquals("equip_armor", rule.id());
+        Assert.assertEquals("Gear Up", rule.name());
+        Assert.assertFalse("Description should not mention hotbar", rule.description().toLowerCase().contains("hotbar"));
+        Assert.assertTrue("Description should mention inventory", rule.description().toLowerCase().contains("inventory"));
+        Assert.assertTrue("Instruction should mention inventory", rule.instruction().getString().toLowerCase().contains("inventory"));
+    }
+
+    @Test
+    public void testStatePersistenceWithRecentRuleHistory() {
+        MicroPartyMinigame game = new MicroPartyMinigame();
+        List<MicroRule> pool = MicroRuleRegistry.getAllRules().subList(0, 5);
+
+        for (int i = 0; i < 5; i++) {
+            game.selectNextRule(pool);
+        }
+
+        JsonObject saved = game.saveRuntimeState();
+        Assert.assertTrue(saved.has("recentRuleHistory"));
+        Assert.assertTrue(saved.getAsJsonArray("recentRuleHistory").size() > 0);
+
+        MicroPartyMinigame restoredGame = new MicroPartyMinigame();
+        restoredGame.loadRuntimeState(saved);
+        Assert.assertEquals(game.getRecentRuleHistory().size(), restoredGame.getRecentRuleHistory().size());
+        Assert.assertEquals(game.getRecentRuleHistory(), restoredGame.getRecentRuleHistory());
+    }
 }

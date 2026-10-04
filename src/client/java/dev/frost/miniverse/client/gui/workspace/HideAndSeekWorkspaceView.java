@@ -13,11 +13,11 @@ import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
-import dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceModuleManager;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.hideandseek.HideAndSeekDefinition;
 import dev.frost.miniverse.minigame.impl.hideandseek.HideAndSeekSettings;
 import dev.frost.miniverse.minigame.impl.hideandseek.disguise.DisguiseType;
@@ -219,58 +219,67 @@ public final class HideAndSeekWorkspaceView extends AbstractGamemodeWorkspaceVie
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip hidingTooltip = WorkspaceTooltip.dynamic(() -> "Hiders will have " + (this.hidingTimeField != null ? this.hidingTimeField.getIntValue(this.hidingTimeSeconds) : this.hidingTimeSeconds) + " seconds to hide before Seekers release.");
             this.rulesLayout.addRow(
-                "Hiding Grace Period", (s, x, y, w) -> {
-                    this.hidingTimeField = this.addIntField(s, x, y, this.hidingTimeSeconds, w, "Grace period", val -> "Hiders will have " + val + " seconds to hide before Seekers release.");
+                "Hiding Grace Period", hidingTooltip, (s, x, y, w) -> {
+                    this.hidingTimeField = this.addIntField(s, "Grace period", x, y, this.hidingTimeSeconds, 5, 120, w, hidingTooltip);
                 }
             );
 
+            WorkspaceTooltip durationTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.durationField != null ? this.durationField.getIntValue(this.durationSeconds) : this.durationSeconds;
+                return "Total hunt duration will be " + val + " seconds (" + (val / 60) + "m).";
+            });
             this.rulesLayout.addRow(
-                "Match Duration", (s, x, y, w) -> {
-                    this.durationField = this.addIntField(s, x, y, this.durationSeconds, w, "Match duration", val -> "Total hunt duration will be " + val + " seconds (" + (val / 60) + "m).");
+                "Match Duration", durationTooltip, (s, x, y, w) -> {
+                    this.durationField = this.addIntField(s, "Match duration", x, y, this.durationSeconds, 60, 1800, w, durationTooltip);
                 }
             );
 
+            WorkspaceTooltip seekerTooltip = WorkspaceTooltip.dynamic(() -> "Match will start with " + (this.seekerCountField != null ? this.seekerCountField.getIntValue(this.seekerCount) : this.seekerCount) + " initial Seeker(s).");
             this.rulesLayout.addRow(
-                "Initial Seekers", (s, x, y, w) -> {
-                    this.seekerCountField = this.addIntField(s, x, y, this.seekerCount, w, "Initial seekers", val -> "Match will start with " + val + " initial Seeker(s).");
+                "Initial Seekers", seekerTooltip, (s, x, y, w) -> {
+                    this.seekerCountField = this.addIntField(s, "Initial seekers", x, y, this.seekerCount, 1, 10, w, seekerTooltip);
                 }
             );
 
+            WorkspaceTooltip tauntTooltip = WorkspaceTooltip.dynamic(() -> "Hiders can make taunt sounds every " + (this.tauntCooldownField != null ? this.tauntCooldownField.getIntValue(this.tauntCooldown) : this.tauntCooldown) + " seconds for bonus points.");
             this.rulesLayout.addRow(
-                "Taunt Cooldown", (s, x, y, w) -> {
-                    this.tauntCooldownField = this.addIntField(s, x, y, this.tauntCooldown, w, "Taunt cooldown", val -> "Hiders can make taunt sounds every " + val + " seconds for bonus points.");
+                "Taunt Cooldown", tauntTooltip, (s, x, y, w) -> {
+                    this.tauntCooldownField = this.addIntField(s, "Taunt cooldown", x, y, this.tauntCooldown, 5, 60, w, tauntTooltip);
                 }
             );
 
+            WorkspaceTooltip sonarTooltip = WorkspaceTooltip.dynamic(() -> "Seekers gain the tracking Sonar Compass in the final " + (this.sonarUnlockField != null ? this.sonarUnlockField.getIntValue(this.sonarUnlock) : this.sonarUnlock) + " seconds.");
             this.rulesLayout.addRow(
-                "Sonar Unlock", (s, x, y, w) -> {
-                    this.sonarUnlockField = this.addIntField(s, x, y, this.sonarUnlock, w, "Sonar unlock", val -> "Seekers gain the tracking Sonar Compass in the final " + val + " seconds.");
+                "Sonar Unlock", sonarTooltip, (s, x, y, w) -> {
+                    this.sonarUnlockField = this.addIntField(s, "Sonar unlock", x, y, this.sonarUnlock, 10, 180, w, sonarTooltip);
                 }
             );
 
+            WorkspaceTooltip missPenaltyTooltip = WorkspaceTooltip.toggle(() -> this.seekerMissPenalty > 0,
+                "Seekers take 0.5 heart damage when attacking incorrect map blocks.",
+                "Seekers take no penalty when swinging at blocks.");
             this.rulesLayout.addRow(
-                "Miss Penalty", (s, x, y, w) -> {
+                "Miss Penalty", missPenaltyTooltip, (s, x, y, w) -> {
                     this.missPenaltyButton = this.addToggleButton(s, "Seeker Miss Penalty", () -> this.seekerMissPenalty > 0, x, y, w,
-                        new BinaryTooltip(
-                            "Seekers take 0.5 heart damage when attacking incorrect map blocks.",
-                            "Seekers take no penalty when swinging at blocks."
-                        ),
+                        missPenaltyTooltip,
                         () -> this.seekerMissPenalty = this.seekerMissPenalty > 0 ? 0.0F : 1.0F);
                 }
             );
 
+            WorkspaceTooltip regenCapTooltip = WorkspaceTooltip.cycle(() -> this.seekerPassiveRegenCap >= 20.0F ? 1 : 0, new String[]{
+                "Resting passively recovers stamina up to 5 hearts. Full 10 hearts requires finding Hiders.",
+                "Resting passively recovers stamina all the way up to full 10 hearts."
+            });
             this.rulesLayout.addRow(
-                "Rest Regen Cap", (s, x, y, w) -> {
+                "Rest Regen Cap", regenCapTooltip, (s, x, y, w) -> {
                     this.addCycleButton(
                         s,
                         () -> "Rest Regen Cap: " + (this.seekerPassiveRegenCap >= 20.0F ? "10 Hearts (Full)" : "5 Hearts (Capped)"),
                         () -> this.seekerPassiveRegenCap >= 20.0F ? 1 : 0,
                         x, y, w,
-                        new String[]{
-                            "Resting passively recovers stamina up to 5 hearts. Full 10 hearts requires finding Hiders.",
-                            "Resting passively recovers stamina all the way up to full 10 hearts."
-                        },
+                        regenCapTooltip,
                         2,
                         () -> this.seekerPassiveRegenCap = (this.seekerPassiveRegenCap >= 20.0F ? 10.0F : 20.0F)
                     );

@@ -80,9 +80,10 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     protected UiLayout.Rect lastWorkspaceRect;
     protected SessionScreen currentScreen;
 
-    protected record TooltipZone(int x, int y, int width, int height, java.util.function.Supplier<String> text) {}
-    protected final java.util.List<TooltipZone> activeTooltips = new java.util.ArrayList<>();
+    public record HoverTooltipTarget(int x, int y, int width, int height, WorkspaceTooltip tooltip) {}
+    protected final java.util.List<HoverTooltipTarget> registeredLabelTooltips = new java.util.ArrayList<>();
     protected final java.util.List<ThemedButtonWidget> managedThemedButtons = new java.util.ArrayList<>();
+    protected final java.util.List<dev.frost.miniverse.client.gui.ui.IntFieldWidget> managedIntFields = new java.util.ArrayList<>();
 
     private TeamSelectionGrid rosterGrid;
     private MapThumbnailGrid mapGrid;
@@ -116,8 +117,10 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     public void init(SessionScreen screen, UiLayout.Rect workspace) {
         this.currentScreen = screen;
         this.lastWorkspaceRect = workspace;
-        this.activeTooltips.clear();
+        this.rulesLayout = null;
+        this.registeredLabelTooltips.clear();
         this.managedThemedButtons.clear();
+        this.managedIntFields.clear();
         SessionScreen.rightDockAnimation.tick();
         float dockProgress = SessionScreen.rightDockAnimation.get();
         int effectiveDockWidth = Math.round(dockProgress * SessionScreen.rightDockTargetWidth);
@@ -229,9 +232,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         // Dynamically update managed themed buttons so they track panel position seamlessly
         for (ThemedButtonWidget btn : this.managedThemedButtons) {
             btn.updatePosition(this.layout.mainPanel().x(), this.layout.mainPanel().y());
-            if (btn.getTooltipSupplier() != null) {
-                this.activeTooltips.add(new TooltipZone(btn.getX(), btn.getY(), btn.getWidth(), btn.getHeight(), btn.getTooltipSupplier()));
-            }
         }
 
         if (this.layout.isRightSidebarOpen()) {
@@ -264,7 +264,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.resetPresetBtnRect = null;
         }
 
-        this.activeTooltips.clear();
         UiLayout.Rect mainPanel = this.layout.mainPanel();
         UiRenderer.panel(context, mainPanel.x(), mainPanel.y(), mainPanel.width(), mainPanel.height(), UiTheme.PANEL, UiTheme.BORDER_SUBTLE);
         context.fill(mainPanel.x() + 1, mainPanel.y() + 1, mainPanel.x() + mainPanel.width() - 1, mainPanel.y() + 40, 0x701B2634);
@@ -278,17 +277,14 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         // When dock is collapsed, render collapsed Start Button and quick validation badge in the header!
         if (!this.layout.isRightSidebarOpen()) {
             UiLayout.Rect startBtn = this.layout.startButton();
-            ValidationResult validation = this.validateGamemodeStart();
+            ValidationResult validation = this.validateSession();
             boolean canStart = validation.canStart();
-            this.renderActionButton(context, textRenderer, startBtn, "\u25B6 Start", UiTheme.ACCENT_GREEN, canStart && startBtn.contains(mouseX, mouseY), canStart);
-            if (!canStart) {
-                this.activeTooltips.add(new TooltipZone(startBtn.x(), startBtn.y(), startBtn.width(), startBtn.height(), () -> "\u26A0 " + validation.message()));
-            }
+            int startAccent = canStart ? UiTheme.ACCENT_GREEN : UiTheme.BORDER_SUBTLE;
+            this.renderActionButton(context, textRenderer, startBtn, "\u25B6 Start", startAccent, canStart && startBtn.contains(mouseX, mouseY), canStart);
 
             int dotX = startBtn.x() - 14;
             int dotY = startBtn.y() + 7;
             context.fill(dotX, dotY, dotX + 8, dotY + 8, canStart ? UiTheme.ACCENT_GREEN : UiTheme.ACCENT_RED);
-            this.activeTooltips.add(new TooltipZone(dotX - 2, dotY - 2, 12, 12, () -> canStart ? "\u2714 Ready to Launch" : ("\u26A0 " + validation.message())));
         }
 
         if (this.rosterGrid != null && (this.moduleManager.isActive("players") || this.moduleManager.isActive("teams"))) {
@@ -402,8 +398,6 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             String arrow = "\u276F"; // ❯ pointing right to collapse
             int arrowColor = isHandleHovered ? UiTheme.ACCENT : (active ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
             context.drawCenteredTextWithShadow(textRenderer, Text.literal(arrow), handleX + handleWidth / 2, handleY + (handleHeight - 8) / 2, arrowColor);
-
-            this.activeTooltips.add(new TooltipZone(handleX, handleY, handleWidth, handleHeight, () -> "Collapse Match Dock"));
         }
     }
 
@@ -423,12 +417,10 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         UiRenderer.panel(context, dockX, dockY, dockW, dockH, UiTheme.PANEL, UiTheme.BORDER_SUBTLE);
         context.fill(dockX + 1, dockY + 1, dockX + dockW - 1, dockY + 32, 0x701B2634);
         context.drawText(textRenderer, Text.literal("MATCH DOCK"), contentX, dockY + 12, UiTheme.TEXT, false);
-
         if (this.dockCloseBtnRect != null) {
             boolean closeHover = this.dockCloseBtnRect.contains(mouseX, mouseY);
             context.fill(this.dockCloseBtnRect.x(), this.dockCloseBtnRect.y(), this.dockCloseBtnRect.x() + this.dockCloseBtnRect.width(), this.dockCloseBtnRect.y() + this.dockCloseBtnRect.height(), closeHover ? 0x40FFFFFF : 0x20FFFFFF);
             context.drawText(textRenderer, Text.literal("\u2715"), this.dockCloseBtnRect.x() + 4, this.dockCloseBtnRect.y() + 4, closeHover ? UiTheme.ACCENT_RED : UiTheme.TEXT_MUTED, false);
-            this.activeTooltips.add(new TooltipZone(this.dockCloseBtnRect.x(), this.dockCloseBtnRect.y(), this.dockCloseBtnRect.width(), this.dockCloseBtnRect.height(), () -> "Collapse Match Dock"));
         }
 
         // Section 1: Presets
@@ -443,24 +435,20 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
         if (this.savePresetBtnRect != null) {
             this.renderActionButton(context, textRenderer, this.savePresetBtnRect, "Save", UiTheme.ACCENT_BLUE, this.savePresetBtnRect.contains(mouseX, mouseY));
-            this.activeTooltips.add(new TooltipZone(this.savePresetBtnRect.x(), this.savePresetBtnRect.y(), this.savePresetBtnRect.width(), this.savePresetBtnRect.height(), () -> "Save current settings to '" + this.activePresetName + "'"));
         }
         if (this.saveAsPresetBtnRect != null) {
             this.renderActionButton(context, textRenderer, this.saveAsPresetBtnRect, "Save As", UiTheme.ACCENT, this.saveAsPresetBtnRect.contains(mouseX, mouseY));
-            this.activeTooltips.add(new TooltipZone(this.saveAsPresetBtnRect.x(), this.saveAsPresetBtnRect.y(), this.saveAsPresetBtnRect.width(), this.saveAsPresetBtnRect.height(), () -> "Save configuration as a new named preset"));
         }
         curY += 23;
 
         if (this.resetPresetBtnRect != null) {
             this.renderActionButton(context, textRenderer, this.resetPresetBtnRect, "Reset", UiTheme.ACCENT_BLUE, this.resetPresetBtnRect.contains(mouseX, mouseY));
-            this.activeTooltips.add(new TooltipZone(this.resetPresetBtnRect.x(), this.resetPresetBtnRect.y(), this.resetPresetBtnRect.width(), this.resetPresetBtnRect.height(), () -> "Revert all settings to Default preset"));
         }
         if (this.deletePresetBtnRect != null) {
             boolean isProtected = this.activePresetName.equalsIgnoreCase("Default") || this.activePresetName.equalsIgnoreCase("Last Used");
             boolean canDelete = !isProtected;
             int delFill = canDelete ? UiTheme.ACCENT_RED : UiTheme.BORDER_SUBTLE;
             this.renderActionButton(context, textRenderer, this.deletePresetBtnRect, "Delete", delFill, canDelete && this.deletePresetBtnRect.contains(mouseX, mouseY));
-            this.activeTooltips.add(new TooltipZone(this.deletePresetBtnRect.x(), this.deletePresetBtnRect.y(), this.deletePresetBtnRect.width(), this.deletePresetBtnRect.height(), () -> canDelete ? "Delete preset '" + this.activePresetName + "' from server" : (this.activePresetName + " preset cannot be deleted")));
         }
         curY += 27;
 
@@ -499,7 +487,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         }
 
         // Section 3: Live Validation & Status Badge
-        ValidationResult validation = this.validateGamemodeStart();
+        ValidationResult validation = this.validateSession();
         boolean canStart = validation.canStart();
         int badgeY = dockY + dockH - 58;
         int badgeH = 18;
@@ -509,7 +497,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         context.fill(contentX, badgeY, contentX + contentW, badgeY + badgeH, badgeBg);
         context.fill(contentX, badgeY, contentX + contentW, badgeY + 1, badgeBorder);
         context.fill(contentX, badgeY + badgeH - 1, contentX + contentW, badgeY + badgeH, badgeBorder);
-        context.fill(contentX, badgeY, contentX + 1, badgeY + badgeH, badgeBorder);
+        context.fill(contentX, badgeY + 1, contentX + 1, badgeY + badgeH, badgeBorder);
         context.fill(contentX + contentW - 1, badgeY, contentX + contentW, badgeY + badgeH, badgeBorder);
 
         String badgeText = canStart ? "\u2714 Ready to Launch" : ("\u26A0 " + validation.message());
@@ -539,14 +527,10 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         } else {
             context.drawText(textRenderer, Text.literal(badgeText), badgeX, badgeYPos, badgeTextColor, false);
         }
-        this.activeTooltips.add(new TooltipZone(contentX, badgeY, contentW, badgeH, () -> canStart ? "Configuration valid. Ready to launch match." : ("Validation issue: " + validation.message())));
 
         // Section 4: Start Match Button
         UiLayout.Rect startBtn = this.layout.startButton();
         this.renderActionButton(context, textRenderer, startBtn, "\u25B6 START MATCH", UiTheme.ACCENT_GREEN, canStart && startBtn.contains(mouseX, mouseY), canStart);
-        if (!canStart) {
-            this.activeTooltips.add(new TooltipZone(startBtn.x(), startBtn.y(), startBtn.width(), startBtn.height(), () -> "Cannot start: " + validation.message()));
-        }
 
         context.disableScissor();
     }
@@ -597,7 +581,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.rosterGrid.renderForeground(context, textRenderer, workspace, mouseX, mouseY, delta);
         }
 
-        if (this.moduleManager.isActive("rules") && this.rulesLayout != null) {
+        if (this.rulesLayout != null && this.rulesLayout.isModuleActive()) {
             this.rulesLayout.renderForeground(context, textRenderer);
         }
 
@@ -609,10 +593,94 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
         boolean suppressTooltips = this.presetDropdown != null && this.presetDropdown.isOpen() && this.presetDropdown.contains(mouseX, mouseY);
         if (!suppressTooltips) {
-            for (TooltipZone zone : this.activeTooltips) {
-                if (mouseX >= zone.x() && mouseX < zone.x() + zone.width() && mouseY >= zone.y() && mouseY < zone.y() + zone.height()) {
-                    context.drawTooltip(textRenderer, Text.literal(zone.text().get()), mouseX, mouseY);
-                    break;
+            WorkspaceTooltip hoveredTooltip = null;
+
+            // 1. Right dock buttons
+            if (this.savePresetBtnRect != null && this.savePresetBtnRect.contains(mouseX, mouseY)) {
+                hoveredTooltip = WorkspaceTooltip.of("Save current settings to '" + this.activePresetName + "'");
+            } else if (this.saveAsPresetBtnRect != null && this.saveAsPresetBtnRect.contains(mouseX, mouseY)) {
+                hoveredTooltip = WorkspaceTooltip.of("Save configuration as a new named preset");
+            } else if (this.resetPresetBtnRect != null && this.resetPresetBtnRect.contains(mouseX, mouseY)) {
+                hoveredTooltip = WorkspaceTooltip.of("Revert all settings to Default preset");
+            } else if (this.deletePresetBtnRect != null && this.deletePresetBtnRect.contains(mouseX, mouseY)) {
+                boolean isProtected = this.activePresetName.equalsIgnoreCase("Default") || this.activePresetName.equalsIgnoreCase("Last Used");
+                hoveredTooltip = WorkspaceTooltip.of(!isProtected ? "Delete preset '" + this.activePresetName + "' from server" : (this.activePresetName + " preset cannot be deleted"));
+            } else if (this.dockCloseBtnRect != null && this.dockCloseBtnRect.contains(mouseX, mouseY)) {
+                hoveredTooltip = WorkspaceTooltip.of("Collapse Match Dock");
+            } else if (this.dockArrowHandleRect != null && this.dockArrowHandleRect.contains(mouseX, mouseY)) {
+                hoveredTooltip = WorkspaceTooltip.of("Toggle Match Dock");
+            } else if (this.rightCollapseStripRect != null && this.rightCollapseStripRect.contains(mouseX, mouseY)) {
+                hoveredTooltip = WorkspaceTooltip.of("Expand Match Dock");
+            }
+
+            // 2. Start Match button & Status Badge (in expanded dock or header)
+            if (hoveredTooltip == null) {
+                ValidationResult validation = this.validateSession();
+                boolean canStart = validation.canStart();
+                UiLayout.Rect startBtn = this.layout.startButton();
+                if (startBtn != null && startBtn.contains(mouseX, mouseY)) {
+                    if (!canStart) {
+                        hoveredTooltip = WorkspaceTooltip.of("Cannot start: " + validation.message());
+                    } else {
+                        hoveredTooltip = WorkspaceTooltip.of("Start " + this.title() + " match with current settings.");
+                    }
+                } else if (this.layout.isRightSidebarOpen() && this.layout.rightSidebar() != null) {
+                    int contentX = this.layout.rightSidebar().x() + 10;
+                    int contentW = this.layout.rightSidebar().width() - 20;
+                    int badgeY = this.layout.rightSidebar().y() + this.layout.rightSidebar().height() - 58;
+                    int badgeH = 18;
+                    if (mouseX >= contentX && mouseX <= contentX + contentW && mouseY >= badgeY && mouseY <= badgeY + badgeH) {
+                        hoveredTooltip = WorkspaceTooltip.of(canStart ? "Configuration valid. Ready to launch match." : ("Validation issue: " + validation.message()));
+                    }
+                } else if (!this.layout.isRightSidebarOpen()) {
+                    int dotX = startBtn.x() - 14;
+                    int dotY = startBtn.y() + 7;
+                    if (mouseX >= dotX - 2 && mouseX <= dotX + 10 && mouseY >= dotY - 2 && mouseY <= dotY + 10) {
+                        hoveredTooltip = WorkspaceTooltip.of(canStart ? "Configuration valid. Ready to launch match." : ("Validation issue: " + validation.message()));
+                    }
+                }
+            }
+
+            // 3. Registered row label hover zones
+            if (hoveredTooltip == null && this.rulesLayout != null && this.rulesLayout.isModuleActive()) {
+                for (HoverTooltipTarget target : this.registeredLabelTooltips) {
+                    if (mouseX >= target.x() && mouseX < target.x() + target.width() && mouseY >= target.y() && mouseY < target.y() + target.height()) {
+                        hoveredTooltip = target.tooltip();
+                        break;
+                    }
+                }
+            }
+
+            // 4. Managed IntFieldWidgets (showing invalid error or field description)
+            if (hoveredTooltip == null) {
+                for (dev.frost.miniverse.client.gui.ui.IntFieldWidget field : this.managedIntFields) {
+                    if (field.isMouseOver(mouseX, mouseY)) {
+                        if (!field.isValid() && field.getValidationError() != null) {
+                            hoveredTooltip = WorkspaceTooltip.of("§c" + field.getValidationError());
+                        } else if (field.getWorkspaceTooltip() != null) {
+                            hoveredTooltip = field.getWorkspaceTooltip();
+                        }
+                        if (hoveredTooltip != null) break;
+                    }
+                }
+            }
+
+            // 5. Managed ThemedButtons
+            if (hoveredTooltip == null) {
+                for (ThemedButtonWidget btn : this.managedThemedButtons) {
+                    if (btn.isMouseOver(mouseX, mouseY) && btn.getWorkspaceTooltip() != null) {
+                        hoveredTooltip = btn.getWorkspaceTooltip();
+                        break;
+                    }
+                }
+            }
+
+            // 6. Render hovered tooltip with word wrapping
+            if (hoveredTooltip != null) {
+                String text = hoveredTooltip.resolve();
+                if (text != null && !text.isBlank()) {
+                    java.util.List<net.minecraft.text.OrderedText> lines = textRenderer.wrapLines(Text.literal(text), 260);
+                    context.drawOrderedTooltip(textRenderer, lines, mouseX, mouseY);
                 }
             }
         }
@@ -676,7 +744,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         }
 
         if (this.layout.startButton().contains(mouseX, mouseY)) {
-            if (this.validateGamemodeStart().canStart()) {
+            if (this.validateSession().canStart()) {
                 this.createSession();
             }
             return true;
@@ -953,6 +1021,7 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     @Override
     public void setActiveModule(String moduleId) {
         this.syncStateFromWidgets();
+        this.rulesLayout = null;
         this.moduleManager.setActiveModuleId(moduleId);
     }
 
@@ -1032,83 +1101,69 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         this.managedThemedButtons.add(plusBtn);
     }
 
+    protected ThemedButtonWidget addThemedButton(SessionScreen screen, String label, int x, int y, int width, int accent, WorkspaceTooltip tooltip, Runnable action) {
+        java.util.Objects.requireNonNull(tooltip, "Tooltip is mandatory for button: " + label);
+        int relX = x - this.layout.mainPanel().x();
+        int relY = y - this.layout.mainPanel().y();
+        ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(label), accent, tooltip, action);
+        btn.setRelative(relX, relY);
+        screen.addWidget(btn);
+        this.managedThemedButtons.add(btn);
+        return btn;
+    }
+
     protected ThemedButtonWidget addThemedButton(SessionScreen screen, String label, int x, int y, int width, int accent, String tooltip, Runnable action) {
-        int relX = x - this.layout.mainPanel().x();
-        int relY = y - this.layout.mainPanel().y();
-        ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(label), accent, action);
-        btn.setRelative(relX, relY);
-        if (tooltip != null) {
-            btn.setTooltipSupplier(() -> tooltip);
-        }
-        screen.addWidget(btn);
-        this.managedThemedButtons.add(btn);
-        return btn;
+        return this.addThemedButton(screen, label, x, y, width, accent, WorkspaceTooltip.of(tooltip), action);
     }
 
-    private ThemedButtonWidget addButton(SessionScreen screen, String label, int x, int y, int width, java.util.function.Supplier<String> tooltip, Runnable action) {
-        int relX = x - this.layout.mainPanel().x();
-        int relY = y - this.layout.mainPanel().y();
-        ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(label), UiTheme.ACCENT_BLUE, action);
-        btn.setRelative(relX, relY);
-        if (tooltip != null) {
-            btn.setTooltipSupplier(tooltip);
-        }
-        screen.addWidget(btn);
-        this.managedThemedButtons.add(btn);
-        return btn;
+    protected ThemedButtonWidget addActionButton(SessionScreen screen, String label, int x, int y, int width, WorkspaceTooltip tooltip, Runnable action) {
+        return this.addThemedButton(screen, label, x, y, width, UiTheme.ACCENT_BLUE, tooltip, action);
     }
 
-    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, int width, String placeholder, java.util.function.Supplier<String> tooltip) {
+    protected ThemedButtonWidget addActionButton(SessionScreen screen, String label, int x, int y, int width, String tooltip, Runnable action) {
+        return this.addThemedButton(screen, label, x, y, width, UiTheme.ACCENT_BLUE, WorkspaceTooltip.of(tooltip), action);
+    }
+
+    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, int width, String placeholder, WorkspaceTooltip tooltip) {
+        java.util.Objects.requireNonNull(tooltip, "Tooltip is mandatory for field: " + placeholder);
         TextFieldWidget field = new TextFieldWidget(MinecraftClient.getInstance().textRenderer, x, y, width, 20, Text.literal(placeholder));
         field.setMaxLength(256);
         field.setText(value);
         screen.addWidget(field);
-        if (tooltip != null) {
-            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-            int zoneW = (x + width) - zoneX;
-            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
-        }
         return field;
     }
 
-    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, String placeholder, java.util.function.Supplier<String> tooltip) {
+    protected TextFieldWidget addField(SessionScreen screen, int x, int y, String value, String placeholder, WorkspaceTooltip tooltip) {
         return this.addField(screen, x, y, value, 120, placeholder, tooltip);
     }
 
-    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, int width, String placeholder, String zeroText, java.util.function.Function<Integer, String> activeText) {
-        dev.frost.miniverse.client.gui.ui.IntFieldWidget field = new dev.frost.miniverse.client.gui.ui.IntFieldWidget(this.client.textRenderer, x, y, width, 20, Text.literal(placeholder));
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, String fieldName, int x, int y, int value, int min, int max, int width, WorkspaceTooltip tooltip, java.util.function.Consumer<Integer> onChanged) {
+        java.util.Objects.requireNonNull(tooltip, "Tooltip is mandatory for int field: " + fieldName);
+        dev.frost.miniverse.client.gui.ui.IntFieldWidget field = new dev.frost.miniverse.client.gui.ui.IntFieldWidget(this.client.textRenderer, fieldName, x, y, width, 20, value, min, max, tooltip, onChanged);
         field.setMaxLength(256);
-        field.setText(Integer.toString(value));
         screen.addWidget(field);
-        
-        if (zeroText != null && activeText != null) {
-            java.util.function.Supplier<String> tooltip = () -> {
-                int val = field.getIntValue(0);
-                return val <= 0 ? zeroText : activeText.apply(val);
-            };
-            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-            int zoneW = (x + width + 44) - zoneX;
-            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
-        }
+        this.managedIntFields.add(field);
         return field;
     }
 
-    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, String placeholder, String zeroText, java.util.function.Function<Integer, String> activeText) {
-        return this.addIntField(screen, x, y, value, 120, placeholder, zeroText, activeText);
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, String fieldName, int x, int y, int value, int min, int max, int width, WorkspaceTooltip tooltip) {
+        return this.addIntField(screen, fieldName, x, y, value, min, max, width, tooltip, null);
+    }
+
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, int width, String placeholder, WorkspaceTooltip tooltip) {
+        return this.addIntField(screen, placeholder, x, y, value, Integer.MIN_VALUE, Integer.MAX_VALUE, width, tooltip, null);
     }
 
     protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, int width, String placeholder, java.util.function.Function<Integer, String> tooltipFormatter) {
+        java.util.Objects.requireNonNull(tooltipFormatter, "Tooltip formatter is mandatory for: " + placeholder);
         dev.frost.miniverse.client.gui.ui.IntFieldWidget field = new dev.frost.miniverse.client.gui.ui.IntFieldWidget(this.client.textRenderer, x, y, width, 20, Text.literal(placeholder));
+        field.setFieldName(placeholder);
         field.setMaxLength(256);
         field.setText(Integer.toString(value));
+        field.setWorkspaceTooltip(WorkspaceTooltip.dynamic(() -> tooltipFormatter.apply(field.getIntValue(0))));
+        field.validate();
         screen.addWidget(field);
-        
-        if (tooltipFormatter != null) {
-            java.util.function.Supplier<String> tooltip = () -> tooltipFormatter.apply(field.getIntValue(0));
-            int zoneX = Math.max(this.layout.mainPanel().x() + 14, x - 145);
-            int zoneW = (x + width + 44) - zoneX;
-            this.activeTooltips.add(new TooltipZone(zoneX, y - 4, zoneW, 28, tooltip));
-        }
+        this.managedIntFields.add(field);
         return field;
     }
 
@@ -1116,7 +1171,29 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         return this.addIntField(screen, x, y, value, 120, placeholder, tooltipFormatter);
     }
 
-    protected ThemedButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, BinaryTooltip tooltip, Runnable onToggle) {
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, int width, String placeholder, String zeroText, java.util.function.Function<Integer, String> activeText) {
+        java.util.Objects.requireNonNull(zeroText, "zeroText is mandatory for: " + placeholder);
+        java.util.Objects.requireNonNull(activeText, "activeText is mandatory for: " + placeholder);
+        dev.frost.miniverse.client.gui.ui.IntFieldWidget field = new dev.frost.miniverse.client.gui.ui.IntFieldWidget(this.client.textRenderer, x, y, width, 20, Text.literal(placeholder));
+        field.setFieldName(placeholder);
+        field.setMaxLength(256);
+        field.setText(Integer.toString(value));
+        field.setWorkspaceTooltip(WorkspaceTooltip.dynamic(() -> {
+            int val = field.getIntValue(0);
+            return val <= 0 ? zeroText : activeText.apply(val);
+        }));
+        field.validate();
+        screen.addWidget(field);
+        this.managedIntFields.add(field);
+        return field;
+    }
+
+    protected dev.frost.miniverse.client.gui.ui.IntFieldWidget addIntField(SessionScreen screen, int x, int y, int value, String placeholder, String zeroText, java.util.function.Function<Integer, String> activeText) {
+        return this.addIntField(screen, x, y, value, 120, placeholder, zeroText, activeText);
+    }
+
+    protected ThemedButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, WorkspaceTooltip tooltip, Runnable onToggle) {
+        java.util.Objects.requireNonNull(tooltip, "Tooltip is mandatory for toggle button: " + labelPrefix);
         int relX = x - this.layout.mainPanel().x();
         int relY = y - this.layout.mainPanel().y();
         ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(labelPrefix + ": " + (stateSupplier.get() ? "ON" : "OFF")), b -> {
@@ -1125,18 +1202,18 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         });
         btn.setAccent(UiTheme.ACCENT);
         btn.setRelative(relX, relY);
-        if (tooltip != null) {
-            btn.setTooltipSupplier(() -> tooltip.resolve(stateSupplier.get()));
-        }
+        btn.setWorkspaceTooltip(tooltip);
         screen.addWidget(btn);
         this.managedThemedButtons.add(btn);
         return btn;
     }
 
-    protected ThemedButtonWidget addCycleButton(SessionScreen screen, java.util.function.Supplier<String> labelSupplier, java.util.function.Supplier<Integer> cycleIndexSupplier, int x, int y, int width, String[] stateTooltips, int cycleLength, Runnable onCycle) {
-        if (stateTooltips.length != cycleLength) {
-            throw new IllegalArgumentException("addCycleButton: stateTooltips length (" + stateTooltips.length + ") must match cycle length (" + cycleLength + ")");
-        }
+    protected ThemedButtonWidget addToggleButton(SessionScreen screen, String labelPrefix, java.util.function.Supplier<Boolean> stateSupplier, int x, int y, int width, String onTooltip, String offTooltip, Runnable onToggle) {
+        return this.addToggleButton(screen, labelPrefix, stateSupplier, x, y, width, WorkspaceTooltip.toggle(stateSupplier, onTooltip, offTooltip), onToggle);
+    }
+
+    protected ThemedButtonWidget addCycleButton(SessionScreen screen, java.util.function.Supplier<String> labelSupplier, java.util.function.Supplier<Integer> cycleIndexSupplier, int x, int y, int width, WorkspaceTooltip tooltip, int cycleLength, Runnable onCycle) {
+        java.util.Objects.requireNonNull(tooltip, "Tooltip is mandatory for cycle button: " + labelSupplier.get());
         int relX = x - this.layout.mainPanel().x();
         int relY = y - this.layout.mainPanel().y();
         ThemedButtonWidget btn = new ThemedButtonWidget(x, y, width, StandardWorkspaceLayout.BUTTON_HEIGHT, Text.literal(labelSupplier.get()), b -> {
@@ -1145,14 +1222,14 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
         });
         btn.setAccent(UiTheme.ACCENT_BLUE);
         btn.setRelative(relX, relY);
-        btn.setTooltipSupplier(() -> stateTooltips[cycleIndexSupplier.get()]);
+        btn.setWorkspaceTooltip(tooltip);
         screen.addWidget(btn);
         this.managedThemedButtons.add(btn);
         return btn;
     }
 
-    protected ThemedButtonWidget addActionButton(SessionScreen screen, String label, int x, int y, int width, String tooltip, Runnable action) {
-        return this.addThemedButton(screen, label, x, y, width, UiTheme.ACCENT_BLUE, tooltip, action);
+    protected ThemedButtonWidget addCycleButton(SessionScreen screen, java.util.function.Supplier<String> labelSupplier, java.util.function.Supplier<Integer> cycleIndexSupplier, int x, int y, int width, String[] stateTooltips, int cycleLength, Runnable onCycle) {
+        return this.addCycleButton(screen, labelSupplier, cycleIndexSupplier, x, y, width, WorkspaceTooltip.cycle(cycleIndexSupplier, stateTooltips), cycleLength, onCycle);
     }
 
     protected void drawLabel(DrawContext context, TextRenderer textRenderer, String label, int x, int y) {
@@ -1171,14 +1248,34 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
     protected int readClamped(dev.frost.miniverse.client.gui.ui.IntFieldWidget field, int fallback, int min, int max) {
         if (field == null) return fallback;
-        int value = Math.clamp(field.getIntValue(fallback), min, max);
-        field.setText(Integer.toString(value));
-        return value;
+        if (!field.isValid()) return fallback;
+        return Math.clamp(field.getIntValue(fallback), min, max);
     }
 
     protected void stepField(dev.frost.miniverse.client.gui.ui.IntFieldWidget field, int min, int max, int delta) {
         int value = this.readClamped(field, min, min, max);
         field.setText(Integer.toString(Math.clamp(value + delta, min, max)));
+    }
+
+    public final ValidationResult validateSession() {
+        if (this.client.player == null) {
+            return ValidationResult.error("Not connected to a server.");
+        }
+        if (this.sessionName == null || this.sessionName.isBlank()) {
+            return ValidationResult.error("Enter a session name.");
+        }
+        if (this.mapGrid != null && (this.selectedMapId == null || this.selectedMapId.isBlank())) {
+            return ValidationResult.error("Select a valid map first.");
+        }
+
+        for (dev.frost.miniverse.client.gui.ui.IntFieldWidget field : this.managedIntFields) {
+            field.validate();
+            if (!field.isValid()) {
+                return ValidationResult.error(field.getValidationError());
+            }
+        }
+
+        return this.validateGamemodeStart();
     }
 
     private void createSession() {
@@ -1195,9 +1292,9 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             return;
         }
         
-        ValidationResult gamemodeValidation = this.validateGamemodeStart();
-        if (gamemodeValidation != null && !gamemodeValidation.canStart()) {
-            this.status = gamemodeValidation;
+        ValidationResult sessionValidation = this.validateSession();
+        if (sessionValidation != null && !sessionValidation.canStart()) {
+            this.status = sessionValidation;
             return;
         }
         
@@ -1234,11 +1331,17 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
     protected class SettingsLayoutBuilder {
         private int currentY;
         private final SessionScreen screen;
+        private final String moduleId;
         private final java.util.List<java.util.function.BiConsumer<DrawContext, TextRenderer>> foregroundRenderers = new java.util.ArrayList<>();
 
         public SettingsLayoutBuilder(SessionScreen screen) {
             this.screen = screen;
+            this.moduleId = moduleManager.getActiveModuleId();
             this.currentY = layout.mainPanel().y() + 104;
+        }
+
+        public boolean isModuleActive() {
+            return this.moduleId != null && moduleManager.isActive(this.moduleId);
         }
 
         public void addHeading(String text) {
@@ -1248,7 +1351,8 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
             this.currentY += 24;
         }
 
-        public void addRow(String leftLabel, WidgetFactory leftWidget, String rightLabel, WidgetFactory rightWidget) {
+        public void addRow(String leftLabel, WorkspaceTooltip leftTooltip, WidgetFactory leftWidget,
+                           String rightLabel, WorkspaceTooltip rightTooltip, WidgetFactory rightWidget) {
             int y = this.currentY;
             int totalW = layout.mainPanel().width() - 48;
             int halfW = totalW / 2;
@@ -1260,28 +1364,49 @@ public abstract class AbstractGamemodeWorkspaceView implements WorkspaceView, Ga
 
             if (leftLabel != null && leftWidget != null) {
                 this.foregroundRenderers.add((context, textRenderer) -> context.drawText(textRenderer, Text.literal(leftLabel), lx1, y + 6, UiTheme.TEXT_MUTED, false));
+                if (leftTooltip != null) {
+                    registeredLabelTooltips.add(new HoverTooltipTarget(lx1, y, 110, 24, leftTooltip));
+                }
                 leftWidget.create(this.screen, cx1, y, widgetW);
             }
             if (rightLabel != null && rightWidget != null) {
                 this.foregroundRenderers.add((context, textRenderer) -> context.drawText(textRenderer, Text.literal(rightLabel), lx2, y + 6, UiTheme.TEXT_MUTED, false));
+                if (rightTooltip != null) {
+                    registeredLabelTooltips.add(new HoverTooltipTarget(lx2, y, 110, 24, rightTooltip));
+                }
                 rightWidget.create(this.screen, cx2, y, widgetW);
             }
             this.currentY += 32;
         }
 
-        public void addRow(String leftLabel, WidgetFactory leftWidget) {
-            this.addRow(leftLabel, leftWidget, null, null);
+        public void addRow(String leftLabel, WorkspaceTooltip leftTooltip, WidgetFactory leftWidget) {
+            this.addRow(leftLabel, leftTooltip, leftWidget, null, null, null);
         }
 
-        public void addFullRow(String label, WidgetFactory widget) {
+        public void addRow(String leftLabel, WidgetFactory leftWidget, String rightLabel, WidgetFactory rightWidget) {
+            this.addRow(leftLabel, null, leftWidget, rightLabel, null, rightWidget);
+        }
+
+        public void addRow(String leftLabel, WidgetFactory leftWidget) {
+            this.addRow(leftLabel, null, leftWidget, null, null, null);
+        }
+
+        public void addFullRow(String label, WorkspaceTooltip tooltip, WidgetFactory widget) {
             int y = this.currentY;
             int lx1 = layout.mainPanel().x() + 24;
             int cx1 = lx1 + 126;
             if (label != null && widget != null) {
                 this.foregroundRenderers.add((context, textRenderer) -> context.drawText(textRenderer, Text.literal(label), lx1, y + 6, UiTheme.TEXT_MUTED, false));
+                if (tooltip != null) {
+                    registeredLabelTooltips.add(new HoverTooltipTarget(lx1, y, 120, 24, tooltip));
+                }
                 widget.create(this.screen, cx1, y, layout.mainPanel().width() - 174);
             }
             this.currentY += 32;
+        }
+
+        public void addFullRow(String label, WidgetFactory widget) {
+            this.addFullRow(label, null, widget);
         }
 
         public void renderForeground(DrawContext context, TextRenderer textRenderer) {

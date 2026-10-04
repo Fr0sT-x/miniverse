@@ -7,6 +7,7 @@ import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGr
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapDefinition;
 import dev.frost.miniverse.minigame.impl.deathswap.DeathSwapSettings;
 import net.minecraft.client.font.TextRenderer;
@@ -47,32 +48,37 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
         if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip swapTooltip = WorkspaceTooltip.dynamic(() -> "Players will swap positions every " + (this.swapIntervalField != null ? this.swapIntervalField.getIntValue(this.swapIntervalSeconds) : this.swapIntervalSeconds) + " seconds.");
             this.rulesLayout.addRow(
-                "Swap Interval", (s, x, y, w) -> {
-                    this.swapIntervalField = this.addIntField(s, x, y, this.swapIntervalSeconds, w, "Swap interval seconds", val -> "Players will swap positions every " + val + " seconds.");
+                "Swap Interval", swapTooltip, (s, x, y, w) -> {
+                    this.swapIntervalField = this.addIntField(s, "Swap interval seconds", x, y, this.swapIntervalSeconds, 10, 3600, w, swapTooltip);
                 }
             );
 
+            WorkspaceTooltip graceTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.gracePeriodField != null ? this.gracePeriodField.getIntValue(this.gracePeriodSeconds) : this.gracePeriodSeconds;
+                return val <= 0 ? "No grace period, swapping begins immediately." : "Players have " + val + " seconds of peace before swapping begins.";
+            });
             this.rulesLayout.addRow(
-                "Grace Period", (s, x, y, w) -> {
-                    this.gracePeriodField = this.addIntField(s, x, y, this.gracePeriodSeconds, w, "Grace period seconds",
-                        "No grace period, swapping begins immediately.",
-                        val -> "Players have " + val + " seconds of peace before swapping begins.");
+                "Grace Period", graceTooltip, (s, x, y, w) -> {
+                    this.gracePeriodField = this.addIntField(s, "Grace period seconds", x, y, this.gracePeriodSeconds, 0, 3600, w, graceTooltip);
                 }
             );
 
+            WorkspaceTooltip borderTooltip = WorkspaceTooltip.dynamic(() -> "Size of the world border in blocks (" + (this.borderSizeField != null ? this.borderSizeField.getIntValue(this.borderSize) : this.borderSize) + ").");
             this.rulesLayout.addRow(
-                "Border Size", (s, x, y, w) -> {
-                    this.borderSizeField = this.addIntField(s, x, y, this.borderSize, w, "Border size", val -> "Size of the world border in blocks.");
+                "Border Size", borderTooltip, (s, x, y, w) -> {
+                    this.borderSizeField = this.addIntField(s, "Border size", x, y, this.borderSize, 100, 30000, w, borderTooltip);
                 }
             );
 
+            WorkspaceTooltip seedModeTooltip = WorkspaceTooltip.cycle(() -> this.seedMode.ordinal(), new String[]{
+                "Random world seed will be used.",
+                "Specify an exact world seed in the text field."
+            });
             this.rulesLayout.addRow(
-                "Seed Mode", (s, x, y, w) -> {
-                    this.seedModeButton = this.addCycleButton(s, () -> seedModeLabel(), () -> this.seedMode.ordinal(), x, y, w, new String[]{
-                        "Random world seed will be used.",
-                        "Specify an exact world seed in the text field."
-                    }, 2, () -> {
+                "Seed Mode", seedModeTooltip, (s, x, y, w) -> {
+                    this.seedModeButton = this.addCycleButton(s, () -> seedModeLabel(), () -> this.seedMode.ordinal(), x, y, w, seedModeTooltip, 2, () -> {
                         this.seedMode = this.seedMode == DeathSwapSettings.SeedMode.RANDOM ? DeathSwapSettings.SeedMode.FIXED : DeathSwapSettings.SeedMode.RANDOM;
                         this.seedModeButton.setMessage(Text.literal(seedModeLabel()));
                         if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
@@ -90,8 +96,9 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
                 }
             );
 
+            WorkspaceTooltip seedValTooltip = WorkspaceTooltip.of("The exact world seed to use.");
             this.rulesLayout.addRow(
-                "Seed Value", (s, x, y, w) -> {
+                "Seed Value", seedValTooltip, (s, x, y, w) -> {
                     this.seedValueField = this.addField(s, x, y, this.seedMode == DeathSwapSettings.SeedMode.FIXED ? this.seedValue : "", w, "Seed value", () -> "The exact world seed to use.");
                     if (this.seedMode == DeathSwapSettings.SeedMode.RANDOM) {
                         this.seedValueField.setEditable(false);
@@ -105,17 +112,20 @@ public final class DeathSwapWorkspaceView extends AbstractGamemodeWorkspaceView 
                 }
             );
 
+            WorkspaceTooltip velocityTooltip = WorkspaceTooltip.toggle(() -> this.preserveVelocity,
+                "Players keep their momentum when teleported.",
+                "Players lose their momentum when teleported.");
             this.rulesLayout.addRow(
-                "Preserve Velocity", (s, x, y, w) -> {
-                    this.preserveVelocityButton = this.addToggleButton(s, "Preserve Velocity", () -> this.preserveVelocity, x, y, w,
-                        new dev.frost.miniverse.client.gui.workspace.framework.BinaryTooltip("Players keep their momentum when teleported.", "Players lose their momentum when teleported."),
+                "Preserve Velocity", velocityTooltip, (s, x, y, w) -> {
+                    this.preserveVelocityButton = this.addToggleButton(s, "Preserve Velocity", () -> this.preserveVelocity, x, y, w, velocityTooltip,
                         () -> this.preserveVelocity = !this.preserveVelocity);
                 }
             );
 
+            WorkspaceTooltip respawnTooltip = WorkspaceTooltip.dynamic(() -> "Players wait " + (this.respawnDelayField != null ? this.respawnDelayField.getIntValue(this.respawnDelaySeconds) : this.respawnDelaySeconds) + " seconds before respawning.");
             this.rulesLayout.addRow(
-                "Respawn Delay", (s, x, y, w) -> {
-                    this.respawnDelayField = this.addIntField(s, x, y, this.respawnDelaySeconds, w, "Respawn delay", val -> "Players wait " + val + " seconds before respawning.");
+                "Respawn Delay", respawnTooltip, (s, x, y, w) -> {
+                    this.respawnDelayField = this.addIntField(s, "Respawn delay", x, y, this.respawnDelaySeconds, 0, 3600, w, respawnTooltip);
                 }
             );
         }

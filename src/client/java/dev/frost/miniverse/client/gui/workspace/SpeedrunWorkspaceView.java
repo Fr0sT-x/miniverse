@@ -3,6 +3,7 @@ package dev.frost.miniverse.client.gui.workspace;
 import dev.frost.miniverse.client.gui.SessionScreen;
 import dev.frost.miniverse.client.gui.SessionSnapshotData;
 import dev.frost.miniverse.client.gui.TeamDraft;
+import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.DynamicTeamSelectionGrid;
@@ -10,6 +11,7 @@ import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorksp
 import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.StandardWorkspaceLayout;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
+import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceTooltip;
 import dev.frost.miniverse.minigame.impl.speedrun.SpeedrunDefinition;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -29,8 +31,8 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
     private TextFieldWidget seedValueField;
     private ButtonWidget seedModeButton;
 
-    private TextFieldWidget timeLimitField;
-    private String timeLimitValue = "0";
+    private IntFieldWidget timeLimitField;
+    private int timeLimitMinutes = 0;
 
     private SeedMode seedMode = SeedMode.RANDOM;
     private String seedValue = "";
@@ -54,18 +56,23 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
         } else if (this.moduleManager.isActive("rules")) {
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
+            WorkspaceTooltip timeLimitTooltip = WorkspaceTooltip.dynamic(() -> {
+                int val = this.timeLimitField != null ? this.timeLimitField.getIntValue(this.timeLimitMinutes) : this.timeLimitMinutes;
+                return val <= 0 ? "0 = Unlimited match time (no limit)." : "Match time limit: " + val + " minutes.";
+            });
             this.rulesLayout.addRow(
-                "Time Limit", (s, x, y, w) -> {
-                    this.timeLimitField = this.addField(s, x, y, this.timeLimitValue, w, "Minutes (0 = off)", () -> "Match time limit in minutes. 0 = unlimited.");
+                "Time Limit", timeLimitTooltip, (s, x, y, w) -> {
+                    this.timeLimitField = this.addIntField(s, "Time Limit", x, y, this.timeLimitMinutes, 0, 720, w, timeLimitTooltip);
                 }
             );
 
+            WorkspaceTooltip seedModeTooltip = WorkspaceTooltip.cycle(() -> this.seedMode.ordinal(), new String[]{
+                "Random world seed will be used.",
+                "Specify an exact world seed in the text field."
+            });
             this.rulesLayout.addRow(
-                "Seed Mode", (s, x, y, w) -> {
-                    this.seedModeButton = this.addCycleButton(s, () -> "Seed Mode: " + this.seedMode.label, () -> this.seedMode.ordinal(), x, y, w, new String[]{
-                        "Random world seed will be used.",
-                        "Specify an exact world seed in the text field."
-                    }, 2, () -> {
+                "Seed Mode", seedModeTooltip, (s, x, y, w) -> {
+                    this.seedModeButton = this.addCycleButton(s, () -> "Seed Mode: " + this.seedMode.label, () -> this.seedMode.ordinal(), x, y, w, seedModeTooltip, 2, () -> {
                         this.seedMode = this.seedMode == SeedMode.RANDOM ? SeedMode.FIXED : SeedMode.RANDOM;
                         this.seedModeButton.setMessage(Text.literal("Seed Mode: " + this.seedMode.label));
                         if (this.seedMode == SeedMode.RANDOM) {
@@ -83,9 +90,10 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
                 }
             );
 
+            WorkspaceTooltip seedValTooltip = WorkspaceTooltip.of("Specify an exact world seed in the text field.");
             this.rulesLayout.addRow(
-                "Fixed Seed", (s, x, y, w) -> {
-                    this.seedValueField = this.addField(s, x, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", w, "Seed value", () -> "Specify an exact world seed in the text field.");
+                "Fixed Seed", seedValTooltip, (s, x, y, w) -> {
+                    this.seedValueField = this.addField(s, x, y, this.seedMode == SeedMode.FIXED ? this.seedValue : "", w, "Seed value", seedValTooltip);
                     if (this.seedMode == SeedMode.RANDOM) {
                         this.seedValueField.setEditable(false);
                         this.seedValueField.active = false;
@@ -194,9 +202,7 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             if (this.seedValueField != null && this.seedMode == SeedMode.FIXED) {
                 this.seedValue = this.seedValueField.getText().trim();
             }
-            if (this.timeLimitField != null) {
-                this.timeLimitValue = this.timeLimitField.getText().trim();
-            }
+            this.timeLimitMinutes = readClamped(this.timeLimitField, this.timeLimitMinutes, 0, 720);
         }
     }
 
@@ -225,12 +231,7 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
     protected void buildSessionSettings(SessionPayloadBuilder builder) {
         this.syncStateFromWidgets();
         builder.settings().putString("seedMode", this.seedMode.nbtValue);
-        
-        int timeLimitMinutes = 0;
-        try {
-            timeLimitMinutes = Integer.parseInt(this.timeLimitValue);
-        } catch (NumberFormatException ignored) {}
-        builder.settings().putInt("timeLimitMinutes", timeLimitMinutes);
+        builder.settings().putInt("timeLimitMinutes", this.timeLimitMinutes);
 
         if (this.seedMode == SeedMode.FIXED) {
             long parsedSeed;
@@ -270,21 +271,21 @@ public final class SpeedrunWorkspaceView extends AbstractGamemodeWorkspaceView {
             this.seedMode = "fixed".equalsIgnoreCase(modeStr) ? SeedMode.FIXED : SeedMode.RANDOM;
         }
         if (settings.contains("timeLimitMinutes")) {
-            this.timeLimitValue = String.valueOf(settings.getInt("timeLimitMinutes"));
+            this.timeLimitMinutes = settings.getInt("timeLimitMinutes");
         }
         if (settings.contains("seed")) {
             this.seedValue = String.valueOf(settings.getLong("seed"));
         }
-        if (this.timeLimitField != null) this.timeLimitField.setText(this.timeLimitValue);
+        if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitMinutes));
         if (this.seedValueField != null) this.seedValueField.setText(this.seedValue);
     }
 
     @Override
     protected void resetToDefaultSettings() {
-        this.timeLimitValue = "0";
+        this.timeLimitMinutes = 0;
         this.seedMode = SeedMode.RANDOM;
         this.seedValue = "";
-        if (this.timeLimitField != null) this.timeLimitField.setText(this.timeLimitValue);
+        if (this.timeLimitField != null) this.timeLimitField.setText(String.valueOf(this.timeLimitMinutes));
         if (this.seedValueField != null) this.seedValueField.setText("");
     }
 

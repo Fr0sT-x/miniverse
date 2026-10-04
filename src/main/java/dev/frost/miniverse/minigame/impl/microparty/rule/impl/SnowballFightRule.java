@@ -65,20 +65,85 @@ public class SnowballFightRule implements MicroRule {
         }
     }
 
+    private void recordHit(ServerPlayerEntity attacker, ServerPlayerEntity victim, MicroPartyMinigame game) {
+        if (attacker.getUuid().equals(victim.getUuid())) {
+            return;
+        }
+        if (!game.getTracker().hasPassedCurrentRound(attacker.getUuid())) {
+            game.getTracker().setPassedCurrentRound(attacker.getUuid(), true);
+            attacker.sendMessage(Text.literal("§a§l✔ Bullseye! Snowball landed!"), true);
+            attacker.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
+            victim.getServerWorld().spawnParticles(ParticleTypes.ITEM_SNOWBALL, victim.getX(), victim.getY() + 1.0, victim.getZ(), 12, 0.2, 0.2, 0.2, 0.05);
+            victim.playSoundToPlayer(SoundEvents.ENTITY_PLAYER_HURT, SoundCategory.PLAYERS, 0.7f, 1.2f);
+        }
+    }
+
+    @Override
+    public void onPlayerAttack(ServerPlayerEntity attacker, net.minecraft.entity.Entity target, MicroPartyMinigame game) {
+        if (target instanceof ServerPlayerEntity victim && !victim.getUuid().equals(attacker.getUuid())) {
+            if (attacker.getMainHandStack().isOf(Items.SNOWBALL) || attacker.getOffHandStack().isOf(Items.SNOWBALL)) {
+                recordHit(attacker, victim, game);
+            }
+        }
+    }
+
+    @Override
+    public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
+        net.minecraft.server.world.ServerWorld world = game.getWorld();
+        if (world == null) return;
+
+        var bounds = dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper.getFloorY(game.getMapConfig());
+        net.minecraft.util.math.Box arenaBox = new net.minecraft.util.math.Box(
+            bounds.minX() - 2, floorY - 2, bounds.minZ() - 2,
+            bounds.maxX() + 2, floorY + 15, bounds.maxZ() + 2
+        );
+
+        java.util.List<SnowballEntity> snowballs = world.getEntitiesByClass(SnowballEntity.class, arenaBox, net.minecraft.entity.Entity::isAlive);
+        for (SnowballEntity snowball : snowballs) {
+            ServerPlayerEntity owner = null;
+            if (snowball.getOwner() instanceof ServerPlayerEntity p) {
+                owner = p;
+            }
+            if (owner == null) continue;
+
+            for (ServerPlayerEntity victim : game.getLivingPlayers()) {
+                if (victim.getUuid().equals(owner.getUuid())) continue;
+                if (victim.getBoundingBox().expand(0.35).intersects(snowball.getBoundingBox())) {
+                    recordHit(owner, victim, game);
+                    snowball.discard();
+                    break;
+                }
+            }
+        }
+    }
+
     @Override
     public boolean onPlayerDamage(ServerPlayerEntity victim, DamageSource source, float amount, MicroPartyMinigame game) {
-        if (source.getSource() instanceof SnowballEntity snowball) {
-            if (snowball.getOwner() instanceof ServerPlayerEntity attacker && !attacker.getUuid().equals(victim.getUuid())) {
-                if (!game.getTracker().hasPassedCurrentRound(attacker.getUuid())) {
-                    game.getTracker().setPassedCurrentRound(attacker.getUuid(), true);
-                    attacker.sendMessage(Text.literal("§a§l✔ Bullseye! Snowball landed!"), true);
-                    attacker.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
-                    victim.getServerWorld().spawnParticles(ParticleTypes.ITEM_SNOWBALL, victim.getX(), victim.getY() + 1.0, victim.getZ(), 12, 0.2, 0.2, 0.2, 0.05);
-                    victim.playSoundToPlayer(SoundEvents.ENTITY_PLAYER_HURT, SoundCategory.PLAYERS, 0.7f, 1.2f);
-                }
+        // 1. Thrown projectile hit
+        if (source.getSource() instanceof SnowballEntity snowball || source.isOf(net.minecraft.entity.damage.DamageTypes.THROWN)) {
+            ServerPlayerEntity attacker = null;
+            if (source.getAttacker() instanceof ServerPlayerEntity a) {
+                attacker = a;
+            } else if (source.getSource() instanceof SnowballEntity sb && sb.getOwner() instanceof ServerPlayerEntity a) {
+                attacker = a;
+            }
+            if (attacker != null) {
+                recordHit(attacker, victim, game);
             }
             return false; // Prevent damage/knockback glitch
         }
+
+        // 2. Melee hit with snowball in hand
+        if (source.isOf(net.minecraft.entity.damage.DamageTypes.PLAYER_ATTACK)) {
+            if (source.getAttacker() instanceof ServerPlayerEntity attacker) {
+                if (attacker.getMainHandStack().isOf(Items.SNOWBALL) || attacker.getOffHandStack().isOf(Items.SNOWBALL)) {
+                    recordHit(attacker, victim, game);
+                }
+            }
+            return false;
+        }
+
         return false;
     }
 

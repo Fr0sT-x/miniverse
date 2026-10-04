@@ -580,6 +580,22 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
                         return true;
                     }
                 }
+
+                if (marker.key().equals("block_pool") || marker.key().equals("disguise_blocks")) {
+                    int scanBtnX = infoBtn.x() + infoBtn.width() + 6;
+                    int scanBtnW = net.minecraft.client.MinecraftClient.getInstance().textRenderer.getWidth("⚡ Scan Hotbar") + 12;
+                    UiLayout.Rect scanBtn = new UiLayout.Rect(scanBtnX, headerRow.y() + 8, scanBtnW, 20);
+                    if (scanBtn.contains(mouseX, adjustedMouseY)) {
+                        NbtCompound action = new NbtCompound();
+                        action.putString("action", "scan_hotbar_blocks");
+                        action.putString("gameId", selected.extension.gameId());
+                        action.putString("definitionKey", marker.key());
+                        ClientPlayNetworking.send(new NetworkConstants.MapEditorActionPayload(action));
+                        this.status = "Scanning hotbar blocks...";
+                        this.pendingRefreshTicks = 10;
+                        return true;
+                    }
+                }
                 
                 if (headerRow.contains(mouseX, adjustedMouseY)) {
                     if (expanded) {
@@ -956,6 +972,32 @@ public final class MapEditorWorkspaceView implements WorkspaceView {
 
                     if (scanHovered) {
                         this.hoveredTooltip = new MarkerTooltip("Scan Chests", "Automatically scan surrounding chunks to detect and register chests for " + marker.displayName() + ".");
+                    }
+                }
+            }
+
+            if (marker.key().equals("block_pool") || marker.key().equals("disguise_blocks")) {
+                int scanBtnX = iconX + iconSize + 6;
+                int scanBtnY = row.y() + 8;
+                int scanBtnW = textRenderer.getWidth("⚡ Scan Hotbar") + 12;
+                int scanBtnH = 20;
+
+                boolean scanBtnVisible = scanBtnY + scanBtnH >= this.listArea.y() && scanBtnY <= this.listArea.y() + this.listArea.height();
+                if (scanBtnVisible) {
+                    boolean scanHovered = this.listArea.contains(mouseX, mouseY)
+                        && mouseX >= scanBtnX && mouseX <= scanBtnX + scanBtnW
+                        && mouseY >= scanBtnY && mouseY <= scanBtnY + scanBtnH;
+
+                    int btnFill = scanHovered ? 0x50FFAA00 : 0x25FFAA00;
+                    int btnBorder = scanHovered ? 0xFFFFAA00 : 0x60FFAA00;
+                    UiRenderer.panel(context, scanBtnX, scanBtnY, scanBtnW, scanBtnH, btnFill, btnBorder);
+
+                    int textX = scanBtnX + (scanBtnW - textRenderer.getWidth("⚡ Scan Hotbar")) / 2;
+                    int textY = scanBtnY + 6;
+                    context.drawText(textRenderer, Text.literal("⚡ Scan Hotbar"), textX, textY, scanHovered ? 0xFFFFFFFF : 0xFFFFD166, false);
+
+                    if (scanHovered) {
+                        this.hoveredTooltip = new MarkerTooltip("Scan Hotbar", "Scan blocks in your hotbar (slots 1-9) and register them as the disguise block pool for " + marker.displayName() + ".");
                     }
                 }
             }

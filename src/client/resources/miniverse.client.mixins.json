@@ -11,7 +11,10 @@
 		"ScreenTransitionOverlayMixin",
 		"InventoryScreenMixin",
 		"ChatHudMixin",
-		"ChatScreenMixin"
+		"ChatScreenMixin",
+		"hideandseek.PlayerEntityRendererMixin",
+		"hideandseek.ClientPlayerPushOutOfBlocksMixin",
+		"hideandseek.ClientPlayerDimensionsMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

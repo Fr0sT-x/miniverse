@@ -2,8 +2,10 @@ package dev.frost.miniverse.map.editor;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import dev.frost.miniverse.common.NetworkConstants;
 import dev.frost.miniverse.map.MapPosition;
@@ -11,12 +13,18 @@ import dev.frost.miniverse.session.BackendLaunchMode;
 import dev.frost.miniverse.session.SessionConfigJson;
 import dev.frost.miniverse.session.SessionRuntimeConfig;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Identifier;
 
 public final class MapEditorNetwork {
     private MapEditorNetwork() {
@@ -69,6 +77,11 @@ public final class MapEditorNetwork {
                 ? action.getInt("searchRadius")
                 : dev.frost.miniverse.map.chest.MapChestScanner.DEFAULT_SEARCH_RADIUS;
             scanChestsDirect(server, player, mapId, extension.get(), midRadius, searchRadius);
+            return;
+        }
+        if (type.equals("scan_hotbar_blocks")) {
+            MapEditorUndoManager.push(mapId, extension.get().gameId());
+            scanHotbarBlocks(server, player, mapId, extension.get(), action);
             return;
         }
         if (type.equals("reclassify_marker")) {
@@ -488,6 +501,69 @@ public final class MapEditorNetwork {
             }
         } catch (IOException e) {
             player.sendMessage(Text.literal("Failed to save scanned chest markers: " + e.getMessage()).formatted(Formatting.RED), false);
+        }
+    }
+
+    public static void scanHotbarBlocks(MinecraftServer server, ServerPlayerEntity player, String mapId, MapEditorExtension extension, NbtCompound action) {
+        String definitionKey = string(action, "definitionKey", "block_pool");
+        Optional<MarkerDefinition> blockDef = extension.marker(definitionKey);
+        if (blockDef.isEmpty()) {
+            blockDef = extension.marker("disguise_blocks");
+        }
+        if (blockDef.isEmpty()) {
+            blockDef = extension.marker("block_pool");
+        }
+        if (blockDef.isEmpty()) {
+            player.sendMessage(Text.literal("No block pool marker definition found for gamemode: " + extension.gameId()).formatted(Formatting.RED), false);
+            return;
+        }
+
+        MarkerDefinition def = blockDef.get();
+        Set<Block> foundBlocks = new LinkedHashSet<>();
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = player.getInventory().getStack(slot);
+            if (!stack.isEmpty() && stack.getItem() instanceof BlockItem blockItem) {
+                Block block = blockItem.getBlock();
+                if (block != Blocks.AIR) {
+                    foundBlocks.add(block);
+                }
+            }
+        }
+
+        if (foundBlocks.isEmpty()) {
+            player.sendMessage(Text.literal("No block items found in your hotbar (slots 1-9). Place blocks in your hotbar and try again.").formatted(Formatting.GOLD), false);
+            return;
+        }
+
+        List<MapMarker> newMarkers = new ArrayList<>();
+        List<String> blockNames = new ArrayList<>();
+        for (Block block : foundBlocks) {
+            Identifier id = Registries.BLOCK.getId(block);
+            String name = block.getName().getString();
+            blockNames.add(name);
+            com.google.gson.JsonObject properties = new com.google.gson.JsonObject();
+            properties.addProperty("block", id.toString());
+            properties.addProperty("blockName", name);
+
+            String markerId = "block_" + id.getNamespace() + "_" + id.getPath();
+            newMarkers.add(new MapMarker(
+                markerId,
+                def.key(),
+                name,
+                MarkerType.POINT,
+                List.of(),
+                List.of(),
+                properties
+            ));
+        }
+
+        try {
+            MapEditorMarkerStore.save(mapId, extension, def, newMarkers);
+            dev.frost.miniverse.session.SessionListSerializer.sendSessionList(server, player);
+            player.sendMessage(Text.literal("Scanned " + foundBlocks.size() + " blocks from hotbar: " + String.join(", ", blockNames)).formatted(Formatting.GREEN), false);
+            player.playSoundToPlayer(net.minecraft.sound.SoundEvents.ENTITY_PLAYER_LEVELUP, net.minecraft.sound.SoundCategory.PLAYERS, 0.8F, 1.2F);
+        } catch (IOException e) {
+            player.sendMessage(Text.literal("Failed to save scanned block pool: " + e.getMessage()).formatted(Formatting.RED), false);
         }
     }
 

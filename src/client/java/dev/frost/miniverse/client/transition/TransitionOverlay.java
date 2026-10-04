@@ -106,6 +106,7 @@ public final class TransitionOverlay {
     }
 
     public static void start(String token, String context) {
+        dev.frost.miniverse.client.hideandseek.HideAndSeekDisguiseClient.clear();
         dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc != null && mc.player != null) {

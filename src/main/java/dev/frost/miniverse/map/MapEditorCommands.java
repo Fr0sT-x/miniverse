@@ -2,6 +2,7 @@ package dev.frost.miniverse.map;
 
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
+import dev.frost.miniverse.Miniverse;
 import dev.frost.miniverse.network.TransitionTransferCoordinator;
 import dev.frost.miniverse.session.BackendLaunchMode;
 import dev.frost.miniverse.session.SessionConfigJson;
@@ -23,7 +24,9 @@ import dev.frost.miniverse.map.chest.MapChestScanner;
 import dev.frost.miniverse.map.editor.MapEditorExtension;
 import dev.frost.miniverse.map.editor.MapEditorExtensionRegistry;
 import dev.frost.miniverse.map.editor.MapEditorMarkerStore;
+import dev.frost.miniverse.map.editor.MapEditorNetwork;
 import dev.frost.miniverse.map.editor.MapEditorUndoManager;
+import net.minecraft.nbt.NbtCompound;
 import dev.frost.miniverse.map.editor.MapMarker;
 import dev.frost.miniverse.map.editor.MarkerDefinition;
 import dev.frost.miniverse.session.SessionListSerializer;
@@ -73,6 +76,10 @@ public final class MapEditorCommands {
                 )
             )
         );
+        dispatcher.register(CommandManager.literal("miniverse_map_scan_hotbar")
+            .requires(source -> source.hasPermissionLevel(2))
+            .executes(context -> scanHotbar(context.getSource()))
+        );
     }
 
     private static int save(ServerCommandSource source) {
@@ -109,26 +116,38 @@ public final class MapEditorCommands {
             return 0;
         }
 
-        // Tell the client to hide all map editor overlays immediately, before the transfer starts.
-        if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.MAP_EDITOR_HIDE_ID)) {
-            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.MapEditorHidePayload());
-        }
+        try {
+            // Tell the client to hide all map editor overlays immediately, before the transfer starts.
+            if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, dev.frost.miniverse.common.NetworkConstants.MAP_EDITOR_HIDE_ID)) {
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new dev.frost.miniverse.common.NetworkConstants.MapEditorHidePayload());
+            }
 
-        TransitionTransferCoordinator.transfer(
-            player,
-            SessionRuntimeConfig.getReturnHost(),
-            SessionRuntimeConfig.getReturnPort(),
-            "Returning to lobby"
-        );
-        return 1;
+            TransitionTransferCoordinator.transfer(
+                player,
+                SessionRuntimeConfig.getReturnHost(),
+                SessionRuntimeConfig.getReturnPort(),
+                "Returning to lobby"
+            );
+            return 1;
+        } catch (Throwable t) {
+            Miniverse.LOGGER.error("Failed to transfer player back to lobby: {}", t.getMessage(), t);
+            source.sendFeedback(() -> Text.literal("Saved successfully! Could not automatically transfer back to lobby: " + t.getMessage() + ". You can type /server lobby to return.").formatted(Formatting.YELLOW), false);
+            return 1;
+        }
     }
 
     private static int saveAndQuit(ServerCommandSource source) {
-        int saved = save(source);
-        if (saved > 0) {
-            returnToLobby(source);
+        try {
+            int saved = save(source);
+            if (saved > 0) {
+                returnToLobby(source);
+            }
+            return saved;
+        } catch (Throwable t) {
+            Miniverse.LOGGER.error("Failed during save and quit: {}", t.getMessage(), t);
+            source.sendError(Text.literal("Error during save and quit: " + t.getMessage()));
+            return 0;
         }
-        return saved;
     }
 
     private static int setSpawn(ServerCommandSource source) {
@@ -307,6 +326,38 @@ public final class MapEditorCommands {
             source.sendError(Text.literal("Failed to save scanned chest markers: " + e.getMessage()));
             return 0;
         }
+    }
+
+    private static int scanHotbar(ServerCommandSource source) {
+        if (SessionRuntimeConfig.getLaunchMode() != BackendLaunchMode.MAP_EDITOR) {
+            source.sendError(Text.literal("This command only works inside a Miniverse map editor server."));
+            return 0;
+        }
+
+        ServerPlayerEntity player = source.getPlayer();
+        if (player == null) {
+            source.sendError(Text.literal("Only players can execute this command."));
+            return 0;
+        }
+
+        String mapId = MapEditorNetwork.currentMapId();
+        if (mapId.isBlank()) {
+            source.sendError(Text.literal("Map editor config is missing mapId."));
+            return 0;
+        }
+
+        var extension = dev.frost.miniverse.map.editor.MapEditorExtensionRegistry.get("hideandseek");
+        if (extension.isEmpty()) {
+            source.sendError(Text.literal("Hide and Seek extension is not registered."));
+            return 0;
+        }
+
+        NbtCompound action = new NbtCompound();
+        action.putString("action", "scan_hotbar_blocks");
+        action.putString("gameId", "hideandseek");
+        action.putString("definitionKey", "block_pool");
+        MapEditorNetwork.scanHotbarBlocks(source.getServer(), player, mapId, extension.get(), action);
+        return 1;
     }
 
     private static JsonObject editorConfig() {

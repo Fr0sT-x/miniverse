@@ -50,6 +50,7 @@ public final class MiniverseGames {
         MinigameRegistry.register(new MicroPartyDefinition());
         MinigameRegistry.register(new dev.frost.miniverse.minigame.impl.skywars.SkywarsDefinition());
         MinigameRegistry.register(new CaptureTheFlagDefinition());
+        MinigameRegistry.register(new dev.frost.miniverse.minigame.impl.hideandseek.HideAndSeekDefinition());
         registered = true;
     }
 }

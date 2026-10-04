@@ -24,7 +24,9 @@
 		"GuardianEntityAccessor",
 		"SlimeEntityMixin",
 		"DownedPlayerPoseMixin",
-		"MobEntityAccessor"
+		"MobEntityAccessor",
+		"hideandseek.EntityPushOutOfBlocksMixin",
+		"hideandseek.PlayerEntityDimensionsMixin"
 	],
 	"client": [
 		"ProtectedItemClientHandledScreenMixin",

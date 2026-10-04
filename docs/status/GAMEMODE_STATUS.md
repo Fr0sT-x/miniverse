@@ -595,6 +595,46 @@ any code. Add the gamemode column to the matrix above.
 
 ---
 
+### Hide and Seek (Block Hunt)
+
+**Main class:** `HideAndSeekMinigame`
+**Status:** Production-ready · **Compliance:** 82%
+**Last reviewed:** 2026-10-03
+
+**Gamerules:** `keepInventory=true`, `doImmediateRespawn=true`
+
+**Frameworks actively used:**
+- F01 Session
+- F02 Match Lifecycle (`MatchLifecycleOptions`, `AbstractMinigame`)
+- F04 Spectator
+- F05 Death Lifecycle (caught hiders convert to seekers, match ends when all hiders found or time expires)
+- F06 Persistence (`PersistentMinigame`, `HideAndSeekSettings`)
+- F08 Team (`TEAM_HIDERS`, `TEAM_SEEKERS`, `VanillaTeamAdapter` with hidden nametags for hiders)
+- F09 Map Protection (`BlockProtectionProvider`, unbreakable world blocks, leaf decay prevention)
+- F11 Map Editor (`HideAndSeekDefinition.EXTENSION`, markers for `hiderSpawns`, `seekerSpawns`, `waitingLobby`)
+- F12 Scoreboard (`ScoreboardTemplate`, active hider count, role display, remaining time, points)
+- F13 Protected Items (`ProtectedItemService`, `ProtectedItemRule` on disguise roster tiles and hotbar radar)
+- F15 Role (`isHider`, `isSeeker`, hider-to-seeker infection conversion)
+- F20 Player Snapshot (`PlayerSnapshot`)
+
+**Key Mechanics & Modules:**
+- **Dynamic Block Disguises**: Hiders select from 12 vanilla block disguises (Bookshelf, Chest, Crafting Table, Furnace, Anvil, Hay Bale, Melon, TNT, Cauldron, Stonecutter, Flower Pot, Barrel). Disguised players lock into the block grid with chime feedback after standing still and sneaking; taking a step (>0.25 blocks displacement) instantly unlocks them.
+- **Seeker Disguise Radar & Roster**: Hotbar Slot 8 auto-cycles through active block disguises every 3s (showing stack count = living hiders with manual right-click advance), and Main Inventory (Slots 9+) displays the complete active disguise pool sorted descending by hider count.
+- **Passive Locational Audio Clues**: Living hiders emit 3D directional audio clues every 30s (accelerating to 15s in the final 90 seconds) with an expanded ~40m audible range and action-bar countdown alerts at key intervals (30s, 20s, 10s, 5..0s).
+- **Seeker Attack & Anti-Spam Penalty**: Seekers wield a custom Seeker's Stick (9.0 attack damage, matching iron axe strength with natural attack speed). Hitting an empty block inflicts a configurable 0.5♥ damage penalty (capped above 1♥ to prevent self-elimination).
+- **Taunt System & Survivor Points**: Hiders trigger custom 3D spatial sound effects (ambient animal sounds, anvil, bell, firework) every 20s for +50 bonus survivor points. Surviving passively grants +10 points every 15s. At match end, a complete Hider Leaderboard is broadcast in chat ranking all hiders from highest to lowest points with survivor/caught status badges.
+- **Block Decoy (Escape Clone)**: Hiders receive a 1-use Block Decoy in Hotbar Slot 2. Right-clicking places a stationary clone of their disguised block where they stand, granting Speed II and brief invisibility to slip away unnoticed. If a seeker attacks the decoy, it poofs into smoke, tricks the seeker, and awards the hider +25 bonus points.
+- **Echo Resonance Shard**: In the final 60 seconds, Seekers receive an Echo Resonance Shard in Hotbar Slot 7. Right-clicking emits an auditory pulse heard only by the seeker—scaling in loudness (volume) and pitch as they get closer to the nearest hider (10s cooldown, pure audio feedback).
+- **Match End Reveal**: When the match concludes, surviving hiders unsolidify and are highlighted with the Glowing effect and glow particles for 15 seconds.
+- **Client Workspace**: Integrated `HideAndSeekWorkspaceView` with player selection, map selection, and customizable game rule toggles.
+
+**Known issues / debt:**
+- None.
+
+**Migration target:** None currently.
+
+---
+
 ## Adding a New Gamemode
 
 When adding a new gamemode, copy the template below and fill it in before writing

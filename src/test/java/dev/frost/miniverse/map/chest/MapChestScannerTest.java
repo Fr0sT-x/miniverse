@@ -1,6 +1,5 @@
 package dev.frost.miniverse.map.chest;
 
-import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.editor.MapMarker;
 import dev.frost.miniverse.map.editor.MarkerDefinition;
 import dev.frost.miniverse.map.editor.MarkerType;

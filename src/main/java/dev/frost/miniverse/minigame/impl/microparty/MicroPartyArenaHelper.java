@@ -1,6 +1,5 @@
 package dev.frost.miniverse.minigame.impl.microparty;
 
-import dev.frost.miniverse.map.MapPosition;
 import dev.frost.miniverse.map.editor.RegionPart;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;

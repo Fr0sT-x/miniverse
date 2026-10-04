@@ -7,6 +7,8 @@ import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Uuids;
+import java.util.UUID;
 
 /** Shared payload IDs and codecs for the session GUI. */
 public final class NetworkConstants {
@@ -79,6 +81,10 @@ public final class NetworkConstants {
     public static final CustomPayload.Id<StopClockStopPayload> STOP_CLOCK_STOP_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "stop_clock_stop"));
     public static final CustomPayload.Id<ChatRoutingSyncPayload> CHAT_ROUTING_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "chat_routing_sync"));
     public static final CustomPayload.Id<ChatChannelSyncPayload> CHAT_CHANNEL_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "chat_channel_sync"));
+    public static final CustomPayload.Id<DisguisePerspectivePayload> DISGUISE_PERSPECTIVE_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "disguise_perspective"));
+    public static final CustomPayload.Id<DisguiseSyncPayload> DISGUISE_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "disguise_sync"));
+    public static final CustomPayload.Id<SolidifySyncPayload> SOLIDIFY_SYNC_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "solidify_sync"));
+    public static final CustomPayload.Id<DisguiseResetPayload> DISGUISE_RESET_ID = new CustomPayload.Id<>(Identifier.of(MOD_ID, "disguise_reset"));
 
     private static boolean payloadTypesRegistered;
 
@@ -156,6 +162,10 @@ public final class NetworkConstants {
         PayloadTypeRegistry.playS2C().register(CHAT_ROUTING_SYNC_ID, ChatRoutingSyncPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(CHAT_CHANNEL_SYNC_ID, ChatChannelSyncPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(CHAT_CHANNEL_SYNC_ID, ChatChannelSyncPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(DISGUISE_PERSPECTIVE_ID, DisguisePerspectivePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(DISGUISE_SYNC_ID, DisguiseSyncPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SOLIDIFY_SYNC_ID, SolidifySyncPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(DISGUISE_RESET_ID, DisguiseResetPayload.CODEC);
         
         payloadTypesRegistered = true;
     }
@@ -1153,6 +1163,58 @@ public final class NetworkConstants {
         @Override
         public Id<? extends CustomPayload> getId() {
             return CHAT_CHANNEL_SYNC_ID;
+        }
+    }
+
+    public record DisguisePerspectivePayload(boolean disguised) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DisguisePerspectivePayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.BOOL,
+            DisguisePerspectivePayload::disguised,
+            DisguisePerspectivePayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DISGUISE_PERSPECTIVE_ID;
+        }
+    }
+
+    public record DisguiseSyncPayload(UUID playerUuid, String blockId, boolean active) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DisguiseSyncPayload> CODEC = PacketCodec.tuple(
+            Uuids.PACKET_CODEC, DisguiseSyncPayload::playerUuid,
+            PacketCodecs.STRING, DisguiseSyncPayload::blockId,
+            PacketCodecs.BOOL, DisguiseSyncPayload::active,
+            DisguiseSyncPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DISGUISE_SYNC_ID;
+        }
+    }
+
+    public record SolidifySyncPayload(UUID playerUuid, boolean solidified) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, SolidifySyncPayload> CODEC = PacketCodec.tuple(
+            Uuids.PACKET_CODEC, SolidifySyncPayload::playerUuid,
+            PacketCodecs.BOOL, SolidifySyncPayload::solidified,
+            SolidifySyncPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return SOLIDIFY_SYNC_ID;
+        }
+    }
+
+    public record DisguiseResetPayload(String reason) implements CustomPayload {
+        public static final PacketCodec<RegistryByteBuf, DisguiseResetPayload> CODEC = PacketCodec.tuple(
+            PacketCodecs.STRING, DisguiseResetPayload::reason,
+            DisguiseResetPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return DISGUISE_RESET_ID;
         }
     }
 }

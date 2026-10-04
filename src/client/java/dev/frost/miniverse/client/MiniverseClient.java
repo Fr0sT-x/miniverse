@@ -367,8 +367,49 @@ public class MiniverseClient implements ClientModInitializer {
 			})
 		);
 
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.DISGUISE_PERSPECTIVE_ID, (payload, context) ->
+			context.client().execute(() -> {
+				if (payload.disguised()) {
+					context.client().options.setPerspective(net.minecraft.client.option.Perspective.THIRD_PERSON_BACK);
+				} else {
+					context.client().options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON);
+				}
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.DISGUISE_SYNC_ID, (payload, context) ->
+			context.client().execute(() -> {
+				if (payload.active()) {
+					dev.frost.miniverse.client.hideandseek.HideAndSeekDisguiseClient.setDisguise(payload.playerUuid(), payload.blockId());
+				} else {
+					dev.frost.miniverse.client.hideandseek.HideAndSeekDisguiseClient.removeDisguise(payload.playerUuid());
+				}
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.SOLIDIFY_SYNC_ID, (payload, context) ->
+			context.client().execute(() -> {
+				dev.frost.miniverse.client.hideandseek.HideAndSeekDisguiseClient.setSolidified(payload.playerUuid(), payload.solidified());
+				if (context.client().world != null) {
+					net.minecraft.entity.player.PlayerEntity p = context.client().world.getPlayerByUuid(payload.playerUuid());
+					if (p != null) {
+						p.calculateDimensions();
+					}
+				}
+			})
+		);
+
+		ClientPlayNetworking.registerGlobalReceiver(NetworkConstants.DISGUISE_RESET_ID, (payload, context) ->
+			context.client().execute(() -> {
+				dev.frost.miniverse.client.hideandseek.HideAndSeekDisguiseClient.clear();
+				context.client().options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON);
+			})
+		);
+
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientFreezeState.setFrozen(false);
+			client.options.setPerspective(net.minecraft.client.option.Perspective.FIRST_PERSON);
+			dev.frost.miniverse.client.hideandseek.HideAndSeekDisguiseClient.clear();
 			dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
 			if (client.player != null) {
 				client.player.setPose(net.minecraft.entity.EntityPose.STANDING);
@@ -382,6 +423,7 @@ public class MiniverseClient implements ClientModInitializer {
 			SessionScreen.clearWorkspaceCache();
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+			dev.frost.miniverse.client.hideandseek.HideAndSeekDisguiseClient.clear();
 			dev.frost.miniverse.minigame.core.freeze.DownedPlayerTracker.clear();
 			if (client.player != null) {
 				client.player.setPose(net.minecraft.entity.EntityPose.STANDING);

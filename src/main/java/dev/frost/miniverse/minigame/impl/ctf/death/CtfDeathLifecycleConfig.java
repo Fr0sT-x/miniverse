@@ -17,7 +17,6 @@ import dev.frost.miniverse.minigame.impl.ctf.CaptureTheFlagMinigame;
 import dev.frost.miniverse.minigame.impl.ctf.CaptureTheFlagSettings;
 import dev.frost.miniverse.minigame.impl.ctf.flag.CtfFlagInstance;
 import dev.frost.miniverse.minigame.impl.ctf.flag.CtfFlagState;
-import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;

@@ -7,5 +7,6 @@ public enum FreezeReason {
     ADMIN_PAUSE,
     ROUND_RESET,
     SPECTATOR_NO_TARGET,
-    DOWNED_PLAYER
+    DOWNED_PLAYER,
+    SEEKER_RESPAWN
 }

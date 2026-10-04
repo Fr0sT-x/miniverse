@@ -46,8 +46,9 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public class SessionScreen extends Screen {
-    private static final int CARD_HEIGHT = 92;
+    private static final int CARD_HEIGHT = 80;
     private static final int CARD_GAP = 12;
+    private static final int CARDS_SCROLLBAR_GUTTER = 14;
     private static final int TOOLBAR_BUTTON_WIDTH = 84;
     private static final int RESET_BUTTON_WIDTH = 80;
     private static final int SIDEBAR_HEADER_HEIGHT = 44;
@@ -85,7 +86,8 @@ public class SessionScreen extends Screen {
         Map.entry("microparty", SessionScreen::openMicroParty),
         Map.entry("micro_party", SessionScreen::openMicroParty),
         Map.entry("skywars", SessionScreen::openSkywars),
-        Map.entry("ctf", SessionScreen::openCtf)
+        Map.entry("ctf", SessionScreen::openCtf),
+        Map.entry("hideandseek", SessionScreen::openHideAndSeek)
     );
 
     private final MinecraftClient client = MinecraftClient.getInstance();
@@ -859,8 +861,8 @@ public class SessionScreen extends Screen {
             // Full-height colored gutter strip in left padding
             int fill = active ? 0x335294E2 : 0x18304860;
             int border = active ? UiTheme.ACCENT : 0x405294E2;
-            context.fill(stripX, stripY, stripX + stripWidth - 2, stripY + stripHeight, fill);
-            context.fill(stripX + stripWidth - 2, stripY, stripX + stripWidth - 1, stripY + stripHeight, border);
+            context.fill(stripX, stripY, stripX + stripWidth - 1, stripY + stripHeight, fill);
+            context.fill(stripX + stripWidth - 1, stripY, stripX + stripWidth, stripY + stripHeight, border);
 
             // Centered 17x44 pill button
             int pillBg = isHandleHovered ? 0xFA1E2C3D : 0xEE141F2B;
@@ -880,7 +882,7 @@ public class SessionScreen extends Screen {
             boolean active = isSplitterHovered || isHandleHovered || this.draggingLeftSplitter;
 
             int lineColor = this.draggingLeftSplitter ? UiTheme.ACCENT : (active ? 0x885294E2 : 0x22FFFFFF);
-            context.fill(splitterLineX - 1, 12, splitterLineX, this.height - 12, lineColor);
+            context.fill(splitterLineX, 12, splitterLineX + 1, this.height - 12, lineColor);
 
             int hx = this.leftCollapseHandleRect.x();
             int hy = this.leftCollapseHandleRect.y();
@@ -1247,9 +1249,10 @@ public class SessionScreen extends Screen {
             return super.mouseClicked(mouseX, mouseY, button);
         }
         List<MinigameEntry> entries = this.filteredEntries();
-        int columns = this.cardColumns(layout.cards().width());
+        UiLayout.Rect cards = layout.cards();
+        UiLayout.Rect gridArea = new UiLayout.Rect(cards.x(), cards.y(), Math.max(1, cards.width() - CARDS_SCROLLBAR_GUTTER), cards.height());
+        int columns = this.cardColumns(gridArea.width());
         if (button == 0 && this.cardsMaxScroll > 0.0) {
-            UiLayout.Rect cards = layout.cards();
             int barW = 4;
             int barX = cards.x() + cards.width() - barW - 2;
             int trackTop = cards.y();
@@ -1275,7 +1278,7 @@ public class SessionScreen extends Screen {
         }
 
         for (int i = 0; i < entries.size(); i++) {
-            UiLayout.Rect card = UiLayout.grid(layout.cards(), i, columns, CARD_HEIGHT, CARD_GAP);
+            UiLayout.Rect card = UiLayout.grid(gridArea, i, columns, CARD_HEIGHT, CARD_GAP);
             int cardY = card.y() - (int) this.cardsScroll;
             if (cardY + card.height() < layout.cards().y() || cardY > layout.cards().y() + layout.cards().height()) {
                 continue;
@@ -1772,7 +1775,7 @@ public class SessionScreen extends Screen {
             boolean active = isSplitterHovered || isHandleHovered || this.draggingOverviewSplitter;
 
             int lineColor = this.draggingOverviewSplitter ? UiTheme.ACCENT : (active ? 0x885294E2 : 0x22FFFFFF);
-            context.fill(splitterLineX - 1, dock.y(), splitterLineX + 1, dock.y() + dock.height(), lineColor);
+            context.fill(splitterLineX, dock.y(), splitterLineX + 1, dock.y() + dock.height(), lineColor);
 
             int handleX = this.overviewCollapseHandleRect.x();
             int handleY = this.overviewCollapseHandleRect.y();
@@ -1788,7 +1791,8 @@ public class SessionScreen extends Screen {
 
     private void drawGamemodeCards(DrawContext context, UiLayout.Rect cards, int mouseX, int mouseY) {
         List<MinigameEntry> entries = this.filteredEntries();
-        int columns = this.cardColumns(cards.width());
+        UiLayout.Rect gridArea = new UiLayout.Rect(cards.x(), cards.y(), Math.max(1, cards.width() - CARDS_SCROLLBAR_GUTTER), cards.height());
+        int columns = this.cardColumns(gridArea.width());
         int rowCount = columns > 0 ? (entries.size() + columns - 1) / columns : 0;
         int totalContentHeight = rowCount > 0 ? (rowCount * CARD_HEIGHT + (rowCount - 1) * CARD_GAP) : 0;
         this.cardsMaxScroll = Math.max(0.0, totalContentHeight - cards.height());
@@ -1798,7 +1802,7 @@ public class SessionScreen extends Screen {
         String hoveredCardTooltip = null;
         for (int i = 0; i < entries.size(); i++) {
             MinigameEntry entry = entries.get(i);
-            UiLayout.Rect rawCard = UiLayout.grid(cards, i, columns, CARD_HEIGHT, CARD_GAP);
+            UiLayout.Rect rawCard = UiLayout.grid(gridArea, i, columns, CARD_HEIGHT, CARD_GAP);
             int cardY = rawCard.y() - (int) this.cardsScroll;
             if (cardY + rawCard.height() < cards.y() || cardY > cards.y() + cards.height()) {
                 continue;
@@ -1855,7 +1859,7 @@ public class SessionScreen extends Screen {
             boolean isThumbHovered = mouseX >= barX - 2 && mouseX <= barX + barW + 2 && mouseY >= thumbY && mouseY <= thumbY + thumbH;
             boolean isHovered = mouseX >= barX - 2 && mouseX <= barX + barW + 2 && mouseY >= trackTop && mouseY <= trackTop + trackHeight;
 
-            context.fill(barX, trackTop, barX + barW, trackTop + trackHeight, 0x22FFFFFF);
+            context.fill(barX, trackTop, barX + barW, trackTop + trackHeight, 0x33000000);
 
             int thumbColor;
             int drawX = barX;
@@ -2000,19 +2004,19 @@ public class SessionScreen extends Screen {
         UiLayout.Rect cards;
 
         int centerPadLeft = currentSidebarWidth <= 4 ? 20 : 16;
-        int centerStartX = workspaceX + centerPadLeft;
+        int centerStartX = currentSidebarWidth <= 4 ? workspaceX + centerPadLeft : splitterLineX + 16;
 
         if (currentOverviewWidth > 4) {
             int dockX = workspaceX + workspaceWidth - currentOverviewWidth;
             detail = new UiLayout.Rect(dockX, dockY, currentOverviewWidth, dockHeight);
-            int centerPadRight = 16;
-            int availableWidth = Math.max(140, dockX - centerStartX - centerPadRight);
-            search = new UiLayout.Rect(centerStartX, dockY + 14, availableWidth, UiTheme.INPUT_HEIGHT);
+            int rightSplitterLineX = dockX - UiTheme.GAP / 2;
+            int contentRight = rightSplitterLineX - 16;
+            int availableWidth = Math.max(140, contentRight - centerStartX);
+            search = new UiLayout.Rect(centerStartX, dockY + 14, Math.max(10, availableWidth - CARDS_SCROLLBAR_GUTTER), UiTheme.INPUT_HEIGHT);
             cards = new UiLayout.Rect(centerStartX, search.y() + search.height() + 18, availableWidth, Math.max(1, this.height - search.y() - search.height() - 42));
 
-            int rightSplitterLineX = dockX - UiTheme.GAP / 2;
             this.overviewSplitterHitRect = new UiLayout.Rect(rightSplitterLineX - 4, dockY, 8, dockHeight);
-            this.overviewCollapseHandleRect = new UiLayout.Rect(rightSplitterLineX - handleWidth / 2, dockY + (dockHeight - handleHeight) / 2, handleWidth, handleHeight);
+            this.overviewCollapseHandleRect = new UiLayout.Rect(rightSplitterLineX - handleWidth / 2, handleY, handleWidth, handleHeight);
             this.overviewCollapseStripRect = null;
         } else {
             detail = new UiLayout.Rect(workspaceX + workspaceWidth, dockY, 0, dockHeight);
@@ -2021,11 +2025,11 @@ public class SessionScreen extends Screen {
             int stripWidth = 26;
             int stripX = this.width - stripWidth;
             this.overviewCollapseStripRect = new UiLayout.Rect(stripX, dockY, stripWidth, dockHeight);
-            this.overviewCollapseHandleRect = new UiLayout.Rect(stripX + (stripWidth - handleWidth) / 2, dockY + (dockHeight - handleHeight) / 2, handleWidth, handleHeight);
+            this.overviewCollapseHandleRect = new UiLayout.Rect(stripX + (stripWidth - handleWidth) / 2, handleY, handleWidth, handleHeight);
 
-            int centerPadRight = 20;
-            int availableWidth = Math.max(140, stripX - centerStartX - centerPadRight);
-            search = new UiLayout.Rect(centerStartX, dockY + 14, availableWidth, UiTheme.INPUT_HEIGHT);
+            int contentRight = stripX - 20;
+            int availableWidth = Math.max(140, contentRight - centerStartX);
+            search = new UiLayout.Rect(centerStartX, dockY + 14, Math.max(10, availableWidth - CARDS_SCROLLBAR_GUTTER), UiTheme.INPUT_HEIGHT);
             cards = new UiLayout.Rect(centerStartX, search.y() + search.height() + 18, availableWidth, Math.max(1, this.height - search.y() - search.height() - 42));
         }
         return new Layout(sidebarRect, sidebarSearch, toolbar, search, cards, detail, content);
@@ -2309,6 +2313,10 @@ public class SessionScreen extends Screen {
 
     private void openCtf() {
         this.openCachedWorkspace("ctf", dev.frost.miniverse.client.gui.workspace.CaptureTheFlagWorkspaceView::new);
+    }
+
+    private void openHideAndSeek() {
+        this.openCachedWorkspace("hideandseek", dev.frost.miniverse.client.gui.workspace.HideAndSeekWorkspaceView::new);
     }
 
     public void openGenericSetup(MinigameEntry entry) {

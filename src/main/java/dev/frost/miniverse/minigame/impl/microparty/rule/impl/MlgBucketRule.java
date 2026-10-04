@@ -1,6 +1,5 @@
 package dev.frost.miniverse.minigame.impl.microparty.rule.impl;
 
-import dev.frost.miniverse.minigame.impl.microparty.MicroPartyArenaHelper;
 import dev.frost.miniverse.minigame.impl.microparty.MicroPartyMinigame;
 import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import net.minecraft.block.Blocks;

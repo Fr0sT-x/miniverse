@@ -318,6 +318,32 @@ public final class MapStore {
                     }
                 }
             }
+            if (descriptor.supportedGamemodes().stream().anyMatch(g -> g.equalsIgnoreCase("hideandseek"))) {
+                Optional<JsonObject> config = readGamemodeConfig(descriptor, "hideandseek");
+                if (config.isPresent()) {
+                    JsonObject cfg = config.get();
+                    if (cfg.has("disguiseBlocks") && cfg.get("disguiseBlocks").isJsonArray()) {
+                        for (com.google.gson.JsonElement el : cfg.getAsJsonArray("disguiseBlocks")) {
+                            if (el.isJsonObject()) {
+                                JsonObject obj = el.getAsJsonObject();
+                                String blockId = "";
+                                if (obj.has("properties") && obj.get("properties").isJsonObject()) {
+                                    JsonObject props = obj.getAsJsonObject("properties");
+                                    if (props.has("block")) {
+                                        blockId = props.get("block").getAsString();
+                                    }
+                                }
+                                if (blockId.isBlank() && obj.has("name")) {
+                                    blockId = obj.get("name").getAsString();
+                                }
+                                if (!blockId.isBlank()) {
+                                    tags.add(net.minecraft.nbt.NbtString.of("hideandseek_block:" + blockId));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             nbt.put("tags", tags);
 
             maps.add(nbt);

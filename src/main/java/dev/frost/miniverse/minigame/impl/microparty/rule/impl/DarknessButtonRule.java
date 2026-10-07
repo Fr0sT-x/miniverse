@@ -66,10 +66,8 @@ public class DarknessButtonRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(8 * 20 * factor);
-        return Math.max(80, standardTicks); // Clamped to at least 4.0s
+    public double minDurationSeconds() {
+        return 5.0;
     }
 
     @Override

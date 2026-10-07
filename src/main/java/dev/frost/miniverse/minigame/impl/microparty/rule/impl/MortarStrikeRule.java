@@ -25,6 +25,7 @@ public class MortarStrikeRule implements MicroRule {
     private final List<MortarReticle> activeReticles = new ArrayList<>();
     private final Random random = new Random();
     private boolean wave2Spawned = false;
+    private boolean wave3Spawned = false;
 
     @Override
     public String id() {
@@ -53,26 +54,28 @@ public class MortarStrikeRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 7;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(8 * 20 * factor);
-        return Math.max(80, standardTicks); // Clamped to at least 4.0 seconds
+    public double minDurationSeconds() {
+        return 4.0;
     }
 
     private void spawnReticleWave(MicroPartyMinigame game, int detonateInTicks) {
         int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
         MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
-        int margin = Math.max(2, bounds.width() / 6);
+        int margin = Math.max(1, bounds.width() / 10);
 
-        int count = 3 + random.nextInt(4); // 3 to 6 mortar strikes
+        // Substantially increased number of mortar zones (14 to 22 zones per wave)
+        int count = 14 + random.nextInt(9);
+        double[] possibleRadii = { 2.0, 2.8, 3.5, 4.2, 5.5 };
+
         for (int i = 0; i < count; i++) {
             double rx = bounds.minX() + margin + random.nextDouble() * Math.max(1, bounds.width() - 2 * margin);
             double rz = bounds.minZ() + margin + random.nextDouble() * Math.max(1, bounds.depth() - 2 * margin);
-            this.activeReticles.add(new MortarReticle(rx, floorY + 0.1, rz, 2.5, detonateInTicks));
+            double zoneRadius = possibleRadii[random.nextInt(possibleRadii.length)];
+            this.activeReticles.add(new MortarReticle(rx, floorY + 0.1, rz, zoneRadius, detonateInTicks));
         }
     }
 
@@ -81,9 +84,10 @@ public class MortarStrikeRule implements MicroRule {
         this.hitPlayers.clear();
         this.activeReticles.clear();
         this.wave2Spawned = false;
+        this.wave3Spawned = false;
 
         int totalTicks = getDurationTicks(game);
-        int wave1Detonate = Math.max(25, totalTicks / 2);
+        int wave1Detonate = Math.max(25, (int)(totalTicks * 0.55));
         spawnReticleWave(game, wave1Detonate);
     }
 
@@ -94,32 +98,40 @@ public class MortarStrikeRule implements MicroRule {
 
         int totalTicks = getDurationTicks(game);
 
-        // Spawn wave 2 at halfway mark if long enough
-        if (!this.wave2Spawned && remainingTicks <= totalTicks / 2 && remainingTicks > 30) {
+        // Wave 2 barrage
+        if (!this.wave2Spawned && remainingTicks <= (int)(totalTicks * 0.65) && remainingTicks > 25) {
             this.wave2Spawned = true;
-            spawnReticleWave(game, Math.max(5, remainingTicks - 35));
+            spawnReticleWave(game, Math.max(10, (int)(totalTicks * 0.20)));
+        }
+
+        // Wave 3 barrage if duration permits
+        if (!this.wave3Spawned && remainingTicks <= (int)(totalTicks * 0.35) && remainingTicks > 15) {
+            this.wave3Spawned = true;
+            spawnReticleWave(game, Math.max(3, remainingTicks - 20));
         }
 
         DustParticleEffect redDust = new DustParticleEffect(new Vector3f(1.0f, 0.1f, 0.1f), 1.2f);
+        MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
+        int floorY = MicroPartyArenaHelper.getFloorY(game.getMapConfig());
+
+        if (remainingTicks % 8 == 0 && !this.activeReticles.isEmpty()) {
+            world.playSound(null, bounds.centerX(), floorY, bounds.centerZ(), SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), SoundCategory.BLOCKS, 0.8f, 1.8f);
+        }
 
         Iterator<MortarReticle> it = this.activeReticles.iterator();
         while (it.hasNext()) {
             MortarReticle reticle = it.next();
 
-            // Draw ring of red dust particles
+            // Draw ring of red dust particles scaled to this reticle's custom radius
             double r = reticle.radius();
-            for (int deg = 0; deg < 360; deg += 30) {
+            int degStep = r > 3.5 ? 15 : 20;
+            for (int deg = 0; deg < 360; deg += degStep) {
                 double rad = Math.toRadians(deg);
                 double px = reticle.x() + Math.cos(rad) * r;
                 double pz = reticle.z() + Math.sin(rad) * r;
                 world.spawnParticles(redDust, px, reticle.y(), pz, 1, 0, 0, 0, 0);
             }
             world.spawnParticles(ParticleTypes.SMOKE, reticle.x(), reticle.y(), reticle.z(), 1, 0.1, 0.1, 0.1, 0.01);
-
-            // Audio warning
-            if (remainingTicks % 8 == 0) {
-                world.playSound(null, reticle.x(), reticle.y(), reticle.z(), SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), SoundCategory.BLOCKS, 0.6f, 1.8f);
-            }
 
             // Check detonation
             if (remainingTicks == reticle.detonateTick()) {
@@ -131,6 +143,7 @@ public class MortarStrikeRule implements MicroRule {
                     double distSq = (p.getX() - reticle.x()) * (p.getX() - reticle.x()) + (p.getZ() - reticle.z()) * (p.getZ() - reticle.z());
                     if (distSq <= r * r && Math.abs(p.getY() - reticle.y()) <= 2.5) {
                         this.hitPlayers.add(p.getUuid());
+                        game.getTracker().recordHazardHit(p.getUuid());
                         p.sendMessage(Text.literal("§c§l💥 HIT BY MORTAR!"), true);
                         p.setVelocity(new Vec3d(0, 0.5, 0));
                         p.velocityModified = true;

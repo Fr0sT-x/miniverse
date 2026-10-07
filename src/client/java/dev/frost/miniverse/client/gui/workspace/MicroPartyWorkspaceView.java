@@ -2,7 +2,9 @@ package dev.frost.miniverse.client.gui.workspace;
 
 import dev.frost.miniverse.client.gui.SessionScreen;
 import dev.frost.miniverse.client.gui.ui.IntFieldWidget;
+import dev.frost.miniverse.client.gui.ui.UiAnimation;
 import dev.frost.miniverse.client.gui.ui.UiLayout;
+import dev.frost.miniverse.client.gui.ui.UiRenderer;
 import dev.frost.miniverse.client.gui.ui.UiTheme;
 import dev.frost.miniverse.client.gui.workspace.components.StaticTeamSelectionGrid;
 import dev.frost.miniverse.client.gui.workspace.framework.AbstractGamemodeWorkspaceView;
@@ -11,34 +13,35 @@ import dev.frost.miniverse.client.gui.workspace.framework.SessionPayloadBuilder;
 import dev.frost.miniverse.client.gui.workspace.framework.ValidationResult;
 import dev.frost.miniverse.client.gui.workspace.framework.WorkspaceModuleManager;
 import dev.frost.miniverse.minigame.impl.microparty.MicroPartyDefinition;
+import dev.frost.miniverse.minigame.impl.microparty.MicroPartySettings;
 import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRule;
 import dev.frost.miniverse.minigame.impl.microparty.rule.MicroRuleRegistry;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.text.Text;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView {
     private final StaticTeamSelectionGrid playerGrid = new StaticTeamSelectionGrid();
 
-    private IntFieldWidget startingLivesField;
     private IntFieldWidget maxRoundsField;
     private IntFieldWidget intermissionSecondsField;
+    private TextFieldWidget speedMultiplierField;
 
     private int startingLives = 3;
     private int maxRounds = 25;
-    private String gameMode = "SURVIVAL";
+    private String gameMode = "POINTS";
     private boolean speedScaling = true;
-    private int intermissionSeconds = 2;
+    private float speedMultiplier = 2.5f;
+    private int intermissionSeconds = 1;
 
     // Micro Game Pool state
     private final Set<String> enabledRuleIds = new LinkedHashSet<>();
+    private final Map<String, Integer> customRuleDurations = new LinkedHashMap<>();
     private int poolScrollOffset = 0;
     private int descHorizontalOffset = 0;
     private UiLayout.Rect selectAllRect;
@@ -48,7 +51,17 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
     private UiLayout.Rect nextPageRect;
     private final List<RuleRowButton> ruleRowButtons = new ArrayList<>();
 
-    private record RuleRowButton(UiLayout.Rect rect, String ruleId, String ruleName, String description, String numberText) {}
+    private record RuleRowButton(
+        UiLayout.Rect rect,
+        UiLayout.Rect minusRect,
+        UiLayout.Rect badgeRect,
+        UiLayout.Rect plusRect,
+        String ruleId,
+        String ruleName,
+        String description,
+        String numberText,
+        int defaultDuration
+    ) {}
 
     public MicroPartyWorkspaceView() {
         super(MicroPartyDefinition.ID);
@@ -56,8 +69,8 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
         this.playerGrid.addColumn("selected", "Selected", UiTheme.ACCENT, false);
         this.useRosterGrid(this.playerGrid, "players", "P", "Players", "Setup", "Select participating players.", UiTheme.ACCENT);
         this.useMapSelection("map", "M", "Map Selection", "Setup", "Choose a map with Micro Party arena markers.", UiTheme.ACCENT_BLUE, "Valid Micro Party Maps");
-        this.moduleManager.register("pool", "G", "Micro Game Pool", "Setup", "Enable or disable micro-games for this match.", 0xFFFFAA00);
-        this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure lives, rounds, and speed scaling.", UiTheme.ACCENT_GREEN);
+        this.moduleManager.register("pool", "G", "Micro Game Pool", "Setup", "Enable, disable, and fine-tune base duration for micro-games.", 0xFFFFAA00);
+        this.moduleManager.register("rules", "R", "Match Rules", "Rules", "Configure rounds, speed scaling, and intermission.", UiTheme.ACCENT_GREEN);
 
         // All micro-games enabled by default
         for (MicroRule rule : MicroRuleRegistry.getAllRules()) {
@@ -104,11 +117,15 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
             MicroRule rule = allRules.get(index);
             int currentY = rowY + (i * 24);
             this.ruleRowButtons.add(new RuleRowButton(
-                new UiLayout.Rect(startX + 26, currentY, 140, 20),
+                new UiLayout.Rect(startX + 26, currentY, 134, 20),
+                new UiLayout.Rect(startX + 164, currentY, 18, 20),
+                new UiLayout.Rect(startX + 184, currentY, 34, 20),
+                new UiLayout.Rect(startX + 220, currentY, 18, 20),
                 rule.id(),
                 rule.name(),
                 rule.description(),
-                (index + 1) + "."
+                (index + 1) + ".",
+                rule.baseDurationSeconds()
             ));
         }
 
@@ -126,17 +143,6 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
             this.rulesLayout = new SettingsLayoutBuilder(screen);
 
             this.rulesLayout.addRow(
-                "Starting Lives",
-                WorkspaceTooltip.of("Starting hearts/lives each player receives. Players are eliminated when reaching 0 lives."),
-                (s, x, y, w) -> {
-                    this.startingLivesField = this.addIntField(s, "Starting Lives", x, y, this.startingLives, 1, 10, w,
-                        WorkspaceTooltip.dynamic(() -> "Players start with " + this.startingLivesField.getIntValue(this.startingLives) + " lives (1-10)."),
-                        val -> this.startingLives = val
-                    );
-                }
-            );
-
-            this.rulesLayout.addRow(
                 "Max Rounds",
                 WorkspaceTooltip.of("Maximum micro-challenges played before determining match winners."),
                 (s, x, y, w) -> {
@@ -148,19 +154,6 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
             );
 
             this.rulesLayout.addRow(
-                "Game Mode",
-                WorkspaceTooltip.of("Determines win conditions: Survival eliminates players, Points tallies score."),
-                (s, x, y, w) -> {
-                    this.addCycleButton(s, () -> "Mode: " + this.gameMode, () -> this.gameMode.equals("SURVIVAL") ? 0 : 1, x, y, w, new String[]{
-                        "Survival: Players lose lives on fail; last survivor wins.",
-                        "Points: Fixed rounds; players compete for highest points."
-                    }, 2, () -> {
-                        this.gameMode = this.gameMode.equals("SURVIVAL") ? "POINTS" : "SURVIVAL";
-                    });
-                }
-            );
-
-            this.rulesLayout.addRow(
                 "Speed Scaling",
                 WorkspaceTooltip.of("Controls whether game speed escalates as rounds progress."),
                 (s, x, y, w) -> {
@@ -168,6 +161,19 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
                         "Tempo speeds up every 5 rounds with faster timers.",
                         "Tempo remains constant throughout the match.",
                         () -> this.speedScaling = !this.speedScaling
+                    );
+                }
+            );
+
+            this.rulesLayout.addRow(
+                "Speed Multiplier",
+                WorkspaceTooltip.of("Peak speedup multiplier reached at max tempo. Allows values from 1.0 to 5.0 with decimal precision (e.g. 1.25, 2.5, 3.8)."),
+                (s, x, y, w) -> {
+                    this.speedMultiplierField = this.addField(s, x, y,
+                        String.format(Locale.ROOT, "%.2f", this.speedMultiplier),
+                        w,
+                        "1.0 - 5.0",
+                        WorkspaceTooltip.dynamic(() -> "Peak speedup multiplier reached at max tempo. Allows decimal point precision from 1.0 to 5.0 (Current: " + String.format(Locale.ROOT, "%.2f", parseSpeedMultiplier(this.speedMultiplierField, this.speedMultiplier)) + "x).")
                     );
                 }
             );
@@ -185,6 +191,18 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
         }
     }
 
+    private float parseSpeedMultiplier(TextFieldWidget field, float fallback) {
+        if (field == null) return fallback;
+        try {
+            String clean = field.getText().replaceAll("[^0-9.]", "").trim();
+            if (clean.isEmpty()) return fallback;
+            float val = Float.parseFloat(clean);
+            return Math.max(1.0f, Math.min(5.0f, val));
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
     @Override
     protected void renderGamemodeBackground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
         if (this.moduleManager.isActive("pool")) {
@@ -196,7 +214,8 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
             int startY = this.layout.mainPanel().y() + 104;
 
             List<MicroRule> allRules = MicroRuleRegistry.getAllRules();
-            String poolInfo = "Active Pool: " + this.enabledRuleIds.size() + " / " + allRules.size() + " micro-games enabled";
+            String poolInfo = "Active Pool: " + this.enabledRuleIds.size() + " / " + allRules.size() + " enabled" +
+                (this.customRuleDurations.isEmpty() ? "" : " §6(" + this.customRuleDurations.size() + " custom durations)");
             context.drawText(textRenderer, Text.literal(poolInfo), startX, headerY + 8, UiTheme.TEXT_MUTED, false);
 
             if (this.selectAllRect != null) {
@@ -228,7 +247,7 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
                 context.drawText(textRenderer, Text.literal(pageInfo), startX + 328, startY + 6, UiTheme.TEXT_DIM, false);
             }
 
-            int descStartX = startX + 26 + 140 + 8;
+            int descStartX = startX + 244;
             int descEndX = this.layout.mainPanel().x() + this.layout.mainPanel().width() - 14;
             int availableDescWidth = Math.max(10, descEndX - descStartX);
 
@@ -249,6 +268,30 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
 
                 // Render toggle button with tick always at the beginning
                 this.renderToggleRowButton(context, textRenderer, btn.rect(), btn.ruleName(), enabled, btn.rect().contains(mouseX, mouseY));
+
+                // Render duration controls [-] [ <sec>s ] [+]
+                int currentDuration = this.customRuleDurations.getOrDefault(btn.ruleId(), btn.defaultDuration);
+                boolean isCustom = this.customRuleDurations.containsKey(btn.ruleId());
+
+                boolean minusHovered = btn.minusRect().contains(mouseX, mouseY);
+                boolean plusHovered = btn.plusRect().contains(mouseX, mouseY);
+                boolean badgeHovered = btn.badgeRect().contains(mouseX, mouseY);
+
+                // Minus button
+                this.renderActionButton(context, textRenderer, btn.minusRect(), "-", UiTheme.ACCENT_BLUE, minusHovered);
+
+                // Duration badge
+                int badgeFill = isCustom ? 0x40FFAA00 : 0x20000000;
+                int badgeBorder = isCustom ? 0xFFFFAA00 : (badgeHovered ? UiTheme.ACCENT_BLUE : UiTheme.BORDER_SUBTLE);
+                UiRenderer.panel(context, btn.badgeRect().x(), btn.badgeRect().y(), btn.badgeRect().width(), btn.badgeRect().height(), badgeFill, badgeBorder);
+                String durText = currentDuration + "s";
+                int durColor = isCustom ? 0xFFFFCC00 : (enabled ? UiTheme.TEXT : UiTheme.TEXT_MUTED);
+                int durTextW = textRenderer.getWidth(durText);
+                int durX = btn.badgeRect().x() + (btn.badgeRect().width() - durTextW) / 2;
+                context.drawText(textRenderer, Text.literal(durText), durX, btn.badgeRect().y() + 6, durColor, false);
+
+                // Plus button
+                this.renderActionButton(context, textRenderer, btn.plusRect(), "+", UiTheme.ACCENT_BLUE, plusHovered);
 
                 // Render clipped description with horizontal scroll
                 int textColor = enabled ? UiTheme.TEXT_MUTED : UiTheme.TEXT_DIM;
@@ -293,10 +336,11 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
                 for (MicroRule r : MicroRuleRegistry.getAllRules()) {
                     this.enabledRuleIds.add(r.id());
                 }
+                this.customRuleDurations.clear();
                 this.poolScrollOffset = 0;
                 this.descHorizontalOffset = 0;
                 this.rebuildPoolRowLayout();
-                this.status = ValidationResult.info("Reset micro-game pool to default (all enabled).");
+                this.status = ValidationResult.info("Reset micro-game pool and rule durations to default.");
                 return true;
             }
 
@@ -308,6 +352,30 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
                         this.enabledRuleIds.add(btn.ruleId());
                     }
                     this.rebuildPoolRowLayout();
+                    return true;
+                }
+                if (btn.minusRect().contains(mouseX, mouseY)) {
+                    int cur = this.customRuleDurations.getOrDefault(btn.ruleId(), btn.defaultDuration);
+                    int next = Math.max(1, cur - 1);
+                    if (next == btn.defaultDuration) {
+                        this.customRuleDurations.remove(btn.ruleId());
+                    } else {
+                        this.customRuleDurations.put(btn.ruleId(), next);
+                    }
+                    return true;
+                }
+                if (btn.plusRect().contains(mouseX, mouseY)) {
+                    int cur = this.customRuleDurations.getOrDefault(btn.ruleId(), btn.defaultDuration);
+                    int next = Math.min(60, cur + 1);
+                    if (next == btn.defaultDuration) {
+                        this.customRuleDurations.remove(btn.ruleId());
+                    } else {
+                        this.customRuleDurations.put(btn.ruleId(), next);
+                    }
+                    return true;
+                }
+                if (btn.badgeRect().contains(mouseX, mouseY)) {
+                    this.customRuleDurations.remove(btn.ruleId());
                     return true;
                 }
             }
@@ -366,18 +434,42 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
 
     @Override
     protected List<Text> getSummaryLines() {
-        return List.of(
-            Text.literal("Micro-Games: §a" + this.enabledRuleIds.size() + "/" + MicroRuleRegistry.getAllRules().size() + " enabled"),
-            Text.literal("Starting Lives: " + this.startingLives),
-            Text.literal("Max Rounds: " + this.maxRounds),
-            Text.literal("Mode: " + this.gameMode),
-            Text.literal("Speed Scaling: " + (this.speedScaling ? "ON" : "OFF")),
-            Text.literal("Intermission: " + this.intermissionSeconds + "s")
-        );
+        List<Text> lines = new ArrayList<>();
+        lines.add(Text.literal("Micro-Games: §a" + this.enabledRuleIds.size() + "/" + MicroRuleRegistry.getAllRules().size() + " enabled"));
+        lines.add(Text.literal("Max Rounds: " + this.maxRounds));
+        lines.add(Text.literal("Speed Scaling: " + (this.speedScaling ? "ON" : "OFF")));
+        if (this.speedScaling) {
+            lines.add(Text.literal("Speed Multiplier: §b" + String.format(Locale.ROOT, "%.2f", this.speedMultiplier) + "x"));
+        }
+        lines.add(Text.literal("Intermission: " + this.intermissionSeconds + "s"));
+        if (!this.customRuleDurations.isEmpty()) {
+            lines.add(Text.literal("Custom Durations: §6" + this.customRuleDurations.size() + " modified"));
+        }
+        return lines;
     }
 
     @Override
     protected void renderGamemodeForeground(DrawContext context, TextRenderer textRenderer, int mouseX, int mouseY, float delta) {
+        if (!this.moduleManager.isActive("pool")) return;
+
+        for (RuleRowButton btn : this.ruleRowButtons) {
+            int currentDuration = this.customRuleDurations.getOrDefault(btn.ruleId(), btn.defaultDuration);
+            if (btn.badgeRect().contains(mouseX, mouseY)) {
+                List<Text> lines = List.of(
+                    Text.literal("Base Duration: §e" + currentDuration + "s §7(Default: " + btn.defaultDuration + "s)"),
+                    Text.literal("§8• Click - / + to adjust (1-60s)"),
+                    Text.literal("§8• Click badge to reset to default")
+                );
+                context.drawTooltip(textRenderer, lines, mouseX, mouseY);
+                return;
+            } else if (btn.minusRect().contains(mouseX, mouseY)) {
+                context.drawTooltip(textRenderer, Text.literal("Decrease base duration (-1s)"), mouseX, mouseY);
+                return;
+            } else if (btn.plusRect().contains(mouseX, mouseY)) {
+                context.drawTooltip(textRenderer, Text.literal("Increase base duration (+1s)"), mouseX, mouseY);
+                return;
+            }
+        }
     }
 
     @Override
@@ -388,9 +480,9 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
 
     protected void syncStateFromWidgets() {
         if (this.moduleManager.isActive("rules")) {
-            this.startingLives = readClamped(this.startingLivesField, this.startingLives, 1, 10);
             this.maxRounds = readClamped(this.maxRoundsField, this.maxRounds, 5, 100);
             this.intermissionSeconds = readClamped(this.intermissionSecondsField, this.intermissionSeconds, 1, 10);
+            this.speedMultiplier = parseSpeedMultiplier(this.speedMultiplierField, this.speedMultiplier);
         }
     }
 
@@ -431,8 +523,10 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
         builder.settings().putInt("maxRounds", this.maxRounds);
         builder.settings().putString("gameMode", this.gameMode);
         builder.settings().putBoolean("speedScaling", this.speedScaling);
+        builder.settings().putFloat("speedMultiplier", this.speedMultiplier);
         builder.settings().putInt("intermissionSeconds", this.intermissionSeconds);
         builder.settings().putString("enabledRules", String.join(",", this.enabledRuleIds));
+        builder.settings().putString("ruleDurations", MicroPartySettings.serializeRuleDurations(this.customRuleDurations));
     }
 
     @Override
@@ -441,7 +535,6 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
         super.applyPresetSettings(settings);
         if (settings.contains("startingLives", NbtElement.INT_TYPE)) {
             this.startingLives = settings.getInt("startingLives");
-            if (this.startingLivesField != null) this.startingLivesField.setText(String.valueOf(this.startingLives));
         }
         if (settings.contains("maxRounds", NbtElement.INT_TYPE)) {
             this.maxRounds = settings.getInt("maxRounds");
@@ -449,6 +542,10 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
         }
         if (settings.contains("speedScaling")) {
             this.speedScaling = settings.getBoolean("speedScaling");
+        }
+        if (settings.contains("speedMultiplier", NbtElement.NUMBER_TYPE)) {
+            this.speedMultiplier = Math.max(1.0f, Math.min(5.0f, settings.getFloat("speedMultiplier")));
+            if (this.speedMultiplierField != null) this.speedMultiplierField.setText(String.format(Locale.ROOT, "%.2f", this.speedMultiplier));
         }
         if (settings.contains("intermissionSeconds", NbtElement.INT_TYPE)) {
             this.intermissionSeconds = settings.getInt("intermissionSeconds");
@@ -467,24 +564,31 @@ public final class MicroPartyWorkspaceView extends AbstractGamemodeWorkspaceView
             }
             this.rebuildPoolRowLayout();
         }
+        if (settings.contains("ruleDurations", NbtElement.STRING_TYPE)) {
+            this.customRuleDurations.clear();
+            this.customRuleDurations.putAll(MicroPartySettings.deserializeRuleDurations(settings.getString("ruleDurations")));
+            this.rebuildPoolRowLayout();
+        }
     }
 
     @Override
     protected void resetToDefaultSettings() {
         this.startingLives = 3;
         this.maxRounds = 25;
-        this.gameMode = "SURVIVAL";
+        this.gameMode = "POINTS";
         this.speedScaling = true;
-        this.intermissionSeconds = 2;
+        this.speedMultiplier = 2.5f;
+        this.intermissionSeconds = 1;
         this.enabledRuleIds.clear();
         for (MicroRule rule : MicroRuleRegistry.getAllRules()) {
             this.enabledRuleIds.add(rule.id());
         }
+        this.customRuleDurations.clear();
         this.poolScrollOffset = 0;
         this.descHorizontalOffset = 0;
-        if (this.startingLivesField != null) this.startingLivesField.setText("3");
         if (this.maxRoundsField != null) this.maxRoundsField.setText("25");
-        if (this.intermissionSecondsField != null) this.intermissionSecondsField.setText("2");
+        if (this.speedMultiplierField != null) this.speedMultiplierField.setText("2.50");
+        if (this.intermissionSecondsField != null) this.intermissionSecondsField.setText("1");
         this.rebuildPoolRowLayout();
     }
 

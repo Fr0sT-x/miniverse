@@ -42,14 +42,12 @@ public class SnowballFightRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 7;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(8 * 20 * factor);
-        return Math.max(80, standardTicks); // Clamped to at least 4.0 seconds
+    public double minDurationSeconds() {
+        return 4.0;
     }
 
     @Override

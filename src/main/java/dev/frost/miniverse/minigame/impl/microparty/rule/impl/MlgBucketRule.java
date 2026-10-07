@@ -62,10 +62,8 @@ public class MlgBucketRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(7 * 20 * factor);
-        return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
+    public double minDurationSeconds() {
+        return 4.0;
     }
 
     private final Set<BlockPos> placedWaterBlocks = new HashSet<>();
@@ -97,13 +95,24 @@ public class MlgBucketRule implements MicroRule {
         }
     }
 
+    private void markPassed(ServerPlayerEntity player, ServerWorld world, BlockPos pos) {
+        if (this.passedPlayers.add(player.getUuid())) {
+            this.failedPlayers.remove(player.getUuid());
+            player.sendMessage(Text.literal("§a§l✔ MLG Clutch!"), true);
+            player.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
+            if (world != null && pos != null) {
+                world.spawnParticles(ParticleTypes.SPLASH, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 15, 0.3, 0.3, 0.3, 0.1);
+            }
+        }
+    }
+
     @Override
     public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
-            if (this.passedPlayers.contains(p.getUuid()) || this.failedPlayers.contains(p.getUuid())) {
+            if (this.passedPlayers.contains(p.getUuid())) {
                 continue;
             }
 
@@ -121,13 +130,20 @@ public class MlgBucketRule implements MicroRule {
             // Check if player landed safely in water
             boolean inWater = p.isInsideWaterOrBubbleColumn()
                 || world.getBlockState(feet).isOf(Blocks.WATER)
-                || world.getBlockState(below).isOf(Blocks.WATER);
+                || world.getBlockState(below).isOf(Blocks.WATER)
+                || world.getBlockState(feet.north()).isOf(Blocks.WATER)
+                || world.getBlockState(feet.south()).isOf(Blocks.WATER)
+                || world.getBlockState(feet.east()).isOf(Blocks.WATER)
+                || world.getBlockState(feet.west()).isOf(Blocks.WATER);
 
-            if (inWater) {
-                this.passedPlayers.add(p.getUuid());
-                p.sendMessage(Text.literal("§a§l✔ MLG Clutch!"), true);
-                p.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
-                world.spawnParticles(ParticleTypes.SPLASH, p.getX(), p.getY(), p.getZ(), 15, 0.3, 0.3, 0.3, 0.1);
+            // Check if player has emptied their bucket (meaning they placed water!) and reached ground
+            boolean bucketEmptied = p.getInventory().contains(new ItemStack(Items.BUCKET))
+                || p.getMainHandStack().isOf(Items.BUCKET)
+                || p.getOffHandStack().isOf(Items.BUCKET);
+            boolean nearGround = p.isOnGround() || p.getVelocity().y >= -0.2;
+
+            if (inWater || (bucketEmptied && nearGround)) {
+                markPassed(p, world, feet);
 
                 // Register placed water into block manager so it is cleanly restored on round end
                 if (world.getBlockState(feet).isOf(Blocks.WATER)) {
@@ -143,17 +159,53 @@ public class MlgBucketRule implements MicroRule {
     @Override
     public boolean onPlayerDamage(ServerPlayerEntity player, DamageSource source, float amount, MicroPartyMinigame game) {
         if (source.isOf(DamageTypes.FALL)) {
+            // If player already clutched or has water near their landing point, negate fall damage and count pass
+            if (this.passedPlayers.contains(player.getUuid())) {
+                player.setHealth(20.0f);
+                return true; // Intercept residual ground impact damage!
+            }
+            BlockPos feet = player.getBlockPos();
+            ServerWorld world = player.getServerWorld();
+            boolean nearWater = world.getBlockState(feet).isOf(Blocks.WATER)
+                || world.getBlockState(feet.down()).isOf(Blocks.WATER)
+                || world.getBlockState(feet.north()).isOf(Blocks.WATER)
+                || world.getBlockState(feet.south()).isOf(Blocks.WATER)
+                || world.getBlockState(feet.east()).isOf(Blocks.WATER)
+                || world.getBlockState(feet.west()).isOf(Blocks.WATER)
+                || player.isInsideWaterOrBubbleColumn();
+            boolean bucketEmptied = player.getInventory().contains(new ItemStack(Items.BUCKET))
+                || player.getMainHandStack().isOf(Items.BUCKET)
+                || player.getOffHandStack().isOf(Items.BUCKET);
+
+            if (nearWater || bucketEmptied) {
+                markPassed(player, world, feet);
+                player.setHealth(20.0f);
+                return true;
+            }
             this.failedPlayers.add(player.getUuid());
             player.sendMessage(Text.literal("§c§l✖ Missed the MLG!"), true);
             player.playSoundToPlayer(SoundEvents.ENTITY_GENERIC_BIG_FALL, SoundCategory.PLAYERS, 0.9f, 0.8f);
-            return false; // Intercept lethal damage
+            player.setHealth(20.0f);
+            return true; // Intercept lethal damage
         }
         return false;
     }
 
     @Override
     public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
-        return this.passedPlayers.contains(player.getUuid()) && !this.failedPlayers.contains(player.getUuid());
+        return this.passedPlayers.contains(player.getUuid());
+    }
+
+    @Override
+    public ActionResult onUseItem(ServerPlayerEntity player, World world, Hand hand, MicroPartyMinigame game) {
+        if (game.isEliminated(player.getUuid()) || !game.getTracker().isAlive(player.getUuid())) {
+            return ActionResult.PASS;
+        }
+        ItemStack held = player.getStackInHand(hand);
+        if (held.isOf(Items.WATER_BUCKET) && world instanceof ServerWorld serverWorld) {
+            markPassed(player, serverWorld, player.getBlockPos());
+        }
+        return ActionResult.PASS;
     }
 
     @Override
@@ -182,16 +234,35 @@ public class MlgBucketRule implements MicroRule {
                     player.setStackInHand(hand, new ItemStack(Items.BUCKET));
                 }
                 serverWorld.playSound(null, targetPos, SoundEvents.ITEM_BUCKET_EMPTY, SoundCategory.BLOCKS, 1.0f, 1.0f);
+
+                // Successfully executed water clutch placement!
+                markPassed(player, serverWorld, targetPos);
                 return ActionResult.SUCCESS;
             }
         } else if (held.isOf(Items.BUCKET) && world instanceof ServerWorld serverWorld) {
             BlockPos hitPos = hitResult.getBlockPos();
+            BlockPos offsetPos = hitPos.offset(hitResult.getSide());
+            BlockPos feetPos = player.getBlockPos();
+            BlockPos belowFeetPos = feetPos.down();
+
+            BlockPos waterPos = null;
             if (world.getBlockState(hitPos).isOf(Blocks.WATER)) {
-                world.setBlockState(hitPos, Blocks.AIR.getDefaultState());
+                waterPos = hitPos;
+            } else if (world.getBlockState(offsetPos).isOf(Blocks.WATER)) {
+                waterPos = offsetPos;
+            } else if (world.getBlockState(feetPos).isOf(Blocks.WATER)) {
+                waterPos = feetPos;
+            } else if (world.getBlockState(belowFeetPos).isOf(Blocks.WATER)) {
+                waterPos = belowFeetPos;
+            }
+
+            if (waterPos != null) {
+                world.setBlockState(waterPos, Blocks.AIR.getDefaultState());
                 if (!player.isCreative()) {
                     player.setStackInHand(hand, new ItemStack(Items.WATER_BUCKET));
                 }
-                serverWorld.playSound(null, hitPos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0f, 1.0f);
+                serverWorld.playSound(null, waterPos, SoundEvents.ITEM_BUCKET_FILL, SoundCategory.BLOCKS, 1.0f, 1.0f);
+                markPassed(player, serverWorld, waterPos);
                 return ActionResult.SUCCESS;
             }
         }

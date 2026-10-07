@@ -12,10 +12,15 @@ import net.minecraft.util.Formatting;
 import java.util.*;
 
 public class WordScrambleRule implements MicroRule {
-    private static final String[] WORD_LIST = {
+    private static final String[] LONG_WORD_LIST = {
         "DIAMOND", "EMERALD", "CREEPER", "OBSIDIAN", "NETHERITE",
         "REDSTONE", "SKELETON", "VILLAGER", "FIREWORK", "CAMPFIRE",
         "MINECART", "BEDROCK", "AMETHYST", "TRIDENT", "ELYTRA"
+    };
+
+    private static final String[] SHORT_WORD_LIST = {
+        "SWORD", "BLOCK", "SLIME", "APPLE", "TORCH",
+        "BREAD", "STICK", "WATER", "LAVA", "ZOMBIE"
     };
 
     private final Set<UUID> passedPlayers = new HashSet<>();
@@ -50,14 +55,17 @@ public class WordScrambleRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 11;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(8 * 20 * factor);
-        return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
+    public double minDurationSeconds() {
+        return 6.0;
+    }
+
+    @Override
+    public void sendInitialActionBar(MicroPartyMinigame game, ServerPlayerEntity player) {
+        player.sendMessage(Text.literal("§eUnscramble: §b" + this.scrambledWord), true);
     }
 
     private String scramble(String word) {
@@ -81,7 +89,9 @@ public class WordScrambleRule implements MicroRule {
     @Override
     public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
         this.passedPlayers.clear();
-        this.originalWord = WORD_LIST[random.nextInt(WORD_LIST.length)];
+        boolean fast = game != null && game.getSpeedFactor() <= 0.6f;
+        String[] pool = fast ? SHORT_WORD_LIST : LONG_WORD_LIST;
+        this.originalWord = pool[random.nextInt(pool.length)];
         this.scrambledWord = scramble(this.originalWord);
     }
 
@@ -92,9 +102,7 @@ public class WordScrambleRule implements MicroRule {
         }
         if (game != null) {
             for (ServerPlayerEntity p : game.getLivingPlayers()) {
-                p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket(
-                    Text.literal("§eUnscramble: §b" + this.scrambledWord).formatted(Formatting.AQUA)
-                ));
+                sendInitialActionBar(game, p);
             }
         }
     }

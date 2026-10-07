@@ -51,14 +51,12 @@ public class StopClockRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 5;
+        return 7;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(5 * 20 * factor);
-        return Math.max(60, standardTicks); // Minimum 3.0 seconds (60 ticks)
+    public double minDurationSeconds() {
+        return 4.0;
     }
 
     public static synchronized void ensureServerReceiverRegistered() {

@@ -53,10 +53,8 @@ public class MusicalBoatsRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(7 * 20 * factor);
-        return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
+    public double minDurationSeconds() {
+        return 4.0;
     }
 
     @Override

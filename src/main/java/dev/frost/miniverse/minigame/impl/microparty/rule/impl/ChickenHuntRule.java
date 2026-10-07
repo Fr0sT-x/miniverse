@@ -52,14 +52,12 @@ public class ChickenHuntRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 7;
+        return 6;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(7 * 20 * factor);
-        return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
+    public double minDurationSeconds() {
+        return 3.5;
     }
 
     @Override
@@ -96,6 +94,42 @@ public class ChickenHuntRule implements MicroRule {
         ServerWorld world = game.getWorld();
         if (world == null || this.spawnedChickens.isEmpty()) return;
 
+        // Active frantic chicken movement & fleeing
+        for (ChickenEntity chicken : this.spawnedChickens) {
+            if (!chicken.isAlive()) continue;
+
+            // Find closest living player
+            ServerPlayerEntity closest = null;
+            double closestDistSq = Double.MAX_VALUE;
+            for (ServerPlayerEntity p : game.getLivingPlayers()) {
+                double dSq = chicken.squaredDistanceTo(p);
+                if (dSq < closestDistSq) {
+                    closestDistSq = dSq;
+                    closest = p;
+                }
+            }
+
+            if (closest != null && closestDistSq <= 25.0) { // Within 5 blocks: PANIC FLEE!
+                double dx = chicken.getX() - closest.getX();
+                double dz = chicken.getZ() - closest.getZ();
+                double dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist > 0.001) {
+                    dx /= dist;
+                    dz /= dist;
+                }
+                chicken.setVelocity(dx * 0.35, 0.10, dz * 0.35);
+                chicken.velocityModified = true;
+                if (remainingTicks % 4 == 0) {
+                    world.spawnParticles(ParticleTypes.CLOUD, chicken.getX(), chicken.getY() + 0.1, chicken.getZ(), 1, 0.05, 0.05, 0.05, 0.02);
+                }
+            } else if (chicken.getVelocity().horizontalLengthSquared() < 0.01 || remainingTicks % 15 == 0) {
+                // Keep moving randomly so chickens never idle in place
+                double angle = random.nextDouble() * Math.PI * 2;
+                chicken.setVelocity(Math.cos(angle) * 0.22, 0.08, Math.sin(angle) * 0.22);
+                chicken.velocityModified = true;
+            }
+        }
+
         // Proximity swing fallback
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             if (this.passedPlayers.contains(p.getUuid())) continue;
@@ -104,7 +138,7 @@ public class ChickenHuntRule implements MicroRule {
                 Iterator<ChickenEntity> it = this.spawnedChickens.iterator();
                 while (it.hasNext()) {
                     ChickenEntity chicken = it.next();
-                    if (chicken.isAlive() && p.squaredDistanceTo(chicken) <= 4.0) {
+                    if (chicken.isAlive() && p.squaredDistanceTo(chicken) <= 4.5) {
                         this.passedPlayers.add(p.getUuid());
                         p.sendMessage(Text.literal("§a§l✔ Chicken Punched!"), true);
                         p.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);

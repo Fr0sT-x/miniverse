@@ -21,6 +21,8 @@ public class SimonSaysRule implements MicroRule {
     private boolean isSimonSays = true;
     private int actionType = 0; // 0 = Crouch, 1 = Jump, 2 = Look Up
     private final Map<UUID, Boolean> lastOnGround = new HashMap<>();
+    private final Map<UUID, Boolean> lastSneakState = new HashMap<>();
+    private final Map<UUID, Boolean> lastLookingUp = new HashMap<>();
 
     @Override
     public String id() {
@@ -62,12 +64,19 @@ public class SimonSaysRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 7;
+        return 5;
+    }
+
+    @Override
+    public double minDurationSeconds() {
+        return 3.0;
     }
 
     @Override
     public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
         this.lastOnGround.clear();
+        this.lastSneakState.clear();
+        this.lastLookingUp.clear();
         this.isSimonSays = random.nextBoolean();
         this.actionType = random.nextInt(3);
     }
@@ -76,6 +85,8 @@ public class SimonSaysRule implements MicroRule {
     public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             this.lastOnGround.put(p.getUuid(), p.isOnGround());
+            this.lastSneakState.put(p.getUuid(), p.isSneaking());
+            this.lastLookingUp.put(p.getUuid(), p.getPitch() <= -65.0f);
             // If Simon said so, you must do it (starts as false)
             // If Simon did NOT say so, you must avoid it (starts as true)
             game.getTracker().setPassedCurrentRound(p.getUuid(), !this.isSimonSays);
@@ -87,12 +98,18 @@ public class SimonSaysRule implements MicroRule {
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             boolean didAction = false;
             if (this.actionType == 0) { // Crouch
-                didAction = p.isSneaking();
+                boolean wasSneaking = this.lastSneakState.getOrDefault(p.getUuid(), false);
+                boolean isSneaking = p.isSneaking();
+                didAction = !wasSneaking && isSneaking;
+                this.lastSneakState.put(p.getUuid(), isSneaking);
             } else if (this.actionType == 1) { // Jump
                 boolean wasGround = this.lastOnGround.getOrDefault(p.getUuid(), true);
                 didAction = wasGround && !p.isOnGround() && p.getVelocity().y > 0.08;
             } else if (this.actionType == 2) { // Look Up
-                didAction = p.getPitch() <= -65.0f;
+                boolean wasLookingUp = this.lastLookingUp.getOrDefault(p.getUuid(), false);
+                boolean isLookingUp = p.getPitch() <= -65.0f;
+                didAction = !wasLookingUp && isLookingUp;
+                this.lastLookingUp.put(p.getUuid(), isLookingUp);
             }
 
             if (didAction) {
@@ -125,5 +142,7 @@ public class SimonSaysRule implements MicroRule {
     @Override
     public void onEnd(MicroPartyMinigame game, MinecraftServer server) {
         this.lastOnGround.clear();
+        this.lastSneakState.clear();
+        this.lastLookingUp.clear();
     }
 }

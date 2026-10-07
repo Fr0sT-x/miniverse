@@ -45,14 +45,12 @@ public class StareDownRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 6;
+        return 5;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(6 * 20 * factor);
-        return Math.max(60, standardTicks); // Clamped to at least 3.0 seconds
+    public double minDurationSeconds() {
+        return 3.0;
     }
 
     public static int getRequiredStareTicks(MicroPartyMinigame game) {

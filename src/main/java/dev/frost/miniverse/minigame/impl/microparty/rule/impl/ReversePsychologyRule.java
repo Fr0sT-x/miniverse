@@ -45,11 +45,24 @@ public class ReversePsychologyRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 4;
     }
 
     @Override
+    public double minDurationSeconds() {
+        return 2.0;
+    }
+
+    @Override
+    public void sendInitialActionBar(MicroPartyMinigame game, ServerPlayerEntity player) {
+        player.sendMessage(Text.literal("§c⚠️ Whatever you do... §eDO NOT JUMP!"), true);
+    }
+
+    private int ticksElapsed = 0;
+
+    @Override
     public void onStart(MicroPartyMinigame game, MinecraftServer server) {
+        this.ticksElapsed = 0;
         lastOnGround.clear();
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             lastOnGround.put(p.getUuid(), p.isOnGround());
@@ -58,15 +71,16 @@ public class ReversePsychologyRule implements MicroRule {
 
     @Override
     public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
+        this.ticksElapsed++;
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             boolean wasOnGround = lastOnGround.getOrDefault(p.getUuid(), true);
             boolean onGround = p.isOnGround();
-            if (wasOnGround && !onGround && p.getVelocity().y > 0.08) {
+            if (this.ticksElapsed > 8 && wasOnGround && !onGround && p.getVelocity().y > 0.08) {
                 game.getTracker().incrementJump(p.getUuid());
                 ServerWorld world = p.getServerWorld();
                 world.spawnParticles(ParticleTypes.ANGRY_VILLAGER, p.getX(), p.getY() + 1.0, p.getZ(), 8, 0.2, 0.2, 0.2, 0.05);
                 world.playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.ENTITY_VILLAGER_NO, SoundCategory.PLAYERS, 0.8f, 1.0f);
-                p.sendMessage(Text.literal("§c❌ You jumped!"), true);
+                p.sendMessage(Text.literal("§c❌ You jumped! (FAILED)"), true);
             }
             lastOnGround.put(p.getUuid(), onGround);
         }

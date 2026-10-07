@@ -13,6 +13,10 @@ public final class PlayerPerformanceTracker {
     private final Map<UUID, Integer> passes = new HashMap<>();
     private final Map<UUID, Integer> fails = new HashMap<>();
     private final Map<UUID, Integer> points = new HashMap<>();
+    private final Map<UUID, Integer> currentStreak = new HashMap<>();
+    private final Map<UUID, Integer> maxStreak = new HashMap<>();
+    private final Map<UUID, Integer> hazardHits = new HashMap<>();
+    private final Map<UUID, Integer> voidFalls = new HashMap<>();
 
     // Per-round transient tracking state
     private final Map<UUID, Boolean> currentRoundPassed = new HashMap<>();
@@ -32,6 +36,10 @@ public final class PlayerPerformanceTracker {
         passes.put(playerId, 0);
         fails.put(playerId, 0);
         points.put(playerId, 0);
+        currentStreak.put(playerId, 0);
+        maxStreak.put(playerId, 0);
+        hazardHits.put(playerId, 0);
+        voidFalls.put(playerId, 0);
         resetRoundState(playerId);
     }
 
@@ -40,6 +48,10 @@ public final class PlayerPerformanceTracker {
         passes.remove(playerId);
         fails.remove(playerId);
         points.remove(playerId);
+        currentStreak.remove(playerId);
+        maxStreak.remove(playerId);
+        hazardHits.remove(playerId);
+        voidFalls.remove(playerId);
         clearTransient(playerId);
     }
 
@@ -54,7 +66,7 @@ public final class PlayerPerformanceTracker {
     }
 
     public void resetAllRoundStates() {
-        for (UUID playerId : lives.keySet()) {
+        for (UUID playerId : points.keySet()) {
             resetRoundState(playerId);
         }
     }
@@ -70,11 +82,11 @@ public final class PlayerPerformanceTracker {
     }
 
     public int getLives(UUID playerId) {
-        return lives.getOrDefault(playerId, 0);
+        return lives.getOrDefault(playerId, startingLives);
     }
 
     public boolean isAlive(UUID playerId) {
-        return getLives(playerId) > 0;
+        return true; // Universal Points mode: everyone plays the entire match
     }
 
     public int deductLife(UUID playerId) {
@@ -85,10 +97,56 @@ public final class PlayerPerformanceTracker {
         return updated;
     }
 
-    public void recordPass(UUID playerId, int pointReward) {
+    public int recordPass(UUID playerId, int pointReward) {
         passes.put(playerId, passes.getOrDefault(playerId, 0) + 1);
         points.put(playerId, points.getOrDefault(playerId, 0) + pointReward);
         currentRoundPassed.put(playerId, true);
+
+        int streak = currentStreak.merge(playerId, 1, Integer::sum);
+        maxStreak.put(playerId, Math.max(maxStreak.getOrDefault(playerId, 0), streak));
+        return streak;
+    }
+
+    public void recordFail(UUID playerId) {
+        fails.put(playerId, fails.getOrDefault(playerId, 0) + 1);
+        currentStreak.put(playerId, 0);
+        currentRoundPassed.put(playerId, false);
+    }
+
+    public void addBonusPoints(UUID playerId, int bonus) {
+        points.put(playerId, points.getOrDefault(playerId, 0) + bonus);
+    }
+
+    public int deductPoints(UUID playerId, int penalty) {
+        int current = getPoints(playerId);
+        int updated = Math.max(0, current - penalty);
+        points.put(playerId, updated);
+        return updated;
+    }
+
+    public void recordHazardHit(UUID playerId) {
+        hazardHits.merge(playerId, 1, Integer::sum);
+    }
+
+    public void recordVoidFall(UUID playerId) {
+        voidFalls.merge(playerId, 1, Integer::sum);
+        deductPoints(playerId, 100);
+    }
+
+    public int getHazardHits(UUID playerId) {
+        return hazardHits.getOrDefault(playerId, 0);
+    }
+
+    public int getVoidFalls(UUID playerId) {
+        return voidFalls.getOrDefault(playerId, 0);
+    }
+
+    public int getCurrentStreak(UUID playerId) {
+        return currentStreak.getOrDefault(playerId, 0);
+    }
+
+    public int getMaxStreak(UUID playerId) {
+        return maxStreak.getOrDefault(playerId, 0);
     }
 
     public boolean hasPassedCurrentRound(UUID playerId) {

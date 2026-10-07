@@ -12,7 +12,7 @@ import net.minecraft.util.Formatting;
 import java.util.*;
 
 public class EchoRule implements MicroRule {
-    private static final String[] PHRASE_LIST = {
+    private static final String[] STANDARD_PHRASES = {
         "miniverse rocks",
         "never dig down",
         "praise the sun",
@@ -23,6 +23,19 @@ public class EchoRule implements MicroRule {
         "punch the wood",
         "eat golden apple",
         "dont touch that"
+    };
+
+    private static final String[] SHORT_PHRASES = {
+        "gg",
+        "run",
+        "jump",
+        "speed",
+        "go go",
+        "mine",
+        "craft",
+        "win",
+        "party",
+        "boom"
     };
 
     private final Set<UUID> passedPlayers = new HashSet<>();
@@ -56,32 +69,35 @@ public class EchoRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 9;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(8 * 20 * factor);
-        return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
+    public double minDurationSeconds() {
+        return 4.5;
+    }
+
+    @Override
+    public void sendInitialActionBar(MicroPartyMinigame game, ServerPlayerEntity player) {
+        player.sendMessage(Text.literal("§eType in chat: §b\"" + this.targetPhrase + "\""), true);
     }
 
     @Override
     public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
         this.passedPlayers.clear();
-        this.targetPhrase = PHRASE_LIST[random.nextInt(PHRASE_LIST.length)];
+        boolean isFast = game != null && game.getSpeedFactor() <= 0.6f;
+        String[] pool = isFast ? SHORT_PHRASES : STANDARD_PHRASES;
+        this.targetPhrase = pool[random.nextInt(pool.length)];
     }
 
     @Override
     public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         if (this.targetPhrase == null || this.targetPhrase.isBlank()) {
-            this.targetPhrase = PHRASE_LIST[random.nextInt(PHRASE_LIST.length)];
+            this.targetPhrase = STANDARD_PHRASES[random.nextInt(STANDARD_PHRASES.length)];
         }
         if (game != null) {
             for (ServerPlayerEntity p : game.getLivingPlayers()) {
-                p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket(
-                    Text.literal("§eType in chat: §b\"" + this.targetPhrase + "\"").formatted(Formatting.YELLOW)
-                ));
+                sendInitialActionBar(game, p);
             }
         }
     }

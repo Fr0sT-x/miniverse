@@ -60,10 +60,8 @@ public class HotPotatoRule implements MicroRule {
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(8 * 20 * factor);
-        return Math.max(100, standardTicks); // Clamped to at least 5.0 seconds (100 ticks)
+    public double minDurationSeconds() {
+        return 5.0;
     }
 
     @Override

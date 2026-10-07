@@ -54,26 +54,30 @@ public class AnvilDodgeRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 7;
     }
+
+    @Override
+    public double minDurationSeconds() {
+        return 4.5;
+    }
+
+    private boolean firstWaveSpawned = false;
+    private int ticksElapsed = 0;
 
     @Override
     public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         spawnedAnvils.clear();
         landedAnvilBlocks.clear();
+        firstWaveSpawned = false;
         secondWaveSpawned = false;
+        ticksElapsed = 0;
 
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             game.getTracker().setPassedCurrentRound(p.getUuid(), true); // Default pass unless crushed
+            p.sendMessage(Text.literal("§e⚠ Watch the sky! Anvils incoming in §c1.2s§e..."), true);
+            p.playSoundToPlayer(SoundEvents.BLOCK_ANVIL_USE, SoundCategory.PLAYERS, 0.7f, 1.4f);
         }
-
-        ServerWorld world = game.getWorld();
-        if (world == null) {
-            return;
-        }
-
-        // Spawn initial wave across the entire arena bounds
-        spawnAnvilWave(game, world, 0);
     }
 
     private void spawnAnvilWave(MicroPartyMinigame game, ServerWorld world, int waveIndex) {
@@ -98,10 +102,6 @@ public class AnvilDodgeRule implements MicroRule {
                     BlockPos dropPos = new BlockPos(x, spawnY, z);
                     BlockPos groundPos = new BlockPos(x, floorY, z);
 
-                    // Ground warning particles
-                    world.spawnParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, groundPos.getX() + 0.5, groundPos.getY() + 0.1, groundPos.getZ() + 0.5, 5, 0.2, 0.05, 0.2, 0.01);
-                    world.spawnParticles(ParticleTypes.ANGRY_VILLAGER, groundPos.getX() + 0.5, groundPos.getY() + 0.2, groundPos.getZ() + 0.5, 1, 0.1, 0.05, 0.1, 0.01);
-
                     FallingBlockEntity anvil = FallingBlockEntity.spawnFromBlock(world, dropPos, Blocks.DAMAGED_ANVIL.getDefaultState());
                     anvil.setHurtEntities(2.0f, 40);
                     spawnedAnvils.add(anvil);
@@ -118,10 +118,33 @@ public class AnvilDodgeRule implements MicroRule {
         ServerWorld world = game.getWorld();
         if (world == null) return;
 
-        // If round is long (>= 6s, remainingTicks <= totalTicks - 50), trigger second staggered wave
+        this.ticksElapsed++;
         int durationTicks = getDurationTicks(game);
-        if (durationTicks >= 120 && !secondWaveSpawned && remainingTicks <= durationTicks - 50) {
-            secondWaveSpawned = true;
+
+        // Wind-up warning period (first 24 ticks / ~1.2s): give players time to react!
+        if (!this.firstWaveSpawned) {
+            if (this.ticksElapsed < 24) {
+                if (this.ticksElapsed % 6 == 0) {
+                    float secsLeft = Math.max(0.1f, (24 - this.ticksElapsed) / 20.0f);
+                    for (ServerPlayerEntity p : game.getLivingPlayers()) {
+                        p.sendMessage(Text.literal(String.format(java.util.Locale.ROOT, "§e⚠ Anvils incoming in §c%.1fs§e! Look for a gap!", secsLeft)), true);
+                        p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_BELL.value(), SoundCategory.PLAYERS, 0.7f, 1.2f + (this.ticksElapsed * 0.03f));
+                    }
+                }
+                return;
+            }
+
+            // Spawn first wave after 1.2s telegraph!
+            this.firstWaveSpawned = true;
+            spawnAnvilWave(game, world, 0);
+            for (ServerPlayerEntity p : game.getLivingPlayers()) {
+                p.sendMessage(Text.literal("§c§l💥 ANVILS FALLING! DODGE!"), true);
+            }
+        }
+
+        // If round is long (>= 6.5s) and enough time has elapsed, trigger second staggered wave
+        if (durationTicks >= 130 && !this.secondWaveSpawned && remainingTicks <= durationTicks - 70 && remainingTicks > 25) {
+            this.secondWaveSpawned = true;
             cleanLandedAnvilBlocks(world);
             spawnAnvilWave(game, world, 1);
         }
@@ -139,6 +162,7 @@ public class AnvilDodgeRule implements MicroRule {
     @Override
     public boolean onPlayerDamage(ServerPlayerEntity player, DamageSource source, float amount, MicroPartyMinigame game) {
         if (source.isOf(DamageTypes.FALLING_ANVIL) || source.isOf(DamageTypes.FALLING_BLOCK)) {
+            game.getTracker().recordHazardHit(player.getUuid());
             game.getTracker().setPassedCurrentRound(player.getUuid(), false);
             player.sendMessage(Text.literal("§c💥 Clang! An anvil crushed you!"), true);
             player.playSoundToPlayer(SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 1.0f, 1.0f);

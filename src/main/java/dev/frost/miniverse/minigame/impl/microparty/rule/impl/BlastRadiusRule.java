@@ -15,7 +15,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 public class BlastRadiusRule implements MicroRule {
-    private static final double REQUIRED_SAFE_DISTANCE = 7.5;
+    private double requiredSafeDistance = 10.0;
     private TntEntity primedTnt = null;
     private double centerX = 0.0;
     private double centerY = 100.0;
@@ -43,12 +43,35 @@ public class BlastRadiusRule implements MicroRule {
 
     @Override
     public Text instruction() {
-        return Text.literal("Run away from the ticking bomb in the center!").formatted(Formatting.YELLOW);
+        return instruction(null);
+    }
+
+    @Override
+    public Text instruction(MicroPartyMinigame game) {
+        return Text.literal("Run at least " + String.format(java.util.Locale.ROOT, "%.1fm", this.requiredSafeDistance) + " away from the bomb!").formatted(Formatting.YELLOW);
     }
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 6;
+    }
+
+    @Override
+    public double minDurationSeconds() {
+        return 3.5;
+    }
+
+    @Override
+    public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
+        if (game != null) {
+            MicroPartyArenaHelper.ArenaBounds2D bounds = MicroPartyArenaHelper.getBounds2D(game.getMapConfig());
+            double halfSpan = Math.min(bounds.width(), bounds.depth()) / 2.0;
+            // Dynamic larger safe distance varying from 9.0m to 12.0m (capped to fit arena with margin)
+            double maxAllowed = Math.max(7.5, halfSpan - 1.5);
+            this.requiredSafeDistance = Math.min(maxAllowed, 9.0 + (new java.util.Random().nextDouble() * 3.0));
+        } else {
+            this.requiredSafeDistance = 10.0;
+        }
     }
 
     @Override
@@ -78,24 +101,34 @@ public class BlastRadiusRule implements MicroRule {
     @Override
     public void onTick(MicroPartyMinigame game, MinecraftServer server, int remainingTicks) {
         ServerWorld world = game.getWorld();
-        if (world != null && remainingTicks % 4 == 0) {
-            world.spawnParticles(ParticleTypes.SMOKE, this.centerX, this.centerY + 1.0, this.centerZ, 3, 0.2, 0.2, 0.2, 0.02);
-            world.spawnParticles(ParticleTypes.FLAME, this.centerX, this.centerY + 1.0, this.centerZ, 1, 0.1, 0.1, 0.1, 0.01);
+        if (world != null) {
+            if (remainingTicks % 4 == 0) {
+                world.spawnParticles(ParticleTypes.SMOKE, this.centerX, this.centerY + 1.0, this.centerZ, 3, 0.2, 0.2, 0.2, 0.02);
+                world.spawnParticles(ParticleTypes.FLAME, this.centerX, this.centerY + 1.0, this.centerZ, 1, 0.1, 0.1, 0.1, 0.01);
+            }
+
+            // Draw visible danger perimeter ring on the arena floor
+            for (int deg = 0; deg < 360; deg += 18) {
+                double rad = Math.toRadians(deg);
+                double px = this.centerX + Math.cos(rad) * this.requiredSafeDistance;
+                double pz = this.centerZ + Math.sin(rad) * this.requiredSafeDistance;
+                world.spawnParticles(ParticleTypes.SMALL_FLAME, px, this.centerY + 0.1, pz, 1, 0, 0, 0, 0);
+            }
         }
 
         for (ServerPlayerEntity p : game.getLivingPlayers()) {
             double dist = Math.sqrt(p.squaredDistanceTo(this.centerX, this.centerY, this.centerZ));
-            if (dist >= REQUIRED_SAFE_DISTANCE) {
-                p.sendMessage(Text.literal("§aSafe: " + String.format("%.1f", dist) + "m §7(Safe Zone)"), true);
+            if (dist >= this.requiredSafeDistance) {
+                p.sendMessage(Text.literal(String.format(java.util.Locale.ROOT, "§a§l✔ Safe: %.1fm §7(Border: %.1fm)", dist, this.requiredSafeDistance)), true);
             } else {
-                p.sendMessage(Text.literal("§cDanger: " + String.format("%.1f", dist) + "m §7(Min " + REQUIRED_SAFE_DISTANCE + "m!)"), true);
+                p.sendMessage(Text.literal(String.format(java.util.Locale.ROOT, "§c§l❌ Danger: %.1fm §7(Need >= %.1fm!)", dist, this.requiredSafeDistance)), true);
             }
         }
     }
 
     @Override
     public boolean hasPassed(ServerPlayerEntity player, MicroPartyMinigame game) {
-        return player.squaredDistanceTo(this.centerX, this.centerY, this.centerZ) >= (REQUIRED_SAFE_DISTANCE * REQUIRED_SAFE_DISTANCE);
+        return player.squaredDistanceTo(this.centerX, this.centerY, this.centerZ) >= (this.requiredSafeDistance * this.requiredSafeDistance);
     }
 
     @Override

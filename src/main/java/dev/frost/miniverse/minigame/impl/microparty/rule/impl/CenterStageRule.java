@@ -41,7 +41,12 @@ public class CenterStageRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 6;
+    }
+
+    @Override
+    public double minDurationSeconds() {
+        return 3.5;
     }
 
     public static double getMaxDistance(MicroPartyMinigame game) {

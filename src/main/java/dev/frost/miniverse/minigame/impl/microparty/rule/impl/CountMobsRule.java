@@ -53,14 +53,17 @@ public class CountMobsRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 7;
+        return 10;
     }
 
     @Override
-    public int getDurationTicks(MicroPartyMinigame game) {
-        float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int standardTicks = Math.round(7 * 20 * factor);
-        return Math.max(70, standardTicks); // Clamped to at least 3.5 seconds
+    public double minDurationSeconds() {
+        return 5.5;
+    }
+
+    @Override
+    public void sendInitialActionBar(MicroPartyMinigame game, ServerPlayerEntity player) {
+        player.sendMessage(Text.literal("§eCount the sheep and type in chat!"), true);
     }
 
     @Override

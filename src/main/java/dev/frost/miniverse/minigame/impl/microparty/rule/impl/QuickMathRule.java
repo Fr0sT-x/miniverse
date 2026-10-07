@@ -49,26 +49,56 @@ public class QuickMathRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 9;
+    }
+
+    @Override
+    public double minDurationSeconds() {
+        return 5.0;
+    }
+
+    @Override
+    public void sendInitialActionBar(MicroPartyMinigame game, ServerPlayerEntity player) {
+        player.sendMessage(Text.literal("§eMath: §b" + this.currentQuestion + " = ?"), true);
     }
 
     public void generateNewQuestion() {
-        int op = random.nextInt(3);
-        if (op == 0) { // Addition
-            int a = random.nextInt(15) + 3;
-            int b = random.nextInt(15) + 2;
-            this.currentQuestion = a + " + " + b;
-            this.expectedAnswer = a + b;
-        } else if (op == 1) { // Subtraction
-            int a = random.nextInt(20) + 10;
-            int b = random.nextInt(a - 2) + 2;
-            this.currentQuestion = a + " - " + b;
-            this.expectedAnswer = a - b;
-        } else { // Multiplication
-            int a = random.nextInt(7) + 2;
-            int b = random.nextInt(7) + 2;
-            this.currentQuestion = a + " × " + b;
-            this.expectedAnswer = a * b;
+        generateNewQuestion(null);
+    }
+
+    public void generateNewQuestion(MicroPartyMinigame game) {
+        boolean fast = game != null && game.getSpeedFactor() <= 0.6f;
+        if (fast) {
+            int op = random.nextInt(2);
+            if (op == 0) {
+                int a = random.nextInt(9) + 1;
+                int b = random.nextInt(9) + 1;
+                this.currentQuestion = a + " + " + b;
+                this.expectedAnswer = a + b;
+            } else {
+                int a = random.nextInt(9) + 5;
+                int b = random.nextInt(a - 1) + 1;
+                this.currentQuestion = a + " - " + b;
+                this.expectedAnswer = a - b;
+            }
+        } else {
+            int op = random.nextInt(3);
+            if (op == 0) { // Addition
+                int a = random.nextInt(15) + 3;
+                int b = random.nextInt(15) + 2;
+                this.currentQuestion = a + " + " + b;
+                this.expectedAnswer = a + b;
+            } else if (op == 1) { // Subtraction
+                int a = random.nextInt(20) + 10;
+                int b = random.nextInt(a - 2) + 2;
+                this.currentQuestion = a + " - " + b;
+                this.expectedAnswer = a - b;
+            } else { // Multiplication
+                int a = random.nextInt(7) + 2;
+                int b = random.nextInt(7) + 2;
+                this.currentQuestion = a + " × " + b;
+                this.expectedAnswer = a * b;
+            }
         }
     }
 
@@ -82,7 +112,7 @@ public class QuickMathRule implements MicroRule {
 
     @Override
     public void onPrepare(MicroPartyMinigame game, MinecraftServer server) {
-        generateNewQuestion();
+        generateNewQuestion(game);
         if (game != null) {
             for (ServerPlayerEntity p : game.getLivingPlayers()) {
                 game.getTracker().setPassedCurrentRound(p.getUuid(), false);
@@ -93,13 +123,11 @@ public class QuickMathRule implements MicroRule {
     @Override
     public void onStart(MicroPartyMinigame game, MinecraftServer server) {
         if (this.currentQuestion == null || this.currentQuestion.isBlank()) {
-            generateNewQuestion();
+            generateNewQuestion(game);
         }
         if (game != null) {
             for (ServerPlayerEntity p : game.getLivingPlayers()) {
-                p.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket(
-                    Text.literal("§eMath: §b" + this.currentQuestion + " = ?").formatted(Formatting.GOLD)
-                ));
+                sendInitialActionBar(game, p);
             }
         }
     }

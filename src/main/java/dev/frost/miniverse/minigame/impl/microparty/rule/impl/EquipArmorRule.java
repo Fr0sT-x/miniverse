@@ -46,7 +46,12 @@ public class EquipArmorRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 7;
+    }
+
+    @Override
+    public double minDurationSeconds() {
+        return 4.5;
     }
 
     @Override

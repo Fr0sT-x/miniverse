@@ -57,7 +57,12 @@ public class LawnMowerRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 7;
+    }
+
+    @Override
+    public double minDurationSeconds() {
+        return 4.0;
     }
 
     public static int getRequiredCuts(MicroPartyMinigame game) {
@@ -122,27 +127,57 @@ public class LawnMowerRule implements MicroRule {
             int current = this.mowedCount.getOrDefault(p.getUuid(), 0);
             if (current >= required) continue;
 
-            // Check if player is near any plant to mow it
-            Iterator<BlockPos> it = this.plantPositions.iterator();
-            while (it.hasNext()) {
-                BlockPos pos = it.next();
-                if (p.squaredDistanceTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5) <= 2.25) { // 1.5 blocks radius
-                    world.setBlockState(pos, Blocks.AIR.getDefaultState());
-                    world.spawnParticles(ParticleTypes.HAPPY_VILLAGER, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 4, 0.2, 0.2, 0.2, 0.05);
-                    world.playSound(null, pos, SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 0.8f, 1.2f);
-                    it.remove();
+            // Require explicit hand swing (left-click / punch) to mow flowers
+            if (!p.handSwinging) continue;
 
-                    int updated = this.mowedCount.merge(p.getUuid(), 1, Integer::sum);
-                    if (updated >= required) {
-                        p.sendMessage(Text.literal("§a§l✔ Lawn Mowed!"), true);
-                        p.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
-                    } else {
-                        p.sendMessage(Text.literal("§aMowed: " + updated + "§7/§e" + required), true);
-                    }
-                    break;
+            BlockPos closestPlant = null;
+            double closestDistSq = 9.0; // 3.0 blocks max reach
+            for (BlockPos pos : this.plantPositions) {
+                double dSq = p.squaredDistanceTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+                if (dSq <= closestDistSq) {
+                    closestDistSq = dSq;
+                    closestPlant = pos;
+                }
+            }
+
+            if (closestPlant != null) {
+                this.plantPositions.remove(closestPlant);
+                world.setBlockState(closestPlant, Blocks.AIR.getDefaultState());
+                world.spawnParticles(ParticleTypes.HAPPY_VILLAGER, closestPlant.getX() + 0.5, closestPlant.getY() + 0.5, closestPlant.getZ() + 0.5, 4, 0.2, 0.2, 0.2, 0.05);
+                world.playSound(null, closestPlant, SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 0.8f, 1.2f);
+
+                int updated = this.mowedCount.merge(p.getUuid(), 1, Integer::sum);
+                if (updated >= required) {
+                    p.sendMessage(Text.literal("§a§l✔ Lawn Mowed!"), true);
+                    p.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
+                } else {
+                    p.sendMessage(Text.literal("§aMowed: " + updated + "§7/§e" + required), true);
                 }
             }
         }
+    }
+
+    @Override
+    public net.minecraft.util.ActionResult onUseBlock(ServerPlayerEntity player, net.minecraft.world.World world, net.minecraft.util.Hand hand, net.minecraft.util.hit.BlockHitResult hitResult, MicroPartyMinigame game) {
+        BlockPos pos = hitResult.getBlockPos();
+        if (this.plantPositions.contains(pos)) {
+            this.plantPositions.remove(pos);
+            world.setBlockState(pos, Blocks.AIR.getDefaultState());
+            if (world instanceof ServerWorld sw) {
+                sw.spawnParticles(ParticleTypes.HAPPY_VILLAGER, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, 4, 0.2, 0.2, 0.2, 0.05);
+            }
+            player.playSoundToPlayer(SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 0.8f, 1.2f);
+            int required = getRequiredCuts(game);
+            int updated = this.mowedCount.merge(player.getUuid(), 1, Integer::sum);
+            if (updated >= required) {
+                player.sendMessage(Text.literal("§a§l✔ Lawn Mowed!"), true);
+                player.playSoundToPlayer(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1.0f, 1.5f);
+            } else {
+                player.sendMessage(Text.literal("§aMowed: " + updated + "§7/§e" + required), true);
+            }
+            return net.minecraft.util.ActionResult.SUCCESS;
+        }
+        return net.minecraft.util.ActionResult.PASS;
     }
 
     @Override

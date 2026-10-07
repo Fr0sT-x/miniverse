@@ -35,7 +35,12 @@ public class LookUpRule implements MicroRule {
 
     @Override
     public int baseDurationSeconds() {
-        return 8;
+        return 4;
+    }
+
+    @Override
+    public double minDurationSeconds() {
+        return 2.0;
     }
 
     @Override

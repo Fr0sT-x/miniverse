@@ -48,6 +48,7 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
 import net.minecraft.network.packet.s2c.play.OverlayMessageS2CPacket;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
+import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket;
 import net.minecraft.network.packet.s2c.play.TitleS2CPacket;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
@@ -74,6 +75,7 @@ public class MicroPartyMinigame extends AbstractMinigame implements
     DeathAwareMinigame,
     dev.frost.miniverse.chat.ChatInterceptAware,
     dev.frost.miniverse.minigame.core.event.ItemUseOnBlockAware,
+    dev.frost.miniverse.minigame.core.event.ItemUseAware,
     PersistentMinigame {
 
     public enum Phase {
@@ -99,6 +101,8 @@ public class MicroPartyMinigame extends AbstractMinigame implements
     private String lastRuleId = "";
     private final List<String> recentRuleHistory = new ArrayList<>();
     private final Random random = new Random();
+
+
 
     private long matchStartTime = 0;
     private boolean matchFinished = false;
@@ -372,11 +376,16 @@ public class MicroPartyMinigame extends AbstractMinigame implements
             @Override
             public RespawnStrategy getRespawnStrategy() {
                 return (ctx, session) -> {
+                    ServerWorld w = getWorld();
+                    if (ctx.location() != null) {
+                        return new RespawnStrategy.RespawnLocation(
+                            w, ctx.location(), ctx.yawAtDeath(), ctx.pitchAtDeath()
+                        );
+                    }
                     Integer slot = assignedSpawnSlots.get(ctx.victimId());
                     MapPosition spawn = (slot != null && slot >= 0 && slot < mapConfig.playerSpawns().size())
                         ? mapConfig.playerSpawns().get(slot)
                         : getLobbySpawn();
-                    ServerWorld w = getWorld();
                     return new RespawnStrategy.RespawnLocation(
                         w, new Vec3d(spawn.x() + 0.5, spawn.y(), spawn.z() + 0.5), spawn.yaw(), spawn.pitch()
                     );
@@ -415,14 +424,33 @@ public class MicroPartyMinigame extends AbstractMinigame implements
             this.updateScoreboard();
         }
 
+        // Void bounds check: only jumping to void resets player's position and deducts 100 points
+        for (ServerPlayerEntity p : this.players()) {
+            if (!isInsideArenaBounds(p.getPos())) {
+                handlePlayerOutOfBounds(p);
+            }
+        }
+
         // Ticking the active rule if in ACTIVE phase
         if (this.currentPhase == Phase.ACTIVE && this.activeRule != null) {
             this.activeRule.onTick(this, server, this.phaseTicksRemaining);
 
-            // Bounds check: if player fell out of arena bounds, catch them!
-            for (ServerPlayerEntity p : getLivingPlayers()) {
-                if (!isInsideArenaBounds(p.getPos())) {
-                    handlePlayerOutOfBounds(p);
+            // 3... 2... 1... Urgent audio countdown
+            if (this.phaseTicksRemaining == 60) {
+                for (ServerPlayerEntity p : this.players()) {
+                    p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), SoundCategory.PLAYERS, 0.9f, 1.2f);
+                }
+            } else if (this.phaseTicksRemaining == 40) {
+                for (ServerPlayerEntity p : this.players()) {
+                    p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), SoundCategory.PLAYERS, 0.9f, 1.5f);
+                }
+            } else if (this.phaseTicksRemaining == 20) {
+                for (ServerPlayerEntity p : this.players()) {
+                    p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_HAT.value(), SoundCategory.PLAYERS, 1.0f, 1.8f);
+                }
+            } else if (this.phaseTicksRemaining == 1) {
+                for (ServerPlayerEntity p : this.players()) {
+                    p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 1.0f, 0.6f);
                 }
             }
         } else if (this.currentPhase == Phase.SPEED_UP) {
@@ -448,15 +476,17 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         switch (this.currentPhase) {
             case INTERMISSION -> {
                 int nextRound = this.currentRound + 1;
-                boolean isSpeedUp = this.settings.speedScaling() && (nextRound % 5 == 1) && (nextRound > 1);
+                float currentFactor = getSpeedFactorForRound(this.currentRound);
+                float nextFactor = getSpeedFactorForRound(nextRound);
+                boolean isSpeedUp = this.settings.speedScaling() && (nextFactor < currentFactor);
                 if (isSpeedUp) {
                     startSpeedUpPause(server);
                 } else {
-                    startAnnouncement(server);
+                    startActiveRound(server);
                 }
             }
-            case SPEED_UP -> startAnnouncement(server);
-            case ANNOUNCEMENT -> startActiveRule(server);
+            case SPEED_UP -> startActiveRound(server);
+            case ANNOUNCEMENT -> startActiveRound(server);
             case ACTIVE -> startResolving(server);
             case RESOLVING -> {
                 if (checkMatchEndCondition()) {
@@ -499,15 +529,14 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         updateScoreboard();
     }
 
-    private void startAnnouncement(MinecraftServer server) {
+    private void startActiveRound(MinecraftServer server) {
         this.currentRound++;
         if (this.currentRound > this.settings.maxRounds()) {
             finishMatch();
             return;
         }
 
-        this.currentPhase = Phase.ANNOUNCEMENT;
-        this.phaseTicksRemaining = 25; // 1.25 seconds announcement pause
+        this.currentPhase = Phase.ACTIVE;
 
         // Unfreeze living players
         for (ServerPlayerEntity p : getLivingPlayers()) {
@@ -535,29 +564,29 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         // Prepare rule state (randomizing questions, phrases, targets, etc.) before title/instruction query
         this.activeRule.onPrepare(this, server);
 
-        // Always announce the actual rule's title and instruction
-        for (ServerPlayerEntity p : this.players()) {
-            p.networkHandler.sendPacket(new TitleS2CPacket(this.activeRule.title(this)));
-            p.networkHandler.sendPacket(new SubtitleS2CPacket(this.activeRule.instruction(this)));
-            p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_BELL.value(), SoundCategory.PLAYERS, 1.0f, getPitchForSpeed());
-        }
-
-        updateScoreboard();
-    }
-
-    private void startActiveRule(MinecraftServer server) {
-        this.currentPhase = Phase.ACTIVE;
+        // Set duration ticks immediately
         this.phaseTicksRemaining = this.activeRule.getDurationTicks(this);
 
         // Apply speed potion effect if speed tiered (Tier 3 & 4)
         if (getSpeedFactor() <= 0.65f) {
-            for (ServerPlayerEntity p : getLivingPlayers()) {
+            for (ServerPlayerEntity p : this.players()) {
                 p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, this.phaseTicksRemaining + 10, 1, false, false, false));
             }
         }
 
-        // Call rule start hook
+        // Call rule start hook immediately
         this.activeRule.onStart(this, server);
+
+        // Send Title that stays on screen for 2.5s to 3.0s so players have ample time to read
+        int stayTicks = Math.max(35, Math.min(60, this.phaseTicksRemaining - 15));
+        for (ServerPlayerEntity p : this.players()) {
+            p.networkHandler.sendPacket(new TitleFadeS2CPacket(3, stayTicks, 10));
+            p.networkHandler.sendPacket(new TitleS2CPacket(this.activeRule.title(this)));
+            p.networkHandler.sendPacket(new SubtitleS2CPacket(this.activeRule.instruction(this)));
+            p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_BELL.value(), SoundCategory.PLAYERS, 1.0f, getPitchForSpeed());
+            this.activeRule.sendInitialActionBar(this, p);
+        }
+
         updateScoreboard();
     }
 
@@ -565,30 +594,31 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         this.currentPhase = Phase.RESOLVING;
         this.phaseTicksRemaining = 25; // 1.25 seconds resolution view
 
-        for (ServerPlayerEntity p : getLivingPlayers()) {
+        int baseReward = 100;
+
+        for (ServerPlayerEntity p : this.players()) {
             if (p.interactionManager.getGameMode() == GameMode.SURVIVAL) {
                 p.changeGameMode(GameMode.ADVENTURE);
             }
             boolean passed = this.activeRule != null && this.activeRule.hasPassed(p, this);
             if (passed) {
-                this.tracker.recordPass(p.getUuid(), 100);
-                p.networkHandler.sendPacket(new OverlayMessageS2CPacket(Text.literal("§a§l✔ PASSED!").formatted(Formatting.GREEN)));
+                int streak = this.tracker.recordPass(p.getUuid(), baseReward);
+                int streakBonus = (streak > 0 && streak % 3 == 0) ? 25 : 0;
+                if (streakBonus > 0) {
+                    this.tracker.addBonusPoints(p.getUuid(), streakBonus);
+                }
+                String streakMsg = streak >= 3 ? " §6(🔥 " + streak + " Streak! +" + streakBonus + ")" : "";
+                p.networkHandler.sendPacket(new OverlayMessageS2CPacket(Text.literal("§a§l✔ PASSED! +" + (baseReward + streakBonus) + "pts" + streakMsg)));
                 p.playSoundToPlayer(SoundEvents.BLOCK_NOTE_BLOCK_CHIME.value(), SoundCategory.PLAYERS, 1.0f, 1.2f);
                 ServerWorld w = p.getServerWorld();
                 w.spawnParticles(ParticleTypes.HAPPY_VILLAGER, p.getX(), p.getY() + 1.0, p.getZ(), 8, 0.3, 0.3, 0.3, 0.05);
             } else {
+                this.tracker.recordFail(p.getUuid());
                 p.networkHandler.sendPacket(new OverlayMessageS2CPacket(Text.literal("§c§l❌ FAILED!").formatted(Formatting.RED)));
                 p.playSoundToPlayer(SoundEvents.ENTITY_VILLAGER_NO, SoundCategory.PLAYERS, 0.9f, 1.0f);
                 p.playSoundToPlayer(SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 0.4f, 1.6f);
                 ServerWorld w = p.getServerWorld();
                 w.spawnParticles(ParticleTypes.ANGRY_VILLAGER, p.getX(), p.getY() + 1.0, p.getZ(), 8, 0.3, 0.3, 0.3, 0.05);
-
-                if ("SURVIVAL".equalsIgnoreCase(this.settings.gameMode())) {
-                    int remaining = this.tracker.deductLife(p.getUuid());
-                    if (remaining <= 0) {
-                        handlePlayerEliminated(p);
-                    }
-                }
             }
         }
 
@@ -600,27 +630,21 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         updateScoreboard();
     }
 
-    private void handlePlayerEliminated(ServerPlayerEntity player) {
-        this.eliminatedPlayers.add(player.getUuid());
-        this.placements.add(0, player.getUuid()); // Last eliminated gets highest placement rank
-
-        GameMessenger.broadcast(this.players(), Text.literal("§c💀 " + player.getName().getString() + " §7has run out of lives and was eliminated!"));
-        player.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("§c§lELIMINATED!")));
-        player.networkHandler.sendPacket(new SubtitleS2CPacket(Text.literal("§7You have run out of lives!")));
-        sendToSpectator(player);
-    }
-
     private void handlePlayerOutOfBounds(ServerPlayerEntity player) {
-        player.networkHandler.sendPacket(new OverlayMessageS2CPacket(Text.literal("§c§lOUT OF BOUNDS!")));
-        player.playSoundToPlayer(SoundEvents.ENTITY_GENERIC_BIG_FALL, SoundCategory.PLAYERS, 0.8f, 1.0f);
+        this.tracker.recordVoidFall(player.getUuid());
         this.tracker.setPassedCurrentRound(player.getUuid(), false);
-        teleportToAssignedSpawn(player);
+        int pts = this.tracker.getPoints(player.getUuid());
+        player.networkHandler.sendPacket(new OverlayMessageS2CPacket(Text.literal("§c§l☠ VOID FALL! -100 Points! §7(" + pts + " pts)")));
+        player.playSoundToPlayer(SoundEvents.ENTITY_GENERIC_BIG_FALL, SoundCategory.PLAYERS, 0.8f, 1.0f);
+        player.playSoundToPlayer(SoundEvents.BLOCK_ANVIL_LAND, SoundCategory.PLAYERS, 0.6f, 0.8f);
+        teleportToAssignedSpawn(player); // Only void fall resets player position!
     }
 
     private void handlePlayerHazardFail(ServerPlayerEntity player) {
         player.setHealth(20.0f);
+        this.tracker.recordHazardHit(player.getUuid());
         this.tracker.setPassedCurrentRound(player.getUuid(), false);
-        teleportToAssignedSpawn(player);
+        // DO NOT reset player position! Player stays where they are in the arena!
     }
 
     private void sendToSpectator(ServerPlayerEntity player) {
@@ -631,21 +655,15 @@ public class MicroPartyMinigame extends AbstractMinigame implements
             SpectatorMode.STANDARD,
             null,
             GameMode.ADVENTURE,
-            Text.literal("§cEliminated! Spectating remaining players...").formatted(Formatting.RED)
+            Text.literal("§cSpectating match...").formatted(Formatting.GRAY)
         );
         teleportToLobby(player);
     }
 
     private boolean checkMatchEndCondition() {
-        if ("SURVIVAL".equalsIgnoreCase(this.settings.gameMode())) {
-            List<ServerPlayerEntity> living = getLivingPlayers();
-            if (living.size() <= 1 && this.players().size() > 1) {
-                finishMatch();
-                return true;
-            } else if (living.isEmpty()) {
-                finishMatch();
-                return true;
-            }
+        if (this.currentRound >= this.settings.maxRounds()) {
+            finishMatch();
+            return true;
         }
         return false;
     }
@@ -663,20 +681,73 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         }
         this.blockManager.restoreAll(this.getWorld());
 
-        List<ServerPlayerEntity> living = getLivingPlayers();
-        ServerPlayerEntity winner = living.isEmpty() ? null : living.get(0);
+        // Sort all players by points descending, tie-break by passes descending
+        List<ServerPlayerEntity> ranked = new ArrayList<>(this.players());
+        ranked.sort((a, b) -> {
+            int cmp = Integer.compare(tracker.getPoints(b.getUuid()), tracker.getPoints(a.getUuid()));
+            if (cmp != 0) return cmp;
+            return Integer.compare(tracker.getPasses(b.getUuid()), tracker.getPasses(a.getUuid()));
+        });
 
-        if (winner != null) {
+        ServerPlayerEntity winner = ranked.isEmpty() ? null : ranked.get(0);
+        int totalRounds = Math.max(1, this.currentRound);
+
+        // Chat Podium Banner
+        GameMessenger.broadcast(this.players(), Text.literal("§6===================================================="));
+        GameMessenger.broadcast(this.players(), Text.literal("§e§l              🏆 MICRO PARTY CHAMPIONS 🏆"));
+        for (int i = 0; i < Math.min(3, ranked.size()); i++) {
+            ServerPlayerEntity p = ranked.get(i);
+            String medal = switch (i) {
+                case 0 -> "§6  🥇 1st Place: ";
+                case 1 -> "§f  🥈 2nd Place: ";
+                default -> "§c  🥉 3rd Place: ";
+            };
+            int pts = this.tracker.getPoints(p.getUuid());
+            int passes = this.tracker.getPasses(p.getUuid());
+            int pct = Math.round((float) passes / totalRounds * 100.0f);
             GameMessenger.broadcast(this.players(), Text.literal(
-                "§6§l[Micro Party] §e👑 " + winner.getName().getString() + " §awins the Micro Party! §e(" + tracker.getPasses(winner.getUuid()) + " passes)"
+                medal + "§f" + p.getName().getString() + " §7— §e" + pts + " pts §a(" + passes + "/" + totalRounds + " passes - " + pct + "%)"
             ));
-            for (ServerPlayerEntity p : this.players()) {
-                p.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("§e§lVICTORY!")));
-                p.networkHandler.sendPacket(new SubtitleS2CPacket(Text.literal("§6" + winner.getName().getString() + " §7is the champion!")));
+        }
+
+        // Fun Accolades
+        ServerPlayerEntity streakChamp = ranked.stream().max(Comparator.comparingInt(p -> tracker.getMaxStreak(p.getUuid()))).orElse(null);
+        if (streakChamp != null && tracker.getMaxStreak(streakChamp.getUuid()) >= 3) {
+            GameMessenger.broadcast(this.players(), Text.literal("§e  🔥 Streak Master: §f" + streakChamp.getName().getString() + " §7(" + tracker.getMaxStreak(streakChamp.getUuid()) + " in a row!)"));
+        }
+        ServerPlayerEntity voidDiver = ranked.stream().max(Comparator.comparingInt(p -> tracker.getVoidFalls(p.getUuid()))).orElse(null);
+        if (voidDiver != null && tracker.getVoidFalls(voidDiver.getUuid()) > 0) {
+            GameMessenger.broadcast(this.players(), Text.literal("§c  🕳️ Void Diver: §f" + voidDiver.getName().getString() + " §7(" + tracker.getVoidFalls(voidDiver.getUuid()) + " void falls!)"));
+        }
+        ServerPlayerEntity hazardKing = ranked.stream().max(Comparator.comparingInt(p -> tracker.getHazardHits(p.getUuid()))).orElse(null);
+        if (hazardKing != null && tracker.getHazardHits(hazardKing.getUuid()) > 0) {
+            GameMessenger.broadcast(this.players(), Text.literal("§d  💥 Chaos Magnet: §f" + hazardKing.getName().getString() + " §7(" + tracker.getHazardHits(hazardKing.getUuid()) + " hazard hits!)"));
+        }
+        GameMessenger.broadcast(this.players(), Text.literal("§6===================================================="));
+
+        // Screen titles and celebration sound
+        for (int i = 0; i < ranked.size(); i++) {
+            ServerPlayerEntity p = ranked.get(i);
+            int pts = this.tracker.getPoints(p.getUuid());
+            int passes = this.tracker.getPasses(p.getUuid());
+            if (i == 0) {
+                p.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("§6§l👑 VICTORY! 👑")));
+                p.networkHandler.sendPacket(new SubtitleS2CPacket(Text.literal("§eChampion with " + pts + " points!")));
                 p.playSoundToPlayer(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.PLAYERS, 1.0f, 1.0f);
+            } else if (i < 3) {
+                p.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("§e§lPODIUM FINISH!")));
+                p.networkHandler.sendPacket(new SubtitleS2CPacket(Text.literal("§fPlaced #" + (i + 1) + " with " + pts + " points!")));
+                p.playSoundToPlayer(SoundEvents.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.PLAYERS, 1.0f, 1.2f);
+            } else {
+                p.networkHandler.sendPacket(new TitleS2CPacket(Text.literal("§7§lMATCH COMPLETE")));
+                p.networkHandler.sendPacket(new SubtitleS2CPacket(Text.literal("§7" + pts + " points (" + passes + "/" + totalRounds + " passes)")));
             }
-        } else {
-            GameMessenger.broadcast(this.players(), Text.literal("§6§l[Micro Party] §eGame Over! Thanks for playing!"));
+
+            // Spawn firework sparkles around player
+            ServerWorld w = p.getServerWorld();
+            w.spawnParticles(ParticleTypes.FIREWORK, p.getX(), p.getY() + 1.5, p.getZ(), 25, 0.5, 0.5, 0.5, 0.1);
+            p.playSoundToPlayer(SoundEvents.ENTITY_FIREWORK_ROCKET_BLAST, SoundCategory.PLAYERS, 0.8f, 1.0f);
+            p.playSoundToPlayer(SoundEvents.ENTITY_FIREWORK_ROCKET_TWINKLE, SoundCategory.PLAYERS, 0.8f, 1.0f);
         }
 
         updateScoreboard();
@@ -707,14 +778,31 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         return this.activeRule;
     }
 
+    public int getRuleBaseDuration(String ruleId, int defaultSeconds) {
+        return this.settings != null ? this.settings.getRuleDuration(ruleId, defaultSeconds) : defaultSeconds;
+    }
+
     public float getSpeedFactor() {
+        return getSpeedFactorForRound(this.currentRound);
+    }
+
+    public float getSpeedFactorForRound(int round) {
         if (!this.settings.speedScaling()) {
             return 1.0f;
         }
-        if (this.currentRound <= 5) return 1.0f;
-        if (this.currentRound <= 10) return 0.75f;
-        if (this.currentRound <= 15) return 0.56f;
-        return 0.38f; // Party speed! (3.0s for base 8s rules)
+        float maxMultiplier = Math.max(1.0f, Math.min(5.0f, this.settings.speedMultiplier()));
+        if (round <= 5 || maxMultiplier <= 1.01f) {
+            return 1.0f;
+        }
+        if (round <= 10) {
+            float mult = 1.0f + (maxMultiplier - 1.0f) * 0.33f;
+            return 1.0f / mult;
+        }
+        if (round <= 15) {
+            float mult = 1.0f + (maxMultiplier - 1.0f) * 0.66f;
+            return 1.0f / mult;
+        }
+        return 1.0f / maxMultiplier;
     }
 
     public float getPitchForSpeed() {
@@ -733,17 +821,35 @@ public class MicroPartyMinigame extends AbstractMinigame implements
             return false;
         }
 
-        // Delegate to active rule if present
+        // Void damage: only jumping to void resets player's position and deducts 100 points
+        if (source.isOf(DamageTypes.OUT_OF_WORLD)) {
+            handlePlayerOutOfBounds(player);
+            return false;
+        }
+
+        // Delegate to active rule if present (can intercept or handle fall damage)
         if (this.activeRule != null) {
             if (source.getAttacker() instanceof ServerPlayerEntity attacker) {
                 this.activeRule.onPlayerAttack(attacker, player, this);
             }
-            return this.activeRule.onPlayerDamage(player, source, amount, this);
+            boolean handled = this.activeRule.onPlayerDamage(player, source, amount, this);
+            if (handled) {
+                return true;
+            }
+            if (amount >= player.getHealth()) {
+                handlePlayerHazardFail(player);
+                return false;
+            }
         }
 
-        // Intercept lethal, fall, void damage
-        if (source.isOf(DamageTypes.FALL) || source.isOf(DamageTypes.OUT_OF_WORLD) || amount >= player.getHealth()) {
-            handlePlayerOutOfBounds(player);
+        // Fall damage disabled in micro party
+        if (source.isOf(DamageTypes.FALL)) {
+            return false;
+        }
+
+        // Intercept lethal damage from other hazards: mark fail, but DO NOT reset position
+        if (amount >= player.getHealth()) {
+            handlePlayerHazardFail(player);
             return false;
         }
 
@@ -800,6 +906,14 @@ public class MicroPartyMinigame extends AbstractMinigame implements
     public net.minecraft.util.ActionResult onUseBlock(ServerPlayerEntity player, net.minecraft.world.World world, net.minecraft.util.Hand hand, net.minecraft.util.hit.BlockHitResult hitResult) {
         if (this.getState() == GameState.RUNNING && this.currentPhase == Phase.ACTIVE && this.activeRule != null) {
             return this.activeRule.onUseBlock(player, world, hand, hitResult, this);
+        }
+        return net.minecraft.util.ActionResult.PASS;
+    }
+
+    @Override
+    public net.minecraft.util.ActionResult onUseItem(ServerPlayerEntity player, net.minecraft.world.World world, net.minecraft.util.Hand hand) {
+        if (this.getState() == GameState.RUNNING && this.currentPhase == Phase.ACTIVE && this.activeRule != null) {
+            return this.activeRule.onUseItem(player, world, hand, this);
         }
         return net.minecraft.util.ActionResult.PASS;
     }
@@ -935,17 +1049,30 @@ public class MicroPartyMinigame extends AbstractMinigame implements
         this.taskLine.updateAll();
 
         int seconds = (this.phaseTicksRemaining + 19) / 20;
-        this.timerLine.setText(Text.literal("Timer: §e" + seconds + "s"));
+        String timerColor = (seconds <= 3 && this.currentPhase == Phase.ACTIVE) ? "§c§l" : "§e";
+        this.timerLine.setText(Text.literal("Timer: " + timerColor + seconds + "s"));
         this.timerLine.updateAll();
 
-        List<ServerPlayerEntity> participants = new ArrayList<>(this.players());
+        List<ServerPlayerEntity> ranked = new ArrayList<>(this.players());
+        ranked.sort((a, b) -> {
+            int cmp = Integer.compare(tracker.getPoints(b.getUuid()), tracker.getPoints(a.getUuid()));
+            if (cmp != 0) return cmp;
+            return Integer.compare(tracker.getPasses(b.getUuid()), tracker.getPasses(a.getUuid()));
+        });
+
         for (int i = 0; i < this.playerLines.size(); i++) {
             ScoreboardLine line = this.playerLines.get(i);
-            if (i < participants.size()) {
-                ServerPlayerEntity p = participants.get(i);
-                int lives = this.tracker.getLives(p.getUuid());
-                String hearts = buildHearts(lives, this.settings.startingLives());
-                line.setText(Text.literal("§f" + p.getName().getString() + ": " + hearts));
+            if (i < ranked.size()) {
+                ServerPlayerEntity p = ranked.get(i);
+                int pts = this.tracker.getPoints(p.getUuid());
+                int passes = this.tracker.getPasses(p.getUuid());
+                String prefix = switch (i) {
+                    case 0 -> "§6#1 ";
+                    case 1 -> "§f#2 ";
+                    case 2 -> "§c#3 ";
+                    default -> "§7#" + (i + 1) + " ";
+                };
+                line.setText(Text.literal(prefix + "§f" + p.getName().getString() + ": §e" + pts + " §7(" + passes + ")"));
             } else {
                 line.setText(Text.literal(""));
             }

@@ -44,6 +44,14 @@ public interface MicroRule {
     int baseDurationSeconds();
 
     /**
+     * Minimum duration in seconds that this rule can scale down to during speedups.
+     * Guarantees that typing, math, eating, and physics challenges are physically completable at max tempo.
+     */
+    default double minDurationSeconds() {
+        return 3.0;
+    }
+
+    /**
      * Context-aware title displayed on screen. Defaults to static title().
      */
     default Text title(MicroPartyMinigame game) {
@@ -59,19 +67,34 @@ public interface MicroRule {
     }
 
     /**
-     * Duration in ticks for this micro-rule, scaled dynamically by the game's current speed factor.
+     * Duration in ticks for this micro-rule, scaled dynamically by the game's current speed factor,
+     * respecting the rule's minimum completability floor.
      */
     default int getDurationTicks(MicroPartyMinigame game) {
         float factor = game != null ? game.getSpeedFactor() : 1.0f;
-        int baseSecs = baseDurationSeconds();
-        return Math.max(40, Math.round(baseSecs * 20 * factor)); // minimum 2.0s (40 ticks)
+        int baseSec = game != null ? game.getRuleBaseDuration(id(), baseDurationSeconds()) : baseDurationSeconds();
+        int baseTicks = baseSec * 20;
+        double minSec = Math.min(minDurationSeconds(), (double) baseSec);
+        int minTicks = (int) Math.round(minSec * 20.0);
+        int scaledTicks = Math.round(baseTicks * factor);
+        return Math.max(minTicks, scaledTicks);
     }
 
     /**
      * Duration in seconds for this micro-rule.
      */
     default int getDurationSeconds(MicroPartyMinigame game) {
-        return Math.max(2, (getDurationTicks(game) + 10) / 20);
+        int baseSec = game != null ? game.getRuleBaseDuration(id(), baseDurationSeconds()) : baseDurationSeconds();
+        double minSec = Math.min(minDurationSeconds(), (double) baseSec);
+        return Math.max((int) Math.ceil(minSec), (getDurationTicks(game) + 10) / 20);
+    }
+
+    /**
+     * Sends the initial action bar HUD message to a player on round start (tick 0).
+     * Rules with custom progress meters (e.g. Crouches: 0/4) can override this.
+     */
+    default void sendInitialActionBar(MicroPartyMinigame game, ServerPlayerEntity player) {
+        player.sendMessage(instruction(game), true);
     }
 
     /**
@@ -135,6 +158,13 @@ public interface MicroRule {
      * Hook when a player interacts with a block during this rule.
      */
     default net.minecraft.util.ActionResult onUseBlock(ServerPlayerEntity player, net.minecraft.world.World world, net.minecraft.util.Hand hand, net.minecraft.util.hit.BlockHitResult hitResult, MicroPartyMinigame game) {
+        return net.minecraft.util.ActionResult.PASS;
+    }
+
+    /**
+     * Hook when a player interacts with an item during this rule.
+     */
+    default net.minecraft.util.ActionResult onUseItem(ServerPlayerEntity player, net.minecraft.world.World world, net.minecraft.util.Hand hand, MicroPartyMinigame game) {
         return net.minecraft.util.ActionResult.PASS;
     }
 
